@@ -239,14 +239,27 @@ const TxUtils = {
     }
 
 
-    async function constructInitialTradeTokenTx(params,senderChannel) {
-        // params might include propertyId, amount, satsExpected, channelUtxo, etc.
+    async function constructInitialTradeTokenTx(params, senderChannel) {
+        // Retrieve the UTXO for the senderChannel address
+        const utxos = await client.cmd('listunspent', 0, 9999999, [senderChannel]);
+        if (utxos.length === 0) {
+            throw new Error('No UTXOs found for the sender channel address');
+        }
+        // Select the appropriate UTXO (e.g., based on criteria like highest amount or specific logic)
+        const selectedUtxo = utxos[0]; // Simple selection logic, adjust as needed
+
+        // Update params with the chosen UTXO details
+        params.channelUtxo = {
+            txid: selectedUtxo.txid,
+            vout: selectedUtxo.vout
+        };
 
         // Create the OP_RETURN payload
-
-        const payload = "tl3" 
-        payload+=Encoding.encodeTradeTokenForUTXO({
+        let payload = "tl3";
+        payload += Encoding.encodeTradeTokenForUTXO({
             ...params,
+            // Include the reference address if needed
+            referenceAddress: senderChannel // or another address if required
         });
 
         // Create the transaction with the channel address as the first input
@@ -268,16 +281,27 @@ const TxUtils = {
         return signedTx;
     }
 
-    async function constructTradeTokenTx(params) {
-    // params include propertyId, amount, satsExpected, etc.
-    
-    // Implement the transaction construction logic as per the described rules
-    // This involves creating inputs, outputs, setting the payload, and validating the transaction structure
+
+   async function finalizeTradeTokenTx(initialRawTx, additionalParams) {
+        // additionalParams might include additionalUtxos, buyerChangeAddress, referenceAddress, etc.
+
+        // Add additional UTXO inputs for UTXO consideration
+        let rawTx = await addInputs(additionalParams.additionalUtxos, initialRawTx);
+
+        // Add a change output for the UTXO spender/buyer
+        rawTx = await setChange(additionalParams.buyerChangeAddress, additionalParams.buyerChangeAmount, rawTx);
+
+        // Add the reference output, ensuring it matches the address in the OP_RETURN payload
+        // (Assuming the logic to add a standard output is similar to setChange)
+        rawTx = await setChange(additionalParams.referenceAddress, additionalParams.referenceAmount, rawTx);
+
+        // Re-sign the transaction to include the new inputs and outputs
+        let signedTx = await client.cmd('signrawtransactionwithwallet', rawTx);
+
+        // Return the fully constructed and signed raw transaction
+        return signedTx;
     }
 
-
-
-    // ... additional functions to build transactions will be added here ...
 };
 
 module.exports = TxUtils;
