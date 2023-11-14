@@ -1,111 +1,142 @@
-// Import the encoding functions from txEncoder.js
-const Encode = require('./txEncoder'); // Update the path to your txEncoder.js file
+const TradeLayerManager = require('./TradeLayerManager');
+const TxIndex = require('./TxIndex');
+// const Persistence = require('./Persistence'); // To be implemented
 
-// Function to encode a payload based on the transaction ID and parameters
-function encodePayload(transactionId, params) {
-  let payload = transactionId.toString(36);
+class Main {
+    constructor() {
+        this.tradeLayerManager = new TradeLayerManager();
+        this.txIndex = new TxIndex();
+        // this.persistence = new Persistence(); // To be implemented
+        this.genesisBlock = /* Define genesis block number */;
+    }
 
-  switch (transactionId) {
-    case 1:
-      payload += Encode.encodeSimpleTokenIssue(params);
-      break;
-    case 2:
-      payload += Encode.encodeSimpleSend(params);
-      break;
-    case 3:
-      payload += Encode.encodeTradeTokenForUTXO(params);
-      break;
-    case 4:
-      payload += Encode.encodeCommitToken(params);
-      break;
-    case 5:
-      payload += Encode.encodeOnChainTokenForToken(params);
-      break;
-    case 6:
-      payload += Encode.encodeCreateWhitelist(params);
-      break;
-    case 7:
-      payload += Encode.encodeUpdateWhitelistAdmin(params);
-      break;
-    case 8:
-      payload += Encode.encodeIssueAttestation(params);
-      break;
-    case 9:
-      payload += Encode.encodeRevokeAttestation(params);
-      break;
-    case 10:
-      payload += Encode.encodeCreateManagedToken(params);
-      break;
-    case 11:
-      payload += Encode.encodeGrantManagedToken(params);
-      break;
-    case 12:
-      payload += Encode.encodeRedeemManagedToken(params);
-      break;
-    case 13:
-      payload += Encode.encodeUpdateManagedTokenAdmin(params);
-      break;
-    case 14:
-      payload += Encode.encodeCreateOracle(params);
-      break;
-    case 15:
-      payload += Encode.encodePublishOracleData(params);
-      break;
-    case 16:
-      payload += Encode.encodeUpdateOracleAdmin(params);
-      break;
-    case 17:
-      payload += Encode.encodeCloseOracle();
-      break;
-    case 18:
-      payload += Encode.encodeCreateOracleFutureContract(params);
-      break;
-    case 19:
-      payload += Encode.encodeExerciseDerivative(params);
-      break;
-    case 20:
-      payload += Encode.encodeNativeContractWithOnChainData(params);
-      break;
-    default:
-      throw new Error('Unknown transaction type');
-  }
+    async initialize() {
+        // Initialize TradeLayer if not already done
+        await this.tradeLayerManager.initialize();
 
-  return payload;
+        // Check for existing index, build one if needed
+        const indexExists = await this.checkForIndex();
+        if (!indexExists) {
+            await this.txIndex.buildIndex(this.genesisBlock);
+        }
+
+        // Construct consensus from index, or load from Persistence if available
+        const consensus = await this.constructOrLoadConsensus();
+
+        // Start processing incoming blocks
+        await this.processIncomingBlocks(consensus);
+    }
+
+    async checkForIndex() {
+        // Check if an index already exists in the DB
+        // Implement the logic to check for index existence
+        return false; // Placeholder
+    }
+
+    async constructOrLoadConsensus() {
+        // Load consensus state from Persistence if available, otherwise construct from index
+        // To be implemented
+        return {}; // Placeholder for consensus state
+    }
+
+    async processIncomingBlocks(consensus) {
+        // Continuously loop through incoming blocks and parse each block for transactions
+        // Decode transactions and apply logic functions to update consensus
+        // Check for activations and validity of transactions
+
+        // Example loop - replace with actual block fetching logic
+        const latestBlock = await this.txIndex.fetchChainTip();
+        for (let blockNumber = this.genesisBlock; blockNumber <= latestBlock; blockNumber++) {
+            const blockData = await this.txIndex.fetchBlockData(blockNumber);
+            await this.processBlockData(blockData, consensus);
+        }
+    }
+
+    async processBlockData(blockData, consensus) {
+        // Process each transaction in the block
+        // Decode and apply logic to update consensus
+        // Implement activation and validity checks
+        // To be implemented
+    }
+
+     async shutdown() {
+        console.log('Shutting down TradeLayer...');
+        // Add shutdown logic here
+        // This could include saving state, closing database connections, etc.
+    }
+
+    async blockHandlerBegin(blockHash, blockHeight) {
+        console.log(`Beginning to process block ${blockHeight}`);
+        // Add logic to handle the beginning of a new block
+        // This could involve preparing data structures, making preliminary checks, etc.
+
+        const reorgDetected = await this.blockchainPersistence.detectReorg(blockHash);
+        if (reorgDetected) {
+            await this.handleReorg(blockHeight);
+        } else {
+            // Proceed with regular block processing
+            await this.blockchainPersistence.updateLastKnownBlock(blockHash);
+            // Additional block begin logic here
+        }
+    }
+
+    async blockHandlerMiddle(blockHash, blockHeight) {
+        console.log(`Processing transactions in block ${blockHeight}`);
+        // Add logic to process the transactions within the block
+        // This could involve iterating over transactions, applying business logic, etc.
+    }
+
+    async blockHandlerEnd(blockHash, blockHeight) {
+        console.log(`Finished processing block ${blockHeight}`);
+        // Add logic to handle the end of block processing
+        // This could include finalizing state changes, updating metrics, etc.
+    }
+
+    async handleReorg(blockHeight) {
+        console.log(`Handling reorganization at block ${blockHeight}`);
+        // Add logic to handle a blockchain reorganization
+        await this.blockchainPersistence.handleReorg();
+        // This could involve reverting to a previous state, re-processing blocks, etc.
+    }
+
+    /**
+     * Updates the tally map based on the given transaction.
+     * @param {string} address - The address whose tally is to be updated.
+     * @param {number} amount - The amount by which to update the tally.
+     * @param {string} propertyId - The identifier of the property or token.
+     * @param {string} transactionType - The type of transaction (e.g., "send", "receive").
+     */
+    updateTallyMap(address, amount, propertyId, transactionType) {
+        // Assuming tallyMap is a Map where each key is an address and each value is another Map,
+        // which maps property IDs to their respective tallies.
+        let propertyTallies = this.tallyMap.get(address);
+
+        if (!propertyTallies) {
+            propertyTallies = new Map();
+            this.tallyMap.set(address, propertyTallies);
+        }
+
+        let currentTally = propertyTallies.get(propertyId) || 0;
+
+        // Update the tally based on the transaction type
+        if (transactionType === "send") {
+            currentTally -= amount;
+        } else if (transactionType === "receive") {
+            currentTally += amount;
+        }
+
+        // Ensure tallies don't go negative
+        currentTally = Math.max(0, currentTally);
+
+        // Update the map with the new tally
+        propertyTallies.set(propertyId, currentTally);
+
+        console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
+    }
 }
 
-// Import the decoding functions from txDecoder.js
-const Decode = require('./txDecoder'); // Update the path to your txDecoder.js file
-
-// Function to decode a payload based on the transaction ID and encoded payload
-function decodePayload(transactionId, encodedPayload) {
-  let index = 0;
-  let params = {};
-
-  if (encodedPayload.startsWith(transactionId.toString(36))) {
-    index = (transactionId.toString(36)).length;
-  } else {
-    throw new Error('Invalid payload');
-  }
-
-  switch (transactionId) {
-    case 1:
-      params = Decode.decodeSimpleTokenIssue(encodedPayload.substr(index));
-      break;
-    case 2:
-      params = Decode.decodeSimpleSend(encodedPayload.substr(index));
-      break;
-    case 3:
-      params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
-      break;
-    // ... other cases ...
-    default:
-      throw new Error('Unknown transaction type');
-  }
-
-  return params;
-}
-
-module.exports = decodePayload;
-
-
-module.exports = encodePayload;
+// Running the main workflow
+(async () => {
+    const main = new Main();
+    await main.initialize();
+})();
