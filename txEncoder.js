@@ -18,7 +18,7 @@ const Encode = {
             params.nft ? '1' : '0'
         ];
         return payload.join(',');
-    }
+    },
 
     // Encode Send Transaction
     encodeSend(params) {
@@ -29,7 +29,7 @@ const Encode = {
             params.amount.map(amt => amt.toString(36)).join(',')
         ];
         return payload.join(';');
-    }
+    },
 
 
     encodeTradeTokenForUTXO: (params) => {
@@ -37,6 +37,7 @@ const Encode = {
             params.propertyId.toString(36),
             params.amount.toString(36),
             params.satsExpected.toString(36),
+            params.payToAddress
         ];
         return payload.join(',');
     },
@@ -60,6 +61,26 @@ const Encode = {
         ];
         return payload.join(',');
     },
+
+    encodeCancelOrder: (params) => {
+        let encodedTx = params.fromAddress;
+
+        // Encode property IDs and cancel all flag
+        encodedTx += `,${params.offeredPropertyId.toString(36)},${params.desiredPropertyId.toString(36)},${params.cancelAll ? 1 : 0}`;
+
+        // Encode optional price if provided
+        if (params.price !== undefined) {
+            encodedTx += `,${params.price.toString(36)}`;
+        }
+
+        // Encode cancel parameters
+        if (params.cancelParams && params.cancelParams.txid) {
+            encodedTx += `,${params.cancelParams.txid}`;
+        }
+
+        return encodedTx;
+    },
+
 
     // Encode Create Whitelist Transaction
     encodeCreateWhitelist: (params) => {
@@ -367,19 +388,11 @@ const Encode = {
     // Encode Register OP_CTV Covenant
     encodeRegisterOPCTVCovenant: (params) => {
         const payload = [
+            params.redeem
             params.txid,
             params.associatedPropertyId1 ? params.associatedPropertyId1.toString(36) : '0',
             params.associatedPropertyId2 ? params.associatedPropertyId2.toString(36) : '0',
             params.covenantType.toString(36),
-        ];
-        return payload.join(',');
-    },
-
-    // Encode Redeem OP_CTV Covenant
-    encodeRedeemOPCTVCovenant: (params) => {
-        const payload = [
-            params.txid,
-            params.covenantId.toString(36),
         ];
         return payload.join(',');
     },

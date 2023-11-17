@@ -44,3 +44,5 @@ getConsensusHash(1, (err, consensusHash) => {
     console.log('Consensus hash for block 1:', consensusHash);
   }
 });
+
+module.exports = {storeConsensusHash, getConsensusHash}

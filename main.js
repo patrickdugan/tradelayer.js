@@ -1,13 +1,51 @@
-const TradeLayerManager = require('./TradeLayerManager');
-const TxIndex = require('./TxIndex');
-// const Persistence = require('./Persistence'); // To be implemented
+const level = require('level'); // LevelDB for storage
+const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
+
+// Custom modules for TradeLayer
+const TradeLayerManager = require('./TradeLayerManager.js'); // Manages TradeLayer protocol
+const Persistence = require('./Persistence.js'); // Handles data persistence
+const Orderbook = require('./Orderbook.js'); // Manages the order book
+const InsuranceFund = require('./InsuranceFund.js'); // Manages the insurance fund
+const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
+const Vesting = require('./Vesting.js'); // Handles vesting logic
+const TxIndex = require('./TxIndex.js'); // Indexes TradeLayer transactions
+const ReOrgChecker = require('./reOrg.js');
+// Additional modules
+const Litecoin = require('litecoin'); // Bitcoin RPC module
+const fs = require('fs'); // File system module
+
+const Validity = require('./validity.js'); // Module for checking transaction validity
+const TxUtils = require('./txUtils.js'); // Utility functions for transactions
+const TradeChannel = require('./channels.js'); // Manages Trade Channels
+const TallyMap = require('./tally.js'); // Manages Tally Mapping
+const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
+const PropertyManager = require('./property.js'); // Manages properties
+const ContractsRegistry = require('./contractsRegistry.js'); // Registry for contracts
+const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Encode = require('./txEncoder.js'); // Encodes transactions
+const Types = require('./types.js'); // Defines different types used in the system
+const Decode = require('./txDecoder.js'); // Decodes transactions
+
 
 class Main {
-    constructor() {
+    constructor(test) {
+      const config = {host: '127.0.0.1',
+                      port: 8332,
+                      user: 'user',
+                      pass: 'pass',
+                      timeout: 10000}
+                  if(test){config = {host: '127.0.0.1',
+                      port: 18332,
+                      user: 'user',
+                      pass: 'pass',
+                      timeout: 10000}
+                  }
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = new TxIndex();
         // this.persistence = new Persistence(); // To be implemented
-        this.genesisBlock = /* Define genesis block number */;
+        this.genesisBlock = 3041685;
+        this.blockchainPersistence = new BlockchainPersistence();
+        this.reOrgChecker = new ReOrgChecker(reOrgConfig);
     }
 
     async initialize() {
@@ -39,24 +77,34 @@ class Main {
         return {}; // Placeholder for consensus state
     }
 
-    async processIncomingBlocks(consensus) {
-        // Continuously loop through incoming blocks and parse each block for transactions
-        // Decode transactions and apply logic functions to update consensus
-        // Check for activations and validity of transactions
+   async processIncomingBlocks(consensus) {
+        // Continuously loop through incoming blocks and process them
+        let latestProcessedBlock = this.genesisBlock;
 
-        // Example loop - replace with actual block fetching logic
-        const latestBlock = await this.txIndex.fetchChainTip();
-        for (let blockNumber = this.genesisBlock; blockNumber <= latestBlock; blockNumber++) {
-            const blockData = await this.txIndex.fetchBlockData(blockNumber);
-            await this.processBlockData(blockData, consensus);
+        while (true) {
+            const latestBlock = await this.txIndex.fetchChainTip();
+            for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
+                const blockData = await this.txIndex.fetchBlockData(blockNumber);
+                await this.processBlock(blockData, blockNumber, consensus);
+                latestProcessedBlock = blockNumber;
+            }
+
+            // Wait for a short period before checking for new blocks
+            await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }
     }
 
-    async processBlockData(blockData, consensus) {
+    async processBlock(blockData, blockNumber, consensus) {
+        // Process the beginning of the block
+        await this.blockHandlerBegin(blockData.hash, blockNumber);
+
         // Process each transaction in the block
-        // Decode and apply logic to update consensus
-        // Implement activation and validity checks
-        // To be implemented
+        for (const transaction of blockData.tx) {
+            await this.blockHandlerMiddle(transaction, blockNumber);
+        }
+
+        // Process the end of the block
+        await this.blockHandlerEnd(blockData.hash, blockNumber);
     }
 
      async shutdown() {
@@ -67,11 +115,11 @@ class Main {
 
     async blockHandlerBegin(blockHash, blockHeight) {
         console.log(`Beginning to process block ${blockHeight}`);
-        // Add logic to handle the beginning of a new block
-        // This could involve preparing data structures, making preliminary checks, etc.
 
-        const reorgDetected = await this.blockchainPersistence.detectReorg(blockHash);
+        // Check for reorganization using ReOrgChecker
+        const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
         if (reorgDetected) {
+            console.log(`Reorganization detected at block ${blockHeight}`);
             await this.handleReorg(blockHeight);
         } else {
             // Proceed with regular block processing
@@ -132,11 +180,62 @@ class Main {
         propertyTallies.set(propertyId, currentTally);
 
         console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
+    },
+
+    async simulateActivationAndTokenCreation(startBlockHeight) {
+        // Step 1: Loop through blocks
+        for (let blockHeight = startBlockHeight; blockHeight <= startBlockHeight + 10; blockHeight++) {
+            console.log(`Processing block ${blockHeight}`);
+            // Simulate fetching block data (replace with actual logic)
+            const blockData = await this.txIndex.fetchBlockData(blockHeight);
+            await this.processBlockData(blockData, {});
+
+            // Step 2: Spit out an activation transaction
+            if (blockHeight === startBlockHeight) {
+                const activationTx = this.createActivationTransaction();
+                console.log('Activation Transaction:', activationTx);
+
+                // Step 3: Activate the system
+                this.activateSystem(activationTx);
+            }
+
+            // Step 4: Spit out another activation and then a token creation
+            if (blockHeight === startBlockHeight + 5) {
+                const anotherActivationTx = this.createAnotherActivationTransaction();
+                console.log('Another Activation Transaction:', anotherActivationTx);
+
+                const tokenCreationTx = this.createTokenCreationTransaction();
+                console.log('Token Creation Transaction:', tokenCreationTx);
+            }
+        }
     }
+
+        createActivationTransaction() {
+            // Construct and return an activation transaction
+            return { type: 'activation', details: {/*...*/} };
+        }
+
+        activateSystem(activationTx) {
+            // Logic to activate the system using the activation transaction
+            // Update the transaction registry, etc.
+        }
+
+        createAnotherActivationTransaction() {
+            // Construct and return another activation transaction
+            return { type: 'activation', details: {/*...*/} };
+        }
+
+        createTokenCreationTransaction() {
+            // Construct and return a token creation transaction
+            return { type: 'tokenCreation', details: {/*...*/} };
+        }
+
+    // ... other methods ...
 }
 
-// Running the main workflow
+// Example usage
 (async () => {
     const main = new Main();
     await main.initialize();
+    await main.simulateActivationAndTokenCreation(3041685); // Replace 3041685 with your starting block height
 })();

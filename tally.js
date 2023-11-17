@@ -79,5 +79,3 @@ tallyMap.updateBalance('address2', 1, 50, 40, 10);
 
 console.log('Address 1 Balances:', tallyMap.getAddressBalances('address1'));
 console.log('Address 2 Balances:', tallyMap.getAddressBalances('address2'));
-
-modules.exports=TallyMap

@@ -31,88 +31,88 @@ const Types = {
                 payload += Encode.encodeOnChainTokenForToken(params);
                 break;
             case 6:
-                payload += Encode.encodeCreateWhitelist(params);
+                payload += Encode.encodeCancelOrder(params)
                 break;
             case 7:
-                payload += Encode.encodeUpdateAdmin(params);
+                payload += Encode.encodeCreateWhitelist(params);
                 break;
             case 8:
-                payload += Encode.encodeIssueAttestation(params);
+                payload += Encode.encodeUpdateAdmin(params);
                 break;
             case 9:
-                payload += Encode.encodeRevokeAttestation(params);
+                payload += Encode.encodeIssueAttestation(params);
                 break;
             case 10:
-                payload += Encode.encodeGrantManagedToken(params);
+                payload += Encode.encodeRevokeAttestation(params);
                 break;
             case 11:
-                payload += Encode.encodeRedeemManagedToken(params);
+                payload += Encode.encodeGrantManagedToken(params);
                 break;
             case 12:
-                payload += Encode.encodeCreateOracle(params);
+                payload += Encode.encodeRedeemManagedToken(params);
                 break;
             case 13:
-                payload += Encode.encodePublishOracleData(params);
+                payload += Encode.encodeCreateOracle(params);
                 break;
             case 14:
-                payload += Encode.encodeCloseOracle();
+                payload += Encode.encodePublishOracleData(params);
                 break;
             case 15:
-                payload += Encode.encodeCreateFutureContractSeries(params);
-                break;
-            case 16:
-                payload += Encode.encodeUpdateOracleAdmin(params);
-                break;
-            case 17:
                 payload += Encode.encodeCloseOracle();
                 break;
+            case 16:
+                payload += Encode.encodeCreateFutureContractSeries(params);
+                break;
+            case 17:
+                payload += Encode.encodeUpdateOracleAdmin(params);
+                break;
             case 18:
-                payload += Encode.encodeCreateOracleFutureContract(params);
+                payload += Encode.encodeCloseOracle();
                 break;
             case 19:
-                payload += Encode.encodeExerciseDerivative(params);
+                payload += Encode.encodeCreateOracleFutureContract(params);
                 break;
             case 20:
-                payload += Encode.encodeNativeContractWithOnChainData(params);
+                payload += Encode.encodeExerciseDerivative(params);
                 break;
             case 21:
-                payload += Encode.encodeTradeContractOnchain(params);
+                payload += Encode.encodeNativeContractWithOnChainData(params);
                 break;
             case 22:
-                payload += Encode.encodeTradeContractChannel(params);
+                payload += Encode.encodeTradeContractOnchain(params);
                 break;
             case 23:
-                payload += Encode.encodeTradeTokensChannel(params);
+                payload += Encode.encodeTradeContractChannel(params);
                 break;
             case 24:
-                payload += Encode.encodeWithdrawal(params);
+                payload += Encode.encodeTradeTokensChannel(params);
                 break;
             case 25:
-                payload += Encode.encodeTransfer(params);
+                payload += Encode.encodeWithdrawal(params);
                 break;
             case 26:
-                payload += Encode.encodeSettleChannelPNL(params);
+                payload += Encode.encodeTransfer(params);
                 break;
             case 27:
-                payload += Encode.encodeMintSynthetic(params);
+                payload += Encode.encodeSettleChannelPNL(params);
                 break;
             case 28:
-                payload += Encode.encodeRedeemSynthetic(params);
+                payload += Encode.encodeMintSynthetic(params);
                 break;
             case 29:
-                payload += Encode.encodePayToTokens(params);
+                payload += Encode.encodeRedeemSynthetic(params);
                 break;
             case 30:
-                payload += Encode.encodePublishNewTx(params);
+                payload += Encode.encodePayToTokens(params);
                 break;
             case 31:
-                payload += Encode.encodeCreateDerivativeOfLRC20OrRGB(params);
+                payload += Encode.encodePublishNewTx(params);
                 break;
             case 32:
-                payload += Encode.encodeRegisterOPCTVCovenant(params);
+                payload += Encode.encodeCreateDerivativeOfLRC20OrRGB(params);
                 break;
             case 33:
-                payload += Encode.encodeRedeemOPCTVCovenant(params);
+                payload += Encode.encodeRegisterOPCTVCovenant(params);
                 break;
             case 34:
                 payload += Encode.encodeMintColoredCoin(params);
@@ -163,91 +163,91 @@ const Types = {
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
                 break;
             case 6:
-                params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));
+                params = Decode.decodeCancelOrder(encodedPayload.substr(index))
                 break;
             case 7:
-                params = Decode.decodeUpdateAdmin(encodedPayload.substr(index));
+                params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));
                 break;
             case 8:
-                params = Decode.decodeIssueAttestation(encodedPayload.substr(index));
+                params = Decode.decodeUpdateAdmin(encodedPayload.substr(index));
                 break;
             case 9:
-                params = Decode.decodeRevokeAttestation(encodedPayload.substr(index));
+                params = Decode.decodeIssueAttestation(encodedPayload.substr(index));
                 break;
             case 10:
-                params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
+                params = Decode.decodeRevokeAttestation(encodedPayload.substr(index));
                 break;
             case 11:
-                params = Decode.decodeRedeemManagedToken(encodedPayload.substr(index));
+                params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
                 break;
             case 12:
-                params = Decode.decodeCreateOracle(encodedPayload.substr(index));
+                params = Decode.decodeRedeemManagedToken(encodedPayload.substr(index));
                 break;
             case 13:
-                params = Decode.decodePublishOracleData(encodedPayload.substr(index));
+                params = Decode.decodeCreateOracle(encodedPayload.substr(index));
                 break;
             case 14:
-                params = Decode.decodeCloseOracle(encodedPayload.substr(index));
+                params = Decode.decodePublishOracleData(encodedPayload.substr(index));
                 break;
             case 15:
-                params = Decode.decodeCreateFutureContractSeries(encodedPayload.substr(index));
-                break;
-            case 16:
-                params = Decode.decodeUpdateOracleAdmin(encodedPayload.substr(index));
-                break;
-            case 17:
                 params = Decode.decodeCloseOracle(encodedPayload.substr(index));
                 break;
+            case 16:
+                params = Decode.decodeCreateFutureContractSeries(encodedPayload.substr(index));
+                break;
+            case 17:
+                params = Decode.decodeUpdateOracleAdmin(encodedPayload.substr(index));
+                break;
             case 18:
-                params = Decode.decodeCreateOracleFutureContract(encodedPayload.substr(index));
+                params = Decode.decodeCloseOracle(encodedPayload.substr(index));
                 break;
             case 19:
-                params = Decode.decodeExerciseDerivative(encodedPayload.substr(index));
+                params = Decode.decodeCreateOracleFutureContract(encodedPayload.substr(index));
                 break;
             case 20:
-                params = Decode.decodeNativeContractWithOnChainData(encodedPayload.substr(index));
+                params = Decode.decodeExerciseDerivative(encodedPayload.substr(index));
                 break;
             case 21:
-                params = Decode.decodeTradeContractOnchain(encodedPayload.substr(index));
+                params = Decode.decodeNativeContractWithOnChainData(encodedPayload.substr(index));
                 break;
             case 22:
-                params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
+                params = Decode.decodeTradeContractOnchain(encodedPayload.substr(index));
                 break;
             case 23:
-                params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
+                params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
                 break;
             case 24:
-                params = Decode.decodeWithdrawal(encodedPayload.substr(index));
+                params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
                 break;
             case 25:
-                params = Decode.decodeTransfer(encodedPayload.substr(index));
+                params = Decode.decodeWithdrawal(encodedPayload.substr(index));
                 break;
             case 26:
-                params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
+                params = Decode.decodeTransfer(encodedPayload.substr(index));
                 break;
             case 27:
-                params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
+                params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
                 break;
             case 28:
-                params = Decode.decodeRedeemSynthetic(encodedPayload.substr(index));
+                params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
                 break;
             case 29:
-                params = Decode.decodePayToTokens(encodedPayload.substr(index));
+                params = Decode.decodeRedeemSynthetic(encodedPayload.substr(index));
                 break;
             case 30:
-                params = Decode.decodeBatchMoveZkRollup(encodedPayload.substr(index));
+                params = Decode.decodePayToTokens(encodedPayload.substr(index));
                 break;    
             case 31:
-                params = Decode.decodePublishNewTx(encodedPayload.substr(index));
+                params = Decode.decodeBatchMoveZkRollup(encodedPayload.substr(index));
                 break;
             case 32:
-                params = Decode.decodeCreateDerivativeOfLRC20OrRGB(encodedPayload.substr(index));
+                params = Decode.decodePublishNewTx(encodedPayload.substr(index));
                 break;
             case 33:
-                params = Decode.decodeRegisterOPCTVCovenant(encodedPayload.substr(index));
+                params = Decode.decodeCreateDerivativeOfLRC20OrRGB(encodedPayload.substr(index));
                 break;
             case 34:
-                params = Decode.decodeRedeemOPCTVCovenant(encodedPayload.substr(index));
+                params = Decode.decodeRegisterOPCTVCovenant(encodedPayload.substr(index));
                 break;
             case 35:
                 params = Decode.decodeMintColoredCoin(encodedPayload.substr(index));

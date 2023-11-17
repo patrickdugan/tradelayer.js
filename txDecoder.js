@@ -61,6 +61,31 @@ const Decode = {
         };
     },
 
+    decodeCancelOrder(encodedTx) {
+        const elements = encodedTx.split(',');
+
+        // Decode the elements
+        const fromAddress = elements[0];
+        const offeredPropertyId = parseInt(elements[1], 36);
+        const desiredPropertyId = parseInt(elements[2], 36);
+        const cancelAll = elements[3] === '1';
+        const price = elements[4] ? parseInt(elements[4], 36) : undefined;
+        const cancelParams = {};
+
+        if (elements.length > 5) {
+            cancelParams.txid = elements[5];
+        }
+
+        return {
+            fromAddress,
+            offeredPropertyId,
+            desiredPropertyId,
+            cancelAll,
+            price,
+            cancelParams
+        };
+    }
+
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {
         const parts = payload.split(',');
@@ -305,18 +330,11 @@ const Decode = {
             txid: parts[0],
             associatedPropertyId1: parts[1] ? parseInt(parts[1], 36) : null,
             associatedPropertyId2: parts[2] ? parseInt(parts[2], 36) : null,
-            covenantType: parseInt(parts[3], 36)
+            covenantType: parseInt(parts[3], 36),
+            redeem: parts[4] === '1' // '1' indicates true, anything else is considered false
         };
     },
 
-    // Decode Redeem OP_CTV Covenant
-    decodeRedeemOPCTVCovenant: (payload) => {
-        const parts = payload.split(',');
-        return {
-            txid: parts[0],
-            covenantId: parseInt(parts[1], 36)
-        };
-    },
 
     // Decode Mint Colored Coin
     decodeMintColoredCoin: (payload) => {

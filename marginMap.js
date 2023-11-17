@@ -131,3 +131,5 @@ class MarginMap {
   }
   
 }
+
+module.exports=MarginMap
