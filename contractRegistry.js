@@ -166,6 +166,17 @@ class ContractsRegistry {
       });
     }
 
+    async getNextId() {
+      let maxId = 0;
+      for (const [key, value] of this.registry) {
+          const currentId = parseInt(key);
+          if (currentId > maxId) {
+              maxId = currentId;
+          }
+      }
+      return maxId + 1;
+    }
+
 }
 
 // Usage:

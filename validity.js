@@ -31,6 +31,10 @@ const Validity = {
         return true; // or false
     },
 
+    async verifyAdmin(whitelistId, adminAddress) {
+        // Logic to verify if the adminAddress is the admin of the whitelist with whitelistId
+    }
+
     // ... continue until transaction type 36 ...
 };
 
