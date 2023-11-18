@@ -1,3 +1,6 @@
+const TxUtils = require('./TxUtils');
+const BigNumber = require('bignumber.js');
+const TradeChannels = require('channels.js')
 
 // logic.js
 const Logic = {
@@ -99,11 +102,64 @@ const Logic = {
 	    tallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
 	    tallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
 	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
-	}
+	},
 
-    tradeTokenForUTXO: async function(/* parameters */) { /* ... */ },
 
-    commitToken: function(/* parameters */) { /* ... */ },
+	async function tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, utxoAmount, transactionFee, network) {
+		    // Step 1: Construct the token part of the transaction
+		    // Deduct the token amount from the sender's balance and credit to the receiver
+		    // This would involve interacting with your token management system
+
+		    // Assuming a function to update token balances
+		    // updateTokenBalances(senderAddress, receiverAddress, propertyId, tokenAmount);
+
+		    // Step 2: Construct the UTXO part of the transaction
+		    // Fetch UTXOs for the senderAddress
+		    const utxos = await TxUtils.getUTXOs(senderAddress, network);
+
+		    // Check if there are enough UTXOs to cover the amount and the transaction fee
+		    const totalUTXOAmount = utxos.reduce((acc, utxo) => acc + utxo.amount, 0);
+		    if (totalUTXOAmount < utxoAmount + transactionFee) {
+		        throw new Error('Insufficient UTXO for the transaction');
+		    }
+
+		    // Construct the raw transaction
+		    // This involves selecting appropriate UTXOs and constructing inputs and outputs
+		    let rawTx = await TxUtils.createRawTransaction(senderAddress, utxos, receiverAddress, utxoAmount, transactionFee, network);
+
+		    // Step 3: Sign the transaction
+		    const signedTx = await TxUtils.signTransaction(rawTx, senderAddress, network);
+
+		    // Step 4: Broadcast the transaction
+		    const txId = await TxUtils.broadcastTransaction(signedTx, network);
+
+		    return txId; // Return the transaction ID of the broadcasted transaction
+	},
+	// commitToken: Commits tokens for a specific purpose
+	commitToken: async function(tallyMap, tradeChannelManager, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
+    // Validate sender address
+	    if (!tallyMap.isAddressValid(senderAddress)) {
+	        throw new Error('Invalid sender address');
+	    }
+
+	    // Check if the sender has sufficient balance
+	    if (!tallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
+	        throw new Error('Insufficient token balance for commitment');
+	    }
+
+	    // Deduct tokens from available balance and add to reserved balance
+	    tallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 'available');
+	    tallyMap.updateBalance(senderAddress, propertyId, tokenAmount, 'reserved');
+
+	    // Determine which column (A or B) to assign the tokens in the channel registry
+	    const channelColumn = tradeChannelManager.determineCommitColumn(senderAddress, transactionTime);
+	    
+	    // Update the channel registry with the committed tokens
+	    await tradeChannelManager.commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
+
+	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
+	},
+
 
     onChainTokenToToken: async function(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected) {
         // Validate input parameters
@@ -134,7 +190,7 @@ const Logic = {
         return order;
     },
 
-		 cancelOrder: async function(fromAddress, offeredPropertyId, desiredPropertyId, cancelAll, price, cancelParams = {}) {
+	cancelOrder: async function(fromAddress, offeredPropertyId, desiredPropertyId, cancelAll, price, cancelParams = {}) {
 		    let cancelledOrders = [];
 
 		    // Handle contract cancellation if only one property ID is provided
@@ -168,59 +224,764 @@ const Logic = {
 
 		    // Return the details of the cancelled orders
 		    return cancelledOrders;
-		}
+		},
 
-    createWhitelist: function(/* parameters */) { /* ... */ },
+		    /**
+		     * Creates a new whitelist.
+		     * 
+		     * @param {Object} params - Parameters for creating the whitelist
+		     * @param {string} params.adminAddress - The address of the admin for this whitelist
+		     * @param {string} [params.name] - Optional name for the whitelist
+		     * @param {Array} [params.criteria] - Optional criteria for inclusion in the whitelist
+		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
+		     * @returns {Object} - The result of the whitelist creation
+		     */
+		    createWhitelist: async function(params) {
+		        const { adminAddress, name, criteria, backupAddress } = params;
 
-    updateAdmin: function(/* parameters */) { /* ... */ },
+		        // Validate input parameters
+		        if (!adminAddress) {
+		            throw new Error('Admin address is required to create a whitelist');
+		        }
 
-    issueAttestation: function(/* parameters */) { /* ... */ },
+		        // Instantiate the WhitelistManager
+		        const whitelistManager = new WhitelistManager();
 
-    revokeAttestation: function(/* parameters */) { 
-    /* ... */ 
+		        // Create the whitelist
+		        const whitelistId = await whitelistManager.createWhitelist({
+		            adminAddress,
+		            name,
+		            criteria,
+		            backupAddress
+		        });
+
+		        // Return a message with the new whitelist ID
+		        return {
+		            message: `Whitelist created successfully with ID: ${whitelistId}`,
+		            whitelistId
+		        };
+		    },
+
+    updateAdmin: async function(entityType, entityId, newAdminAddress, registries) {
+	    if (!entityType || !entityId || !newAdminAddress || !registries) {
+	        throw new Error('Missing required parameters');
+	    }
+
+	    switch (entityType) {
+	        case 'property':
+	            await registries.propertyRegistry.updateAdmin(entityId, newAdminAddress);
+	            break;
+	        case 'whitelist':
+	            await registries.whitelistRegistry.updateAdmin(entityId, newAdminAddress);
+	            break;
+	        case 'oracle':
+	            await registries.oracleRegistry.updateAdmin(entityId, newAdminAddress);
+	            break;
+	        default:
+	            throw new Error('Invalid entity type');
+	    }
+
+	    console.log(`Admin updated for ${entityType} ${entityId}`);
 	},
 
-    grantManagedToken: function(/* parameters */) { /* ... */ },
 
-    redeemManagedToken: function(/* parameters */) { /* ... */ },
+    issueAttestation: async function(whitelistId, targetAddress, whitelistRegistry) {
+	    if (!whitelistId || !targetAddress || !whitelistRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    createOracle: function(/* parameters */) { /* ... */ },
+	    await whitelistRegistry.addAddressToWhitelist(whitelistId, targetAddress);
+	    console.log(`Address ${targetAddress} added to whitelist ${whitelistId}`);
+	},
 
-    publishOracleData: function(/* parameters */) { /* ... */ },
+    revokeAttestation: async function(whitelistId, targetAddress, whitelistRegistry) {
+    if (!whitelistId || !targetAddress || !whitelistRegistry) {
+        throw new Error('Missing required parameters');
+    }
 
-    closeOracle: function(/* parameters */) { /* ... */ },
+    await whitelistRegistry.removeAddressFromWhitelist(whitelistId, targetAddress);
+    console.log(`Address ${targetAddress} removed from whitelist ${whitelistId}`);
+	},
 
-    createFutureContractSeries: function(/* parameters */) { /* ... */ },
+    grantManagedToken: async function(propertyId, amount, recipientAddress, propertyManager) {
+	    if (!propertyId || !amount || !recipientAddress || !propertyManager) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    exerciseDerivative: function(/* parameters */) { /* ... */ },
+	    // Verify if the property is a managed type
+	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
+	    if (!isManaged) {
+	        throw new Error('Property is not a managed type');
+	    }
 
-    tradeContractOnchain: function(/* parameters */) { /* ... */ },
+	    // Logic to grant tokens to the recipient
+	    await propertyManager.grantTokens(propertyId, recipientAddress, amount);
+	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
+	},
 
-    tradeContractChannel: function(/* parameters */) { /* ... */ },
+	redeemManagedToken: async function(propertyId, amount, propertyManager) {
+	    if (!propertyId || !amount || !propertyManager) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    tradeTokensChannel: function(/* parameters */) { /* ... */ },
+	    // Verify if the property is a managed type
+	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
+	    if (!isManaged) {
+	        throw new Error('Property is not a managed type');
+	    }
 
-    withdrawal: function(/* parameters */) { /* ... */ },
+	    // Logic to redeem tokens from the admin's balance
+	    await propertyManager.redeemTokens(propertyId, amount);
+	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
+	},
 
-    transfer: function(/* parameters */) { /* ... */ },
+    createOracle: async function(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry) {
+	    if (!adminAddress || !ticker || !url || !oracleRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    settleChannelPNL: function(/* parameters */) { /* ... */ },
+	    // Create a new oracle
+	    const oracleId = await oracleRegistry.createOracle({adminAddress, ticker, url, backupAddress, whitelists, lag});
+	    console.log(`Oracle created with ID: ${oracleId}`);
+	    return oracleId;
+	},
 
-    mintSynthetic: function(/* parameters */) { /* ... */ },
+    publishOracleData: async function(oracleId, price, high, low, close, oracleRegistry) {
+	    if (!oracleId || !price || !oracleRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    redeemSynthetic: function(/* parameters */) { /* ... */ },
+	    // Publish data to the oracle
+	    await oracleRegistry.publishData(oracleId, { price, high, low, close });
+	    console.log(`Data published to oracle ${oracleId}`);
+	},
 
-    payToTokens: function(/* parameters */) { /* ... */ },
+	closeOracle: async function(oracleId, oracleRegistry) {
+	    if (!oracleId || !oracleRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    createOptionChain: function(/* parameters */) { /* ... */ },
+	    // Close the specified oracle
+	    await oracleRegistry.closeOracle(oracleId);
+	    console.log(`Oracle ${oracleId} has been closed`);
+	},
 
-    tradeBaiUrbun: function(/* parameters */) { /* ... */ },
+    createFutureContractSeries: async function(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee, contractsRegistry) {
+	    if (!contractId || !underlyingOracleId || !notionalPropertyId || !notionalValue || !collateralPropertyId || !contractsRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    tradeMurabaha: function(/* parameters */) { /* ... */ },
+	    // Create a new future contract series
+	    const futureContractSeriesId = await contractsRegistry.createFutureContractSeries({
+	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee
+	    });
+	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
+	    return futureContractSeriesId;
+	},
 
-    issueInvoice: function(/* parameters */) { /* ... */ },
+    exerciseDerivative: async function(contractId, amount, contractsRegistry) {
+	    if (!contractId || !amount || !contractsRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
 
-    batchMoveZkRollup: function(/* parameters */) { /* ... */ },
+	    // Exercise the derivative contract
+	    await contractsRegistry.exerciseDerivative(contractId, amount);
+	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
+	},
+
+    tradeContractOnchain: async function(contractId, price, amount, side, insurance, contractsRegistry) {
+	    if (!contractId || !price || !amount || !contractsRegistry) {
+	        throw new Error('Missing required parameters');
+	    }
+
+	    // Trade the contract on-chain
+	    await contractsRegistry.tradeContractOnchain(contractId, price, amount, side, insurance);
+	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
+	},
+
+    tradeContractChannel: async function(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, tradeChannelManager) {
+	    if (!contractId || !price || !amount || !tradeChannelManager) {
+	        throw new Error('Missing required parameters');
+	    }
+
+	    // Trade the contract within a channel
+	    await tradeChannelManager.tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance);
+	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
+	},
+
+		tradeTokensChannel: async function(propertyId1, propertyId2, amountOffered1, amountDesired2, expiryBlock, channelAddress, TradeChannel, TallyMap) {
+		    // Check if the trade channel exists and is valid
+		    const channelExists = TradeChannel.isChannelValid(channelAddress);
+		    if (!channelExists) {
+		        throw new Error("Invalid trade channel address");
+		    }
+
+		    // Verify if the trade is within the expiry block
+		    const currentBlock = /* logic to get current block number */;
+		    if (currentBlock > expiryBlock) {
+		        throw new Error("Trade expired");
+		    }
+
+		    // Verify sufficient balances in the channel columns
+		    const balanceA = TallyMap.getBalance(channelAddress, propertyId1, 'columnA');
+		    const balanceB = TallyMap.getBalance(channelAddress, propertyId2, 'columnB');
+		    if (balanceA < amountOffered1 || balanceB < amountDesired2) {
+		        throw new Error("Insufficient balance in trade channel");
+		    }
+
+		    // Update balances in the channel columns and commitment addresses
+		    TallyMap.updateBalance(channelAddress, propertyId1, -amountOffered1, 'columnA');
+		    TallyMap.updateBalance(/* Commitment Address B */, propertyId1, amountOffered1, 'available');
+
+		    TallyMap.updateBalance(channelAddress, propertyId2, -amountDesired2, 'columnB');
+		    TallyMap.updateBalance(/* Commitment Address A */, propertyId2, amountDesired2, 'available');
+
+		    // Lock the trade in the channel
+		    await TradeChannel.lockTrade(channelAddress, propertyId1, propertyId2, amountOffered1, amountDesired2);
+
+		    return `Trade executed in channel ${channelAddress}`;
+		},
+
+
+		withdrawal: function(channelAddress, propertyId, amount) {
+		    const channel = this.channelsRegistry.get(channelAddress);
+		    if (!channel) {
+		        throw new Error('Channel not found');
+		    }
+
+		    // Assuming channel object has a map of property balances
+		    if (!channel.balances[propertyId] || channel.balances[propertyId] < amount) {
+		        throw new Error('Insufficient balance for withdrawal');
+		    }
+
+		    // Deduct the amount from the channel balance
+		    channel.balances[propertyId] -= amount;
+
+		    // Logic to transfer the amount back to the user's main account
+		    // This could involve interacting with TallyMap or another account balance module
+
+		    this.channelsRegistry.set(channelAddress, channel);
+		},
+
+
+		transfer: function(fromChannelAddress, toChannelAddress, propertyId, amount) {
+		    const fromChannel = this.channelsRegistry.get(fromChannelAddress);
+		    const toChannel = this.channelsRegistry.get(toChannelAddress);
+
+		    if (!fromChannel || !toChannel) {
+		        throw new Error('One or both channels not found');
+		    }
+
+		    // Check if the fromChannel has enough balance
+		    if (!fromChannel.balances[propertyId] || fromChannel.balances[propertyId] < amount) {
+		        throw new Error('Insufficient balance for transfer');
+		    }
+
+		    // Update balances in both channels
+		    fromChannel.balances[propertyId] -= amount;
+		    toChannel.balances[propertyId] = (toChannel.balances[propertyId] || 0) + amount;
+
+		    this.channelsRegistry.set(fromChannelAddress, fromChannel);
+		    this.channelsRegistry.set(toChannelAddress, toChannel);
+		},
+
+
+		settleChannelPNL: function(channelAddress, txParams) {
+		    const {
+		        txidNeutralized,
+		        contractId,
+		        amountCancelled,
+		        propertyId,
+		        amountSettled,
+		        close,
+		        propertyId2,
+		        amountDelivered
+		    } = txParams;
+
+		    // Locate the trade channel
+		    const channel = this.channelsRegistry.get(channelAddress);
+		    if (!channel) {
+		        throw new Error('Trade channel not found');
+		    }
+
+		    // Neutralize specified contracts
+		    if (txidNeutralized) {
+		        // Logic to mark specified contracts as neutralized
+		        // This could involve updating the channel's contract states
+		    }
+
+		    // Process PNL settlement
+		    if (amountSettled && propertyId) {
+		        // Adjust balances for PNL settlement
+		        // You may need to fetch the current balances and then update them
+		        this.adjustChannelBalances(channelAddress, propertyId, amountSettled);
+		    }
+
+		    // Close contracts if requested
+		    if (close && contractId) {
+		        // Logic to close the specified contract
+		        // This might involve updating the contract state and potentially transferring tokens
+		        this.closeContract(channelAddress, contractId);
+		    }
+
+		    // Handle exercise of options if specified
+		    if (propertyId2 && amountDelivered) {
+		        // Deliver the specified amount of propertyId2 in exercise of options
+		        this.handleOptionExercise(channelAddress, propertyId2, amountDelivered);
+		    }
+
+		    // Save the updated state of the channel
+		    this.channelsRegistry.set(channelAddress, channel);
+
+		    console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
+		},
+
+		exerciseDerivative: function(txParams) {
+		    const { contractId, exerciseType, propertyId, amount } = txParams;
+
+		    switch (exerciseType) {
+		        case 'deliverContract':
+		            this.deliverContract(contractId, propertyId, amount);
+		            break;
+		        case 'optionExercise':
+		            this.handleOptionExercise(contractId, propertyId, amount);
+		            break;
+		        default:
+		            throw new Error('Invalid exercise type');
+		    }
+		},
+
+		deliverContract: function(contractId, propertyId, amount) {
+		    // Logic for contract delivery
+		    // This would involve transferring tokens from the contract to the exercising party
+		    // Eliminate the contract positions
+
+		    // Retrieve contract details and involved parties' balances
+		    // Assume existence of functions getContractDetails and getAddressBalance
+		    const contractDetails = this.getContractDetails(contractId);
+		    const senderBalance = this.getAddressBalance(contractDetails.senderAddress, propertyId);
+		    const receiverBalance = this.getAddressBalance(contractDetails.receiverAddress, propertyId);
+
+		    // Transfer tokens based on contract terms
+		    if (senderBalance >= amount) {
+		        this.updateBalance(contractDetails.senderAddress, propertyId, -amount);
+		        this.updateBalance(contractDetails.receiverAddress, propertyId, amount);
+		    } else {
+		        throw new Error('Insufficient balance for contract delivery');
+		    }
+
+		    // Eliminate the contract
+		    this.removeContract(contractId);
+		},
+
+		handleOptionExercise: function(contractId, propertyId1, propertyId2, numberOfContracts) {
+		    // Logic for handling option exercise
+		    // Notional value of the contract is based on the strike price
+		    // Eliminate the contract positions
+
+		    // Retrieve contract details
+		    const contractDetails = this.getContractDetails(contractId);
+		    const strikePrice = contractDetails.strikePrice; // The strike price of the option
+
+		    // Calculate the notional value based on the strike price
+		    const notionalValue = numberOfContracts * strikePrice;
+
+		    // Retrieve balances of involved parties
+		    const balanceProperty1 = this.getAddressBalance(contractDetails.holderAddress, propertyId1);
+		    const balanceProperty2 = this.getAddressBalance(contractDetails.writerAddress, propertyId2);
+
+		    // Execute the exchange if balances are sufficient
+		    if (balanceProperty1 >= notionalValue && balanceProperty2 >= numberOfContracts) {
+		        // Holder of the option (buyer) exercises the option
+		        this.updateBalance(contractDetails.holderAddress, propertyId1, -notionalValue);
+		        this.updateBalance(contractDetails.holderAddress, propertyId2, numberOfContracts);
+
+		        // Writer of the option (seller) fulfills the option
+		        this.updateBalance(contractDetails.writerAddress, propertyId1, notionalValue);
+		        this.updateBalance(contractDetails.writerAddress, propertyId2, -numberOfContracts);
+		    } else {
+		        throw new Error('Insufficient balance for option exercise');
+		    }
+
+		    // Eliminate the contract
+		    this.removeContract(contractId);
+		},
+
+
+		mintSynthetic: async function(propertyId, contractId, amount) {
+		    // Check if it's the first instance of this synthetic token
+		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
+		    let vaultId;
+		    if (!synthRegistry.exists(syntheticTokenId)) {
+		        vaultId = synthRegistry.createVault(propertyId, contractId);
+		        synthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
+		    } else {
+		        vaultId = synthRegistry.getVaultId(syntheticTokenId);
+		        synthRegistry.updateVault(vaultId, amount);
+		    }
+
+		    // Issue the synthetic token
+		    propertyManager.addProperty(syntheticTokenId, `Synth-${propertyId}-${contractId}`, amount, 'Synthetic');
+
+		    // Log the minting of the synthetic token
+		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
+		},
+
+		redeemSynthetic: async function(propertyId, contractId, amount) {
+		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
+		    const vaultId = synthRegistry.getVaultId(syntheticTokenId);
+
+		    if (!vaultId) {
+		        throw new Error('Synthetic token vault not found');
+		    }
+
+		    // Redeem the synthetic token
+		    const vault = synthRegistry.getVault(vaultId);
+		    if (vault.amount < amount) {
+		        throw new Error('Insufficient synthetic token balance for redemption');
+		    }
+
+		    synthRegistry.updateVault(vaultId, -amount);
+
+		    // Update margin and contract balances in MarginMap
+		    marginMap.updateMarginBalance(vault.address, propertyId, -amount);
+		    marginMap.updateContractBalance(vault.address, contractId, -amount);
+
+		    // Update synthetic token property
+		    propertyManager.updatePropertyBalance(syntheticTokenId, -amount);
+
+		    // Log the redemption of the synthetic token
+		    console.log(`Redeemed ${amount} of synthetic token ${syntheticTokenId}`);
+		},
+
+    const BigNumber = require('bignumber.js');
+
+	// payToTokens: Distributes propertyIdUsed tokens to holders of propertyIdTarget tokens
+	payToTokens: async function(tallyMap, propertyIdTarget, propertyIdUsed, amount) {
+	    // Check if enough tokens of propertyIdUsed are available for distribution
+	    const totalAvailable = tallyMap.totalTokens(propertyIdUsed);
+	    if (totalAvailable < amount) {
+	        throw new Error('Insufficient tokens for distribution');
+	    }
+
+	    // Calculate total holdings of propertyIdTarget
+	    const totalHoldingTarget = tallyMap.totalTokens(propertyIdTarget);
+	    if (totalHoldingTarget <= 0) {
+	        throw new Error('No holders for target token');
+	    }
+
+	    // Calculate and distribute tokens to each holder
+	    let remainingAmount = new BigNumber(amount);
+	    for (const [address, balances] of tallyMap.addresses.entries()) {
+	        const targetBalance = balances[propertyIdTarget];
+	        if (targetBalance && targetBalance.available > 0) {
+	            // Calculate the holder's share
+	            const share = new BigNumber(targetBalance.available).dividedBy(totalHoldingTarget);
+	            const payout = share.multipliedBy(amount);
+
+	            // Distribute if the payout is significant (>= 0.00000001)
+	            if (payout.isGreaterThanOrEqualTo(new BigNumber('0.00000001'))) {
+	                // Update balances
+	                tallyMap.updateBalance(address, propertyIdUsed, -payout.toNumber(), 'available');
+	                remainingAmount = remainingAmount.minus(payout);
+
+	                console.log(`Distributed ${payout.toFixed()} of token ${propertyIdUsed} to holder ${address}`);
+	            }
+	        }
+	    }
+
+	    // Handle any remaining amount, possibly due to rounding
+	    if (!remainingAmount.isZero()) {
+	        // Choose a strategy to distribute the remaining amount
+	        // For example, add to a general pool, burn it, or send to a specific address
+	        // Example: send to a designated address
+	        const designatedAddress = 'some_designated_address';
+	        tallyMap.updateBalance(designatedAddress, propertyIdUsed, remainingAmount.toNumber(), 'available');
+	        console.log(`Remaining ${remainingAmount.toFixed()} of token ${propertyIdUsed} sent to ${designatedAddress}`);
+	    }
+
+	    // Save the updated state of the TallyMap
+	    await tallyMap.save(currentBlockHeight); // Replace currentBlockHeight with actual block height
+	},
+
+
+     createOptionChain(seriesId, strikePercentInterval, isEuropeanStyle) {
+        if (!this.isValidSeriesId(seriesId)) {
+            throw new Error('Invalid series ID');
+        }
+
+        // Assuming you have a method to get the expiry intervals and other necessary data for a series
+        const seriesData = this.getSeriesData(seriesId);
+        const optionChain = [];
+
+        seriesData.expiryIntervals.forEach(expiryInterval => {
+            // Calculate strike prices based on the strikePercentInterval and underlying asset price
+            const strikePrices = this.calculateStrikePrices(seriesData.underlyingAssetPrice, strikePercentInterval);
+
+            strikePrices.forEach(strikePrice => {
+                // Generate contract IDs for both Put and Call options
+                const putContractId = `${seriesId}-${expiryInterval}-P-${strikePrice}`;
+                const callContractId = `${seriesId}-${expiryInterval}-C-${strikePrice}`;
+
+                optionChain.push({
+                    contractId: putContractId,
+                    type: 'Put',
+                    strikePrice: strikePrice,
+                    expiryBlockHeight: expiryInterval,
+                    isEuropeanStyle: isEuropeanStyle
+                });
+
+                optionChain.push({
+                    contractId: callContractId,
+                    type: 'Call',
+                    strikePrice: strikePrice,
+                    expiryBlockHeight: expiryInterval,
+                    isEuropeanStyle: isEuropeanStyle
+                });
+            });
+        });
+
+        // Optionally, register these contracts in your system's registry
+        // this.registerOptionContracts(optionChain);
+
+        return optionChain;
+    },
+
+    // Helper function to calculate strike prices
+    calculateStrikePrices(assetPrice, percentInterval) {
+        // Logic to calculate an array of strike prices based on the asset price and percentage interval
+        // For simplicity, let's say we generate a fixed number of strike prices above and below the asset price
+        const strikePrices = [];
+        const numStrikes = 5; // Number of strike prices above and below the current price
+
+        for (let i = -numStrikes; i <= numStrikes; i++) {
+            const strikePrice = assetPrice * (1 + (i * percentInterval / 100));
+            strikePrices.push(strikePrice);
+        }
+
+        return strikePrices;
+    },
+
+    async tradeBaiUrbun(channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercent, amount, expiryBlock, tradeExpiryBlock) {
+    // Ensure the trade is conducted inside a channel
+    if (!this.channelsRegistry.has(channelAddress)) {
+        throw new Error('Trade channel not found');
+    }
+
+    // Calculate the down payment amount based on the percentage
+    const downPaymentAmount = amount * (downPaymentPercent / 10000); // Assuming basis points
+
+    // Retrieve current market price for the two property IDs from the token DEX
+    const currentMarketPrice = await this.tokenDex.getMarketPrice(propertyIdToBeSold, propertyIdDownPayment);
+    if (!currentMarketPrice) {
+        throw new Error('Market price not available for the given property IDs');
+    }
+
+    // Validate that the Bai Urbun is not out of the money
+    if (downPaymentAmount < currentMarketPrice * amount) {
+        throw new Error('Bai Urbun contract is out of the money');
+    }
+
+    // Create the Bai Urbun contract
+    const baiUrbunContract = {
+        type: 'BaiUrbun',
+        propertyIdDownPayment,
+        propertyIdToBeSold,
+        downPaymentPercent,
+        downPaymentAmount,
+        totalAmount: amount,
+        expiryBlock,
+        tradeExpiryBlock,
+        contractId: `B-${propertyIdToBeSold}-${propertyIdDownPayment}-${expiryBlock}`
+    };
+
+    // Add the contract to the Bai Urbun registry
+    await this.baiUrbunRegistry.addContract(baiUrbunContract);
+
+    // Process token commitments in the channel
+    this.channelsRegistry.commitToChannel(channelAddress, propertyIdDownPayment, downPaymentAmount, 'BaiUrbunDownPayment');
+
+
+
+    console.log(`Bai Urbun contract created: ${JSON.stringify(baiUrbunContract)}`);
+    return baiUrbunContract;
+	}
+
+	tradeBaiUrbun: async function(tallyMap, marginMap, channelRegistry, channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercentage, price, amount, expiryBlock, tradeExpiryBlock) {
+	    // Validate inputs and check balances
+	    if (!channelRegistry.hasChannel(channelAddress)) {
+	        throw new Error('Invalid channel address');
+	    }
+
+	    const channel = channelRegistry.getChannel(channelAddress);
+	    const { committerA, committerB } = channel; // Assuming the channel has committerA and committerB
+
+	    // Calculate down payment amount
+	    const downPaymentAmount = (downPaymentPercentage / 10000) * amount; // Convert basis points to actual amount
+
+	    // Check if committers have enough balance for the trade
+	    if (!tallyMap.hasSufficientBalance(committerA, propertyIdToBeSold, amount)) {
+	        throw new Error('Seller (Committer A) has insufficient token balance for the property to be sold');
+	    }
+	    if (!tallyMap.hasSufficientBalance(committerB, propertyIdDownPayment, downPaymentAmount)) {
+	        throw new Error('Buyer (Committer B) has insufficient token balance for down payment');
+	    }
+
+		    const baiUrbunContract = {
+	        type: 'BaiUrbun',
+	        propertyIdDownPayment,
+	        propertyIdToBeSold,
+	        downPaymentPercent,
+	        downPaymentAmount,
+	        totalAmount: amount,
+	        expiryBlock,
+	        tradeExpiryBlock,
+	        contractId: `B-${propertyIdToBeSold}-${propertyIdDownPayment}-${expiryBlock}`
+    	};
+
+	    // Add the contract to the Bai Urbun registry
+	    await contractsRegistry.baiUrbun.addContract(baiUrbunContract);
+
+	    // Generate contract ID for Bai Urbun
+	    const contractId = `B-${propertyIdToBeSold}-${propertyIdDownPayment}-${expiryBlock}`;
+
+	    // Reserve the property and down payment in the tallyMap
+	    tallyMap.updateBalance(committerA, propertyIdToBeSold, -amount, 'available');
+	    tallyMap.updateBalance(committerA, propertyIdToBeSold, amount, 'reserved');
+	    tallyMap.updateBalance(committerB, propertyIdDownPayment, -downPaymentAmount, 'available');
+	    tallyMap.updateBalance(committerB, propertyIdDownPayment, downPaymentAmount, 'reserved');
+
+	    // Update marginMap for Bai Urbun contract
+	    marginMap.updateContractBalance(committerA, contractId, amount, 'positive');
+	    marginMap.updateContractBalance(committerB, contractId, amount, 'negative');
+
+	    console.log(`Created Bai Urbun contract with ID ${contractId} in channel ${channelAddress}`);
+
+	    // Record the contract creation in the BaiUrbun registry
+	    // Additional logic to add the contract to the BaiUrbun registry
+	    // ...
+
+	    return contractId;
+	},
+
+
+	tradeMurabaha(channelAddress, buyerAddress, sellerAddress, propertyId, costPrice, profitMargin, paymentBlockHeight) {
+	    // Check if the channel exists
+	    const channel = this.channelsRegistry.get(channelAddress);
+	    if (!channel) {
+	        throw new Error('Channel not found');
+	    }
+
+	    // Validate addresses and amounts
+	    TxUtils.validateAddresses(buyerAddress, sellerAddress);
+	    TxUtils.validateAmounts(costPrice, profitMargin);
+	     // Example: Update margin at the time of agreement
+	    marginMap.updateMargin(buyerAddress, propertyId, -(costPrice + profitMargin)); // Buyer's margin decreases by total payment amount
+    	marginMap.updateMargin(sellerAddress, propertyId, costPrice); // Seller's margin increases by the cost price
+
+
+	    // Logic for Murabaha contract
+	    // Record the cost and profit margin
+	    channel.contracts.push({
+	        type: 'Murabaha',
+	        buyerAddress,
+	        sellerAddress,
+	        propertyId,
+	        costPrice,
+	        profitMargin,
+	        paymentBlockHeight
+	    });
+
+	    console.log(`Murabaha contract created in channel ${channelAddress}`);
+	},
+
+    issueInvoice: function(propertyManager, invoiceRegistry, propertyIdToReceivePayment, amount, dueDateBlock, propertyIdCollateral = null, receivesPayToToken = false, issuerNonce) {
+	    // Validate input parameters
+	    if (!propertyManager.isPropertyIdValid(propertyIdToReceivePayment)) {
+	        throw new Error('Invalid property ID to receive payment');
+	    }
+	    if (propertyIdCollateral && !propertyManager.isPropertyIdValid(propertyIdCollateral)) {
+	        throw new Error('Invalid property ID for collateral');
+	    }
+
+	    // Generate an invoice ID
+	    const invoiceId = `${propertyIdToReceivePayment}-${dueDateBlock}-${issuerNonce}`;
+
+	    // Create the invoice object
+	    const invoice = {
+	        invoiceId,
+	        propertyIdToReceivePayment,
+	        amount,
+	        dueDateBlock,
+	        collateral: propertyIdCollateral ? {
+	            propertyId: propertyIdCollateral,
+	            locked: receivesPayToToken,
+	        } : null,
+	    };
+
+	    // Register the invoice in the invoice registry
+	    invoiceRegistry.registerInvoice(invoice);
+
+	    console.log(`Invoice issued with ID: ${invoiceId}`);
+
+	    // Optionally, if collateral is involved and receives payToToken, lock the collateral
+	    if (invoice.collateral && receivesPayToToken) {
+	        // Logic to lock collateral in association with this invoice
+	        // This might involve updating a collateral registry or similar system
+	    }
+
+	    // Return the invoice ID for reference
+	    return invoiceId;
+	},
+
+	batchMoveZkRollup: function(zkVerifier, rollupData, zkProof) {
+	    // Parse the Zero-Knowledge rollup data
+	    let transactions;
+	    try {
+	        transactions = JSON.parse(rollupData); // Assuming rollupData is a JSON string
+	    } catch (error) {
+	        throw new Error('Invalid rollup data format');
+	    }
+
+	    // Validate the structure of the parsed data
+	    if (!isValidRollupDataStructure(transactions)) {
+	        throw new Error('Invalid rollup data structure');
+	    }
+
+	    // Verify the Zero-Knowledge proof
+	    if (!zkVerifier.verify(zkProof, transactions)) {
+	        throw new Error('Invalid Zero-Knowledge proof');
+	    }
+
+	    // Process each transaction in the batch
+	    transactions.forEach(transaction => {
+	        const { fromAddress, toAddress, propertyId, amount } = transaction;
+
+	        // Perform necessary checks and balances updates for each transaction
+	        // For example, debiting from one address and crediting to another
+	        // This will involve interaction with a ledger or database
+	    });
+
+	    console.log('Batched transactions processed successfully');
+
+	    // Placeholder for additional proof logics to be parsed later
+	    // Implement as per the specific requirements of the rollup data and proofs
+
+	    // Return success or a summary of the processed transactions
+	    return { status: 'success', transactionsProcessed: transactions.length };
+	},
+
+		// Helper function to validate the structure of the rollup data
+		function isValidRollupDataStructure(transactions) {
+		    // Implement validation logic based on expected format
+		    // For example, checking for required fields in each transaction object
+		    return transactions.every(transaction => 
+		        transaction.hasOwnProperty('fromAddress') &&
+		        transaction.hasOwnProperty('toAddress') &&
+		        transaction.hasOwnProperty('propertyId') &&
+		        transaction.hasOwnProperty('amount')
+		    );
+		},
 
     publishNewTx: function(/* parameters */) { /* ... */ },
 

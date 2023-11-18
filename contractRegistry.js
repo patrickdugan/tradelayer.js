@@ -175,6 +175,17 @@ class ContractsRegistry {
           }
       }
       return maxId + 1;
+    },
+
+    isValidSeriesId(seriesId) {
+        // Check if the seriesId exists in the contract series registry
+        // The registry could be a database, a map, or any other data structure
+        // that stores information about the contract series in your system
+        if (this.contractSeriesRegistry.has(seriesId)) {
+            return true; // The seriesId is valid
+        } else {
+            return false; // The seriesId is not valid
+        }
     }
 
 }

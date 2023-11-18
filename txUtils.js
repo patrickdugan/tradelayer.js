@@ -223,19 +223,19 @@ const TxUtils = {
 
 
     async function setChange(address, amount, rawTx) {
-    // Decode the raw transaction
-    let decodedTx = await client.cmd('decoderawtransaction', rawTx);
+        // Decode the raw transaction
+        let decodedTx = await client.cmd('decoderawtransaction', rawTx);
 
-    // Add a change output
-    decodedTx.vout.push({
-        "value": amount,
-        "scriptPubKey": {
-            "address": address
-        }
-    });
+        // Add a change output
+        decodedTx.vout.push({
+            "value": amount,
+            "scriptPubKey": {
+                "address": address
+            }
+        });
 
-    // Re-encode the transaction
-    return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
+        // Re-encode the transaction
+        return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
     }
 
 
@@ -300,6 +300,40 @@ const TxUtils = {
 
         // Return the fully constructed and signed raw transaction
         return signedTx;
+    },
+
+
+    async function parseAndCoSignMultisigTransaction(rawTx, expectedUTXOValue, coSignerAddress, coSignerPrivateKey, network) {
+        // Step 1: Decode the raw transaction
+        const decodedTx = await TxUtils.decodeRawTransaction(rawTx, network);
+
+        // Step 2: Analyze the transaction outputs to find the reference/payment address and its value
+         // Step 2: Analyze the transaction outputs to find the reference/payment address and its value
+    // The reference output is the last output before the OP_RETURN or null data output
+        let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
+        if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
+            throw new Error('No OP_RETURN output found or no outputs before OP_RETURN');
+        }
+        let paymentOutput = decodedTx.vout[paymentOutputIndex - 1]; // Getting the output before OP_RETURN
+
+        if (!paymentOutput || paymentOutput.value < expectedUTXOValue) {
+            throw new Error('Transaction does not meet the expected UTXO value criteria');
+        }
+
+        // Step 3: If the transaction is valid, prepare to co-sign it
+        // Fetch additional UTXOs for the coSignerAddress if necessary
+        const additionalUTXOs = await TxUtils.getAdditionalUTXOs(coSignerAddress, expectedUTXOValue - paymentOutput.value, network);
+
+        // Step 4: Add the additional UTXOs to the transaction
+        rawTx = await TxUtils.addInputsToTransaction(rawTx, additionalUTXOs, network);
+
+        // Step 5: Co-sign the transaction
+        const coSignedTx = await TxUtils.coSignTransaction(rawTx, coSignerPrivateKey, network);
+
+        // Step 6: Optionally, you can broadcast the transaction
+        // const txId = await TxUtils.broadcastTransaction(coSignedTx, network);
+
+        return coSignedTx; // Return the co-signed transaction
     }
 
 };

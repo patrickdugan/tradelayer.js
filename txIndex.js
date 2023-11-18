@@ -12,11 +12,11 @@ class TxIndex {
             pass: 'pass',
             timeout: 10000
         });
-    }
+    },
 
     async initializeIndex(genesisBlock) {
         await this.db.put('genesisBlock', genesisBlock);
-    }
+    },
 
     async extractBlockData(startHeight) {
         const chainTip = await this.fetchChainTip();
@@ -24,7 +24,7 @@ class TxIndex {
             const blockData = await this.fetchBlockData(height);
             await this.processBlockData(blockData, height);
         }
-    }
+    },
 
     async fetchChainTip() {
         return new Promise((resolve, reject) => {
@@ -36,7 +36,7 @@ class TxIndex {
                 }
             });
         });
-    }
+    },
 
     async fetchBlockData(height) {
         return new Promise((resolve, reject) => {
@@ -54,7 +54,7 @@ class TxIndex {
                 }
             });
         });
-    }
+    },
 
     async processBlockData(blockData, blockHeight) {
         for (const txId of blockData.tx) {
@@ -64,7 +64,7 @@ class TxIndex {
                 await this.saveTransactionData(txId, txData, txType, blockHeight);
             }
         }
-    }
+    },
 
     async fetchTransactionData(txId) {
         return new Promise((resolve, reject) => {
@@ -76,7 +76,7 @@ class TxIndex {
                 }
             });
         });
-    }
+    },
 
     decodeTransactionType(txData) {
         // Assuming OP_RETURN is used for TL transactions
@@ -85,7 +85,7 @@ class TxIndex {
 
         const hexPayload = opReturn.scriptPubKey.hex;
         return this.decodePayload(hexPayload);
-    }
+    },
 
     decodePayload(hexPayload) {
         const marker = hexPayload.slice(0, 1);
@@ -94,11 +94,11 @@ class TxIndex {
         } else {
             return null;
         }
-    }
+    },
 
     async saveTransactionData(txId, txData, txType, blockHeight) {
         await this.db.put(`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, txType }));
-    }
+    },
 
     async loadIndex() {
         // Load and process the saved index from LevelDB

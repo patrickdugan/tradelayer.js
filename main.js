@@ -46,7 +46,7 @@ class Main {
         this.genesisBlock = 3041685;
         this.blockchainPersistence = new BlockchainPersistence();
         this.reOrgChecker = new ReOrgChecker(reOrgConfig);
-    }
+    }   client = new Litecoin(config)
 
     async initialize() {
         // Initialize TradeLayer if not already done
@@ -63,19 +63,29 @@ class Main {
 
         // Start processing incoming blocks
         await this.processIncomingBlocks(consensus);
-    }
+    },
+
+    async function getCurrentBlockHeight() {
+      try {
+        const blockchainInfo = await client.cmd('getblockchaininfo');
+        return blockchainInfo.blocks;
+      } catch (error) {
+        console.error('Error fetching current block height:', error);
+        throw error; // or handle error as needed
+      }
+    },
 
     async checkForIndex() {
         // Check if an index already exists in the DB
         // Implement the logic to check for index existence
         return false; // Placeholder
-    }
+    },
 
     async constructOrLoadConsensus() {
         // Load consensus state from Persistence if available, otherwise construct from index
         // To be implemented
         return {}; // Placeholder for consensus state
-    }
+    },
 
    async processIncomingBlocks(consensus) {
         // Continuously loop through incoming blocks and process them
@@ -92,7 +102,7 @@ class Main {
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }
-    }
+    },
 
     async processBlock(blockData, blockNumber, consensus) {
         // Process the beginning of the block
@@ -105,13 +115,13 @@ class Main {
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
-    }
+    },
 
      async shutdown() {
         console.log('Shutting down TradeLayer...');
         // Add shutdown logic here
         // This could include saving state, closing database connections, etc.
-    }
+    },
 
     async blockHandlerBegin(blockHash, blockHeight) {
         console.log(`Beginning to process block ${blockHeight}`);
@@ -126,26 +136,28 @@ class Main {
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
         }
-    }
+    },
 
     async blockHandlerMiddle(blockHash, blockHeight) {
         console.log(`Processing transactions in block ${blockHeight}`);
         // Add logic to process the transactions within the block
         // This could involve iterating over transactions, applying business logic, etc.
-    }
+    },
 
     async blockHandlerEnd(blockHash, blockHeight) {
         console.log(`Finished processing block ${blockHeight}`);
-        // Add logic to handle the end of block processing
-        // This could include finalizing state changes, updating metrics, etc.
-    }
+        // Additional logic for end of block processing
+
+        // Call the method to process confirmed withdrawals
+        await this.processConfirmedWithdrawals();
+    },
 
     async handleReorg(blockHeight) {
         console.log(`Handling reorganization at block ${blockHeight}`);
         // Add logic to handle a blockchain reorganization
         await this.blockchainPersistence.handleReorg();
         // This could involve reverting to a previous state, re-processing blocks, etc.
-    }
+    },
 
     /**
      * Updates the tally map based on the given transaction.
@@ -208,27 +220,64 @@ class Main {
                 console.log('Token Creation Transaction:', tokenCreationTx);
             }
         }
-    }
+    },
 
-        createActivationTransaction() {
+    async processConfirmedWithdrawals() {
+        console.log('Checking for confirmed withdrawals...');
+
+        const currentBlockHeight = await this.getCurrentBlockHeight();
+        const withdrawalsToProcess = await this.getConfirmedWithdrawals(currentBlockHeight);
+
+        for (const withdrawal of withdrawalsToProcess) {
+            if (currentBlockHeight - withdrawal.blockConfirmed >= 8) {
+                console.log(`Processing withdrawal for ${withdrawal.channelAddress}`);
+                // Process the transfer logic here
+                // This might involve interacting with the TradeChannel module
+                // and updating the respective balances or state
+                await this.tradeChannel.processTransfer(withdrawal);
+            }
+        }
+    },
+
+    async getConfirmedWithdrawals(currentBlockHeight) {
+        // Assuming `db` is your database instance configured to interact with your blockchain data
+        // The range would be from currentBlockHeight - 8 to currentBlockHeight
+        const confirmedWithdrawals = await db.getConfirmedWithdrawals(currentBlockHeight - 8, currentBlockHeight);
+        return confirmedWithdrawals;
+    },
+
+    async processWithdrawals(currentBlockHeight) {
+      const confirmedWithdrawals = await this.getConfirmedWithdrawals(currentBlockHeight);
+      for (const withdrawalTx of confirmedWithdrawals) {
+          const isValid = await this.validateWithdrawal(withdrawalTx);
+          if (isValid) {
+              // Process the valid withdrawal
+              // This could involve transferring the tokens from the trade channel to the user's address
+          } else {
+              // Handle invalid withdrawal, e.g., logging, notifying the user, etc.
+          }
+      }
+    },
+
+    createActivationTransaction() {
             // Construct and return an activation transaction
             return { type: 'activation', details: {/*...*/} };
-        }
+    },
 
-        activateSystem(activationTx) {
+    activateSystem(activationTx) {
             // Logic to activate the system using the activation transaction
             // Update the transaction registry, etc.
-        }
+    },
 
-        createAnotherActivationTransaction() {
+    createAnotherActivationTransaction() {
             // Construct and return another activation transaction
             return { type: 'activation', details: {/*...*/} };
-        }
+    },
 
-        createTokenCreationTransaction() {
+    createTokenCreationTransaction() {
             // Construct and return a token creation transaction
             return { type: 'tokenCreation', details: {/*...*/} };
-        }
+    }
 
     // ... other methods ...
 }
