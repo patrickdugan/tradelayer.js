@@ -972,7 +972,7 @@ const Logic = {
 	},
 
 		// Helper function to validate the structure of the rollup data
-		function isValidRollupDataStructure(transactions) {
+    isValidRollupDataStructure(transactions) {
 		    // Implement validation logic based on expected format
 		    // For example, checking for required fields in each transaction object
 		    return transactions.every(transaction => 
@@ -981,9 +981,41 @@ const Logic = {
 		        transaction.hasOwnProperty('propertyId') &&
 		        transaction.hasOwnProperty('amount')
 		    );
-		},
+	},
 
-    publishNewTx: function(/* parameters */) { /* ... */ },
+    publishNewTx: function(ordinalRevealJSON, jsCode) {
+    // Validate the input JSON and JavaScript code
+    if (!isValidJSON(ordinalRevealJSON)) {
+        throw new Error('Invalid Ordinal Reveal JSON');
+    }
+    if (!isValidJavaScript(jsCode)) {
+        throw new Error('Invalid JavaScript code');
+    }
+
+    // Minify the JavaScript code (assuming a minification function exists)
+    const minifiedJsCode = minifyJavaScript(jsCode);
+
+    // Assign a new transaction type ID
+    const newTxTypeId = getNextTxTypeId();
+
+    // Construct the new transaction with the ordinal reveal JSON and minified JS code
+    const newTx = {
+        txTypeId: newTxTypeId,
+        ordinalRevealJSON: ordinalRevealJSON,
+        smartContractCode: minifiedJsCode
+    };
+
+    // Save the new transaction to the system's registry
+    // Assuming a function to save the transaction exists
+    saveNewTransaction(newTx);
+
+    console.log(`Published new transaction type ID ${newTxTypeId}`);
+
+    // Return the new transaction type ID and details
+    return { newTxTypeId, newTx };
+},
+
+/
 
     createDerivativeOfLRC20OrRGB: function(/* parameters */) { /* ... */ },
 

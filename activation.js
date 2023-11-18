@@ -105,7 +105,7 @@ class Activation {
             35: { name: "Mint Colored Coin", logicFunction: Logic.mintColoredCoin, active: false },
             // ... potentially other transaction types ...
         };
-    }
+    },
 
 
      /**
@@ -120,11 +120,43 @@ class Activation {
             return true;
         }
         return false;
-    }
+    },
 
     async isSenderGenesisAdmin(address) {
         // Check if the given address is the genesis admin
         return (address === 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8')
+    },
+
+    isValidJSON(json) {
+        try {
+            JSON.parse(json);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    isValidJavaScript(jsCode) {
+        // Implement JavaScript validation logic
+        // This could include syntax checking and potentially safety checks
+        return true; // Placeholder
+    }
+
+    minifyJavaScript(jsCode) {
+        // Implement JavaScript code minification
+        // You might use existing libraries for minification
+        return jsCode; // Placeholder
+    }
+
+    getNextTxTypeId() {
+        // Logic to get the next transaction type ID
+        // This might involve querying a database or keeping track in memory
+        return /* next transaction type ID */;
+    },
+
+    saveNewTransaction(newTx) {
+        // Logic to save the new transaction
+        // This will likely involve database operations
     }
 }
 
