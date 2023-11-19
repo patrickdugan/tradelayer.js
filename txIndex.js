@@ -61,10 +61,21 @@ class TxIndex {
             const txData = await this.fetchTransactionData(txId);
             const txType = this.decodeTransactionType(txData);
             if (txType === 'tl') {
-                await this.saveTransactionData(txId, txData, txType, blockHeight);
+                const txDetails = await this.processOmniTransaction(txData);
+                await this.saveTransactionData(txId, txData, txType, blockHeight, txDetails);
+
+                // Save each transaction with its block height as a key
+                await this.saveTransactionByHeight(txId, blockHeight);
             }
         }
     },
+
+     async saveTransactionByHeight(txId, blockHeight) {
+        const txKey = `txHeight-${blockHeight}-${txId}`;
+        const txData = await this.fetchTransactionData(txId);
+        await this.db.put(txKey, JSON.stringify(txData));
+    },
+
 
     async fetchTransactionData(txId) {
         return new Promise((resolve, reject) => {
@@ -76,6 +87,19 @@ class TxIndex {
                 }
             });
         });
+    },
+
+    async processTransaction(txData) {
+        // Example: Extract sender, reference address, payload, etc.
+        // These methods can be similar to those in TxUtils
+        const sender = await this.getSender(txData.txId);
+        const reference = await this.getReference(txData.txId);
+        const payload = await this.getPayload(txData.txId);
+        const txType = TxUtils.decodeTransactionType(txData);
+        // Decode the transaction based on its type and payload
+        const decodedParams = Types.decodePayload(txId, txType, payload);
+
+        return { sender, reference, payload, decodeParams};
     },
 
     decodeTransactionType(txData) {

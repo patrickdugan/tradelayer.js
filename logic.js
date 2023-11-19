@@ -4,6 +4,50 @@ const TradeChannels = require('channels.js')
 
 // logic.js
 const Logic = {
+
+    typeSwitch: (txNumber, params) => {
+        switch (txNumber) {
+            case 0: Logic.activateTradeLayer(params); break;
+            case 1: Logic.tokenIssue(params); break;
+            case 2: Logic.sendToken(params); break;
+            case 3: Logic.tradeTokenForUTXO(params); break;
+            case 4: Logic.commitToken(params); break;
+            case 5: Logic.onChainTokenToToken(params); break;
+            case 6: Logic.cancelOrder(params); break;
+            case 7: Logic.createWhitelist(params); break;
+            case 8: Logic.updateAdmin(params); break;
+            case 9: Logic.issueAttestation(params); break;
+            case 10: Logic.revokeAttestation(params); break;
+            case 11: Logic.grantManagedToken(params); break;
+            case 12: Logic.redeemManagedToken(params); break;
+            case 13: Logic.createOracle(params); break;
+            case 14: Logic.publishOracleData(params); break;
+            case 15: Logic.closeOracle(params); break;
+            case 16: Logic.createFutureContractSeries(params); break;
+            case 17: Logic.updateOracleAdmin(params); break;
+            case 18: Logic.closeOracle(params); break; // Note: This repeats case 15
+            case 19: Logic.createOracleFutureContract(params); break;
+            case 20: Logic.exerciseDerivative(params); break;
+            case 21: Logic.nativeContractWithOnChainData(params); break;
+            case 22: Logic.tradeContractOnchain(params); break;
+            case 23: Logic.tradeContractChannel(params); break;
+            case 24: Logic.tradeTokensChannel(params); break;
+            case 25: Logic.withdrawal(params); break;
+            case 26: Logic.transfer(params); break;
+            case 27: Logic.settleChannelPNL(params); break;
+            case 28: Logic.mintSynthetic(params); break;
+            case 29: Logic.redeemSynthetic(params); break;
+            case 30: Logic.payToTokens(params); break;
+            case 31: Logic.batchMoveZkRollup(params); break;
+            case 32: Logic.publishNewTx(params); break;
+            case 33: Logic.createDerivativeOfLRC20OrRGB(params); break;
+            case 34: Logic.registerOPCTVCovenant(params); break;
+            case 35: Logic.mintColoredCoin(params); break;
+            default:
+                console.log(`Unhandled transaction type: ${txNumber}`);
+        }
+    },
+
     activateTradeLayer: function(transaction, activationInstance) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         const firstTxId = transaction.txId; // This should uniquely identify the first transaction

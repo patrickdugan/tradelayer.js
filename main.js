@@ -140,9 +140,33 @@ class Main {
 
     async blockHandlerMiddle(blockHash, blockHeight) {
         console.log(`Processing transactions in block ${blockHeight}`);
-        // Add logic to process the transactions within the block
-        // This could involve iterating over transactions, applying business logic, etc.
+
+        // Retrieve the block data
+        const blockData = await this.txIndex.fetchBlockData(blockHeight);
+
+        // Iterate over each transaction in the block
+        for (const txId of blockData.tx) {
+            try {
+                // Fetch detailed transaction data
+                const txData = await TxUtils.getRawTransaction(txId);
+
+                // Extract and decode the payload
+                const payload = TxUtils.getPayload(txId);
+                const txType = TxUtils.decodeTransactionType(txData);
+
+                // Decode the transaction based on its type and payload
+                const decodedParams = Types.decodePayload(txId, txType, payload);
+
+                // Process the transaction based on the decoded parameters
+                await TxIndex.processTransaction(txType, decodedParams, blockHeight);
+                Logic.typeSwitch(txType, decodedParams);
+
+            } catch (error) {
+                console.error(`Error processing transaction ${txId}: ${error.message}`);
+            }
+        }
     },
+
 
     async blockHandlerEnd(blockHash, blockHeight) {
         console.log(`Finished processing block ${blockHeight}`);
