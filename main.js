@@ -1,6 +1,6 @@
 const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
-
+const Clearing =requre('clearing.js')
 // Custom modules for TradeLayer
 const TradeLayerManager = require('./TradeLayerManager.js'); // Manages TradeLayer protocol
 const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -75,12 +75,32 @@ class Main {
       }
     },
 
-    async checkForIndex() {
-        // Check if an index already exists in the DB
-        // Implement the logic to check for index existence
-        return false; // Placeholder
-    },
+    async function checkForIndex() {
+        try {
+            // Define the key for your singleton index
+            const singletonIndexKey = 'singleton_index_key'; // Replace with your actual key
 
+            const indexExists = await new Promise((resolve, reject) => {
+                db.get(singletonIndexKey, (err, value) => {
+                    if (err) {
+                        if (err.type === 'NotFoundError') {
+                            resolve(false); // Singleton index does not exist
+                        } else {
+                            reject(err); // Some other error occurred
+                        }
+                    } else {
+                        resolve(true); // Singleton index exists
+                    }
+                });
+            });
+
+            return indexExists;
+        } catch (error) {
+            console.error('Error checking for singleton index:', error);
+            throw error; // Rethrow or handle error as appropriate for your application
+        }
+    },
+    
     async constructOrLoadConsensus() {
         // Load consensus state from Persistence if available, otherwise construct from index
         // To be implemented
@@ -173,7 +193,18 @@ class Main {
         // Additional logic for end of block processing
 
         // Call the method to process confirmed withdrawals
-        await this.processConfirmedWithdrawals();
+        await Channels.processConfirmedWithdrawals();
+         for (const contract of ContractsRegistry.getAllContracts()) {
+            // Check if the contract has open positions
+            if (ContractsRegistry.hasOpenPositions(contract)) {
+                // Perform settlement tasks for the contract
+                let positions = await Clearing.fetchPositionsForAdjustment(blockHeight, contract);
+                const blob = await Clearing.makeSettlement(blockHeight, contract);
+
+                // Perform audit tasks for the contract
+                await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
+            }
+        }
     },
 
     async handleReorg(blockHeight) {
@@ -218,6 +249,14 @@ class Main {
         console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
     },
 
+    async clearingFunction(blockHeight) {
+        // Implement your clearing logic here
+        // This could include confirming final balances, updating ledgers, etc.
+
+        console.log(`Clearing operations completed for block ${blockHeight}`);
+        
+        // Additional logic for clearing, such as updating databases or sending notifications
+    },
     async simulateActivationAndTokenCreation(startBlockHeight) {
         // Step 1: Loop through blocks
         for (let blockHeight = startBlockHeight; blockHeight <= startBlockHeight + 10; blockHeight++) {

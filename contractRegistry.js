@@ -164,7 +164,7 @@ class ContractsRegistry {
           });
         });
       });
-    }
+    },
 
     async getNextId() {
       let maxId = 0;
@@ -185,6 +185,36 @@ class ContractsRegistry {
             return true; // The seriesId is valid
         } else {
             return false; // The seriesId is not valid
+        }
+    },
+
+    getAllContracts() {
+        let allContracts = [];
+        // Add all oracle contracts
+        for (const seriesId in this.oracleSeriesIndex) {
+            allContracts.push(...this.oracleSeriesIndex[seriesId]);
+        }
+        // Add all native contracts
+        for (const seriesId in this.nativeSeriesIndex) {
+            allContracts.push(...this.nativeSeriesIndex[seriesId]);
+        }
+        return allContracts;
+    },
+
+    async hasOpenPositions(contract) {
+        try {
+            // Load the margin map for the contract's series ID
+            let marginMap = await MarginMap.loadMarginMap(contract.seriesId);
+            // Check if the margin map has any non-zero positions for this contract
+            for (let [address, positionData] of marginMap.margins.entries()) {
+                if (positionData.contracts > 0) {
+                    return true; // Found an open position
+                }
+            }
+            return false; // No open positions found
+        } catch (error) {
+            console.error('Error checking open positions for contract:', contract.seriesId, error);
+            throw error;
         }
     }
 
