@@ -25,13 +25,14 @@ const Validity = {
     },
 
     // 2: Send
-    validateSend: (params, tallyMap) => {
-        // Validate parameters specific to Send transaction
-        const isValidAddress = typeof params.address === 'string'; // Further validation based on address format
-        const isValidPropertyId = Number.isInteger(params.propertyIdNumber);
-        const isValidAmount = Number.isInteger(params.amount) && params.amount > 0;
-        // Add further validations as needed
-        return isValidAddress && isValidPropertyId && isValidAmount;
+    validateSend: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
+        // Ensure the sender has sufficient balance
+        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+
+        // Check if the sender address is whitelisted
+        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
+
+        return hasSufficientBalance && isSenderWhitelisted && senderKYCCleared;
     },
 
     // 3: Trade Token for UTXO
@@ -45,26 +46,32 @@ const Validity = {
     },
 
     // 4: Commit Token
-    validateCommitToken: (params, tallyMap) => {
-        // Validate parameters specific to Commit Token transaction
-        const isValidPropertyId = Number.isInteger(params.propertyIdNumber);
-        const isValidAmount = Number.isInteger(params.amount) && params.amount > 0;
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdNumber, params.amount);
-        // Add further validations as needed
-        return isValidPropertyId && isValidAmount && hasSufficientBalance;
+    validateCommitToken: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
+        // Ensure the sender has enough tokens available to commit
+        const hasSufficientTokens = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+
+        // Check if the sender address is whitelisted
+        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
+
+        // Check if the sender address has KYC clearance
+        const senderKYCCleared = await kycRegistry.isAddressKYCCleared(params.senderAddress);
+
+        return hasSufficientTokens && isSenderWhitelisted && senderKYCCleared;
     },
 
     // 5: On-chain Token for Token
-    validateOnChainTokenForToken: (params, orderBook) => {
-        // Validate parameters specific to On-chain Token for Token transaction
-        const isValidPropertyIdOffered = Number.isInteger(params.propertyIdNumber);
-        const isValidPropertyIdDesired = Number.isInteger(params.propertyIdNumberDesired);
-        const isValidAmountOffered = Number.isInteger(params.amountOffered) && params.amountOffered > 0;
-        const isValidAmountExpected = Number.isInteger(params.amountExpected) && params.amountExpected > 0;
-        // Add further validations as needed
-        return isValidPropertyIdOffered && isValidPropertyIdDesired && isValidAmountOffered && isValidAmountExpected;
+    validateOnChainTokenForToken: async (params, tallyMap, whitelistRegistry) => {
+        // Ensure the sender has sufficient balance of the offered token
+        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.offeredPropertyId, params.amountOffered);
+
+        // Check if the sender address is whitelisted for the offered property
+        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
+
+        // Check if the recipient address is whitelisted for the desired property
+        const isRecipientWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.recipientAddress, params.desiredPropertyId);
+
+        return hasSufficientBalance && isSenderWhitelisted && isRecipientWhitelisted;
     },
-// Continuing from the previous implementation...
 
     // 6: Cancel Order
     validateCancelOrder: (params, orderBook) => {
@@ -165,34 +172,53 @@ const Validity = {
     },
 
     // 17: Trade Contract On-chain
-    validateTradeContractOnchain: (params, derivativeRegistry, tallyMap) => {
-        // Check if the derivative contract exists and is valid for trading
-        const isValidDerivative = derivativeRegistry.isValidDerivative(params.contractId);
-        // Check if the sender has sufficient balance or margin for the trade
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+    validateTradeContractOnchain: async (params, marginMap, whitelistRegistry, contractRegistry) => {
+        // Ensure the sender has enough margin or contract balance
+        const hasSufficientMargin = marginMap.hasSufficientMargin(params.senderAddress, params.contractId, params.amount);
 
-        return isValidDerivative && hasSufficientBalance;
+        // Retrieve contract details from the contract registry
+        const contractDetails = await contractRegistry.getContractDetails(params.contractId);
+
+        let isSenderWhitelisted = true;
+        if (contractDetails.type === 'oracle') {
+            // Check if the sender address is whitelisted for the contract's oracle
+            isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, contractDetails.oracleId);
+        }
+
+        return hasSufficientMargin && isSenderWhitelisted;
     },
 
     // 18: Trade Contract Channel
-    validateTradeContractChannel: (params, channelRegistry, marginMap) => {
-        // Check if the channel exists and is valid
-        const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-        // Check if the sender has sufficient contracts and margin for the trade
-        const canTrade = marginMap.canTrade(params.senderAddress, params.contractId, params.amount);
+    validateTradeContractChannel: async (params, channelRegistry, whitelistRegistry, contractRegistry) => {
+        // Retrieve the commit addresses from the channel registry
+        const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
 
-        return isValidChannel && canTrade;
+        // Retrieve contract details from the contract registry
+        const contractDetails = await contractRegistry.getContractDetails(params.contractId);
+
+        let isAddressAWhitelisted = true;
+        let isAddressBWhitelisted = true;
+        if (contractDetails.type === 'oracle') {
+            // Check if the commit addresses are whitelisted for the contract's oracle
+            isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, contractDetails.oracleId);
+            isAddressBWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressB, contractDetails.oracleId);
+        }
+
+        return isAddressAWhitelisted && isAddressBWhitelisted;
     },
 
     // 19: Trade Tokens Channel
-    validateTradeTokensChannel: (params, channelRegistry, tallyMap) => {
-        // Check if the channel exists and is valid
-        const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-        // Check if the sender has sufficient token balance for the trade
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId1, params.amountOffered1);
+    validateTradeTokensChannel: async (params, channelRegistry, whitelistRegistry) => {
+        // Retrieve the commit addresses from the channel registry
+        const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
 
-        return isValidChannel && hasSufficientBalance;
+        // Check if the commit addresses are whitelisted for the respective properties
+        const isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, params.propertyId1);
+        const isAddressBWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressB, params.propertyId2);
+
+        return isAddressAWhitelisted && isAddressBWhitelisted;
     },
+
 
     // 20: Withdrawal
     validateWithdrawal: (params, channelRegistry, tallyMap) => {

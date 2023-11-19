@@ -1015,8 +1015,6 @@ const Logic = {
     return { newTxTypeId, newTx };
 },
 
-/
-
     createDerivativeOfLRC20OrRGB: function(/* parameters */) { /* ... */ },
 
     registerOP_CTVCovenant: function(/* parameters */) { /* ... */ },
