@@ -100,7 +100,7 @@ class Main {
             throw error; // Rethrow or handle error as appropriate for your application
         }
     },
-    
+
     async constructOrLoadConsensus() {
         // Load consensus state from Persistence if available, otherwise construct from index
         // To be implemented
@@ -185,6 +185,15 @@ class Main {
                 console.error(`Error processing transaction ${txId}: ${error.message}`);
             }
         }
+
+         // Loop through contracts to trigger liquidations
+        for (const contract of ContractsRegistry.getAllContracts()) {
+            if (MarginMap.needsLiquidation(contract)) {
+                const orders = await MarginMap.triggerLiquidations(contract);
+                // Handle the created liquidation orders
+                // ...
+            }
+        }
     },
 
 
@@ -257,6 +266,7 @@ class Main {
         
         // Additional logic for clearing, such as updating databases or sending notifications
     },
+
     async simulateActivationAndTokenCreation(startBlockHeight) {
         // Step 1: Loop through blocks
         for (let blockHeight = startBlockHeight; blockHeight <= startBlockHeight + 10; blockHeight++) {

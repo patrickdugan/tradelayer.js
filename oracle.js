@@ -47,6 +47,12 @@ class OracleRegistry {
             }
         }
         return maxId + 1;
+    },
+
+    static async getTwap(contractId) {
+        // Logic to fetch TWAP data for the given contractId
+        // Example:
+        // return await someExternalOracleService.getTwap(contractId);
     }
 
     // Additional methods for managing oracles

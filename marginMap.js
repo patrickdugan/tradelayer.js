@@ -128,7 +128,54 @@ class MarginMap {
         resolve(map);
       });
     });
-  }
+  },
+
+  static async triggerLiquidations(contract) {
+        // Logic to handle the liquidation process
+        // This could involve creating liquidation orders and updating the contract's state
+
+        // Example:
+        const liquidationOrders = this.generateLiquidationOrders(contract);
+        await this.saveLiquidationOrders(contract, liquidationOrders);
+
+        // Update the contract's state as needed
+        // Example: contract.state = 'liquidating';
+        await ContractsRegistry.updateContractState(contract);
+
+        return liquidationOrders;
+    },
+
+    static generateLiquidationOrders(contract) {
+        // Logic to generate liquidation orders
+        // Example: return [{...}, {...}]; // Array of order objects
+    },
+
+    static async saveLiquidationOrders(contract, orders) {
+        // Logic to save liquidation orders to the database or in-memory structure
+        // Example: await db.put(`liquidationOrders-${contract.id}`, JSON.stringify(orders));
+    },
+
+    static needsLiquidation(contract) {
+        // Logic to determine if liquidation is needed
+        // This could involve checking margin levels, market prices, etc.
+
+        // Example:
+        const marginLevel = this.getMarginLevel(contract);
+        const marketPrice = this.getMarketPrice(contract);
+
+        // Assuming a simple threshold for liquidation
+        return marginLevel < marketPrice * someThresholdFactor;
+    },
+
+    static getMarginLevel(contract) {
+        // Logic to calculate the margin level of the contract
+        // Example: return marginData[contract.id].level;
+    },
+
+    static getMarketPrice(contract) {
+        // Logic to get the current market price of the contract
+        // Example: return marketData[contract.id].price;
+    }
   
 }
 

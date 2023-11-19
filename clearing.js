@@ -353,85 +353,78 @@ class Clearing {
         return JSON.stringify(auditData);
     },
 
-
-
-
     async lossSocialization(contractId, collateral, fullAmount) {
-        let count = 0;
-        let zeroPositionAddresses = [];
+            let count = 0;
+            let zeroPositionAddresses = [];
 
-        // Fetch register data
-        let registerData = await this.fetchRegisterData();
+            // Fetch register data
+            let registerData = await this.fetchRegisterData();
 
-        // Count non-zero positions and identify zero position addresses
-        registerData.forEach(entry => {
-            let position = entry.getRecord(contractId, 'CONTRACT_POSITION');
-            if (position === 0) {
-                zeroPositionAddresses.push(entry.address);
-            } else {
-                count++;
-            }
-        });
+            // Count non-zero positions and identify zero position addresses
+            registerData.forEach(entry => {
+                let position = entry.getRecord(contractId, 'CONTRACT_POSITION');
+                if (position === 0) {
+                    zeroPositionAddresses.push(entry.address);
+                } else {
+                    count++;
+                }
+            });
 
-        if (count === 0) return;
+            if (count === 0) return;
 
-        let fraction = fullAmount / count;
+            let fraction = fullAmount / count;
 
-        // Socialize loss among non-zero positions
-        registerData.forEach(entry => {
-            if (!zeroPositionAddresses.includes(entry.address)) {
-                let available = await this.getMPbalance(entry.address, collateral, 'BALANCE');
-                let amount = (available >= fraction) ? fraction : available;
+            // Socialize loss among non-zero positions
+            for (const entry of registerData) {
+                if (!zeroPositionAddresses.includes(entry.address)) {
+                    let balanceDetails = this.tallyMap.getAddressBalances(entry.address);
+                    let available = balanceDetails.find(b => b.propertyId === collateral)?.available || 0;
+                    let amount = Math.min(available, fraction);
 
-                if (amount > 0) {
-                    await this.updateBalance(entry.address, collateral, amount, 'BALANCE');
+                    if (amount > 0) {
+                        this.tallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0); // Assuming updateBalance deducts from available
+                    }
                 }
             }
-        });
+
+            // Optionally, save the TallyMap state to the database
+            await this.tallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
     },
 
     async getTotalLoss(contractId, notionalSize) {
-        let vwap = 0;
-        let volume = 0;
-        let bankruptcyVWAP = 0;
-        let oracleTwap = 0;
+            let vwap = 0;
+            let volume = 0;
+            let bankruptcyVWAP = 0;
+            let oracleTwap = 0;
 
-        // Determine if the contract is oracle-based or native
-        let contractType = await this.getContractType(contractId);
+            let contractType = await ContractsRegistry.getContractType(contractId);
 
-        if (contractType === 'oracle') {
-            // Fetch the liquidation volume data for oracle-based contracts
-            let liquidationData = await this.fetchLiquidationVolume(contractId);
-            if (!liquidationData) {
-                console.log('No liquidation volume data found for oracle-based contract.');
+            if (contractType === 'oracle') {
+                let liquidationData = await ContractsRegistry.fetchLiquidationVolume(contractId);
+                if (!liquidationData) {
+                    console.log('No liquidation volume data found for oracle-based contract.');
+                    return 0;
+                }
+                ({ volume, vwap, bankruptcyVWAP } = liquidationData);
+
+                // Fetch TWAP data from oracle
+                oracleTwap = await Oracles.getTwap(contractId); // Assuming Oracles module provides TWAP data
+            } else if (contractType === 'native') {
+                // Fetch VWAP data for native contracts
+                let vwapData = VolumeIndex.getVwapData(contractId); // Assuming VolumeIndex module provides VWAP data
+                if (!vwapData) {
+                    console.log('No VWAP data found for native contract.');
+                    return 0;
+                }
+                ({ volume, vwap, bankruptcyVWAP } = vwapData);
+                oracleTwap = vwap;
+            } else {
+                console.log('Unknown contract type.');
                 return 0;
             }
-            ({ volume, vwap, bankruptcyVWAP } = liquidationData);
 
-            // Fetch TWAP data from oracle
-            oracleTwap = await this.getOracleTwap(contractId, 1);
-            let oracleLag = await this.getOracleTwap(contractId, 3);
-
-            if (oracleLag * 0.965 >= oracleTwap) {
-                oracleTwap = oracleLag * 0.965;
-            }
-        } else if (contractType === 'native') {
-            // Fetch VWAP data for native contracts
-            let vwapData = await this.getNativeVWAP(contractId);
-            if (!vwapData) {
-                console.log('No VWAP data found for native contract.');
-                return 0;
-            }
-            ({ volume, vwap, bankruptcyVWAP } = vwapData);
-            oracleTwap = vwap; // For native contracts, use VWAP as the mark price
-        } else {
-            console.log('Unknown contract type.');
-            return 0;
+            return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
         }
-
-        // Calculate total loss
-        return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
-    }
 
     // Additional helper methods or logic as required
 }

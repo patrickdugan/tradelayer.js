@@ -1,117 +1,135 @@
 const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 
-// Database setup
-const db = level('./tradeVolumeDB');
+class VolumeIndex {
+    constructor(dbPath) {
+        this.db = level(dbPath);
+    },
 
-// Function to calculate and track volume
-async function calculateAndTrackVolume(transactions, prices) {
-    let cumulativeVolume = 0;
-    const volumeByBlock = {};
+    async calculateAndTrackVolume(transactions, prices) {
+        let cumulativeVolume = 0;
+        const volumeByBlock = {};
 
-    for (const tx of transactions) {
-        // Calculate the LTC-equivalent volume for the transaction
-        // Increment the cumulative volume
-        // Store per-block segment of volume information
+        for (const tx of transactions) {
+            const volume = tx.amount * prices[tx.token];
+            cumulativeVolume += volume;
 
-        // Example (adjust according to actual transaction structure):
-        const volume = tx.amount * prices[tx.token];
-        cumulativeVolume += volume;
-
-        if (!volumeByBlock[tx.block]) {
-            volumeByBlock[tx.block] = 0;
+            if (!volumeByBlock[tx.block]) {
+                volumeByBlock[tx.block] = 0;
+            }
+            volumeByBlock[tx.block] += volume;
         }
-        volumeByBlock[tx.block] += volume;
-    }
 
-    // Update the database
-    await db.put('cumulativeVolume', cumulativeVolume);
-    await db.put('volumeByBlock', JSON.stringify(volumeByBlock));
-}
+        await this.db.put('cumulativeVolume', cumulativeVolume);
+        await this.db.put('volumeByBlock', JSON.stringify(volumeByBlock));
+    },
 
-// Main function to orchestrate the volume indexing
-async function indexVolume() {
-    try {
-        const transactions = await sampleTradeTransactions();
-        const tokens = transactions.map(tx => tx.token);
-        const prices = await getTokenPricesInLTC(tokens);
-        await calculateAndTrackVolume(transactions, prices);
-    } catch (error) {
-        console.error('Error in indexing volume:', error);
-}
-   
-async function sampleTradeTransactions(blockNumber) {
-    // Example implementation. Adjust based on your actual data source and structure
-    // This could be an API call or a direct blockchain query
-    const transactions = []; // Replace with actual logic to fetch transactions
-    return transactions;
-}
+    async sampleTradeTransactions(blockNumber) {
+        // Replace with actual logic to fetch transactions
+        const transactions = []; 
+        return transactions;
+    },
 
-async function getTokenPriceInLTC(tokenId) {
-    // Example implementation. Adjust based on your actual data source
-    // This could be an API call to a price feed service
-    const response = await fetch(`https://api.pricefeed.com/token/${tokenId}`);
-    const data = await response.json();
-    return data.priceInLTC; // Assuming the API returns a field named 'priceInLTC'
-}
+    async getTokenPriceInLTC(tokenId) {
+        const response = await fetch(`https://api.pricefeed.com/token/${tokenId}`);
+        const data = await response.json();
+        return data.priceInLTC; 
+    },
 
+    calculateVolumeInLTC(tradeTransaction, tokenPrices) {
+        const tokenPriceInLTC = tokenPrices[tradeTransaction.tokenId];
+        return tradeTransaction.amount * tokenPriceInLTC;
+    },
 
-function calculateVolumeInLTC(tradeTransaction, tokenPrices) {
-    // Assuming tradeTransaction contains an 'amount' field and a 'tokenId'
-    const tokenPriceInLTC = tokenPrices[tradeTransaction.tokenId];
-    const volumeInLTC = tradeTransaction.amount * tokenPriceInLTC;
-    return volumeInLTC;
-}
+    async updateCumulativeVolume(volumeInLTC) {
+        let currentCumulativeVolume = 0;
+        try {
+            currentCumulativeVolume = Number(await this.db.get('cumulativeVolume'));
+        } catch (error) {
+            if (error.type !== 'NotFoundError') {
+                throw error;
+            }
+        }
 
+        const newCumulativeVolume = currentCumulativeVolume + volumeInLTC;
+        await this.db.put('cumulativeVolume', newCumulativeVolume.toString());
+    },
 
-async function updateCumulativeVolume(volumeInLTC) {
-    let currentCumulativeVolume = 0;
-    try {
-        currentCumulativeVolume = Number(await db.get('cumulativeVolume'));
-    } catch (error) {
-        if (error.type !== 'NotFoundError') {
+    async saveVolumeData(blockNumber, volumeData) {
+        await this.db.put(`block-${blockNumber}`, JSON.stringify(volumeData));
+    },
+
+    async processBlock(blockNumber) {
+        try {
+            const trades = await this.sampleTradeTransactions(blockNumber);
+            let blockVolumeData = [];
+            let cumulativeVolumeInLTC = 0;
+
+            for (const trade of trades) {
+                const priceInLTC = await this.getTokenPriceInLTC(trade.tokenId);
+                const volumeInLTC = this.calculateVolumeInLTC(trade, { [trade.tokenId]: priceInLTC });
+
+                blockVolumeData.push({ trade, volumeInLTC });
+                cumulativeVolumeInLTC += volumeInLTC;
+            }
+
+            await this.updateCumulativeVolume(cumulativeVolumeInLTC);
+            await this.saveVolumeData(blockNumber, blockVolumeData);
+        } catch (error) {
+            console.error(`Error processing block ${blockNumber}:`, error);
+        }
+    },
+
+    async runVolumeIndexing() {
+        const latestBlockNumber = /* logic to get the latest block number */;
+        for (let blockNumber = 1; blockNumber <= latestBlockNumber; blockNumber++) {
+            await this.processBlock(blockNumber);
+        }
+    },
+
+    static async getVwapData(contractId) {
+        if (ContractsRegistry.isNativeContract(contractId)) {
+            // Retrieve contract information
+            const contractInfo = ContractsRegistry.getContractInfo(contractId);
+            if (!contractInfo || !contractInfo.indexPair) {
+                console.error(`Contract information not found for contract ID: ${contractId}`);
+                return null;
+            }
+
+            // Extract property IDs from the contract's index pair
+            const [propertyId1, propertyId2] = contractInfo.indexPair;
+
+            // Calculate and return the VWAP
+            return await this.calculateVwap(propertyId1, propertyId2);
+        } else {
+            console.error(`Contract ID ${contractId} is not a native contract.`);
+            return null;
+        }
+    },
+
+    static async calculateVwap(propertyId1, propertyId2) {
+        try {
+            // Retrieve LTC prices for both tokens
+            const priceInLTC1 = await this.getTokenPriceInLTC(propertyId1);
+            const priceInLTC2 = await this.getTokenPriceInLTC(propertyId2);
+
+            // Check if both prices are valid to avoid division by zero
+            if (priceInLTC1 && priceInLTC2 && priceInLTC2 !== 0) {
+                // Calculate VWAP
+                const vwap = priceInLTC1 / priceInLTC2;
+                return vwap;
+            } else {
+                throw new Error("Invalid prices or division by zero encountered");
+            }
+        } catch (error) {
+            console.error(`Error calculating VWAP for property IDs ${propertyId1} and ${propertyId2}:`, error);
             throw error;
         }
     }
-
-    const newCumulativeVolume = currentCumulativeVolume + volumeInLTC;
-    await db.put('cumulativeVolume', newCumulativeVolume.toString());
 }
 
-async function saveVolumeData(blockNumber, volumeData) {
-    // Save the per-block segment of volume information to LevelDB
-    await db.put(`block-${blockNumber}`, JSON.stringify(volumeData));
-}
+// Example usage:
+const volumeIndex = new VolumeIndex('./tradeVolumeDB');
+volumeIndex.runVolumeIndexing().catch(console.error);
 
-async function processBlock(blockNumber) {
-    try {
-        const trades = await sampleTradeTransactions(blockNumber);
-        let blockVolumeData = [];
-        let cumulativeVolumeInLTC = 0;
-
-        for (const trade of trades) {
-            const priceInLTC = await getTokenPriceInLTC(trade.tokenId);
-            const volumeInLTC = trade.amount * priceInLTC; // Assuming 'amount' is in trade tokens
-
-            blockVolumeData.push({ trade, volumeInLTC });
-            cumulativeVolumeInLTC += volumeInLTC;
-        }
-
-        // Update the cumulative volume in the database
-        await updateCumulativeVolume(cumulativeVolumeInLTC);
-
-        // Save the block's volume data
-        await saveVolumeData(blockNumber, blockVolumeData);
-    } catch (error) {
-        console.error(`Error processing block ${blockNumber}:`, error);
-    }
-}
-
-async function runVolumeIndexing() {
-    const latestBlockNumber = /* logic to get the latest block number */;
-    for (let blockNumber = 1; blockNumber <= latestBlockNumber; blockNumber++) {
-        await processBlock(blockNumber);
-    }
-}
-
-runVolumeIndexing().catch(console.error);
+module.exports = VolumeIndex;

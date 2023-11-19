@@ -216,8 +216,50 @@ class ContractsRegistry {
             console.error('Error checking open positions for contract:', contract.seriesId, error);
             throw error;
         }
-    }
+    },
 
+    static async getContractType(contractId) {
+        // Logic to determine the contract type
+        // This could involve checking your database or in-memory data structure
+        // Example:
+        if (this.oracleSeriesIndex[contractId]) {
+            return 'oracle';
+        } else if (this.nativeSeriesIndex[contractId]) {
+            return 'native';
+        } else {
+            throw new Error("Contract type not found for contract ID: " + contractId);
+        }
+    },
+
+    static async fetchLiquidationVolume(contractId, blockHeight) {
+        // Assuming you have a database method to fetch liquidation data
+        try {
+            const liquidationData = await db.get(`liquidation-${contractId}-${blockHeight}`);
+            return JSON.parse(liquidationData);
+        } catch (error) {
+            if (error.type === 'NotFoundError') {
+                console.log(`No liquidation data found for contract ID ${contractId} at block ${blockHeight}`);
+                return null; // Handle case where data is not found
+            }
+            throw error; // Rethrow other types of errors
+        }
+    },
+
+    static isNativeContract(contractId) {
+        // Check if the contractId exists in the nativeSeriesIndex
+        return Boolean(this.nativeSeriesIndex && this.nativeSeriesIndex[contractId]);
+    },
+
+    static getContractInfo(contractId) {
+        // Fetch contract information from the nativeSeriesIndex or oracleSeriesIndex
+        if (this.isNativeContract(contractId)) {
+            return this.nativeSeriesIndex[contractId];
+        } else if (this.oracleSeriesIndex && this.oracleSeriesIndex[contractId]) {
+            return this.oracleSeriesIndex[contractId];
+        }
+        console.log(`Contract information not found for contract ID: ${contractId}`);
+        return null;
+    }
 }
 
 // Usage:
