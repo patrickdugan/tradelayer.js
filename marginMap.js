@@ -146,35 +146,81 @@ class MarginMap {
     },
 
     static generateLiquidationOrders(contract) {
-        // Logic to generate liquidation orders
-        // Example: return [{...}, {...}]; // Array of order objects
+        const liquidationOrders = [];
+        const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
+
+        for (const [address, position] of Object.entries(this.margins[contract.id])) {
+            const notionalValue = position.contracts * contract.marketPrice;
+            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
+
+            if (position.margin < maintenanceMargin) {
+                // Liquidate 50% of the position if below maintenance margin
+                const liquidationSize = position.contracts * 0.5;
+                liquidationOrders.push({
+                    address,
+                    contractId: contract.id,
+                    size: liquidationSize,
+                    price: contract.marketPrice, // Assuming market price for simplicity
+                    type: 'liquidation'
+                });
+            }
+        }
+
+        return liquidationOrders;
     },
 
     static async saveLiquidationOrders(contract, orders) {
-        // Logic to save liquidation orders to the database or in-memory structure
-        // Example: await db.put(`liquidationOrders-${contract.id}`, JSON.stringify(orders));
+        try {
+            // Save liquidation orders to the database
+            await db.put(`liquidationOrders-${contract.id}`, JSON.stringify(orders));
+        } catch (error) {
+            console.error(`Error saving liquidation orders for contract ${contract.id}:`, error);
+            throw error;
+        }
     },
 
     static needsLiquidation(contract) {
-        // Logic to determine if liquidation is needed
-        // This could involve checking margin levels, market prices, etc.
+        const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value
 
-        // Example:
-        const marginLevel = this.getMarginLevel(contract);
-        const marketPrice = this.getMarketPrice(contract);
+        for (const [address, position] of Object.entries(this.margins[contract.id])) {
+            const notionalValue = position.contracts * contract.marketPrice;
+            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
 
-        // Assuming a simple threshold for liquidation
-        return marginLevel < marketPrice * someThresholdFactor;
+            if (position.margin < maintenanceMargin) {
+                return true; // Needs liquidation
+            }
+        }
+        return false; // No positions require liquidation
     },
 
     static getMarginLevel(contract) {
-        // Logic to calculate the margin level of the contract
-        // Example: return marginData[contract.id].level;
+        // Assuming margins are stored per position in the contract
+        // Example: Return the margin level for the contract
+        let totalMargin = 0;
+        for (const position of Object.values(this.margins[contract.id])) {
+            totalMargin += position.margin;
+        }
+        return totalMargin;
     },
 
-    static getMarketPrice(contract) {
-        // Logic to get the current market price of the contract
-        // Example: return marketData[contract.id].price;
+    static async getMarketPrice(contract) {
+        let marketPrice;
+
+        if (ContractsRegistry.isOracleContract(contract.id)) {
+            // Fetch the 3-block TWAP for oracle-based contracts
+            marketPrice = await Oracles.getTwap(contract.id, 3); // Assuming the getTwap method accepts block count as an argument
+        } else if (ContractsRegistry.isNativeContract(contract.id)) {
+            // Fetch VWAP data for native contracts
+            const contractInfo = ContractsRegistry.getContractInfo(contract.id);
+            if (contractInfo && contractInfo.indexPair) {
+                const [propertyId1, propertyId2] = contractInfo.indexPair;
+                marketPrice = await VolumeIndex.getVwapData(propertyId1, propertyId2);
+            }
+        } else {
+            throw new Error(`Unknown contract type for contract ID: ${contract.id}`);
+        }
+
+        return marketPrice;
     }
   
 }
