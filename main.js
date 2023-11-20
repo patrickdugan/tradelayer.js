@@ -257,15 +257,6 @@ class Main {
         console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
     },
 
-    async clearingFunction(blockHeight) {
-        // Implement your clearing logic here
-        // This could include confirming final balances, updating ledgers, etc.
-
-        console.log(`Clearing operations completed for block ${blockHeight}`);
-        
-        // Additional logic for clearing, such as updating databases or sending notifications
-    },
-
     async simulateActivationAndTokenCreation(startBlockHeight) {
         // Step 1: Loop through blocks
         for (let blockHeight = startBlockHeight; blockHeight <= startBlockHeight + 10; blockHeight++) {

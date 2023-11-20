@@ -424,7 +424,18 @@ class Clearing {
             }
 
             return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
+        },
+
+     async fetchAuditData(auditDataKey) {
+        // Implement logic to fetch audit data from the database
+        try {
+            const auditData = await database.getAuditData(auditDataKey);
+            return auditData;
+        } catch (error) {
+            console.error('Error fetching audit data:', error);
+            throw error;
         }
+    }
 
     // Additional helper methods or logic as required
 }

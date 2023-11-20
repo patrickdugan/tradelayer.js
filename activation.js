@@ -1,5 +1,6 @@
 const level = require('level');
 const Logic = require('./logic.js');
+const TL = require('./vesting.js')
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
@@ -43,11 +44,10 @@ class Activation {
 
     if (firstTxId === 0) {
                 // Initial setup for the first transaction
-                await createTxTypeIndex();  // Populate with inactive transactions 1 through 35
-                await createTLTokenProperties();  // Create propertyId 1 and 2 for TL token
-                await initializeTxRegistry();  // With pre-populated types and logic
-                await setGenesisAdmin(senderAddress);  // Register the sender as the admin
-
+                await TL.initializeTokens();  // Create propertyId 1 and 2 for TL token
+                await TL.initializeContractSeries();
+                await this.initializeTxRegistry();  // With pre-populated types and logic
+            
                 return 'TradeLayer initialized with genesis admin.';
         } else {
                 // For subsequent transactions
@@ -58,10 +58,6 @@ class Activation {
                     return 'Invalid sender address for activation.';
             }
         }
-    }
-
-    async createTLTokenProperties() {
-        // Create propertyId 1 and 2 for the TL token
     }
 
     async initializeTxRegistry() {
@@ -106,7 +102,6 @@ class Activation {
             // ... potentially other transaction types ...
         };
     },
-
 
      /**
      * Checks if a transaction type is active in the transaction registry.

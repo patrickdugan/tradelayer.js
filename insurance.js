@@ -57,20 +57,33 @@ class InsuranceFund {
         await this.db.put(`event-${eventRecord.timestamp}`, JSON.stringify(eventRecord));
     }
 
-    async getPayouts(startBlock, endBlock) {
+   /**
+     * Retrieves payout events for a specific contract between specified blocks.
+     * @param {number} contractId - The contract ID.
+     * @param {number} startBlock - The starting block number.
+     * @param {number} endBlock - The ending block number.
+     */
+    async getPayouts(contractId, startBlock, endBlock) {
         const payouts = [];
         for (let block = startBlock; block <= endBlock; block++) {
             try {
-                const event = await this.getEvent(block);
-                if (event && event.type === 'deficit') {
-                    payouts.push(event.data);
+                const payoutRecordKey = `contract_${contractId}_block_${block}`;
+                const payoutRecord = await this.db.get(payoutRecordKey);
+                if (payoutRecord) {
+                    const event = JSON.parse(payoutRecord);
+                    if (event.type === 'deficit') {
+                        payouts.push(event.data);
+                    }
                 }
             } catch (error) {
-                // Handle or log error
+                if (error.type !== 'NotFoundError') {
+                    // Handle or log error for cases other than not found
+                }
             }
         }
         return payouts;
-    }
+    },
+
 
     async getEvent(blockNumber) {
         try {
