@@ -28,6 +28,20 @@ class PropertyManager {
         return this.nextPropertyId++;
     },
 
+    createToken(ticker, totalInCirculation, type) {
+        // Get the next available property ID
+        const propertyId = this.getNextPropertyId();
+
+        // Add the new token to the property index
+        this.addProperty(propertyId, ticker, totalInCirculation, type);
+
+        // Optionally, immediately save the updated state
+        this.save();
+
+        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
+        return propertyId; // Return the new token's property ID
+    },
+
     addProperty(propertyId, ticker, totalInCirculation, type) {
         if (this.propertyIndex.has(propertyId)) {
             throw new Error('Property ID already exists.');

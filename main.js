@@ -118,7 +118,6 @@ class Main {
                 await this.processBlock(blockData, blockNumber, consensus);
                 latestProcessedBlock = blockNumber;
             }
-
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }

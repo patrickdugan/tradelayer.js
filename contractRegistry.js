@@ -1,5 +1,6 @@
 const level = require('level');
 const db = level('contracts');
+const dbPath = './LevelDB/contracts'
 
 class ContractsRegistry {
 
@@ -9,7 +10,41 @@ class ContractsRegistry {
     
     this.oracleSeriesIndex = {};
     this.nativeSeriesIndex = {};
-  }
+    this.contractSeries = new Map(); // To store contract series information
+    this.db = level(dbPath); // LevelDB for storage
+        // Load existing contract series from the database
+    this.loadContractSeries();
+  },
+
+  async loadContractSeries() {
+        // Load the contract series data from the database
+        try {
+            const seriesDataJSON = await this.db.get('contractSeries');
+            this.contractSeries = new Map(JSON.parse(seriesDataJSON));
+        } catch (error) {
+            if (error.type === 'NotFoundError') {
+                this.contractSeries = new Map(); // Initialize if not found
+            } else {
+                console.error('Error loading contract series data:', error);
+            }
+        }
+    },
+
+    createContractSeries(contractId, type, properties) {
+        if (this.contractSeries.has(contractId)) {
+            throw new Error(`Contract series with ID ${contractId} already exists.`);
+        }
+        this.contractSeries.set(contractId, {
+            type,
+            properties
+        });
+        this.saveContractSeries(); // Save the updated state
+    },
+
+    async saveContractSeries() {
+        const seriesDataJSON = JSON.stringify([...this.contractSeries]);
+        await this.db.put('contractSeries', seriesDataJSON);
+    },
 
   // ...generate series IDs and create contract methods...
 
@@ -28,7 +63,7 @@ class ContractsRegistry {
         .on('error', reject)
         .on('end', resolve);
     });
-  }
+  },
 
   // In ContractsRegistry
 
@@ -44,7 +79,7 @@ class ContractsRegistry {
       }
 
       return contracts; 
-    }
+    },
 
     getContractsSameNativeIndex(notionalPropId, collateralPropId) {
 
@@ -82,7 +117,7 @@ class ContractsRegistry {
   }
 
   return contracts;
-}
+},
 
   saveContractsToDb() {
     const batch = [];
@@ -93,7 +128,7 @@ class ContractsRegistry {
         key: JSON.stringify({ type: 'oracle', seriesId }),
         value: JSON.stringify(contracts)
       });
-    }
+    },
 
     for (let [seriesId, contracts] of Object.entries(this.nativeSeriesIndex)) {
       batch.push({

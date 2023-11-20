@@ -1,7 +1,7 @@
 class TradeLayerManager {
     constructor() {
         // Initialize class properties if needed
-    }
+    },
 
     initializeTokens() {
         const TLTokenId = 1;
@@ -12,15 +12,34 @@ class TradeLayerManager {
 
         const insuranceFundAddress = /* insurance fund address */;
         const amountToInsuranceFund = 500000;
-        
-        // Logic to create and distribute tokens
-        // Initialize LTC/TL Perpetual Future Contract
+
+        // Create TL Token
+        Property.createToken(TLTokenId, TLTotalAmount,3);
+        // Create TLVEST Token
+        Property.createToken(TLVESTTokenId, TLVESTTotalAmount,4);
+
+        // Distribute initial amount to insurance fund
+        TallyMap.updateBalance(insuranceFundAddress, TLTokenId, amountToInsuranceFund, amountToInsuranceFund, 0);
+    },
+
+    initializeContractSeries() {
         const LTC_TL_Future_ContractId = 1;
         const contractProperties = {
-            // Contract properties
+            // Define contract properties such as margin requirements, expiry, etc.
+            // Example properties:
+            initialMargin: 0.1, // 10%
+            maintenanceMargin: 0.05, // 5%
+            expiry: 'perp', //need to assure that perp or 0 or null etc. codes to perpetual
+            index: [1, 0], //LTC vs. TL, need to assure that the propertyid for TL init's to 1 and that 0 corresponds to LTC UTXO
+            expiryInterval: 17280,
+            seriesLength: 6
         };
-        // Implement token and contract initialization logic here
-    }
+
+        // Create the contract series
+        ContractsRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties);
+
+        // Additional setup if required, such as initializing order books, setting initial market conditions, etc.
+    },
 
     updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {
         const logScaleMin = 1000;
@@ -29,7 +48,7 @@ class TradeLayerManager {
         vestingFactor = Math.min(Math.max(vestingFactor, 0), 1);
         const vestingAmount = vestingFactor * currentBlockVolumeLTC;
         // Update vesting balances per address
-    }
+    },
 
     calculateTradeRebates(cumulativeVolumeLTC) {
 	    const baseVolume = 1000; // The volume where rebate calculation starts
@@ -47,7 +66,7 @@ class TradeLayerManager {
 
 	    // Ensure the rebate is not less than the minimum
 	    return Math.max(rebate, minRebate);
-	}
+	},
 
     performBuyback(feeCaches) {
         feeCaches.forEach(cache => {
@@ -55,12 +74,12 @@ class TradeLayerManager {
             const buybackAmount = this.calculateBuybackAmount(cache, orderbook);
             // Execute buyback transaction
         });
-    }
+    },
 
     fetchOrderbookForToken(tokenId) {
         // Fetch the orderbook for the given token
         // Implementation depends on your system's data sources
-    }
+    },
 
     calculateBuybackAmount(cache, orderbook) {
         let availableFunds = cache.funds;
@@ -82,7 +101,7 @@ class TradeLayerManager {
         }
 
         return totalBuybackAmount;
-    }
+    },
 }
 
 module.exports = TradeLayerManager;

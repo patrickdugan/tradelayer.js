@@ -1,10 +1,9 @@
 const level = require('level');
 
 class InsuranceFund {
-    constructor(contractSeriesId, hedgedContractId) {
+    constructor(contractSeriesId) {
         this.db = level(`./insuranceFundDB_${contractSeriesId}`);
         this.contractSeriesId = contractSeriesId;
-        this.hedgedContractId = hedgedContractId;
         this.balance = 0;
         this.hedgeRatio = 0.5; // 50/50 hedging with the contract
         // Additional properties for hedging strategy
