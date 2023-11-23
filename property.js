@@ -1,12 +1,11 @@
-const level = require('level');
+const { Level } = require('level')
 
 class PropertyManager {
     constructor(dbPath) {
         this.propertyIndex = new Map();
         this.nextPropertyId = 1;
-        this.db = level(dbPath);
-        this.load(); // Load the property list on startup
-    },
+        this.db = new Level(dbPath);
+    }
 
     async load() {
         try {
@@ -15,18 +14,18 @@ class PropertyManager {
             const nextPropertyIdString = await this.db.get('nextPropertyId');
             this.nextPropertyId = parseInt(nextPropertyIdString, 10);
         } catch (error) {
-            if (error.type === 'NotFoundError') {
+            if (error.notFound) {
                 this.propertyIndex = new Map();
                 this.nextPropertyId = 1;
             } else {
                 console.error('Error loading data from LevelDB:', error);
             }
         }
-    },
+    }
 
     getNextPropertyId() {
         return this.nextPropertyId++;
-    },
+    }
 
     createToken(ticker, totalInCirculation, type) {
         // Get the next available property ID
@@ -40,7 +39,7 @@ class PropertyManager {
 
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId; // Return the new token's property ID
-    },
+    }
 
     addProperty(propertyId, ticker, totalInCirculation, type) {
         if (this.propertyIndex.has(propertyId)) {
@@ -69,18 +68,18 @@ class PropertyManager {
             reserveAmount: 0,
             marginAmount: 0,
         });
-    },
+    }
 
     isPropertyIdValid(propertyId) {
         return this.propertyIndex.has(propertyId);
-    },
+    }
 
     getPropertyData(propertyId) {
         if (!this.isPropertyIdValid(propertyId)) {
             return null;
         }
         return this.propertyIndex.get(propertyId);
-    },
+    }
 
     getPropertyIndex() {
         const propertyIndexJSON = {};
@@ -96,13 +95,13 @@ class PropertyManager {
             };
         });
         return propertyIndexJSON;
-    },
+    }
 
     async save() {
         const propertyIndexJSON = JSON.stringify([...this.propertyIndex]);
         await this.db.put('propertyIndex', propertyIndexJSON);
         await this.db.put('nextPropertyId', this.nextPropertyId.toString());
-    },
+    }
 
     async verifyIfManaged(propertyId) {
         const property = this.getPropertyData(propertyId);
@@ -110,7 +109,7 @@ class PropertyManager {
             throw new Error('Property not found');
         }
         return property.type === 'Managed';
-    },
+    }
 
     async updateAdmin(propertyId, newAdminAddress) {
         const property = this.getPropertyData(propertyId);
@@ -127,35 +126,14 @@ class PropertyManager {
 
         console.log(`Admin for property ${propertyId} updated to ${newAdminAddress}`);
     }
+    
+    async clear() {
+        await this.db.clear()
+    }
 
-    // ... any other methods ...
+    async close() {
+        await this.db.close()
+    }
 }
 
 module.exports = PropertyManager;
-
-// Example usage
-const dbPath = './path_to_leveldb';
-const propertyManager = new PropertyManager(dbPath);
-
-// ... rest of the example usage ...
-
-// Ensure to save the state when you update the properties
-propertyManager.addProperty(1, 'PROP1', 1000000, 'Fixed');
-propertyManager.save(); // Call save after updates
-
-
-// Example usage
-
-module.exports = propertyManager;
-
-// Adding properties
-propertyManager.addProperty(1, 'PROP1', 1000000, 'Fixed');
-propertyManager.addProperty(2, 'PROP2', 500000, 'Managed');
-propertyManager.addProperty(3, 'PROP3', 100000, 'Native');
-
-// Check if a property ID is valid and retrieve property data
-console.log('Is Property ID 1 Valid:', propertyManager.isPropertyIdValid(1));
-console.log('Property Data for ID 1:', propertyManager.getPropertyData(1));
-
-console.log('Is Property ID 4 Valid:', propertyManager.isPropertyIdValid(4));
-console.log('Property Data for ID 4:', propertyManager.getPropertyData(4));

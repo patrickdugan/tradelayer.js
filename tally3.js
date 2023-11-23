@@ -1,68 +1,71 @@
-const level = require('level');
+const { Level } = require('level');
 
 class TallyMap {
-    static instance;
-
     constructor(path) {
-        if (!TallyMap.instance) {
-            this.db = level(path);
-            this.addresses = new Map();
-            TallyMap.instance = this;
-        }
-        return TallyMap.instance;
-    },
+        this.db = new Level(path);
+        this.addresses = new Map();
+    }
 
     updateBalance(address, propertyId, amount, available, reserved) {
         if (!this.addresses.has(address)) {
             this.addresses.set(address, {});
         }
-        const addressObj = this.addresses.get(address);
+        const addr = this.addresses.get(address);
 
-        if (!addressObj[propertyId]) {
-            addressObj[propertyId] = { amount: 0, available: 0, reserved: 0 };
+        if (!addr[propertyId]) {
+            addr[propertyId] = { amount: 0, available: 0, reserved: 0 };
         }
 
-        addressObj[propertyId].amount += amount;
-        addressObj[propertyId].available += available;
-        addressObj[propertyId].reserved += reserved;
-    },
+        addr[propertyId].amount += amount;
+        addr[propertyId].available += available;
+        addr[propertyId].reserved += reserved;
+    }
+    
+    getBalance(address) {
+        let n = 100 
+        // let bb = this.getAddressBalances(address)
+        // for (const b in bb) {
+        //         n += b.amount // + b['reserved'];
+        // }
+        return n;
+    }
 
     getAddressBalances(address) {
         if (!this.addresses.has(address)) {
             return [];
         }
 
-        const addressObj = this.addresses.get(address);
+        const addr = this.addresses.get(address);
         const balances = [];
 
-        for (const propertyId in addressObj) {
-            if (Object.hasOwnProperty.call(addressObj, propertyId)) {
-                const balanceObj = addressObj[propertyId];
+        for (const propertyId in addr) {
+            if (Object.hasOwnProperty.call(addr, propertyId)) {
+                const b = addr[propertyId];
                 balances.push({
                     propertyId: propertyId,
-                    amount: balanceObj.amount,
-                    available: balanceObj.available,
-                    reserved: balanceObj.reserved,
+                    amount: b.amount,
+                    available: b.available,
+                    reserved: b.reserved,
                 });
             }
         }
         return balances;
-    },
+    }
 
     totalTokens(propertyId) {
         let total = 0;
-        for (const addressObj of this.addresses.values()) {
-            if (addressObj[propertyId]) {
-                total += addressObj[propertyId].available + addressObj[propertyId].reserved;
+        for (const a of this.addresses.values()) {
+            if (a[propertyId]) {
+                total += a[propertyId].available + a[propertyId].reserved;
             }
         }
         return total;
-    },
+    }
 
     async save(blockHeight) {
         const serializedData = JSON.stringify([...this.addresses]);
         await this.db.put(`block-${blockHeight}`, serializedData);
-    },
+    }
 
     async load(blockHeight) {
         try {
@@ -72,36 +75,33 @@ class TallyMap {
         } catch (error) {
             console.error('Error loading data:', error);
         }
-    },
-
-    static getSingletonInstance() {
-        if (!TallyMap.instance) {
-            throw new Error("TallyMap instance has not been created yet");
-        }
-        return TallyMap.instance;
-    },
+    }
 
     // Get the tally for a specific address and property
     getTally(address, propertyId) {
         const key = `${address}_${propertyId}`;
         return this.tallyMap.get(key) || 0;
-    },
+    }
 
     // Save the tally map to LevelDB
-    async saveTallyMap() {
+    async save() {
         const serializedMap = JSON.stringify(Array.from(this.tallyMap.entries()));
-        await this.dbInterface.storeData('tallyMap', serializedMap);
-    },
+        await this.db.put('tallyMap', serializedMap);
+    }
 
     // Load the tally map from LevelDB
-    async loadTallyMap() {
-        const serializedMap = await this.dbInterface.getData('tallyMap');
+    async load() {
+        const serializedMap = await this.db.get('tallyMap');
         if (serializedMap) {
             this.tallyMap = new Map(JSON.parse(serializedMap));
         }
-    },
+    }
 
-    getAddressBalances(address) {
+    async close() {
+        await this.db.close()
+    }
+
+    getAddressBalances1(address) {
         const balances = [];
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address);
@@ -113,7 +113,7 @@ class TallyMap {
             }
         }
         return balances;
-    },
+    }
 
     /**
      * Retrieves all addresses that have a balance for a given property.
@@ -122,7 +122,6 @@ class TallyMap {
      */
     getAddressesWithBalanceForProperty(propertyId) {
         const addressesWithBalances = [];
-
             for (const [address, balances] of this.addresses.entries()) {
                 if (balances[propertyId]) {
                     const balanceInfo = balances[propertyId];
@@ -135,7 +134,6 @@ class TallyMap {
                     }
                 }
             }
-
             return addressesWithBalances;
         }
 }
