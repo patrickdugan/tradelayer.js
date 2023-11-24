@@ -10,6 +10,7 @@ class TallyMap {
         if (!this.addresses.has(address)) {
             this.addresses.set(address, {});
         }
+
         const addr = this.addresses.get(address);
 
         if (!addr[propertyId]) {
@@ -19,37 +20,6 @@ class TallyMap {
         addr[propertyId].amount += amount;
         addr[propertyId].available += available;
         addr[propertyId].reserved += reserved;
-    }
-    
-    getBalance(address) {
-        let n = 100 
-        // let bb = this.getAddressBalances(address)
-        // for (const b in bb) {
-        //         n += b.amount // + b['reserved'];
-        // }
-        return n;
-    }
-
-    getAddressBalances(address) {
-        if (!this.addresses.has(address)) {
-            return [];
-        }
-
-        const addr = this.addresses.get(address);
-        const balances = [];
-
-        for (const propertyId in addr) {
-            if (Object.hasOwnProperty.call(addr, propertyId)) {
-                const b = addr[propertyId];
-                balances.push({
-                    propertyId: propertyId,
-                    amount: b.amount,
-                    available: b.available,
-                    reserved: b.reserved,
-                });
-            }
-        }
-        return balances;
     }
 
     totalTokens(propertyId) {
@@ -77,15 +47,9 @@ class TallyMap {
         }
     }
 
-    // Get the tally for a specific address and property
-    getTally(address, propertyId) {
-        const key = `${address}_${propertyId}`;
-        return this.tallyMap.get(key) || 0;
-    }
-
     // Save the tally map to LevelDB
     async save() {
-        const serializedMap = JSON.stringify(Array.from(this.tallyMap.entries()));
+        const serializedMap = JSON.stringify([...this.addresses]);
         await this.db.put('tallyMap', serializedMap);
     }
 
@@ -93,7 +57,7 @@ class TallyMap {
     async load() {
         const serializedMap = await this.db.get('tallyMap');
         if (serializedMap) {
-            this.tallyMap = new Map(JSON.parse(serializedMap));
+            this.addresses = new Map(JSON.parse(serializedMap));
         }
     }
 
@@ -101,7 +65,13 @@ class TallyMap {
         await this.db.close()
     }
 
-    getAddressBalances1(address) {
+    // Get the tally for a specific address and property
+    getTally(address, propertyId) {
+        const key = `${address}_${propertyId}`;
+        return this.addresses.get(key) || 0;
+    }
+
+    getAddressBalances(address) {
         const balances = [];
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address);
@@ -122,20 +92,20 @@ class TallyMap {
      */
     getAddressesWithBalanceForProperty(propertyId) {
         const addressesWithBalances = [];
-            for (const [address, balances] of this.addresses.entries()) {
-                if (balances[propertyId]) {
-                    const balanceInfo = balances[propertyId];
-                    if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
-                        addressesWithBalances.push({
-                            address: address,
-                            amount: balanceInfo.amount,
-                            reserved: balanceInfo.reserved
-                        });
-                    }
+        for (const [address, balances] of this.addresses.entries()) {
+            if (balances[propertyId]) {
+                const balanceInfo = balances[propertyId];
+                if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
+                    addressesWithBalances.push({
+                        address: address,
+                        amount: balanceInfo.amount,
+                        reserved: balanceInfo.reserved
+                    });
                 }
             }
-            return addressesWithBalances;
         }
+        return addressesWithBalances;
+    }
 }
 
 module.exports = TallyMap;

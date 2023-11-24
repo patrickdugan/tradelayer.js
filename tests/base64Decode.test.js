@@ -10,3 +10,7 @@ const encodedString = "eyJzIjogeyJBQVBMIjogMC4yNTEzMzQyMjgyNzc5NTgzNywgIkdPT0ciO
 const decodedString = decodeBase64(encodedString);
 
 //console.log(decodedString);
+
+test('base64', async () => {
+    expect(decodeBase64(encodedString)[2]).toBe('s')
+})

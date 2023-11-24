@@ -119,16 +119,12 @@ class PropertyManager {
         if (property.type !== 'Managed') {
             throw new Error('Only managed properties can have an admin');
         }
-        
+
         property.adminAddress = newAdminAddress;
         this.propertyIndex.set(propertyId, property);
         await this.save();
 
         console.log(`Admin for property ${propertyId} updated to ${newAdminAddress}`);
-    }
-    
-    async clear() {
-        await this.db.clear()
     }
 
     async close() {
