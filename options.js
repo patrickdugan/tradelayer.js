@@ -61,7 +61,7 @@ class OptionChain {
         // This might involve creating transactions, interacting with a smart contract, or simply storing in a database
     },
 
-     isValidSeriesId(seriesId) {
+    isValidSeriesId(seriesId) {
         // Placeholder for series ID validation logic
         // Implement as per your system's requirements
         return true; // Replace with actual validation logic

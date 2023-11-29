@@ -1,13 +1,12 @@
-const level = require('level');
+const { Level } = require('level');
 
 class OracleRegistry {
     constructor(dbPath = './oracleDB') {
-        this.db = level(dbPath);
+        this.db = new Level(dbPath);
         this.oracles = new Map(); // Stores all oracles
-        this.loadOracles(); // Load existing oracles from the database
     }
 
-    async loadOracles() {
+    async load() {
         try {
             for await (const [key, value] of this.db.iterator({ gt: 'oracle-', lt: 'oracle-\xFF' })) {
                 this.oracles.set(key, JSON.parse(value));
@@ -17,7 +16,11 @@ class OracleRegistry {
         }
     }
 
-    async verifyAdmin(oracleId, adminAddress) {
+    async close() {
+        await this.db.close()
+    }
+
+    verifyAdmin(oracleId, adminAddress) {
         const oracleKey = `oracle-${oracleId}`;
         const oracle = this.oracles.get(oracleKey);
         return oracle && oracle.adminAddress === adminAddress;
@@ -38,7 +41,7 @@ class OracleRegistry {
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`);
     }
 
-    async getNextId() {
+    getNextId() {
         let maxId = 0;
         for (const key of this.oracles.keys()) {
             const currentId = parseInt(key.split('-')[1]);
@@ -47,7 +50,7 @@ class OracleRegistry {
             }
         }
         return maxId + 1;
-    },
+    }
 
     static async getTwap(contractId) {
         // Logic to fetch TWAP data for the given contractId
