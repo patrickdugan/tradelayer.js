@@ -4,8 +4,8 @@ const Encode = {
     // Encode Simple Token Issue Transaction
      encodeActivateTradeLayer(params) {
         // Assuming params has a txid
-        return params.txid;
-    }
+        return 0+','+params.code;
+    },
 
     // Encode Token Issue Transaction
     encodeTokenIssue(params) {
@@ -388,7 +388,7 @@ const Encode = {
     // Encode Register OP_CTV Covenant
     encodeRegisterOPCTVCovenant: (params) => {
         const payload = [
-            params.redeem
+            params.redeem,
             params.txid,
             params.associatedPropertyId1 ? params.associatedPropertyId1.toString(36) : '0',
             params.associatedPropertyId2 ? params.associatedPropertyId2.toString(36) : '0',

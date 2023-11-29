@@ -1,25 +1,36 @@
 // Import the necessary library for interacting with Litecoin
 const Litecoin = require('litecoin'); // Replace with actual library import
+const async = require('async')
+const util = require('util');
 
-const client = new litecoin.Client({
+const STANDARD_FEE = 0.0001; // Standard fee in LTC
+const client = new Litecoin.Client({
     host: '127.0.0.1',
-    port: 8332,
+    port: 18332,
     user: 'user',
     pass: 'pass',
     timeout: 10000
 });
 
+// Promisify the necessary client functions
+const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
+const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
+const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
+const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
+const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
+
 const TxUtils = {
-    async function getRawTransaction(txId) {
+    async getRawTransaction(txId) {
         try {
-            return await client.getRawTransaction(txId, true); // true for verbose mode
+            // Use the promisified version of getRawTransaction
+            return await getRawTransactionAsync(txId, true); // true for verbose mode
         } catch (error) {
             console.error(`Error fetching transaction ${txId}:`, error);
             throw error;
         }
     },
 
-    async function getSender(txId) {
+    async getSender(txId) {
         const tx = await this.getRawTransaction(txId);
         if (!tx || !tx.vin || tx.vin.length === 0) {
             throw new Error(`Invalid transaction data for ${txId}`);
@@ -77,7 +88,37 @@ const TxUtils = {
         }
     },
 
-    async function getPayload(txId) {
+    async listUnspent(minconf, maxconf, addresses) {
+        try {
+            // Use the promisified version of listUnspent
+            return await listUnspentAsync(minconf, maxconf, addresses);
+        } catch (error) {
+            console.error(`Error listing UTXOs:`, error);
+            throw error;
+        }
+    },
+
+    async decoderawtransaction(hexString) {
+        try {
+            // Use the promisified version of decoderawtransaction
+            return await decoderawtransactionAsync(hexString);
+        } catch (error) {
+            console.error(`Error decoding raw transaction:`, error);
+            throw error;
+        }
+    },
+
+    async signrawtransactionwithwallet(rawTx) {
+        try {
+            // Use the promisified version of signrawtransactionwithwallet
+            return await signrawtransactionwithwalletAsync(rawTx);
+        } catch (error) {
+            console.error(`Error signing raw transaction with wallet:`, error);
+            throw error;
+        }
+    },
+
+    async getPayload(txId) {
         try {
             const tx = await this.getRawTransaction(txId);
             if (!tx || !tx.vout) {
@@ -101,7 +142,7 @@ const TxUtils = {
         }
     },
 
-    async function getAdditionalInputs(txId) {
+    async getAdditionalInputs(txId) {
         try {
             const tx = await this.getRawTransaction(txId);
             if (!tx || !tx.vin || tx.vin.length <= 1) {
@@ -139,7 +180,7 @@ const TxUtils = {
         }
     },
 
-    async function setSender(address, requiredAmount) {
+    async setSender(address, requiredAmount) {
         // First, get UTXOs for the specific address
         let utxos = await client.cmd('listunspent', 0, 9999999, [address]);
 
@@ -185,7 +226,72 @@ const TxUtils = {
         return selectedUtxos;
     },
 
-    async function addInputs(utxos, rawTx) {
+    async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
+        try {
+            // Ensure outputs is an array
+            if (!Array.isArray(outputs)) {
+                throw new Error("Outputs argument must be an array");
+            }
+
+            // Format the inputs
+            const formattedInputs = inputs.map(input => {
+                let inputObj = { txid: input.txid, vout: input.vout };
+                if (input.sequence !== undefined) {
+                    inputObj.sequence = input.sequence;
+                } else if (replaceable) {
+                    //inputObj.sequence = /* default sequence number for replaceable */;
+                }
+                return inputObj;
+            });
+            //console.log(formattedInputs)
+
+            // Format the outputs
+            const formattedOutputs = {};
+            outputs.forEach(output => {
+                if (output.address) {
+                    formattedOutputs[output.address] = output.amount;
+                } else if (output.data) {
+                    formattedOutputs["data"] = output.data;
+                }
+            });
+
+            // Create the raw transaction
+            try {
+                var raw = await createRawTransactionAsync(formattedInputs, formattedOutputs, locktime);
+            }catch (err){
+                console.log(err)
+            }
+            //console.log(raw)
+            return raw
+        } catch (error) {
+            console.error(`Error in createRawTransaction:`, error);
+            throw error;
+        }
+    },
+
+    async beginRawTransaction(txid, vout) {
+        try {
+            // Specify the input using txid and vout
+            const inputs = [{
+                txid: txid,
+                vout: vout
+            }];
+
+            // Define a minimal set of outputs, can be an empty object for now
+            const outputs = {};
+
+            // Create the raw transaction
+            const rawTx = await this.createRawTransaction(inputs, [outputs]);
+
+            return rawTx;
+        } catch (error) {
+            console.error(`Error in createRawTransaction:`, error);
+            throw error;
+        }
+    },
+
+
+    async addInputs(utxos, rawTx) {
         // Decode the raw transaction to modify it
         let decodedTx = await client.cmd('decoderawtransaction', rawTx);
 
@@ -201,45 +307,93 @@ const TxUtils = {
         return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
     },
 
-    async function addPayload(payload, rawTx) {
-        // Decode the raw transaction
-        let decodedTx = await client.cmd('decoderawtransaction', rawTx);
-
-        // Convert payload to a format suitable for OP_RETURN (typically hex-encoded)
-        const encodedPayload = /* encode payload as necessary */;
-
-        // Add OP_RETURN output
-        decodedTx.vout.push({
-            "value": 0.0,
-            "scriptPubKey": {
-                "type": "nulldata",
-                "hex": "6a" + encodedPayload // '6a' is OP_RETURN in hex
+   async addPayload(payload, rawTx) {
+        try {
+            // Ensure rawTx is a valid string
+            if (typeof rawTx !== 'string' || rawTx.length === 0) {
+                throw new Error('Invalid raw transaction string');
             }
-        });
 
-        // Re-encode the transaction
-        return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
+            // Decode the raw transaction
+            let decodedTx = await decoderawtransactionAsync(rawTx);
+
+            // Check if decodedTx has the necessary structure
+            if (!decodedTx || !decodedTx.vout) {
+                throw new Error('Decoded transaction does not have the expected structure');
+            }
+
+            // Convert the payload to a hexadecimal string
+            let hexPayload = '746c' + Buffer.from(payload).toString('hex');
+
+            // Add OP_RETURN output with "tl" marker and payload
+            decodedTx.vout.push({
+                "value": 0.0,
+                "scriptPubKey": {
+                    "type": "nulldata",
+                    "hex": "6a" + hexPayload // '6a' is OP_RETURN in hex, payload includes "tl" marker
+                }
+            });
+
+            // Ensure the outputs are formatted as an array of objects
+            const formattedOutputs = decodedTx.vout.map(output => {
+                if (output.scriptPubKey.type === 'nulldata') {
+                    return { "data": output.scriptPubKey.hex };
+                } else if (output.scriptPubKey.addresses && output.scriptPubKey.addresses.length > 0) {
+                    return { [output.scriptPubKey.addresses[0]]: output.value };
+                } else {
+                    throw new Error('Invalid output structure: missing addresses');
+                }
+            });
+
+            // Re-encode the transaction
+            return await createRawTransactionAsync(decodedTx.vin, formattedOutputs);
+        } catch (error) {
+            console.error(`Error in addPayload:`, error);
+            throw error;
+        }
     },
 
 
-    async function setChange(address, amount, rawTx) {
-        // Decode the raw transaction
-        let decodedTx = await client.cmd('decoderawtransaction', rawTx);
+    async setChange(address, amount, rawTx) {
+        try {
+            // Decode the raw transaction to get inputs and outputs
+            let decodedTx = await client.cmd('decoderawtransaction', rawTx);
 
-        // Add a change output
-        decodedTx.vout.push({
-            "value": amount,
-            "scriptPubKey": {
-                "address": address
+            // If amount is null, calculate the change based on the sender's balance and fee
+            if (amount === null) {
+                // Assuming the first input is the sender
+                const senderTxId = decodedTx.vin[0].txid;
+                const senderVout = decodedTx.vin[0].vout;
+
+                // Fetch the transaction where the sender received the LTC
+                const senderTx = await this.getRawTransaction(senderTxId);
+                const senderOutput = senderTx.vout[senderVout];
+
+                // Get sender's balance from the output
+                const senderBalance = senderOutput.value;
+
+                // Calculate the change to return to sender (deduct the standard fee)
+                amount = senderBalance - STANDARD_FEE;
             }
-        });
 
-        // Re-encode the transaction
-        return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
-    }
+            // Add a change output
+            decodedTx.vout.push({
+                "value": amount,
+                "scriptPubKey": {
+                    "address": address
+                }
+            });
+
+            // Re-encode the transaction
+            return await client.createRawTransactionAsync('createrawtransaction', decodedTx.vin, decodedTx.vout);
+        } catch (error) {
+            console.error(`Error in setChange:`, error);
+            throw error;
+        }
+    },
 
 
-    async function constructInitialTradeTokenTx(params, senderChannel) {
+    async constructInitialTradeTokenTx(params, senderChannel) {
         // Retrieve the UTXO for the senderChannel address
         const utxos = await client.cmd('listunspent', 0, 9999999, [senderChannel]);
         if (utxos.length === 0) {
@@ -279,10 +433,9 @@ const TxUtils = {
 
         // Return the partially constructed and signed raw transaction
         return signedTx;
-    }
+    },
 
-
-   async function finalizeTradeTokenTx(initialRawTx, additionalParams) {
+   async finalizeTradeTokenTx(initialRawTx, additionalParams) {
         // additionalParams might include additionalUtxos, buyerChangeAddress, referenceAddress, etc.
 
         // Add additional UTXO inputs for UTXO consideration
@@ -303,7 +456,7 @@ const TxUtils = {
     },
 
 
-    async function parseAndCoSignMultisigTransaction(rawTx, expectedUTXOValue, coSignerAddress, coSignerPrivateKey, network) {
+    async parseAndCoSignMultisigTransaction(rawTx, expectedUTXOValue, coSignerAddress, coSignerPrivateKey, network) {
         // Step 1: Decode the raw transaction
         const decodedTx = await TxUtils.decodeRawTransaction(rawTx, network);
 
