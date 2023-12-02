@@ -1,5 +1,6 @@
 // Import required modules and utilities
 const TxUtils = require('./txUtils.js');
+const TxUtilsA = require('./txUtilsA.js');
 const Encode = require('./txEncoder.js');
 const assert = require('assert');
 
@@ -18,11 +19,11 @@ const vOut = 1
         //console.log(encodedData)
         // Assuming you have a function in TxUtils to create a transaction
         // This function should use the encodedData to create the transaction
-        var transaction = await TxUtils.beginRawTransaction(fundingInput,vOut)
+        var transaction = await TxUtilsA.beginRawTransaction(fundingInput,vOut)
         //console.log(transaction)
-        transaction = await TxUtils.addPayload(encodedData,transaction)
+        transaction = await TxUtilsA.addPayload(encodedData,transaction)
         console.log(transaction)
-        transaction = await TxUtils.setChange(address,null,transaction)
+        transaction = await TxUtilsA.setChange(address,null,transaction)
         console.log(transaction)
 
         // Assertions to validate the transaction

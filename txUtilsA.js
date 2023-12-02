@@ -354,7 +354,7 @@ const TxUtils = {
         }
     },
 
-    async setChange(address, amount, rawTx) {
+    async setChange(senderAddress, amount, rawTx) {
         try {
             console.log(`setChange - rawTx: ${rawTx}`);
 
@@ -362,28 +362,33 @@ const TxUtils = {
             let decodedTx = await decoderawtransactionAsync(rawTx);
             console.log(`setChange - decodedTx:`, decodedTx);
 
-            // If amount is null, calculate the change based on the sender's balance and fee
-            if (amount === null) {
-                // Assuming the first input is the sender
-                const senderTxId = decodedTx.vin[0].txid;
-                const senderVout = decodedTx.vin[0].vout;
-                console.log(`setChange - senderTxId: ${senderTxId}, senderVout: ${senderVout}`);
+            // Assuming the first input is the sender
+            const senderTxId = decodedTx.vin[0].txid;
+            console.log(`setChange - senderTxId: ${senderTxId}`);
 
-                // Fetch the transaction where the sender received the LTC
-                const senderTx = await this.getRawTransaction(senderTxId);
-                console.log(`setChange - senderTx:`, senderTx);
+            // Fetch the transaction where the sender received the LTC
+            const senderTx = await this.getRawTransaction(senderTxId);
+            console.log(`setChange - senderTx:`, senderTx);
 
-                const senderOutput = senderTx.vout.find(output => output.n === senderVout);
-
-                if (!senderOutput) {
-                    throw new Error('Sender output not found in the transaction');
+            // Find the output that matches the sender's address
+            let senderBalance = 0;
+            let senderVout = -1;
+            for (let i = 0; i < senderTx.vout.length; i++) {
+                if (senderTx.vout[i].scriptPubKey.addresses && senderTx.vout[i].scriptPubKey.addresses.includes(senderAddress)) {
+                    senderBalance = senderTx.vout[i].value;
+                    senderVout = i;
+                    break;
                 }
+            }
 
-                // Get sender's balance from the output
-                const senderBalance = senderOutput.value;
-                console.log(`setChange - senderBalance: ${senderBalance}`);
+            if (senderVout === -1) {
+                throw new Error('Sender address not found in the transaction outputs');
+            }
 
-                // Calculate the change to return to sender (deduct the standard fee)
+            console.log(`setChange - senderBalance: ${senderBalance}, senderVout: ${senderVout}`);
+
+            // Calculate the change to return to sender (deduct the standard fee)
+            if (amount === null) {
                 amount = senderBalance - STANDARD_FEE;
                 console.log(`setChange - Calculated amount: ${amount}`);
 
@@ -393,36 +398,16 @@ const TxUtils = {
                     return rawTx;
                 }
             }
-    // If amount is null, calculate the change based on the sender's balance and fee
-            if (amount === null) {
-                // ... existing code for calculating senderBalance ...
-
-                // Check if the change amount is greater than dust threshold
-                if (amount <= DUST_THRESHOLD) {
-                    console.log('Change amount is too small, not adding change output');
-                    return rawTx;
-                }
-            }
-
-            // Find the index of the output that corresponds to the change address
-            const outputIndex = decodedTx.vout.findIndex(
-                output => output.scriptPubKey.addresses && output.scriptPubKey.addresses.includes(address)
-            );
-
-            if (outputIndex === -1) {
-                throw new Error('Change address not found in transaction outputs');
-            }
-
-            console.log(`setChange - Output index for change: ${outputIndex}`);
 
             // Construct scriptPubKey for the change address
-            let scriptPubKey = decodedTx.vout[outputIndex].scriptPubKey.hex;
-            console.log(`setChange - scriptPubKey: ${scriptPubKey}`);
+         let scriptPubKey = decodedTx.vout[outputIndex].scriptPubKey.hex;
 
             // Add a change output
             decodedTx.vout.push({
                 "value": amount,
-                "scriptPubKey": { "hex": scriptPubKey }
+                "scriptPubKey": {
+                    "hex": scriptPubKey
+                }
             });
             console.log(`setChange - Updated decodedTx:`, decodedTx);
 
@@ -435,6 +420,9 @@ const TxUtils = {
             throw error;
         }
     },
+
+
+
 
     async constructInitialTradeTokenTx(params, senderChannel) {
         // Retrieve the UTXO for the senderChannel address
