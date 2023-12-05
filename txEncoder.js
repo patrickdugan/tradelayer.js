@@ -4,7 +4,7 @@ const Encode = {
     // Encode Simple Token Issue Transaction
      encodeActivateTradeLayer(params) {
         // Assuming params has a txid
-        return 0+','+params.code;
+        return params.code;
     },
 
     // Encode Token Issue Transaction
@@ -136,6 +136,7 @@ const Encode = {
     // Encode Grant Managed Token Transaction
     encodeGrantManagedToken:(params) => {
       const payload = [
+        params.propertyid.toString(36),
         params.amountGranted.toString(36),
         params.addressToGrantTo,
       ];
@@ -144,12 +145,18 @@ const Encode = {
 
     // Encode Redeem Managed Token Transaction
     encodeRedeemManagedToken:(params) => {
-      return params.amountDestroyed.toString(36);
+      const payload = [
+        params.propertyid.toString(36),
+        params.amountGranted.toString(36),
+        params.addressToGrantTo,
+      ];
+      return payload.join(',');
     },
 
     // Encode Publish Oracle Data Transaction
     encodePublishOracleData:(params) => {
       const payload = [
+        params.oracleid.toString(36),
         params.price.toString(36),
       ];
       if (params.high !== undefined) {

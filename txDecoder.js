@@ -84,7 +84,7 @@ const Decode = {
             price,
             cancelParams
         };
-    }
+    },
 
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {
@@ -306,7 +306,7 @@ const Decode = {
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };
-    }
+    },
 
     // Decode Publish New Transaction Type
     decodePublishNewTx: (payload) => {

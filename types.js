@@ -10,7 +10,7 @@ const Types = {
   encodePayload: (transactionId, params) => {
     let payload = "tl"
     payload+=transactionId.toString(36);
-
+    console.log(transactionId)
     switch (transactionId) {
             case 0:
                 payload += Encode.encodeActivateTradeLayer(params);
@@ -117,8 +117,6 @@ const Types = {
             case 34:
                 payload += Encode.encodeMintColoredCoin(params);
                 break;
-
-
       default:
         throw new Error('Unknown transaction type');
     }
@@ -132,7 +130,7 @@ const Types = {
     let params = {};
 
     if (encodedPayload.startsWith(transactionId.toString(36))) {
-      index = (transactionId.toString(36)).length;
+      index = (transactionId.toString(36));
     } else {
       throw new Error('Invalid payload');
     }
@@ -253,7 +251,7 @@ const Types = {
                 params = Decode.decodeMintColoredCoin(encodedPayload.substr(index));
                 break;
       default:
-        throw an Error('Unknown transaction type');
+        throw new Error('Unknown transaction type');
     }
 
     return params;
