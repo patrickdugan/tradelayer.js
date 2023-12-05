@@ -2,8 +2,9 @@
 const Litecoin = require('litecoin'); // Replace with actual library import
 const async = require('async')
 const util = require('util');
-
-const STANDARD_FEE = 0.0001; // Standard fee in LTC
+const litecore = require('bitcore-lib-ltc');
+const COIN = 100000000
+const STANDARD_FEE = 10000; // Standard fee in LTC
 const client = new Litecoin.Client({
     host: '127.0.0.1',
     port: 18332,
@@ -18,7 +19,9 @@ const createRawTransactionAsync = util.promisify(client.createRawTransaction.bin
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
 const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
-const DUST_THRESHOLD= 0.000546
+const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
+const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
+const DUST_THRESHOLD= 54600
 
 const TxUtils = {
     async getRawTransaction(txId) {
@@ -78,7 +81,8 @@ const TxUtils = {
 
             if (referenceOutput) {
                 const address = referenceOutput.scriptPubKey.addresses[0]; // Assuming single address
-                const satoshis = Math.round(referenceOutput.value * 1e8); // Convert LTC to satoshis
+                const satoshis = Math.round(referenceOutput.value * COIN); // Convert LTC to satoshis
+                console.log(satoshis)
                 return { address, satoshis };
             } else {
                 throw new Error("Reference output not found");
@@ -227,47 +231,91 @@ const TxUtils = {
         return selectedUtxos;
     },
 
-    async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
-        try {
-            // Ensure outputs is an array
-            if (!Array.isArray(outputs)) {
-                throw new Error("Outputs argument must be an array");
+     async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
+    const transaction = new litecore.Transaction();
+
+    for (const input of inputs) {
+        // Fetch the raw transaction to which this input refers
+        const tx = await this.getRawTransaction(input.txid);
+        const utxo = tx.vout[input.vout];
+        const scriptPubKey = utxo.scriptPubKey.hex;
+        const value = Math.round(utxo.value*COIN)
+        console.log(value)
+        // Add UTXO to the transaction
+        transaction.from({
+            txId: input.txid,
+            outputIndex: input.vout,
+            script: scriptPubKey,
+            satoshis: value // Convert LTC to satoshis
+        });
+    }
+
+        // Add outputs
+        outputs.forEach(output => {
+            if (output.address) {
+                transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
+                console.log(output.amount*COIN)
             }
-
-            // Format the inputs
-            const formattedInputs = inputs.map(input => {
-                let inputObj = { txid: input.txid, vout: input.vout };
-                if (input.sequence !== undefined) {
-                    inputObj.sequence = input.sequence;
-                } else if (replaceable) {
-                    //inputObj.sequence = /* default sequence number for replaceable */;
-                }
-                return inputObj;
-            });
-            //console.log(formattedInputs)
-
-            // Format the outputs
-            const formattedOutputs = {};
-            outputs.forEach(output => {
-                if (output.address) {
-                    formattedOutputs[output.address] = output.amount;
-                } else if (output.data) {
-                    formattedOutputs["data"] = output.data;
-                }
-            });
-
-            // Create the raw transaction
-            try {
-                var raw = await createRawTransactionAsync(formattedInputs, formattedOutputs, locktime);
-            }catch (err){
-                console.log(err)
+            // Handle data (OP_RETURN) outputs
+            else if (output.data) {
+                const script = litecore.Script.buildDataOut(output.data, 'hex');
+                transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
             }
-            //console.log(raw)
-            return raw
-        } catch (error) {
-            console.error(`Error in createRawTransaction:`, error);
-            throw error;
+        });
+
+        // Set locktime if specified
+        if (locktime > 0) {
+            transaction.lockUntilDate(locktime);
         }
+
+        return transaction;
+    },
+
+    addPayload(payload, rawTx) {
+        const transaction = new litecore.Transaction(rawTx);
+        const script = litecore.Script.buildDataOut('tl' + payload, 'hex');
+        transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
+        return transaction.toString();
+    },
+
+    async setChange(senderAddress, amount, rawTx) {
+            const transaction = new litecore.Transaction(rawTx);
+
+            // Log the transaction's inputs and outputs for debugging
+            console.log("Transaction inputs:", transaction.inputs);
+            console.log("Transaction outputs:", transaction.outputs);
+
+            // Calculate change amount
+            const inputAmount = transaction.inputs.reduce((sum, input) => {
+                console.log("Current input:", input); // Log each input
+                return sum + (input.output ? input.output.satoshis : 0);
+            }, 0);
+
+            const outputAmount = transaction.outputs.reduce((sum, output) => {
+                console.log("Current output:", output); // Log each output
+                return sum + output.satoshis;
+            }, 0);
+
+            const changeAmount = inputAmount - outputAmount - (STANDARD_FEE * 1e8); // Convert LTC to satoshis
+
+            // Log the calculated change amount
+            console.log("Calculated change amount (in satoshis):", changeAmount);
+
+            // Add change output if above dust threshold
+            if (changeAmount > DUST_THRESHOLD * 1e8) {
+                transaction.change(senderAddress);
+            }
+
+            return transaction.serialize();
+    },
+
+
+
+    signTransaction(rawTx, privateKey) {
+        const transaction = new litecore.Transaction(rawTx);
+        const privateKeyObj = new litecore.PrivateKey(privateKey);
+        transaction.sign(privateKeyObj);
+        return transaction.toString();
     },
 
     async beginRawTransaction(txid, vout) {
@@ -306,134 +354,6 @@ const TxUtils = {
 
         // Re-encode the transaction
         return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
-    },
-
-   async addPayload(payload, rawTx) {
-        try {
-            // Ensure rawTx is a valid string
-            if (typeof rawTx !== 'string' || rawTx.length === 0) {
-                throw new Error('Invalid raw transaction string');
-            }
-
-            // Decode the raw transaction
-            let decodedTx = await decoderawtransactionAsync(rawTx);
-
-            // Check if decodedTx has the necessary structure
-            if (!decodedTx || !decodedTx.vout) {
-                throw new Error('Decoded transaction does not have the expected structure');
-            }
-
-            // Convert the payload to a hexadecimal string
-            let hexPayload = '746c' + Buffer.from(payload).toString('hex');
-
-            // Add OP_RETURN output with "tl" marker and payload
-            decodedTx.vout.push({
-                "value": 0.0,
-                "scriptPubKey": {
-                    "type": "nulldata",
-                    "hex": "6a" + hexPayload // '6a' is OP_RETURN in hex, payload includes "tl" marker
-                }
-            });
-
-            // Ensure the outputs are formatted as an array of objects
-            const formattedOutputs = decodedTx.vout.map(output => {
-                if (output.scriptPubKey.type === 'nulldata') {
-                    return { "data": output.scriptPubKey.hex };
-                } else if (output.scriptPubKey.addresses && output.scriptPubKey.addresses.length > 0) {
-                    return { [output.scriptPubKey.addresses[0]]: output.value };
-                } else {
-                    throw new Error('Invalid output structure: missing addresses');
-                }
-            });
-
-            // Re-encode the transaction
-            return await createRawTransactionAsync(decodedTx.vin, formattedOutputs);
-        } catch (error) {
-            console.error(`Error in addPayload:`, error);
-            throw error;
-        }
-    },
-
-    async setChange(address, amount, rawTx) {
-        try {
-            console.log(`setChange - rawTx: ${rawTx}`);
-
-            // Decode the raw transaction to get inputs and outputs
-            let decodedTx = await decoderawtransactionAsync(rawTx);
-            console.log(`setChange - decodedTx:`, decodedTx);
-
-            // If amount is null, calculate the change based on the sender's balance and fee
-            if (amount === null) {
-                // Assuming the first input is the sender
-                const senderTxId = decodedTx.vin[0].txid;
-                const senderVout = decodedTx.vin[0].vout;
-                console.log(`setChange - senderTxId: ${senderTxId}, senderVout: ${senderVout}`);
-
-                // Fetch the transaction where the sender received the LTC
-                const senderTx = await this.getRawTransaction(senderTxId);
-                console.log(`setChange - senderTx:`, senderTx);
-
-                const senderOutput = senderTx.vout.find(output => output.n === senderVout);
-
-                if (!senderOutput) {
-                    throw new Error('Sender output not found in the transaction');
-                }
-
-                // Get sender's balance from the output
-                const senderBalance = senderOutput.value;
-                console.log(`setChange - senderBalance: ${senderBalance}`);
-
-                // Calculate the change to return to sender (deduct the standard fee)
-                amount = senderBalance - STANDARD_FEE;
-                console.log(`setChange - Calculated amount: ${amount}`);
-
-                // Check if the change amount is greater than dust threshold
-                if (amount <= DUST_THRESHOLD) {
-                    console.log('Change amount is too small, not adding change output');
-                    return rawTx;
-                }
-            }
-    // If amount is null, calculate the change based on the sender's balance and fee
-            if (amount === null) {
-                // ... existing code for calculating senderBalance ...
-
-                // Check if the change amount is greater than dust threshold
-                if (amount <= DUST_THRESHOLD) {
-                    console.log('Change amount is too small, not adding change output');
-                    return rawTx;
-                }
-            }
-
-            // Find the index of the output that corresponds to the change address
-            const outputIndex = decodedTx.vout.findIndex(
-                output => output.scriptPubKey.addresses && output.scriptPubKey.addresses.includes(address)
-            );
-
-            if (outputIndex === -1) {
-                throw new Error('Change address not found in transaction outputs');
-            }
-
-            console.log(`setChange - Output index for change: ${outputIndex}`);
-
-            // Construct scriptPubKey for the change address
-            let scriptPubKey = decodedTx.vout[outputIndex].scriptPubKey.hex;
-            console.log(`setChange - scriptPubKey: ${scriptPubKey}`);
-
-            // Add a change output
-            decodedTx.vout.push({
-                "value": amount,
-                "scriptPubKey": { "hex": scriptPubKey }
-            });
-            console.log(`setChange - Updated decodedTx:`, decodedTx);
-
-            // Re-encode the transaction
-            const newRawTx = await createRawTransactionAsync(decodedTx.vin, decodedTx.vout);
-            console.log(`setChange - New Raw Transaction: ${newRawTx}`);
-            return newRawTx;
-        } catch (error) {
-            console.error(`Error in setChange:`, error);
-            throw error;
-        }
     },
 
     async constructInitialTradeTokenTx(params, senderChannel) {
@@ -530,6 +450,69 @@ const TxUtils = {
         // const txId = await TxUtils.broadcastTransaction(coSignedTx, network);
 
         return coSignedTx; // Return the co-signed transaction
+    },
+
+   async sendTransaction(fromAddress, toAddress, amount, opReturnData = null) {
+        try {
+            // Get private key for the fromAddress
+            const privateKey = await dumpprivkeyAsync(fromAddress);
+
+            // Adjust the amount to be at least the DUST_THRESHOLD if it is lower
+            if (amount > 0 && amount < DUST_THRESHOLD) {
+                amount = DUST_THRESHOLD;
+            }
+
+            // Find a suitable UTXO
+            const minAmountSatoshis = amount + STANDARD_FEE;
+            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+
+            // Create the transaction
+            let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
+
+            // If toAddress is not null, add the to output
+            if (toAddress) {
+                transaction.to(toAddress, amount);
+            }
+
+            // Add change address
+            transaction.change(fromAddress);
+
+            // Add OP_RETURN data if provided
+            if (opReturnData) {
+                transaction.addData(opReturnData);
+            }
+
+            // Sign the transaction
+            transaction.sign(privateKey);
+
+            // Serialize and send the transaction
+            const serializedTx = transaction.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendTransaction:', error);
+            throw error;
+        }
+    },
+
+
+
+    async findSuitableUTXO(address, minAmount) {
+        
+        const utxos = await listUnspentAsync(0, 9999999, [address]);
+        const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
+        console.log(suitableUtxo)
+        if (!suitableUtxo) {
+            throw new Error('No suitable UTXO found.');
+        }
+
+        return {
+            txId: suitableUtxo.txid,
+            outputIndex: suitableUtxo.vout,
+            address: suitableUtxo.address,
+            script: suitableUtxo.scriptPubKey,
+            satoshis: Math.round(suitableUtxo.amount * 1e8) // Convert LTC to satoshis
+        };
     }
 
 };

@@ -10,7 +10,7 @@ const client = new litecoin.Client({
     timeout: 10000
 });
 
-client.cmd('createwallet','', function(err, walletInfo) {
+/*client.cmd('createwallet','', function(err, walletInfo) {
     if (err) {
         console.error('Error creating new wallet:', err);
         return;
@@ -32,7 +32,7 @@ client.listUnspent(1, 9999999, function(err, unspent) {
         return;
     }
     console.log('Unspent Transactions:', unspent);
-});
+});*/
 
 client.getNewAddress(function(err, address) {
     if (err) {
