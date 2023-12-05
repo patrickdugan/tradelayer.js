@@ -1,11 +1,10 @@
-const level = require('level');
+var db = require('./db')
 
 class TallyMap {
     static instance;
 
     constructor(path) {
         if (!TallyMap.instance) {
-            this.db = level(path);
             this.addresses = new Map();
             TallyMap.instance = this;
         }

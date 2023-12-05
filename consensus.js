@@ -3,8 +3,7 @@ const level = require('level');
 // Define the path to your LevelDB database
 const dbPath = './my-leveldb';
 
-// Open the LevelDB database
-const db = level(dbPath);
+const db = require('./db')
 
 // Function to store consensus hash for a block
 function storeConsensusHash(blockHeight, consensusHash) {

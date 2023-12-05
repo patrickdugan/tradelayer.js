@@ -1,6 +1,6 @@
 const level = require('level');
-const db = level('contracts');
-const dbPath = './LevelDB/contracts'
+var db = require('./db')
+
 
 class ContractsRegistry {
 

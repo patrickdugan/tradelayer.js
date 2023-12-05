@@ -1,10 +1,10 @@
 const { Level } = require('level')
+var db = require('./db')
 
 class PropertyManager {
     constructor(dbPath) {
         this.propertyIndex = new Map();
         this.nextPropertyId = 1;
-        this.db = new Level(dbPath);
     }
 
     async load() {

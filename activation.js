@@ -1,4 +1,4 @@
-const level = require('level');
+var db = require('./db')
 const Logic = require('./logic.js');
 const TL = require('./vesting.js')
 
@@ -6,7 +6,7 @@ const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
 class Activation {
     constructor(dbPath, adminAddress) {
-        this.db = level(dbPath);
+
         this.hardcodedAdminAddress = adminAddress;
         this.consensusVector = {};
     }

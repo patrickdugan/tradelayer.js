@@ -2,6 +2,7 @@ const litecoin = require('litecoin');
 const {Level} = require('level');
 const json = require('big-json');
 const util = require('util')
+const txUtils = require('./txUtils')
 
 class TxIndex {
     constructor() {
@@ -62,25 +63,6 @@ class TxIndex {
         });
     }
 
-    async processBlockData(blockData, blockHeight) {
-         for (var txId of blockData.tx) {
-            const txHex = await this.fetchTransactionData(txId);   
-            const txData = await this.DecodeRawTransaction(txHex)
-            
-            if(txData != null){
-                if (txData.marker === 'tl') {
-                    this.transparentIndex.push(txData.payload)
-                    const txDetails = await this.processTransaction(txData.payload, txData.decode);
-                    await this.saveTransactionData(txId, txData.decode, txData.marker, blockHeight, txDetails);
-                    //console.log(txDetails)
-                   
-                    // Save each transaction with its block height as a key
-                    await this.saveTransactionByHeight(txId, blockHeight);
-                }
-            }
-        }
-    }
-
      async saveTransactionByHeight(txId, blockHeight) {
         const txKey = `txHeight-${blockHeight}-${txId}`;
         const txData = await this.fetchTransactionData(txId);
@@ -126,7 +108,7 @@ class TxIndex {
                 if(marker=='tl'){console.log('Decoded Payload:', payload)};
 
 
-                return { marker, payload , decoded};
+                return { marker, payload , decodedTx};
             } else {
                 //console.log('No OP_RETURN output found.');
                 return null;
@@ -136,11 +118,31 @@ class TxIndex {
         }
     }
 
+    async processBlockData(blockData, blockHeight) {
+         for (var txId of blockData.tx) {
+            const txHex = await this.fetchTransactionData(txId);   
+            const txData = await this.DecodeRawTransaction(txHex)
+            
+            if(txData != null){
+                if (txData.marker === 'tl') {
+                    this.transparentIndex.push(txData.payload)
+                    const txDetails = await this.processTransaction(txData.payload, txData.decodedTx);
+                    await this.saveTransactionData(txId, txData.decodedTx, txData.payload, blockHeight, txDetails);
+                    //console.log(txDetails)
+                   
+                    // Save each transaction with its block height as a key
+                    await this.saveTransactionByHeight(txId, blockHeight);
+                }
+            }
+        }
+    }
+
+
     async processTransaction(payload, decode) {
         // Example: Extract sender, reference address, payload, etc.
         // These methods can be similar to those in TxUtils
-        const sender = await this.getSender(decode.txId);
-        const reference = await this.getReference(decode.txId);
+        const sender = await txUtils.getSender(null, decode);
+        const reference = await txUtils.getReference(null, decode);
         // Decode the transaction based on its type and payload
         // Extract and process the actual payload
         const decodedParams = Types.decodePayload(txData.txid, 'tl', payload);
@@ -148,17 +150,9 @@ class TxIndex {
         return { sender, reference, payload, decodedParams};
     }
 
-    decodePayload(hexPayload) {
-        const marker = hexPayload.slice(0, 1);
-        if (marker === '746c'||marker==="tl"){
-            return "tl";
-        } else {
-            return null;
-        }
-    }
-
-    async saveTransactionData(txId, txData, txType, blockHeight) {
-        await this.db.put(`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, txType }));
+    async saveTransactionData(txId, txData, payload, blockHeight) {
+        console.log('saving'+`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, payload}))
+        await this.db.put(`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, payload}));
     }
 
     async loadIndex() {

@@ -1,8 +1,7 @@
-const { Level } = require('level');
+var db = require('./db')
 
 class OracleRegistry {
-    constructor(dbPath = './oracleDB') {
-        this.db = new Level(dbPath);
+    constructor() {
         this.oracles = new Map(); // Stores all oracles
     }
 
