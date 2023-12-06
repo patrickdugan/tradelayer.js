@@ -3,10 +3,11 @@ const {Level} = require('level');
 const json = require('big-json');
 const util = require('util')
 const txUtils = require('./txUtils')
+const Types = require('./types.js')
+var db = require('./db.js')
 
 class TxIndex {
     constructor() {
-        this.db = new Level('./txIndexDB');
         this.client = new litecoin.Client({
             host: '127.0.0.1',
             port: 18332,
@@ -20,7 +21,7 @@ class TxIndex {
     }
     
     async initializeIndex(genesisBlock) {
-        await this.db.put('genesisBlock', genesisBlock);
+        await db.put('genesisBlock', genesisBlock);
     }
 
     async extractBlockData(startHeight) {
@@ -66,7 +67,7 @@ class TxIndex {
      async saveTransactionByHeight(txId, blockHeight) {
         const txKey = `txHeight-${blockHeight}-${txId}`;
         const txData = await this.fetchTransactionData(txId);
-        await this.db.put(txKey, JSON.stringify(txData));
+        await db.put(txKey, JSON.stringify(txData));
     }
 
 
@@ -126,7 +127,7 @@ class TxIndex {
             if(txData != null){
                 if (txData.marker === 'tl') {
                     this.transparentIndex.push(txData.payload)
-                    const txDetails = await this.processTransaction(txData.payload, txData.decodedTx);
+                    const txDetails = await this.processTransaction(txData.payload, txData.decodedTx, txId, txData.marker);
                     await this.saveTransactionData(txId, txData.decodedTx, txData.payload, blockHeight, txDetails);
                     //console.log(txDetails)
                    
@@ -138,27 +139,28 @@ class TxIndex {
     }
 
 
-    async processTransaction(payload, decode) {
+    async processTransaction(payload, decode, txid, marker) {
         // Example: Extract sender, reference address, payload, etc.
         // These methods can be similar to those in TxUtils
-        const sender = await txUtils.getSender(null, decode);
-        const reference = await txUtils.getReference(null, decode);
+        const sender = await txUtils.getSender(txid);
+        const reference = await txUtils.getReference(txid);
         // Decode the transaction based on its type and payload
         // Extract and process the actual payload
-        const decodedParams = Types.decodePayload(txData.txid, 'tl', payload);
+        const decodedParams = Types.decodePayload(txid, marker, payload);
 
         return { sender, reference, payload, decodedParams};
     }
 
     async saveTransactionData(txId, txData, payload, blockHeight) {
-        console.log('saving'+`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, payload}))
-        await this.db.put(`tx-${blockHeight}-${txId}`, JSON.stringify({ txData, payload}));
+        const indexKey = `txIndex-tx-${blockHeight}-${txId}`;
+        console.log('saving', indexKey, JSON.stringify({ txData, payload }));
+        await db.put(indexKey, JSON.stringify({ txData, payload }));
     }
 
     async loadIndex() {
         return new Promise((resolve, reject) => {
             let data = {};
-            this.db.createReadStream()
+            db.createReadStream()
                 .on('data', (entry) => {
                     data[entry.key] = entry.value;
                 })

@@ -24,7 +24,7 @@ const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtr
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
-    async getRawTransaction(txId, decode) {
+    async getRawTransaction(txId) {
         try {
             // Use the promisified version of getRawTransaction
             return await getRawTransactionAsync(txId, true); // true for verbose mode
@@ -34,15 +34,8 @@ const TxUtils = {
         }
     },
 
-    async getSender(txId, decode) {
-        if(txId!=null){
-            const tx = await this.getRawTransaction(txId);
-        }
-
-        if(decode!=null){
-            const tx = decode
-        }
-
+    async getSender(txId) {
+        const tx = await this.getRawTransaction(txId);
         if (!tx || !tx.vin || tx.vin.length === 0) {
             throw new Error(`Invalid transaction data for ${txId}`);
         }

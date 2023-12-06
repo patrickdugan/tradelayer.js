@@ -125,23 +125,25 @@ const Types = {
   },
 
   // Function to decode a payload based on the transaction ID and encoded payload
-  decodePayload: (txId, type, encodedPayload) => {
+  decodePayload: (txId, marker, encodedPayload) => {
     let index = 0;
     let params = {};
 
-    if (encodedPayload.startsWith(transactionId.toString(36))) {
-      index = (transactionId.toString(36));
-    } else {
+    if (marker !='tl'){
       throw new Error('Invalid payload');
     }
 
+    var type = Number(encodedPayload.slice(0,1).toString(36))
+    console.log(type)
     switch (type) {
        case 0:
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                if(Validity.validateActivateTradeLayer(txid,params)){
-                  //save this tx and its validity to db
+                if(Validity.validateActivateTradeLayer(txId,params)){
+                  params.valid = true//save this tx and its validity to db
                   //call logic function
                 }else{
+                  params.valid = false
+                  params.reason = "Not sent from admin address"
                   //save invalid tx to db
                 }
                 break;

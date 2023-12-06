@@ -1,18 +1,21 @@
+const TxUtils = require('./txUtils.js')
+const db = require('./db')
+
 const Validity = {
     // 0: Activate TradeLayer
     validateActivateTradeLayer: async (txid, params, db, adminAddress) => {
         const sender = await TxUtils.getSender(txid);
-        const isFirstTx = await db.isFirstTx(txid);
+        /*const isFirstTx = await db.isFirstTx(txid);
         if (isFirstTx) {
             // Logic for the first transaction in TradeLayer
             // This logic will depend on your system's specific implementation
             // For example, setting up initial configurations, registries, etc.
             return sender === adminAddress;
-        } else {
+        } else {*/
             // Logic for subsequent activation transactions
             // Ensure sender is the genesis admin
             return sender === adminAddress;
-        }
+        //}
     },
 
     // 1: Token Issue
