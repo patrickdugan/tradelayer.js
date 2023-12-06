@@ -1,11 +1,12 @@
 const level = require('level');
 
 // Database setup
-const db = level('./tradeLayerDB');
+{ db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
 
 class BlockchainPersistence {
     constructor() {
         this.lastKnownBlockHash = '';
+        this.checkpointInterval = 1000
     }
 
     /**
@@ -80,6 +81,81 @@ class BlockchainPersistence {
             console.error('Error loading state:', error);
             return null;
         }
+    }
+
+    async getActivationsSnapshot() {
+        const snapshot = {};
+        try {
+            // Retrieve all data from the activations sublevel
+            for await (const [key, value] of activationsDB.createReadStream()) {
+                // Process and store each key-value pair in the snapshot
+                // Depending on your data structure, you might need to parse the value or perform other transformations
+                snapshot[key] = value;
+            }
+        } catch (error) {
+            console.error('Error fetching activations snapshot:', error);
+            throw error; // Rethrow the error to handle it in the calling function
+        }
+        return snapshot;
+    }
+
+    async getTallyMapSnapshot() {
+        // Logic to get snapshot of tallyMap
+    }
+
+    async getPropertyListSnapshot() {
+        // Logic to get snapshot of propertyList
+    }
+
+    async getWhitelistsSnapshot() {
+        // Logic to get snapshot of whitelists
+    }
+
+    async getOraclesSnapshot() {
+        // Logic to get snapshot of oracles
+    }
+
+    async getContractListSnapshot() {
+        // Logic to get snapshot of contract list
+    }
+
+    async getMarginMapsSnapshot() {
+        // Logic to get snapshot of marginMaps
+    }
+
+    async saveState() {
+        try {
+            const state = {
+                activations: await this.getActivationsSnapshot(),
+                tallyMap: await this.getTallyMapSnapshot(),
+                propertyList: await this.getPropertyListSnapshot(),
+                whitelists: await this.getWhitelistsSnapshot(),
+                oracles: await this.getOraclesSnapshot(),
+                contractList: await this.getContractListSnapshot(),
+                marginMaps: await this.getMarginMapsSnapshot()
+            };
+
+            await persistenceDB.put('savedState', JSON.stringify(state));
+            console.log('State saved successfully');
+        } catch (error) {
+            console.error('Error saving state:', error);
+        }
+    }
+
+    /**
+     * Loads the blockchain state from the most recent checkpoint.
+     */
+    async loadStateFromCheckpoint() {
+        // Load and deserialize the state from the DB
+        // Placeholder implementation
+        // Consider using JSON.parse or a similar method for deserialization
+    }
+
+    /**
+     * Manages and maintains checkpoints.
+     */
+    manageCheckpoints() {
+        // Logic to create new checkpoints and prune old ones
     }
 }
 

@@ -25,7 +25,8 @@ const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactions
-
+const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
+const genesisBlock = 3082500
 
 class Main {
     constructor(test) {
@@ -48,7 +49,27 @@ class Main {
         this.reOrgChecker = new ReOrgChecker(reOrgConfig);
     }   client = new Litecoin(config)
 
+    async function initializeOrLoadDB(db, genesisBlock) {
+        try {
+            const genesis = await db.get('genesisBlock');
+            console.log('Database already initialized. Genesis block:', genesis);
+            // Database already exists, you can load or process data from here
+        } catch (error) {
+            // If the genesis block is not found, initialize the database
+            if (error.type === 'NotFoundError') {
+                console.log('Initializing database with genesis block:', genesisBlock);
+                await db.put('genesisBlock', genesisBlock);
+                // Perform other initialization tasks if necessary
+            } else {
+                // Handle other errors
+                console.error('Error accessing database:', error);
+            }
+        }
+    }
+
     async initialize() {
+        
+
         // Initialize TradeLayer if not already done
         await this.tradeLayerManager.initialize();
 
@@ -75,31 +96,39 @@ class Main {
       }
     },
 
-    async function checkForIndex() {
-        try {
-            // Define the key for your singleton index
-            const singletonIndexKey = 'singleton_index_key'; // Replace with your actual key
+    async function initOrLoadTxIndex() {
+        // Check if the txIndex exists by trying to find the max indexed block
+        const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
 
-            const indexExists = await new Promise((resolve, reject) => {
-                db.get(singletonIndexKey, (err, value) => {
-                    if (err) {
-                        if (err.type === 'NotFoundError') {
-                            resolve(false); // Singleton index does not exist
-                        } else {
-                            reject(err); // Some other error occurred
-                        }
-                    } else {
-                        resolve(true); // Singleton index exists
-                    }
-                });
-            });
-
-            return indexExists;
-        } catch (error) {
-            console.error('Error checking for singleton index:', error);
-            throw error; // Rethrow or handle error as appropriate for your application
+        if (maxIndexedBlock === 0 || maxIndexedBlock === null) {
+            // Initialize the txIndex if it doesn't exist
+            await TxIndex.initializeIndex(genesisBlock);
         }
-    },
+        // Proceed to synchronize the index
+        await syncIndex(txIndexDB, txIndexModule, maxIndexedBlock);
+    }
+
+    async function syncIndex(txIndexDB, txIndexModule) {
+        try {
+            // Find the maximum indexed block in the database
+            const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
+            if(maxIndexedBlock===null){initOrLoadTxIndex}
+            // Fetch the current chain tip (latest block number) from the blockchain
+            const chainTip = await TxIndex.fetchChainTip();
+
+            // If the chain tip is greater than the max indexed block, sync the index
+            if (chainTip > maxIndexedBlock) {
+                // Loop through each block starting from maxIndexedBlock + 1 to chainTip
+                TxIndex.extractBlockData(maxIndexedBlock)
+            } else {
+                console.log("TxIndex is already up to date.");
+            }
+        } catch (error) {
+            console.error("Error during syncIndex:", error);
+        }
+    }
+
+
 
     async constructOrLoadConsensus() {
         // Load consensus state from Persistence if available, otherwise construct from index

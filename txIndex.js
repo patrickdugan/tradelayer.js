@@ -1,10 +1,9 @@
 const litecoin = require('litecoin');
-const {Level} = require('level');
 const json = require('big-json');
 const util = require('util')
 const txUtils = require('./txUtils')
 const Types = require('./types.js')
-var db = require('./db.js')
+const { txIndexDB } = require('./db.js'); // Import sublevel for txIndex
 
 class TxIndex {
     constructor() {
@@ -21,7 +20,7 @@ class TxIndex {
     }
     
     async initializeIndex(genesisBlock) {
-        await db.put('genesisBlock', genesisBlock);
+        await txIndexDB.put('genesisBlock', genesisBlock);
     }
 
     async extractBlockData(startHeight) {
@@ -31,7 +30,7 @@ class TxIndex {
             await this.processBlockData(blockData, height);
             chainTip = await this.fetchChainTip()
         }
-        console.log('indexed to chaintip', JSON.stringify(this.transparentIndex))
+        console.log('indexed to chaintip')
     }
 
     async fetchChainTip() {
@@ -67,7 +66,7 @@ class TxIndex {
      async saveTransactionByHeight(txId, blockHeight) {
         const txKey = `txHeight-${blockHeight}-${txId}`;
         const txData = await this.fetchTransactionData(txId);
-        await db.put(txKey, JSON.stringify(txData));
+        await txIndexDB.put(txKey, JSON.stringify(txData));
     }
 
 
@@ -151,16 +150,43 @@ class TxIndex {
         return { sender, reference, payload, decodedParams};
     }
 
+    // New method to find the maximum block height
+    async findMaxIndexedBlock() {
+        return new Promise((resolve, reject) => {
+            let maxBlockHeight = 0;
+            txIndexDB.createKeyStream()
+                .on('data', (key) => {
+                    const height = parseInt(key.split('-')[1]);
+                    if (height > maxBlockHeight) {
+                        maxBlockHeight = height;
+                    }
+                })
+                .on('error', (err) => {
+                    console.log("can't find maxIndexedBlock"+err)
+                    reject(null);
+                })
+                .on('end', async () => {
+                    try {
+                        await txIndexDB.put('maxIndexHeight', maxBlockHeight);  // Save the max block height
+                        resolve(maxBlockHeight);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+        });
+    }
+
+
+    // Updated saveTransactionData method
     async saveTransactionData(txId, txData, payload, blockHeight) {
-        const indexKey = `txIndex-tx-${blockHeight}-${txId}`;
-        console.log('saving', indexKey, JSON.stringify({ txData, payload }));
-        await db.put(indexKey, JSON.stringify({ txData, payload }));
+        const indexKey = `tx-${blockHeight}-${txId}`;
+        await txIndexDB.put(indexKey, JSON.stringify({ txData, payload }));
     }
 
     async loadIndex() {
         return new Promise((resolve, reject) => {
             let data = {};
-            db.createReadStream()
+            txIndexDB.createReadStream() // Using txIndex sublevel
                 .on('data', (entry) => {
                     data[entry.key] = entry.value;
                 })
