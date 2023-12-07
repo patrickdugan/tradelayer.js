@@ -1,6 +1,7 @@
 const TxUtils = require('./TxUtils');
 const BigNumber = require('bignumber.js');
 const TradeChannels = require('channels.js')
+const Activation = require('activation.js')
 
 // logic.js
 const Logic = {
@@ -48,13 +49,13 @@ const Logic = {
         }
     }
 
-    activateTradeLayer: function(transaction, activationInstance) { 
+    activateTradeLayer: function(transaction, txType) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         const firstTxId = transaction.txId; // This should uniquely identify the first transaction
         const senderAddress = transaction.senderAddress;
 
         // Call the activateSystem method from the Activation class instance
-        const activationResult = await activationInstance.activateSystem(firstTxId, senderAddress);
+        const activationResult = await Activation.activateSystem(firstTxId, senderAddress);
 
         // Log or handle the result of activation
         console.log(activationResult);

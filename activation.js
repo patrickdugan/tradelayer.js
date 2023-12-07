@@ -1,4 +1,4 @@
-var db = require('./db')
+const {activationsDB} = require('./db')
 const Logic = require('./logic.js');
 const TL = require('./vesting.js')
 
@@ -28,35 +28,51 @@ class Activation {
 
     async saveConsensusVector() {
         try {
-            await this.db.put('consensusVector', JSON.stringify(this.consensusVector));
+            await activationsDB.put('consensusVector', JSON.stringify(this.consensusVector));
             console.log('Consensus vector saved successfully.');
         } catch (error) {
             console.error('Error saving consensus vector:', error);
         }
     }
 
-    isValidActivationTx(tx, adminAddress) {
-        return tx.fromAddress === this.hardcodedAdminAddress && adminAddress === this.hardcodedAdminAddress;
+    // New Method to save activations list
+    async saveActivationsList() {
+        try {
+            await activationsDB.put('activationsList', JSON.stringify(this.txRegistry));
+            console.log('Activations list saved successfully.');
+        } catch (error) {
+            console.error('Error saving activations list:', error);
+        }
     }
 
-        // Example helper functions (implementations depend on your specific logic and data structures)
-    async activate(firstTxId, senderAddress) {
+    // New Method to load activations list
+    async loadActivationsList() {
+        try {
+            const storedList = await activationsDB.get('activationsList');
+            this.txRegistry = JSON.parse(storedList);
+            console.log('Activations list loaded successfully.');
+        } catch (error) {
+            console.error('Error loading activations list:', error);
+            this.txRegistry = {}; // Reset to empty object if loading fails
+        }
+    }
 
-    if (firstTxId === 0) {
+
+        // Example helper functions (implementations depend on your specific logic and data structures)
+    async activate(txType, senderAddress) {
+
+    if (txType === 0) {
                 // Initial setup for the first transaction
                 await TL.initializeTokens();  // Create propertyId 1 and 2 for TL token
                 await TL.initializeContractSeries();
                 await this.initializeTxRegistry();  // With pre-populated types and logic
             
-                return 'TradeLayer initialized with genesis admin.';
-        } else {
-                // For subsequent transactions
-            if (await isSenderGenesisAdmin(senderAddress)) {
                     await activateRegistrySwitch(senderAddress);  // Activate the switch in the registry
-                    return 'Activation switch engaged for existing admin.';
-            } else {
-                    return 'Invalid sender address for activation.';
-            }
+        }else{
+            await loadActivationsList()
+            this.txRegistry[txType].active = true;
+            await this.saveActivationsList(); // Save the updated activations list
+           
         }
     }
 
@@ -110,6 +126,7 @@ class Activation {
      */
     isTxTypeActive(txTypeNumber) {
         // Assuming txRegistry is accessible within this context
+        await loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
         if (txType && txType.active) {
             return true;
