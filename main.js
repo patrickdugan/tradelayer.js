@@ -30,25 +30,23 @@ const genesisBlock = 3082500
 
 class Main {
     constructor(test) {
-      const config = {host: '127.0.0.1',
-                      port: 8332,
-                      user: 'user',
-                      pass: 'pass',
-                      timeout: 10000}
-                  if(test){config = {host: '127.0.0.1',
-                      port: 18332,
-                      user: 'user',
-                      pass: 'pass',
-                      timeout: 10000}
-                  }
+        const config = {
+            host: '127.0.0.1',
+            port: test ? 18332 : 8332, // Use 18332 for test, 8332 for production
+            user: 'user',
+            pass: 'pass',
+            timeout: 10000
+        };
+
+        this.client = new Litecoin(config);
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = new TxIndex();
-        // this.persistence = new Persistence(); // To be implemented
         this.genesisBlock = 3082500;
         this.blockchainPersistence = new BlockchainPersistence();
-        this.reOrgChecker = new ReOrgChecker(reOrgConfig);
-    }   
-    client = new Litecoin(config)
+        this.reOrgChecker = new ReOrgChecker(reOrgConfig); // Make sure reOrgConfig is defined
+        // Other initializations...
+    }
+
 
     async initializeOrLoadDB(db, genesisBlock) {
         try {

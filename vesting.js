@@ -1,7 +1,7 @@
-const TallyMap = require('./tallyMap');
-const InsuranceFund = require('./insurance');
-const Property = require('./property'); // Assuming Property has the createToken method
-const ContractsRegistry = require('./contractsRegistry'); // Assuming this is the correct import
+const TallyMap = require('./tally.js');
+const InsuranceFund = require('./insurance.js');
+const Property = require('./property.js'); // Assuming Property has the createToken method
+const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
 
 class TradeLayerManager {
     constructor(adminAddress) {

@@ -1,9 +1,9 @@
 const assert = require('assert');
-const TradeLayerManager = require('./tradeLayerManager');
-const TallyMap = require('./tallyMap');
-const InsuranceFund = require('./insurance');
-const Property = require('./property');
-const ContractsRegistry = require('./contractsRegistry');
+const TradeLayerManager = require('./vesting.js');
+const TallyMap = require('./tally.js');
+const InsuranceFund = require('./insurance.js');
+const Property = require('./property.js');
+const ContractsRegistry = require('./contractRegistry.js');
 
 describe('TradeLayerManager', function() {
     let tradeLayerManager;
