@@ -1,5 +1,4 @@
-const level = require('level');
-var db = require('./db')
+const contractListDB = require('./db')
 
 
 class ContractsRegistry {
@@ -11,15 +10,14 @@ class ContractsRegistry {
     this.oracleSeriesIndex = {};
     this.nativeSeriesIndex = {};
     this.contractSeries = new Map(); // To store contract series information
-    this.db = level(dbPath); // LevelDB for storage
         // Load existing contract series from the database
     this.loadContractSeries();
-  },
+  }
 
   async loadContractSeries() {
         // Load the contract series data from the database
         try {
-            const seriesDataJSON = await this.db.get('contractSeries');
+            const seriesDataJSON = await this.contractListDB.get('contractSeries');
             this.contractSeries = new Map(JSON.parse(seriesDataJSON));
         } catch (error) {
             if (error.type === 'NotFoundError') {
@@ -28,7 +26,7 @@ class ContractsRegistry {
                 console.error('Error loading contract series data:', error);
             }
         }
-    },
+    }
 
     createContractSeries(contractId, type, properties) {
         if (this.contractSeries.has(contractId)) {
@@ -39,12 +37,12 @@ class ContractsRegistry {
             properties
         });
         this.saveContractSeries(); // Save the updated state
-    },
+    }
 
     async saveContractSeries() {
         const seriesDataJSON = JSON.stringify([...this.contractSeries]);
         await this.db.put('contractSeries', seriesDataJSON);
-    },
+    }
 
   // ...generate series IDs and create contract methods...
 
@@ -63,7 +61,7 @@ class ContractsRegistry {
         .on('error', reject)
         .on('end', resolve);
     });
-  },
+  }
 
   // In ContractsRegistry
 
@@ -79,45 +77,45 @@ class ContractsRegistry {
       }
 
       return contracts; 
-    },
+    }
 
     getContractsSameNativeIndex(notionalPropId, collateralPropId) {
 
       const contracts = [];
 
-    for (let seriesId in this.nativeSeriesIndex) {
+        for (let seriesId in this.nativeSeriesIndex) {
 
-        for (let contract of this.nativeSeriesIndex[seriesId]) {
-      
-          // Handle single data array 
-          if (Array.isArray(contract.dataIndex)) {
-            if (contract.dataIndex[0] === notionalPropId && 
-              contract.dataIndex[1] === collateralPropId) {
-            contracts.push(contract);
+            for (let contract of this.nativeSeriesIndex[seriesId]) {
+          
+              // Handle single data array 
+              if (Array.isArray(contract.dataIndex)) {
+                if (contract.dataIndex[0] === notionalPropId && 
+                  contract.dataIndex[1] === collateralPropId) {
+                contracts.push(contract);
+              }
+            } 
+          
+          // Handle multiple equal-weighted arrays
+          else if (Array.isArray(contract.dataIndex[0])) {
+            let match = true;
+            
+            for (let dataPair of contract.dataIndex) {
+              if (!(dataPair[0] === notionalPropId && 
+                    dataPair[1] === collateralPropId)) {
+                match = false;
+                break;
+              }
+            }
+            
+            if (match) {
+              contracts.push(contract);
+            }
           }
-        } 
-      
-      // Handle multiple equal-weighted arrays
-      else if (Array.isArray(contract.dataIndex[0])) {
-        let match = true;
-        
-        for (let dataPair of contract.dataIndex) {
-          if (!(dataPair[0] === notionalPropId && 
-                dataPair[1] === collateralPropId)) {
-            match = false;
-            break;
-          }
-        }
-        
-        if (match) {
-          contracts.push(contract);
         }
       }
-    }
-  }
 
-  return contracts;
-},
+      return contracts;
+    }
 
   saveContractsToDb() {
     const batch = [];
@@ -128,7 +126,7 @@ class ContractsRegistry {
         key: JSON.stringify({ type: 'oracle', seriesId }),
         value: JSON.stringify(contracts)
       });
-    },
+    }
 
     for (let [seriesId, contracts] of Object.entries(this.nativeSeriesIndex)) {
       batch.push({
@@ -199,7 +197,7 @@ class ContractsRegistry {
           });
         });
       });
-    },
+    }
 
     async getNextId() {
       let maxId = 0;
@@ -210,7 +208,7 @@ class ContractsRegistry {
           }
       }
       return maxId + 1;
-    },
+    }
 
     isValidSeriesId(seriesId) {
         // Check if the seriesId exists in the contract series registry
@@ -221,7 +219,7 @@ class ContractsRegistry {
         } else {
             return false; // The seriesId is not valid
         }
-    },
+    }
 
     getAllContracts() {
         let allContracts = [];
@@ -234,7 +232,7 @@ class ContractsRegistry {
             allContracts.push(...this.nativeSeriesIndex[seriesId]);
         }
         return allContracts;
-    },
+    }
 
     async hasOpenPositions(contract) {
         try {
@@ -251,7 +249,7 @@ class ContractsRegistry {
             console.error('Error checking open positions for contract:', contract.seriesId, error);
             throw error;
         }
-    },
+    }
 
     static async getContractType(contractId) {
         // Logic to determine the contract type
@@ -264,7 +262,7 @@ class ContractsRegistry {
         } else {
             throw new Error("Contract type not found for contract ID: " + contractId);
         }
-    },
+    }
 
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
@@ -278,12 +276,12 @@ class ContractsRegistry {
             }
             throw error; // Rethrow other types of errors
         }
-    },
+    }
 
     static isNativeContract(contractId) {
         // Check if the contractId exists in the nativeSeriesIndex
         return Boolean(this.nativeSeriesIndex && this.nativeSeriesIndex[contractId]);
-    },
+    }
 
     static getContractInfo(contractId) {
         // Fetch contract information from the nativeSeriesIndex or oracleSeriesIndex
@@ -299,8 +297,8 @@ class ContractsRegistry {
 
 // Usage:
 
-const oracleContracts = registry.getContractsByOracle(5); 
+/*const oracleContracts = registry.getContractsByOracle(5); 
 
-const propertyContracts = registry.getContractsByProperties(1, 2);
+const propertyContracts = registry.getContractsByProperties(1, 2);*/
 
 module.exports = new ContractsRegistry();

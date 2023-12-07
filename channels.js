@@ -1,5 +1,4 @@
-const level = require('level');
-const db = level('./path_to_channels_db');
+const {channelsDB} = require('./db.js');
 
 class TradeChannel {
   constructor() {
@@ -36,7 +35,7 @@ class TradeChannel {
         throw error;
       }
     }
-  },
+  }
 
   adjustChannelBalances(channelAddress, propertyId, amount) {
         // Logic to adjust the token balances within a channel
@@ -48,7 +47,7 @@ class TradeChannel {
 
         // Example logic to adjust balances
         // Update the channel's token balances as needed
-  },
+  }
 
   // Transaction processing functions
   processWithdrawal(transaction) {
@@ -63,7 +62,7 @@ class TradeChannel {
     // Example logic, replace with actual business logic
     channel.balances[propertyId] -= amount;
     this.channelsRegistry.set(channelAddress, channel);
-  },
+  }
 
   processTransfer(transaction) {
     // Process a transfer within a trade channel
@@ -82,7 +81,7 @@ class TradeChannel {
 
     this.channelsRegistry.set(fromChannel, sourceChannel);
     this.channelsRegistry.set(toChannel, destinationChannel);
-  },
+  }
 
   channelTokenTrade(transaction) {
     // Process a token trade within a trade channel
@@ -99,7 +98,7 @@ class TradeChannel {
     channel.balances[desiredPropertyId] += amountExpected;
 
     this.channelsRegistry.set(channelAddress, channel);
-  },
+  }
 
   channelContractTrade(transaction) {
     const { channelAddress, contractId, amount, price, side } = transaction;
@@ -134,7 +133,7 @@ class TradeChannel {
     // Example: MarginMap.updateMargin(commitmentAddress, contractId, amount, price, side);
 
     this.channelsRegistry.set(channelAddress, channel);
-  },
+  }
 
    determineCommitColumn(senderAddress, transactionTime) {
       // Check if there's an existing channel for this address
@@ -153,7 +152,7 @@ class TradeChannel {
           // Otherwise, use the same column as the last commitment
           return channel.lastUsedColumn;
       }
-    },
+    }
 
 
     async commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, commitPurpose, transactionTime) {

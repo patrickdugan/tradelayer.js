@@ -1,15 +1,15 @@
 const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
-const Clearing =requre('clearing.js')
 // Custom modules for TradeLayer
-const TradeLayerManager = require('./TradeLayerManager.js'); // Manages TradeLayer protocol
+const Clearing =require('./clearing.js')
 const Persistence = require('./Persistence.js'); // Handles data persistence
-const Orderbook = require('./Orderbook.js'); // Manages the order book
-const InsuranceFund = require('./InsuranceFund.js'); // Manages the insurance fund
+const Orderbook = require('./orderbook.js'); // Manages the order book
+const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const Vesting = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
 const TxIndex = require('./TxIndex.js'); // Indexes TradeLayer transactions
 const ReOrgChecker = require('./reOrg.js');
+const Oracles = require('./oracle.js')
 // Additional modules
 const Litecoin = require('litecoin'); // Bitcoin RPC module
 const fs = require('fs'); // File system module
@@ -20,7 +20,7 @@ const TradeChannel = require('./channels.js'); // Manages Trade Channels
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
-const ContractsRegistry = require('./contractsRegistry.js'); // Registry for contracts
+const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
@@ -44,21 +44,22 @@ class Main {
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = new TxIndex();
         // this.persistence = new Persistence(); // To be implemented
-        this.genesisBlock = 3041685;
+        this.genesisBlock = 3082500;
         this.blockchainPersistence = new BlockchainPersistence();
         this.reOrgChecker = new ReOrgChecker(reOrgConfig);
-    }   client = new Litecoin(config)
+    }   
+    client = new Litecoin(config)
 
-    async function initializeOrLoadDB(db, genesisBlock) {
+    async initializeOrLoadDB(db, genesisBlock) {
         try {
-            const genesis = await db.get('genesisBlock');
+            const genesis = await txIndexDB.get('genesisBlock');
             console.log('Database already initialized. Genesis block:', genesis);
             // Database already exists, you can load or process data from here
         } catch (error) {
             // If the genesis block is not found, initialize the database
             if (error.type === 'NotFoundError') {
                 console.log('Initializing database with genesis block:', genesisBlock);
-                await db.put('genesisBlock', genesisBlock);
+                await TxIndex.put('genesisBlock', genesisBlock);
                 // Perform other initialization tasks if necessary
             } else {
                 // Handle other errors
@@ -84,9 +85,9 @@ class Main {
 
         // Start processing incoming blocks
         await this.processIncomingBlocks(consensus);
-    },
+    }
 
-    async function getCurrentBlockHeight() {
+    async getCurrentBlockHeight() {
       try {
         const blockchainInfo = await client.cmd('getblockchaininfo');
         return blockchainInfo.blocks;
@@ -94,12 +95,12 @@ class Main {
         console.error('Error fetching current block height:', error);
         throw error; // or handle error as needed
       }
-    },
+    }
 
-    async function initOrLoadTxIndex() {
+    async initOrLoadTxIndex() {
         // Check if the txIndex exists by trying to find the max indexed block
         const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
-
+        console.log(maxIndexedBlock)
         if (maxIndexedBlock === 0 || maxIndexedBlock === null) {
             // Initialize the txIndex if it doesn't exist
             await TxIndex.initializeIndex(genesisBlock);
@@ -108,7 +109,7 @@ class Main {
         await syncIndex(txIndexDB, txIndexModule, maxIndexedBlock);
     }
 
-    async function syncIndex(txIndexDB, txIndexModule) {
+    async syncIndex(txIndexDB, txIndexModule) {
         try {
             // Find the maximum indexed block in the database
             const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
@@ -119,7 +120,8 @@ class Main {
             // If the chain tip is greater than the max indexed block, sync the index
             if (chainTip > maxIndexedBlock) {
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
-                TxIndex.extractBlockData(maxIndexedBlock)
+                await TxIndex.extractBlockData(maxIndexedBlock)
+                constructOrLoadConsensus()
             } else {
                 console.log("TxIndex is already up to date.");
             }
@@ -129,14 +131,77 @@ class Main {
     }
 
 
-
     async constructOrLoadConsensus() {
-        // Load consensus state from Persistence if available, otherwise construct from index
-        // To be implemented
-        return {}; // Placeholder for consensus state
-    },
+        let consensusState;
+        try {
+            const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
+            const startHeight = lastSavedHeight || genesisBlockHeight;
+            consensusState = await this.constructConsensusFromIndex(startHeight);
+        } catch (error) {
+            if (error.type === 'NotFoundError') {
+                // If no saved state, start constructing consensus from genesis block
+                consensusState = await this.constructConsensusFromIndex(genesisBlockHeight);
+            } else {
+                console.error('Error loading consensus state:', error);
+                throw error;
+            }
+        }
+        return consensusState;
+    }
 
-   async processIncomingBlocks(consensus) {
+    async constructConsensusFromIndex(startHeight) {
+    let currentBlockHeight = await this.txIndex.findMaxIndexedBlock();
+        let maxProcessedHeight = startHeight - 1; // Initialize to one less than startHeight
+        for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
+        const txDataSet = await this.txIndexDB.get(`tx-${blockHeight}`);
+
+          for (const txData of txDataSet) {
+              const txId = txData.txid;
+              const payload = txData.payload; // Assume payload is included in txData
+              const txType = Types.decodeTransactionType(txData); // Function to decode txType from txData
+
+              const decodedParams = Types.decodePayload(txId, txType, payload);
+              await Logic.typeSwitch(txType, decodedParams);  // Process liquidations and settlements if necessary
+              
+              for (const contract of ContractsRegistry.getAllContracts()) {
+                      if (MarginMap.needsLiquidation(contract)) {
+                          await MarginMap.triggerLiquidations(contract);
+                      }
+                      if (ContractsRegistry.hasOpenPositions(contract)) {
+                          let positions = await Clearing.fetchPositionsForAdjustment(blockHeight, contract);
+                          const blob = await Clearing.makeSettlement(blockHeight, contract);
+                          await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
+                      }
+                  }
+              }
+
+              // Process channels and other end-of-block logic
+              await Channels.processConfirmedWithdrawals();
+              maxProcessedHeight = blockHeight; // Update max processed height after each block
+              await consensusDB.put('maxConsensusBlock', maxProcessedHeight);
+
+          }
+
+        return syncIfNecessary()
+    }
+
+    async syncIfNecessary() {
+        const blockLag = await checkBlockLag();
+        if (blockLag > 0) {
+            syncIndex(); // Sync the txIndexDB
+        }else if (blockLag === 0) {
+            processIncomingBlocks(); // Start processing new blocks as they come
+        }
+    }
+
+    async checkBlockLag() {
+        const chaintip = await this.txIndex.fetchChainTip();
+        const maxConsensusBlock = await consensusDB.get('maxConsensusBlock');
+        return chaintip - maxConsensusBlock;
+    }
+
+
+    async processIncomingBlocks(consensus) {
         // Continuously loop through incoming blocks and process them
         let latestProcessedBlock = this.genesisBlock;
 
@@ -150,7 +215,7 @@ class Main {
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }
-    },
+    }
 
     async processBlock(blockData, blockNumber, consensus) {
         // Process the beginning of the block
@@ -163,13 +228,13 @@ class Main {
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
-    },
+    }
 
      async shutdown() {
         console.log('Shutting down TradeLayer...');
         // Add shutdown logic here
         // This could include saving state, closing database connections, etc.
-    },
+    }
 
     async blockHandlerBegin(blockHash, blockHeight) {
         console.log(`Beginning to process block ${blockHeight}`);
@@ -184,7 +249,7 @@ class Main {
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
         }
-    },
+    }
 
     async blockHandlerMiddle(blockHash, blockHeight) {
         console.log(`Processing transactions in block ${blockHeight}`);
@@ -222,8 +287,7 @@ class Main {
                 // ...
             }
         }
-    },
-
+    }
 
     async blockHandlerEnd(blockHash, blockHeight) {
         console.log(`Finished processing block ${blockHeight}`);
@@ -242,14 +306,14 @@ class Main {
                 await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
             }
         }
-    },
+    }
 
     async handleReorg(blockHeight) {
         console.log(`Handling reorganization at block ${blockHeight}`);
         // Add logic to handle a blockchain reorganization
         await this.blockchainPersistence.handleReorg();
         // This could involve reverting to a previous state, re-processing blocks, etc.
-    },
+    }
 
     /**
      * Updates the tally map based on the given transaction.
@@ -284,35 +348,7 @@ class Main {
         propertyTallies.set(propertyId, currentTally);
 
         console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
-    },
-
-    async simulateActivationAndTokenCreation(startBlockHeight) {
-        // Step 1: Loop through blocks
-        for (let blockHeight = startBlockHeight; blockHeight <= startBlockHeight + 10; blockHeight++) {
-            console.log(`Processing block ${blockHeight}`);
-            // Simulate fetching block data (replace with actual logic)
-            const blockData = await this.txIndex.fetchBlockData(blockHeight);
-            await this.processBlockData(blockData, {});
-
-            // Step 2: Spit out an activation transaction
-            if (blockHeight === startBlockHeight) {
-                const activationTx = this.createActivationTransaction();
-                console.log('Activation Transaction:', activationTx);
-
-                // Step 3: Activate the system
-                this.activateSystem(activationTx);
-            }
-
-            // Step 4: Spit out another activation and then a token creation
-            if (blockHeight === startBlockHeight + 5) {
-                const anotherActivationTx = this.createAnotherActivationTransaction();
-                console.log('Another Activation Transaction:', anotherActivationTx);
-
-                const tokenCreationTx = this.createTokenCreationTransaction();
-                console.log('Token Creation Transaction:', tokenCreationTx);
-            }
-        }
-    },
+    }
 
     async processConfirmedWithdrawals() {
         console.log('Checking for confirmed withdrawals...');
@@ -329,14 +365,14 @@ class Main {
                 await this.tradeChannel.processTransfer(withdrawal);
             }
         }
-    },
+    }
 
     async getConfirmedWithdrawals(currentBlockHeight) {
         // Assuming `db` is your database instance configured to interact with your blockchain data
         // The range would be from currentBlockHeight - 8 to currentBlockHeight
         const confirmedWithdrawals = await db.getConfirmedWithdrawals(currentBlockHeight - 8, currentBlockHeight);
         return confirmedWithdrawals;
-    },
+    }
 
     async processWithdrawals(currentBlockHeight) {
       const confirmedWithdrawals = await this.getConfirmedWithdrawals(currentBlockHeight);
@@ -349,26 +385,6 @@ class Main {
               // Handle invalid withdrawal, e.g., logging, notifying the user, etc.
           }
       }
-    },
-
-    createActivationTransaction() {
-            // Construct and return an activation transaction
-            return { type: 'activation', details: {/*...*/} };
-    },
-
-    activateSystem(activationTx) {
-            // Logic to activate the system using the activation transaction
-            // Update the transaction registry, etc.
-    },
-
-    createAnotherActivationTransaction() {
-            // Construct and return another activation transaction
-            return { type: 'activation', details: {/*...*/} };
-    },
-
-    createTokenCreationTransaction() {
-            // Construct and return a token creation transaction
-            return { type: 'tokenCreation', details: {/*...*/} };
     }
 
     // ... other methods ...

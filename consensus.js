@@ -1,9 +1,6 @@
-const level = require('level');
 
 // Define the path to your LevelDB database
-const dbPath = './my-leveldb';
-
-const db = require('./db')
+const { db, txIndexDB, volumeIndexDB, propertyListDB,oracleListDB,contractListDB,tallyMapDB, channelsDB, marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db')
 
 // Function to store consensus hash for a block
 function storeConsensusHash(blockHeight, consensusHash) {
@@ -12,7 +9,7 @@ function storeConsensusHash(blockHeight, consensusHash) {
     const value = JSON.stringify({ consensusHash });
 
     // Store the data in the LevelDB
-    db.put(key, value, (err) => {
+    consensusDB.put(key, value, (err) => {
         if (err) {
             console.error('Error storing consensus hash:', err);
         } else {
@@ -24,7 +21,7 @@ function storeConsensusHash(blockHeight, consensusHash) {
 // Function to retrieve consensus hash for a block
 function getConsensusHash(blockHeight, callback) {
     const key = `block_${blockHeight}`;
-    db.get(key, (err, value) => {
+    consensusDB.get(key, (err, value) => {
         if (err) {
             callback(err, null);
         } else {

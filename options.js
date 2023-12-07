@@ -53,13 +53,13 @@ class OptionChain {
     getExpiryIntervals(contractSeriesId) {
         // Logic to fetch expiry intervals for the given contract series
         return []; // Replace with actual implementation
-    },
+    }
 
     async storeOptionChain(optionChain) {
         // Placeholder for logic to store the option chain in the blockchain or database
         // Implement as per your system's requirements
         // This might involve creating transactions, interacting with a smart contract, or simply storing in a database
-    },
+    }
 
     isValidSeriesId(seriesId) {
         // Placeholder for series ID validation logic

@@ -54,7 +54,7 @@ class WalletCache {
 
         console.log(`WalletCache: Update finished - there were ${numChanges} changes`);
         return numChanges;
-    },
+    }
 
     async getAllWalletBalances() {
         try {
@@ -80,7 +80,7 @@ class WalletCache {
             console.error('Error getting all wallet balances:', error);
             throw error;
         }
-    },
+    }
 
      // Updates the cache with the latest state and returns the number of changes made to wallet addresses.
     async updateWalletCache() {

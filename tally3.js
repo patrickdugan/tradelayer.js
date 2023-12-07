@@ -1,4 +1,4 @@
-var db = require('./db')
+var tallyMapDB = require('./db')
 
 class TallyMap {
     static instance;
@@ -9,7 +9,7 @@ class TallyMap {
             TallyMap.instance = this;
         }
         return TallyMap.instance;
-    },
+    }
 
     updateBalance(address, propertyId, amount, available, reserved) {
         if (!this.addresses.has(address)) {
@@ -24,7 +24,7 @@ class TallyMap {
         addressObj[propertyId].amount += amount;
         addressObj[propertyId].available += available;
         addressObj[propertyId].reserved += reserved;
-    },
+    }
 
     getAddressBalances(address) {
         if (!this.addresses.has(address)) {
@@ -46,7 +46,7 @@ class TallyMap {
             }
         }
         return balances;
-    },
+    }
 
     totalTokens(propertyId) {
         let total = 0;
@@ -56,12 +56,12 @@ class TallyMap {
             }
         }
         return total;
-    },
+    }
 
     async save(blockHeight) {
         const serializedData = JSON.stringify([...this.addresses]);
         await this.db.put(`block-${blockHeight}`, serializedData);
-    },
+    }
 
     async load(blockHeight) {
         try {
@@ -71,26 +71,26 @@ class TallyMap {
         } catch (error) {
             console.error('Error loading data:', error);
         }
-    },
+    }
 
     static getSingletonInstance() {
         if (!TallyMap.instance) {
             throw new Error("TallyMap instance has not been created yet");
         }
         return TallyMap.instance;
-    },
+    }
 
     // Get the tally for a specific address and property
     getTally(address, propertyId) {
         const key = `${address}_${propertyId}`;
         return this.tallyMap.get(key) || 0;
-    },
+    }
 
     // Save the tally map to LevelDB
     async saveTallyMap() {
         const serializedMap = JSON.stringify(Array.from(this.tallyMap.entries()));
         await this.dbInterface.storeData('tallyMap', serializedMap);
-    },
+    }
 
     // Load the tally map from LevelDB
     async loadTallyMap() {
@@ -98,7 +98,7 @@ class TallyMap {
         if (serializedMap) {
             this.tallyMap = new Map(JSON.parse(serializedMap));
         }
-    },
+    }
 
     getAddressBalances(address) {
         const balances = [];
@@ -112,7 +112,7 @@ class TallyMap {
             }
         }
         return balances;
-    },
+    }
 
     /**
      * Retrieves all addresses that have a balance for a given property.
@@ -136,7 +136,7 @@ class TallyMap {
             }
 
             return addressesWithBalances;
-        }
+    }
 }
 
 module.exports = TallyMap;

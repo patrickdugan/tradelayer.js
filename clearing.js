@@ -1,5 +1,5 @@
-const tallyMap = require('tally3.js')
-const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contracts');
+const tallyMap = require('./tally.js')
+const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contractRegistry.js');
 
 class Clearing {
     // ... other methods ...
@@ -8,7 +8,7 @@ class Clearing {
         this.tallyMap = TallyMap.getSingletonInstance();
         this.balanceChanges = []; // Initialize an array to track balance changes
 
-    },
+    }
 
     async clearingFunction(blockHeight) {
         console.log(`Starting clearing operations for block ${blockHeight}`);
@@ -32,7 +32,7 @@ class Clearing {
         await this.makeSettlement(blockHeight);
 
         console.log(`Clearing operations completed for block ${blockHeight}`);
-    },
+    }
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...
@@ -51,7 +51,7 @@ class Clearing {
 
         // Save any changes back to your data source
         await this.saveFees(fees);
-    },
+    }
 
    async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
@@ -68,7 +68,7 @@ class Clearing {
 
         // Save the updated channel information
         await this.saveChannels(channels);
-    },
+    }
 
 
     async calculateAndUpdateUPNL(blockHeight) {
@@ -85,7 +85,7 @@ class Clearing {
 
         // Save the updated trade data
         await this.saveTrades(trades);
-    },
+    }
 
     async createChannelsForNewTrades(blockHeight) {
         //console.log('Creating channels for new trades');
@@ -99,7 +99,7 @@ class Clearing {
             // Save the new channel
             this.saveChannel(channel);
         });
-    },
+    }
 
     async closeChannelsIfNeeded() {
         console.log('Closing channels if needed');
@@ -117,7 +117,7 @@ class Clearing {
 
         // Save the updated state of channels
         await this.saveChannels(channels);
-    },
+    }
 
     async makeSettlement(blockHeight) {
         console.log('Making settlement for positions at block height:', blockHeight);
@@ -145,7 +145,7 @@ class Clearing {
         // Save the updated position information
         await this.savePositions(positions);
         return [positions, this.balanceChanges];
-    },
+    }
 
     // Additional functions to be implemented
     async fetchPositionsForAdjustment(blockHeight) {
@@ -163,7 +163,7 @@ class Clearing {
             console.error('Error fetching positions for adjustment:', error);
             throw error;
         }
-    },
+    }
 
     calculatePnLChange(position, blockHeight) {
         // Retrieve the current and previous mark prices for the block height
@@ -181,7 +181,7 @@ class Clearing {
         pnlChange *= position.isLong ? 1 : -1; // Assuming position.isLong is a boolean indicating position type
 
         return pnlChange;
-    },
+    }
 
     async adjustBalance(holderAddress, pnlChange) {
         try {
@@ -212,7 +212,7 @@ class Clearing {
             console.error('Error adjusting balance for address:', holderAddress, error);
             throw error;
         }
-    },
+    }
 
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
@@ -223,7 +223,7 @@ class Clearing {
             console.error('Error fetching balance for address:', holderAddress, error);
             throw error;
         }
-    },
+    }
 
     async performAdditionalSettlementTasks(blockHeight, positions) {
         try {
@@ -265,20 +265,18 @@ class Clearing {
             await this.saveAuditIndex(blockHeight);
         } catch (error) {
             console.error('Audit error at block height', blockHeight, ':', error);
-            throw error;
 
-             // Check for the consistency of balance updates
-        let balanceUpdates = this.fetchBalanceUpdatesForSettlement();
-            if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
-                throw new Error("Inconsistent balance updates detected");
-            }
+                 // Check for the consistency of balance updates
+            let balanceUpdates = this.fetchBalanceUpdatesForSettlement();
+                if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
+                    throw new Error("Inconsistent balance updates detected");
+                }
 
-                // Save audit data
-                const auditData = this.prepareAuditData(); 
-                await this.saveAuditData(blockHeight, auditData);
-            } catch (error) {
+                    // Save audit data
+                    const auditData = this.prepareAuditData(); 
+                    await this.saveAuditData(blockHeight, auditData);
         }
-    },
+    }
 
     async updateBalanceInDatabase(holderAddress, newBalance) {
         // Replace this with actual data updating logic for your system
@@ -288,7 +286,7 @@ class Clearing {
             console.error('Error updating balance for address:', holderAddress, error);
             throw error;
         }
-    },
+    }
 
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
@@ -299,7 +297,7 @@ class Clearing {
             console.error('Error fetching balance for address:', holderAddress, error);
             throw error;
         }
-    },
+    }
 
 
     // Implement or reference these helper methods as per your system's logic
@@ -309,13 +307,13 @@ class Clearing {
             totalMargin += position.margin;  // Assuming each position object has a 'margin' property
         });
         return totalMargin;
-    },
+    }
 
     isMarginConsistent(totalMargin) {
         const expectedMargin = this.getExpectedTotalMargin(); // Implement this method based on your system
         // You can also implement a range-based check instead of an exact value match
         return totalMargin === expectedMargin;
-    },
+    }
 
     async saveAuditIndex(blockHeight) {
         const auditData = this.prepareAuditData(); // Implement this method to prepare data for saving
@@ -325,7 +323,7 @@ class Clearing {
             console.error('Error saving audit index for block height:', blockHeight, error);
             throw error;
         }
-    },
+    }
 
     prepareAuditData(blockHeight, positions, balanceChanges) {
         // The data structure to hold the audit data
@@ -351,7 +349,7 @@ class Clearing {
         this.balanceChanges = [];
 
         return JSON.stringify(auditData);
-    },
+    }
 
     async lossSocialization(contractId, collateral, fullAmount) {
             let count = 0;
@@ -389,7 +387,7 @@ class Clearing {
 
             // Optionally, save the TallyMap state to the database
             await this.tallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
-    },
+    }
 
     async getTotalLoss(contractId, notionalSize) {
             let vwap = 0;
@@ -424,9 +422,9 @@ class Clearing {
             }
 
             return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
-        },
+    }
 
-     async fetchAuditData(auditDataKey) {
+    async fetchAuditData(auditDataKey) {
         // Implement logic to fetch audit data from the database
         try {
             const auditData = await database.getAuditData(auditDataKey);

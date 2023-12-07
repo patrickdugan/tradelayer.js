@@ -82,7 +82,7 @@ class InsuranceFund {
             }
         }
         return payouts;
-    },
+    }
 
 
     async getEvent(blockNumber) {

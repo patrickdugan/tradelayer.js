@@ -1,7 +1,5 @@
-const level = require('level');
-
 // Assuming the LevelDB database is stored at './path_to_margin_db'
-const db = level('./path_to_margin_db');
+const {marginMapDB, contractListDB} = require('./db.js');
 
 class MarginMap {
     constructor(seriesId) {
@@ -128,7 +126,7 @@ class MarginMap {
                 resolve(map);
             });
         });
-    },
+    }
 
     static async triggerLiquidations(contract) {
         // Logic to handle the liquidation process
@@ -143,7 +141,7 @@ class MarginMap {
         await ContractsRegistry.updateContractState(contract);
 
         return liquidationOrders;
-    },
+    }
 
     static generateLiquidationOrders(contract) {
         const liquidationOrders = [];
@@ -167,7 +165,7 @@ class MarginMap {
         }
 
         return liquidationOrders;
-    },
+    }
 
     static async saveLiquidationOrders(contract, orders) {
         try {
@@ -177,7 +175,7 @@ class MarginMap {
             console.error(`Error saving liquidation orders for contract ${contract.id}:`, error);
             throw error;
         }
-    },
+    }
 
     static needsLiquidation(contract) {
         const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value
@@ -191,7 +189,7 @@ class MarginMap {
             }
         }
         return false; // No positions require liquidation
-    },
+    }
 
     static getMarginLevel(contract) {
         // Assuming margins are stored per position in the contract
@@ -201,7 +199,7 @@ class MarginMap {
             totalMargin += position.margin;
         }
         return totalMargin;
-    },
+    }
 
     static async getMarketPrice(contract) {
         let marketPrice;

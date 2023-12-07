@@ -1,10 +1,10 @@
-const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
+const {volumeIndexDB, propertyListDB, contractsListDB} = require('./db.js')
+const Litecoin = require('litecoin')
 
 class VolumeIndex {
     constructor(dbPath) {
-        this.db = level(dbPath);
-    },
+    }
 
     async calculateAndTrackVolume(transactions, prices) {
         let cumulativeVolume = 0;
@@ -22,24 +22,24 @@ class VolumeIndex {
 
         await this.db.put('cumulativeVolume', cumulativeVolume);
         await this.db.put('volumeByBlock', JSON.stringify(volumeByBlock));
-    },
+    }
 
     async sampleTradeTransactions(blockNumber) {
         // Replace with actual logic to fetch transactions
         const transactions = []; 
         return transactions;
-    },
+    }
 
     async getTokenPriceInLTC(tokenId) {
         const response = await fetch(`https://api.pricefeed.com/token/${tokenId}`);
         const data = await response.json();
         return data.priceInLTC; 
-    },
+    }
 
     calculateVolumeInLTC(tradeTransaction, tokenPrices) {
         const tokenPriceInLTC = tokenPrices[tradeTransaction.tokenId];
         return tradeTransaction.amount * tokenPriceInLTC;
-    },
+    }
 
     async updateCumulativeVolume(volumeInLTC) {
         let currentCumulativeVolume = 0;
@@ -53,11 +53,11 @@ class VolumeIndex {
 
         const newCumulativeVolume = currentCumulativeVolume + volumeInLTC;
         await this.db.put('cumulativeVolume', newCumulativeVolume.toString());
-    },
+    }
 
     async saveVolumeData(blockNumber, volumeData) {
         await this.db.put(`block-${blockNumber}`, JSON.stringify(volumeData));
-    },
+    }
 
     async processBlock(blockNumber) {
         try {
@@ -78,14 +78,15 @@ class VolumeIndex {
         } catch (error) {
             console.error(`Error processing block ${blockNumber}:`, error);
         }
-    },
+    }
 
     async runVolumeIndexing() {
-        const latestBlockNumber = /* logic to get the latest block number */;
+        const blockchainInfo = await client.cmd('getblockchaininfo');
+        var blockNumber = blockchainInfo.blocks;
         for (let blockNumber = 1; blockNumber <= latestBlockNumber; blockNumber++) {
             await this.processBlock(blockNumber);
         }
-    },
+    }
 
     static async getVwapData(contractId) {
         if (ContractsRegistry.isNativeContract(contractId)) {
@@ -105,7 +106,7 @@ class VolumeIndex {
             console.error(`Contract ID ${contractId} is not a native contract.`);
             return null;
         }
-    },
+    }
 
     static async calculateVwap(propertyId1, propertyId2) {
         try {
