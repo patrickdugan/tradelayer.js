@@ -11,7 +11,8 @@ class TallyMap {
         return TallyMap.instance;
     }
 
-    updateBalance(address, propertyId, amount, available, reserved) {
+    
+    static updateBalance(address, propertyId, amountChange, availableChange, reservedChange) {
         if (!this.addresses.has(address)) {
             this.addresses.set(address, {});
         }
@@ -21,12 +22,20 @@ class TallyMap {
             addressObj[propertyId] = { amount: 0, available: 0, reserved: 0 };
         }
 
-        addressObj[propertyId].amount += amount;
-        addressObj[propertyId].available += available;
-        addressObj[propertyId].reserved += reserved;
+        const newAmount = addressObj[propertyId].amount + amountChange;
+        const newAvailable = addressObj[propertyId].available + availableChange;
+        const newReserved = addressObj[propertyId].reserved + reservedChange;
+
+        if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
+            throw new Error("Balance cannot go negative");
+        }
+
+        addressObj[propertyId].amount = newAmount;
+        addressObj[propertyId].available = newAvailable;
+        addressObj[propertyId].reserved = newReserved;
     }
 
-    getAddressBalances(address) {
+    static getAddressBalances(address) {
         if (!this.addresses.has(address)) {
             return [];
         }
@@ -48,7 +57,7 @@ class TallyMap {
         return balances;
     }
 
-    totalTokens(propertyId) {
+    static totalTokens(propertyId) {
         let total = 0;
         for (const addressObj of this.addresses.values()) {
             if (addressObj[propertyId]) {
@@ -81,9 +90,15 @@ class TallyMap {
     }
 
     // Get the tally for a specific address and property
-    getTally(address, propertyId) {
-        const key = `${address}_${propertyId}`;
-        return this.tallyMap.get(key) || 0;
+    static getTally(address, propertyId) {
+        if (!this.addresses.has(address)) {
+            return 0;
+        }
+        const addressObj = this.addresses.get(address);
+        if (!addressObj[propertyId]) {
+            return 0;
+        }
+        return addressObj[propertyId].amount; // or other specific fields like available, reserved
     }
 
     // Save the tally map to LevelDB

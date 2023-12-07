@@ -66,8 +66,6 @@ class Activation {
                 await TL.initializeTokens();  // Create propertyId 1 and 2 for TL token
                 await TL.initializeContractSeries();
                 await this.initializeTxRegistry();  // With pre-populated types and logic
-            
-                    await activateRegistrySwitch(senderAddress);  // Activate the switch in the registry
         }else{
             await loadActivationsList()
             this.txRegistry[txType].active = true;

@@ -55,7 +55,7 @@ const Logic = {
         const senderAddress = transaction.senderAddress;
 
         // Call the activateSystem method from the Activation class instance
-        const activationResult = await Activation.activateSystem(firstTxId, senderAddress);
+        const activationResult = await Activation.activate(txType);
 
         // Log or handle the result of activation
         console.log(activationResult);

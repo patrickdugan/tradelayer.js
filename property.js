@@ -67,6 +67,7 @@ class PropertyManager {
             insuranceAmount: 0,
             reserveAmount: 0,
             marginAmount: 0,
+            vestingAmount: 0
         });
     }
 
