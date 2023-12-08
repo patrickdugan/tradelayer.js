@@ -6,24 +6,42 @@ const Types = require('./types.js')
 const { txIndexDB } = require('./db.js'); // Import sublevel for txIndex
 
 class TxIndex {
-    constructor() {
-        this.client = new litecoin.Client({
+   static instance;
+
+    constructor(test) {
+        if (TxIndex.instance) {
+            return TxIndex.instance;
+        }
+
+        const clientConfig = test ? {
             host: '127.0.0.1',
             port: 18332,
             user: 'user',
             pass: 'pass',
             timeout: 10000
-        });
-        this.decoderawtransactionAsync = util.promisify(this.client.cmd.bind(this.client,'decoderawtransaction'));
-        this.getTransactionAsync = util.promisify(this.client.cmd.bind(this.client, 'gettransaction'))
-        this.transparentIndex = []
+        } : {
+            host: '127.0.0.1',
+            port: 8332,
+            user: 'user',
+            pass: 'pass',
+            timeout: 10000
+        };
+
+        this.client = new litecoin.Client(clientConfig);
+        this.decoderawtransactionAsync = util.promisify(this.client.cmd.bind(this.client, 'decoderawtransaction'));
+        this.getTransactionAsync = util.promisify(this.client.cmd.bind(this.client, 'gettransaction'));
+        this.transparentIndex = [];
+
+        TxIndex.instance = this;
     }
     
-    async initializeIndex(genesisBlock) {
+    static async initializeIndex(genesisBlock) {
         await txIndexDB.put('genesisBlock', genesisBlock);
+        // Set the indexExists key to indicate the index is being created
+        await txIndexDB.put('indexExists', true);
     }
 
-    async extractBlockData(startHeight) {
+    static async extractBlockData(startHeight) {
         var chainTip = await this.fetchChainTip();
         for (let height = startHeight; height <= chainTip; height++) {
             var blockData = await this.fetchBlockData(height);
@@ -33,7 +51,22 @@ class TxIndex {
         console.log('indexed to chaintip')
     }
 
-    async fetchChainTip() {
+    static async checkForIndex() {
+        try {
+            // Check for the special key indexExists
+            await txIndexDB.get('indexExists');
+            return true; // The index exists
+        } catch (error) {
+            if (error.type === 'NotFoundError') {
+                return false; // The index does not exist
+            } else {
+                console.error('Error checking for index:', error);
+                throw error; // Handle other errors appropriately
+            }
+        }
+    }
+
+    static async fetchChainTip() {
         return new Promise((resolve, reject) => {
             this.client.getBlockCount((error, chainTip) => {
                 if (error) {
@@ -45,7 +78,7 @@ class TxIndex {
         });
     }
 
-    async fetchBlockData(height) {
+    static async fetchBlockData(height) {
         return new Promise((resolve, reject) => {
             this.client.getBlockHash(height, (error, blockHash) => {
                 if (error) {
@@ -63,14 +96,26 @@ class TxIndex {
         });
     }
 
-     async saveTransactionByHeight(txId, blockHeight) {
-        const txKey = `txHeight-${blockHeight}-${txId}`;
-        const txData = await this.fetchTransactionData(txId);
-        await txIndexDB.put(txKey, JSON.stringify(txData));
+    static async saveTransactionByHeight(txId, blockHeight) {
+        try {
+            const txKey = `txHeight-${blockHeight}-${txId}`;
+            const txData = await this.fetchTransactionData(txId);
+
+            // Log the data to be saved (for diagnostic purposes)
+            console.log(`Saving transaction data for key ${txKey}:`, txData);
+
+            if (txData) {
+                await txIndexDB.put(txKey, JSON.stringify(txData));
+                console.log(`Transaction data saved successfully for key ${txKey}`);
+            } else {
+                console.log(`No transaction data found for txId ${txId}`);
+            }
+        } catch (error) {
+            console.error(`Error in saveTransactionByHeight for txId ${txId}:`, error);
+        }
     }
 
-
-    async fetchTransactionData(txId) {
+    static async fetchTransactionData(txId) {
         return new Promise((resolve, reject) => {
             this.client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
@@ -83,7 +128,7 @@ class TxIndex {
         });
     }
 
-    async DecodeRawTransaction(rawTx) {
+    static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await this.decoderawtransactionAsync(rawTx);
             
@@ -118,7 +163,7 @@ class TxIndex {
         }
     }
 
-    async processBlockData(blockData, blockHeight) {
+    static async processBlockData(blockData, blockHeight) {
          for (var txId of blockData.tx) {
             const txHex = await this.fetchTransactionData(txId);   
             const txData = await this.DecodeRawTransaction(txHex)
@@ -137,8 +182,7 @@ class TxIndex {
         }
     }
 
-
-    async processTransaction(payload, decode, txid, marker) {
+    static async processTransaction(payload, decode, txid, marker) {
         // Example: Extract sender, reference address, payload, etc.
         // These methods can be similar to those in TxUtils
         const sender = await txUtils.getSender(txid);
@@ -151,19 +195,20 @@ class TxIndex {
     }
 
     // New method to find the maximum block height
-    async findMaxIndexedBlock() {
+    static async findMaxIndexedBlock() {
         return new Promise((resolve, reject) => {
             let maxBlockHeight = 0;
             txIndexDB.createKeyStream()
                 .on('data', (key) => {
                     const height = parseInt(key.split('-')[1]);
+                    console.log('txindex height '+height)
                     if (height > maxBlockHeight) {
                         maxBlockHeight = height;
                     }
                 })
                 .on('error', (err) => {
                     console.log("can't find maxIndexedBlock"+err)
-                    reject(null);
+                    reject(err);
                 })
                 .on('end', async () => {
                     try {
@@ -176,14 +221,13 @@ class TxIndex {
         });
     }
 
-
     // Updated saveTransactionData method
-    async saveTransactionData(txId, txData, payload, blockHeight) {
+    static async saveTransactionData(txId, txData, payload, blockHeight) {
         const indexKey = `tx-${blockHeight}-${txId}`;
         await txIndexDB.put(indexKey, JSON.stringify({ txData, payload }));
     }
 
-    async loadIndex() {
+    static async loadIndex() {
         return new Promise((resolve, reject) => {
             let data = {};
             txIndexDB.createReadStream() // Using txIndex sublevel
@@ -203,6 +247,17 @@ class TxIndex {
                 });
         });
     }
+
+    static async clearTxIndex() {
+        try {
+            // Clear the entire txIndexDB sublevel
+            await txIndexDB.clear();
+            console.log('txIndexDB cleared successfully.');
+        } catch (error) {
+            console.error('Error in clearing txIndexDB:', error);
+        }
+    }
+
 
 }
 

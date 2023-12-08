@@ -1,14 +1,13 @@
 const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 // Custom modules for TradeLayer
-const Clearing =require('./clearing.js')
-const Persistence = require('./Persistence.js'); // Handles data persistence
-const Orderbook = require('./orderbook.js'); // Manages the order book
-const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
-const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
+//const Clearing =require('./clearing.js')
+//const Persistence = require('./Persistence.js'); // Handles data persistence
+//const Orderbook = require('./orderbook.js'); // Manages the order book
+//const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
+//const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
 const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
-const TxIndex = require('./TxIndex.js'); // Indexes TradeLayer transactions
-const ReOrgChecker = require('./reOrg.js');
+//const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules
 const Litecoin = require('litecoin'); // Bitcoin RPC module
@@ -16,12 +15,13 @@ const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity
 const TxUtils = require('./txUtils.js'); // Utility functions for transactions
-const TradeChannel = require('./channels.js'); // Manages Trade Channels
+const TxIndex = require('./txIndex.js') // Indexes TradeLayer transactions
+//const TradeChannel = require('./channels.js'); // Manages Trade Channels
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
-const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
+//const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
-const Consensus = require('./consensus.js'); // Functions for handling consensus
+//const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactions
@@ -29,24 +29,35 @@ const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marg
 const genesisBlock = 3082500
 
 class Main {
+    static instance;
+
     constructor(test) {
+        if (Main.instance) {
+            return Main.instance;
+        }
+
         const config = {
             host: '127.0.0.1',
-            port: test ? 18332 : 8332, // Use 18332 for test, 8332 for production
+            port: test ? 18332 : 8332,
             user: 'user',
             pass: 'pass',
             timeout: 10000
         };
 
-        this.client = new Litecoin(config);
+        this.client = new Litecoin.Client(config);
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = new TxIndex();
         this.genesisBlock = 3082500;
-        this.blockchainPersistence = new BlockchainPersistence();
-        this.reOrgChecker = new ReOrgChecker(reOrgConfig); // Make sure reOrgConfig is defined
-        // Other initializations...
+ //       this.blockchainPersistence = new Persistence();
+        Main.instance = this;
     }
 
+    static getInstance(test) {
+        if (!Main.instance) {
+            Main.instance = new Main(test);
+        }
+        return Main.instance;
+    }
 
     async initializeOrLoadDB(db, genesisBlock) {
         try {
@@ -67,18 +78,17 @@ class Main {
     }
 
     async initialize() {
-        
-
-        // Initialize TradeLayer if not already done
-        await this.tradeLayerManager.initialize();
 
         // Check for existing index, build one if needed
-        const indexExists = await this.checkForIndex();
+        const indexExists = await TxIndex.checkForIndex();
+        console.log('indexExists'+indexExists)
         if (!indexExists) {
+            console.log('building txIndex')
             await this.txIndex.buildIndex(this.genesisBlock);
         }
 
         // Construct consensus from index, or load from Persistence if available
+        console.log('constructing consensus state')
         const consensus = await this.constructOrLoadConsensus();
 
         // Start processing incoming blocks
@@ -132,8 +142,8 @@ class Main {
     async constructOrLoadConsensus() {
         let consensusState;
         try {
-            const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
-            const startHeight = lastSavedHeight || genesisBlockHeight;
+            //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
+            const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
             consensusState = await this.constructConsensusFromIndex(startHeight);
         } catch (error) {
             if (error.type === 'NotFoundError') {
@@ -148,10 +158,11 @@ class Main {
     }
 
     async constructConsensusFromIndex(startHeight) {
-    let currentBlockHeight = await this.txIndex.findMaxIndexedBlock();
+    let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+      console.log('maxIndexedBlock = '+currentBlockHeight)
         let maxProcessedHeight = startHeight - 1; // Initialize to one less than startHeight
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
-        const txDataSet = await this.txIndexDB.get(`tx-${blockHeight}`);
+        const txDataSet = await TxIndexDB.get(`tx-${blockHeight}`);
 
           for (const txData of txDataSet) {
               const txId = txData.txid;
@@ -388,9 +399,4 @@ class Main {
     // ... other methods ...
 }
 
-// Example usage
-(async () => {
-    const main = new Main();
-    await main.initialize();
-    await main.simulateActivationAndTokenCreation(3041685); // Replace 3041685 with your starting block height
-})();
+module.exports = Main
