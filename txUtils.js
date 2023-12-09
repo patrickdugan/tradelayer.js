@@ -139,8 +139,6 @@ const TxUtils = {
                     return payloadData;
                 }
             }
-
-            throw new Error("Payload not found in transaction");
         } catch (error) {
             console.error(`Error in getPayload for transaction ${txId}:`, error);
             throw error;

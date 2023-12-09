@@ -79,6 +79,18 @@ class TxIndex {
     console.log('indexed to chaintip');
     
     // Use the correct NeDB method to insert or update the 'indexExists' document
+     // After processing the block, update 'MaxHeight'
+        try {
+            await db.getDatabase('txIndex').updateAsync(
+                { _id: 'MaxHeight' },
+                { _id: 'MaxHeight', value: chainTip },
+                { upsert: true }
+            );
+        } catch (error) {
+            console.error('Error updating MaxHeight:', error);
+            throw error;
+        }
+
         try {
             await db.getDatabase('txIndex').updateAsync(
                 { _id: 'indexExists' },
@@ -135,9 +147,6 @@ class TxIndex {
                 const payload = txData.payload;
                 const txDetails = await this.processTransaction(payload, txData.decodedTx, txId, txData.marker);
                 await db.getDatabase('txIndex').insertAsync({ _id: txId, value: txDetails});
-
-                //await this.saveTransactionData(txId, txData.decodedTx, payload, blockHeight, txDetails);
-                //console.log(`Saved txId: ${txId}`);
             }
         }
     }
@@ -303,52 +312,43 @@ class TxIndex {
     }
 
     static async findMaxIndexedBlock() {
-        return new Promise((resolve, reject) => {
-            let maxBlockHeight = 0;
-            txIndexDB.createKeyStream()
-                .on('data', (key) => {
-                    const height = parseInt(key.split('-')[1]);
-                    console.log('txindex height '+height)
-                    if (height > maxBlockHeight) {
-                        maxBlockHeight = height;
-                    }
-                })
-                .on('error', (err) => {
-                    console.log("can't find maxIndexedBlock"+err)
-                    reject(err);
-                })
-                .on('close', async () => {
-                    try {
-                        await txIndexDB.put('maxIndexHeight', maxBlockHeight);  // Save the max block height
-                        resolve(maxBlockHeight);
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
-        });
-    }
-
-
-   static async checkForIndex() {
         try {
-            const indexExistsValue = await txIndexDB.get('indexExists');
-            if (indexExistsValue !== undefined) {
-                console.log(`'indexExists' key found with value: ${indexExistsValue}`);
-                return true; // The index exists
+            const txIndexDB = db.getDatabase('txIndex');
+            const maxHeightDoc = await txIndexDB.findOneAsync({ _id: 'MaxHeight' });
+
+            if (maxHeightDoc) {
+                return maxHeightDoc.value;
             } else {
-                console.log("'indexExists' key found but with undefined or null value.");
-                return false; // The index does not exist or is undefined
+                // Handle the case where MaxHeight hasn't been set yet
+                console.log('MaxHeight not found in txIndexDB.');
+                return 0; // or an appropriate default/fallback value
             }
-        } catch (error) {
-            if (error.type === 'NotFoundError') {
-                console.log("'indexExists' key not found in txIndexDB.");
-                return false; // The index does not exist
-            } else {
-                console.error('Error checking for index:', error);
-                throw error; // Handle other errors appropriately
-            }
+        } catch (err) {
+            console.error('Error finding MaxIndexedBlock:', err);
+            throw err;
         }
     }
+
+
+
+    static async checkForIndex() {
+        try {
+            const txIndexDB = db.getDatabase('txIndex');
+            const indexExistsValue = await txIndexDB.findOneAsync({ _id: 'indexExists' });
+
+            if (indexExistsValue) {
+                console.log(`'indexExists' key found with value: ${indexExistsValue.value}`);
+                return true; // The index exists
+            } else {
+                console.log("'indexExists' key not found.");
+                return false; // The index does not exist
+            }
+        } catch (error) {
+            console.error('Error checking for index:', error);
+            throw error;
+        }
+    }
+
 
 }
 

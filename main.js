@@ -64,23 +64,18 @@ class Main {
     }
 
     async initialize() {
-          await this.delay(2000)
         const txIndex = TxIndex.getInstance();
-            await this.delay(2000)
-        /*try {
+        try {
             await txIndex.initializeOrLoadDB(db, genesisBlock);
             // Proceed with further operations after successful initialization
         } catch (error) {
             console.log('boop')
-        }*/
-          await this.delay(2000)
+        }
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
-          await this.delay(2000)
         if (!indexExists) {
             console.log('building txIndex');
-            await this.delay(2000)
             await TxIndex.initializeIndex(this.genesisBlock);
         }
 
@@ -188,21 +183,21 @@ class Main {
 
           }
 
-        return syncIfNecessary()
+        return this.syncIfNecessary()
     }
 
     async syncIfNecessary() {
-        const blockLag = await checkBlockLag();
-        if (blockLag > 0) {
+        const blockLag = await this.checkBlockLag();
+        /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
-        }else if (blockLag === 0) {
-            processIncomingBlocks(); // Start processing new blocks as they come
-        }
+        }else if (blockLag === 0) {*/
+            this.processIncomingBlocks(); // Start processing new blocks as they come
+        //}
     }
 
     async checkBlockLag() {
         const chaintip = await this.txIndex.fetchChainTip();
-        const maxConsensusBlock = await consensusDB.get('maxConsensusBlock');
+        const maxConsensusBlock = await TxIndex.findMaxIndexedBlock()
         return chaintip - maxConsensusBlock;
     }
 
@@ -246,7 +241,7 @@ class Main {
         console.log(`Beginning to process block ${blockHeight}`);
 
         // Check for reorganization using ReOrgChecker
-        const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
+        /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
         if (reorgDetected) {
             console.log(`Reorganization detected at block ${blockHeight}`);
             await this.handleReorg(blockHeight);
@@ -254,7 +249,8 @@ class Main {
             // Proceed with regular block processing
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
-        }
+        }*/
+        return console.log('no re-org detected')
     }
 
     async blockHandlerMiddle(blockHash, blockHeight) {
@@ -286,13 +282,13 @@ class Main {
         }
 
          // Loop through contracts to trigger liquidations
-        for (const contract of ContractsRegistry.getAllContracts()) {
+        /*for (const contract of ContractsRegistry.getAllContracts()) {
             if (MarginMap.needsLiquidation(contract)) {
                 const orders = await MarginMap.triggerLiquidations(contract);
                 // Handle the created liquidation orders
                 // ...
             }
-        }
+        }*/
     }
 
     async blockHandlerEnd(blockHash, blockHeight) {
@@ -300,7 +296,7 @@ class Main {
         // Additional logic for end of block processing
 
         // Call the method to process confirmed withdrawals
-        await Channels.processConfirmedWithdrawals();
+        /*await Channels.processConfirmedWithdrawals();
          for (const contract of ContractsRegistry.getAllContracts()) {
             // Check if the contract has open positions
             if (ContractsRegistry.hasOpenPositions(contract)) {
@@ -311,7 +307,8 @@ class Main {
                 // Perform audit tasks for the contract
                 await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
             }
-        }
+        }*/
+        return ('block finish '+blockHeight)
     }
 
     async handleReorg(blockHeight) {

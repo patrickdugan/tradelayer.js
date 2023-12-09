@@ -1,3 +1,4 @@
-{"_id":"genesisBlock","value":3082500}
 {"_id":"0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{"txId":"00","valid":true}}}
+{"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
+{"_id":"maxIndexHeight","value":0}
