@@ -4,11 +4,11 @@ async function runUnitTest() {
     const genesisBlock = 3082500;
     try {
         console.log(`Initializing index from genesis block: ${genesisBlock}`);
-        await TxIndex.initializeIndex(genesisBlock);
+        await TxIndex.initializeIndex(genesisBlock,true);
         
         const txIndex = TxIndex.getInstance();
         console.log(`Extracting block data starting from block: ${genesisBlock}`);
-        await txIndex.extractBlockData(genesisBlock);
+        await txIndex.extractBlockData(genesisBlock,true);
 
         if (txIndex.transparentIndex.includes('00')) {
             console.log("Payload 'tl00' found in the index.");

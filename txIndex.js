@@ -3,7 +3,7 @@ const json = require('big-json');
 const util = require('util');
 const txUtils = require('./txUtils');
 const Types = require('./types.js');
-const { ensureDbOpen, txIndexDB } = require('./db.js');
+const db = require('./db.js');
 
 class TxIndex {
     static instance;
@@ -43,25 +43,57 @@ class TxIndex {
     }
 
     static async initializeIndex(genesisBlock) {
-        //await ensureDbOpen(); // Ensure the database is open
-        await txIndexDB.put('genesisBlock', genesisBlock);
-        await TxIndex.getInstance().extractBlockData(genesisBlock);
+             try {
+            const existingGenesisBlock = await db.getDatabase('txIndex').findOneAsync({ _id: 'genesisBlock' });
+            if (existingGenesisBlock) {
+                console.log('Genesis block is already initialized:', existingGenesisBlock.value);
+                return;
+            }
+        } catch (error) {
+            // Handle any errors that occur during database access
+            console.error('Error checking for existing genesis block:', error);
+            throw error;
+        }
+
+        // If the "genesisBlock" key does not exist, initialize it
+        try {
+            await db.getDatabase('txIndex').insertAsync({ _id: 'genesisBlock', value: genesisBlock });
+            console.log('Genesis block initialized:', genesisBlock);
+        } catch (error) {
+            // Handle any errors that occur during insertion
+            console.error('Error initializing genesis block:', error);
+            throw error;
+        }
     }
 
-    async extractBlockData(startHeight) {
-        let chainTip = await this.fetchChainTip();
-        console.log('building index until'+chainTip)
-        for (let height = startHeight; height <= chainTip; height++) {
-            console.log(height)
-            //let blockData = await this.fetchBlockData(height);
-            console.log(blockData)
-            await this.processBlockData(blockData, height);
-            chainTip = await this.fetchChainTip();
-        }
-        console.log('indexed to chaintip');
-        await txIndexDB.put('indexExists', true);
-        return console.log('built index')
+   async extractBlockData(startHeight) {
+    let chainTip = await this.fetchChainTip();
+    console.log('building index until' + chainTip);
+    for (let height = startHeight; height <= chainTip; height++) {
+        //console.log(height);
+        let blockData = await this.fetchBlockData(height);
+        //console.log(blockData)
+        await this.processBlockData(blockData, height);
+        //chainTip = await this.fetchChainTip();
     }
+    console.log('indexed to chaintip');
+    
+    // Use the correct NeDB method to insert or update the 'indexExists' document
+        try {
+            await db.getDatabase('txIndex').updateAsync(
+                { _id: 'indexExists' },
+                { _id: 'indexExists', value: true },
+                { upsert: true } // This option ensures that the document is inserted if it doesn't exist or updated if it does.
+            );
+            console.log('Index flag set successfully.');
+        } catch (error) {
+            console.error('Error setting the index flag:', error);
+            throw error;
+        }
+
+            console.log('built index');
+    }
+
 
     async fetchChainTip() {
         return new Promise((resolve, reject) => {
@@ -95,21 +127,21 @@ class TxIndex {
 
     async processBlockData(blockData, blockHeight) {
         for (const txId of blockData.tx) {
-            const txHex = await this.fetchTransactionData(txId);   
+            const txHex = await this.fetchTransactionData(txId);
             const txData = await this.DecodeRawTransaction(txHex);
-            //console.log(txData)
-            if(txData != null){
-                //console.log(txData.marker)
-                if (txData.marker === 'tl') {
-                    console.log(txData.payload)
-                    this.transparentIndex.push(txData.payload);
-                    const txDetails = await this.processTransaction(txData.payload, txData.decodedTx, txId, txData.marker);
-                    //await this.saveTransactionData(txId, txData.decodedTx, txData.payload, blockHeight, txDetails);
-                    console.log(txDetails);
-                }
+            
+            if (txData != null && txData.marker === 'tl') {
+                //console.log(`Processing txId: ${txId}`);
+                const payload = txData.payload;
+                const txDetails = await this.processTransaction(payload, txData.decodedTx, txId, txData.marker);
+                await db.getDatabase('txIndex').insertAsync({ _id: txId, value: txDetails});
+
+                //await this.saveTransactionData(txId, txData.decodedTx, payload, blockHeight, txDetails);
+                //console.log(`Saved txId: ${txId}`);
             }
         }
     }
+
 
     async fetchTransactionData(txId) {
         return new Promise((resolve, reject) => {
@@ -163,49 +195,63 @@ class TxIndex {
         return { sender, reference, payload, decodedParams };
     }
 
-    async saveTransactionData(txId, txData, payload, blockHeight) {
+    async saveTransactionData(txId, txData, payload, blockHeight,txDetails) {
         const indexKey = `tx-${blockHeight}-${txId}`;
-        await txIndexDB.put(indexKey, JSON.stringify({ txData, payload }));
+        const document = {
+            _id: indexKey,
+            txData: txDetails
+        };
+
+        console.log(document);
+
+        try {
+            // Attempt to insert the document
+            await db.getDatabase('txIndex').insertAsync([document]);
+            console.log(`Transaction data saved for ${indexKey}`);
+        } catch (error) {
+            // Check if the error is due to a unique constraint violation
+            if (error.errorType === 'uniqueViolated') {
+                // Handle the duplicate key error here (e.g., skip or update)
+                console.log(`Duplicate key error for ${indexKey}: ${error}`);
+                // You can choose to skip the insertion or update the existing document here
+                // For example, to update an existing document, you can use the updateAsync method:
+                // await db.getDatabase('txIndex').updateAsync({ _id: indexKey }, { $set: { txData, payload } });
+            } else {
+                // Handle other errors
+                console.error(`Error saving transaction data for ${indexKey}: ${error}`);
+            }
+        }
     }
 
-    async loadIndex() {
+     async loadIndex() {
         return new Promise((resolve, reject) => {
             let data = {};
-            txIndexDB.createReadStream()
-                .on('data', (entry) => {
-                    data[entry.key] = entry.value;
-                })
-                .on('error', (err) => {
-                    console.error('Stream encountered an error:', err);
-                    reject(err);
-                })
-                .on('close', () => {
-                    console.log('Stream ended');
+            db.getDatabase('txIndex')
+                .findAsync({})
+                .then(entries => {
+                    entries.forEach(entry => {
+                        data[entry._id] = entry.value;
+                    });
                     resolve(data);
+                })
+                .catch(err => {
+                    console.error('Error loading index:', err);
+                    reject(err);
                 });
         });
     }
 
-    static async clearTxIndex() {
-
-            return new Promise((resolve, reject) => {
+        static async clearTxIndex() {
+            return new Promise(async (resolve, reject) => {
                 try {
-                    // Create a stream to read all keys in the database
-                    const stream = txIndexDB.createReadStream();
+                    // Initialize your NeDB database
+                    const db = new Datastore({ filename: 'your_nedb_database.db', autoload: true });
 
-                    stream.on('data', async ({ key }) => {
-                        await txIndexDB.del(key);
-                    });
+                    // Remove all documents from the txIndex collection
+                    await db.remove({}, { multi: true });
 
-                    stream.on('error', (error) => {
-                        console.error('Error in clearing txIndexDB:', error);
-                        reject(error);
-                    });
-
-                    stream.on('close', () => {
-                        console.log('txIndexDB cleared successfully.');
-                        resolve();
-                    });
+                    console.log('Cleared all entries from txIndexDB.');
+                    resolve();
                 } catch (error) {
                     console.error('Error in clearing txIndexDB:', error);
                     reject(error);
@@ -213,28 +259,38 @@ class TxIndex {
             });
         }
 
-   async initializeOrLoadDB(db, genesisBlock) {
+        async initializeOrLoadDB(genesisBlock) {
             return new Promise(async (resolve, reject) => {
                 try {
-                    const genesis = await txIndexDB.get('genesisBlock');
-                    console.log('Database already initialized. Genesis block:', genesis);
-                    // Database already exists, resolve the promise
-                    resolve();
-                } catch (error) {
-                    if (error.type === 'NotFoundError') {
-                        console.log('Initializing database with genesis block:', genesisBlock);
-                        try {
-                            await txIndexDB.put('genesisBlock', genesisBlock);
-                            // Initialization successful, resolve the promise
+                    // Initialize your NeDB database
+                    const db = new Datastore({ filename: 'your_nedb_database.db', autoload: true });
+
+                    // Attempt to find the 'genesisBlock' key
+                    db.findOne({ _id: 'genesisBlock' }, (err, doc) => {
+                        if (err) {
+                            console.error('Error accessing database:', err);
+                            reject(err);
+                        } else if (!doc) {
+                            // If 'genesisBlock' key does not exist, initialize it
+                            console.log('Initializing database with genesis block:', genesisBlock);
+                            db.insert({ _id: 'genesisBlock', value: genesisBlock }, (insertErr) => {
+                                if (insertErr) {
+                                    console.error('Error initializing database:', insertErr);
+                                    reject(insertErr);
+                                } else {
+                                    // Initialization successful, resolve the promise
+                                    resolve();
+                                }
+                            });
+                        } else {
+                            console.log('Database already initialized. Genesis block:', doc.value);
+                            // Database already exists, resolve the promise
                             resolve();
-                        } catch (putError) {
-                            console.error('Error initializing database:', putError);
-                            reject(putError); // Reject the promise on initialization error
                         }
-                    } else {
-                        console.error('Error accessing database:', error);
-                        reject(error); // Reject the promise on other errors
-                    }
+                    });
+                } catch (error) {
+                    console.error('Error accessing database:', error);
+                    reject(error);
                 }
             });
         }
