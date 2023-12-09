@@ -3,7 +3,7 @@ const json = require('big-json');
 const util = require('util');
 const txUtils = require('./txUtils');
 const Types = require('./types.js');
-const { ensureDbOpen, txIndexDB } = require('./db.js');
+const db = require('./db'); // Assuming db.js exports the singleton instance
 
 class TxIndex {
     static instance;
@@ -43,17 +43,15 @@ class TxIndex {
     }
 
     static async initializeIndex(genesisBlock) {
-        //await ensureDbOpen(); // Ensure the database is open
-        await txIndexDB.put('genesisBlock', genesisBlock);
+        await db.put('txIndex', 'genesisBlock', genesisBlock);
         await TxIndex.getInstance().extractBlockData(genesisBlock);
     }
-
     async extractBlockData(startHeight) {
         let chainTip = await this.fetchChainTip();
         console.log('building index until'+chainTip)
         for (let height = startHeight; height <= chainTip; height++) {
             console.log(height)
-            //let blockData = await this.fetchBlockData(height);
+            let blockData = await this.fetchBlockData(height);
             console.log(blockData)
             await this.processBlockData(blockData, height);
             chainTip = await this.fetchChainTip();
@@ -165,131 +163,106 @@ class TxIndex {
 
     async saveTransactionData(txId, txData, payload, blockHeight) {
         const indexKey = `tx-${blockHeight}-${txId}`;
-        await txIndexDB.put(indexKey, JSON.stringify({ txData, payload }));
+        await db.put('txIndex', indexKey, JSON.stringify({ txData, payload }));
     }
 
-    async loadIndex() {
-        return new Promise((resolve, reject) => {
-            let data = {};
-            txIndexDB.createReadStream()
-                .on('data', (entry) => {
-                    data[entry.key] = entry.value;
-                })
-                .on('error', (err) => {
-                    console.error('Stream encountered an error:', err);
-                    reject(err);
-                })
-                .on('close', () => {
-                    console.log('Stream ended');
-                    resolve(data);
+     async loadIndex() {
+        const data = {};
+        try {
+            const stream = db.db.createReadStream({
+                gte: 'txIndex:',
+                lte: 'txIndex:\xff'
+            });
+
+            for await (const { key, value } of stream) {
+                // Removing the 'txIndex:' prefix from the key for the returned data object
+                const formattedKey = key.split(':')[1];
+                data[formattedKey] = value;
+            }
+
+            console.log('Index loaded successfully.');
+            return data;
+        } catch (err) {
+            console.error('Error loading index:', err);
+            throw err;
+        }
+    }
+
+
+    static async clearTxIndex() {
+        // Iterate over keys in the txIndex category and delete them
+        return new Promise(async (resolve, reject) => {
+            try {
+                const stream = db.db.createKeyStream({
+                    gte: 'txIndex:',
+                    lte: 'txIndex:\xff'
                 });
+
+                for await (const key of stream) {
+                    await db.delete('txIndex', key.split(':')[1]);
+                }
+
+                console.log('txIndexDB cleared successfully.');
+                resolve();
+            } catch (error) {
+                console.error('Error in clearing txIndexDB:', error);
+                reject(error);
+            }
         });
     }
 
-    static async clearTxIndex() {
-
-            return new Promise((resolve, reject) => {
-                try {
-                    // Create a stream to read all keys in the database
-                    const stream = txIndexDB.createReadStream();
-
-                    stream.on('data', async ({ key }) => {
-                        await txIndexDB.del(key);
-                    });
-
-                    stream.on('error', (error) => {
-                        console.error('Error in clearing txIndexDB:', error);
-                        reject(error);
-                    });
-
-                    stream.on('close', () => {
-                        console.log('txIndexDB cleared successfully.');
-                        resolve();
-                    });
-                } catch (error) {
-                    console.error('Error in clearing txIndexDB:', error);
-                    reject(error);
-                }
-            });
+    async initializeOrLoadDB(genesisBlock) {
+        try {
+            const genesis = await db.get('txIndex', 'genesisBlock');
+            if (genesis === null) {
+                console.log('Initializing database with genesis block:', genesisBlock);
+                await db.put('txIndex', 'genesisBlock', genesisBlock);
+            } else {
+                console.log('Database already initialized. Genesis block:', genesis);
+            }
+        } catch (error) {
+            console.error('Error accessing database:', error);
         }
-
-   async initializeOrLoadDB(db, genesisBlock) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const genesis = await txIndexDB.get('genesisBlock');
-                    console.log('Database already initialized. Genesis block:', genesis);
-                    // Database already exists, resolve the promise
-                    resolve();
-                } catch (error) {
-                    if (error.type === 'NotFoundError') {
-                        console.log('Initializing database with genesis block:', genesisBlock);
-                        try {
-                            await txIndexDB.put('genesisBlock', genesisBlock);
-                            // Initialization successful, resolve the promise
-                            resolve();
-                        } catch (putError) {
-                            console.error('Error initializing database:', putError);
-                            reject(putError); // Reject the promise on initialization error
-                        }
-                    } else {
-                        console.error('Error accessing database:', error);
-                        reject(error); // Reject the promise on other errors
-                    }
-                }
-            });
-        }
-
+    }
 
     static async resetIndexFlag() {
-        await txIndexDB.del('indexExists');
-        await txIndexDB.del('genesisBlock');
+        await db.delete('txIndex', 'indexExists');
+        await db.delete('txIndex', 'genesisBlock');
         console.log('Index flags reset successfully.');
     }
 
     static async findMaxIndexedBlock() {
-        return new Promise((resolve, reject) => {
-            let maxBlockHeight = 0;
-            txIndexDB.createKeyStream()
-                .on('data', (key) => {
-                    const height = parseInt(key.split('-')[1]);
-                    console.log('txindex height '+height)
-                    if (height > maxBlockHeight) {
-                        maxBlockHeight = height;
-                    }
-                })
-                .on('error', (err) => {
-                    console.log("can't find maxIndexedBlock"+err)
-                    reject(err);
-                })
-                .on('close', async () => {
-                    try {
-                        await txIndexDB.put('maxIndexHeight', maxBlockHeight);  // Save the max block height
-                        resolve(maxBlockHeight);
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
+        let maxBlockHeight = 0;
+        const stream = db.db.createReadStream({
+            gte: 'txIndex:tx-',
+            lte: 'txIndex:tx-\xff'
         });
-    }
 
+        for await (const { key } of stream) {
+            const height = parseInt(key.split('-')[1]);
+            if (height > maxBlockHeight) {
+                maxBlockHeight = height;
+            }
+        }
+
+        // Optionally save the max block height in the database if needed
+        await db.put('txIndex', 'maxIndexHeight', maxBlockHeight);
+
+        return maxBlockHeight;
+    }
 
    static async checkForIndex() {
         try {
-            const indexExistsValue = await txIndexDB.get('indexExists');
-            if (indexExistsValue !== undefined) {
-                console.log(`'indexExists' key found with value: ${indexExistsValue}`);
-                return true; // The index exists
-            } else {
-                console.log("'indexExists' key found but with undefined or null value.");
-                return false; // The index does not exist or is undefined
-            }
+            const indexExistsValue = await db.get('txIndex', 'indexExists');
+            return indexExistsValue !== undefined;
         } catch (error) {
-            if (error.type === 'NotFoundError') {
-                console.log("'indexExists' key not found in txIndexDB.");
-                return false; // The index does not exist
+            if (error.type === 'NotFoundError' || error.notFound) {
+                // Key does not exist, which means the index has not been created yet
+                return false;
             } else {
+                // Some other error occurred
                 console.error('Error checking for index:', error);
-                throw error; // Handle other errors appropriately
+                throw error; // Rethrow the error to handle it in the calling context
             }
         }
     }

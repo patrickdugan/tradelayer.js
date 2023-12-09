@@ -25,7 +25,7 @@ const PropertyManager = require('./property.js'); // Manages properties
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactions
-const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
+const db = require('./db'); // Import the singleton instance
 const genesisBlock = 3082500
 
 class Main {
@@ -64,16 +64,14 @@ class Main {
     }
 
     async initialize() {
-          await this.delay(2000)
         const txIndex = TxIndex.getInstance();
-            await this.delay(2000)
-        /*try {
+        
+        try {
             await txIndex.initializeOrLoadDB(db, genesisBlock);
             // Proceed with further operations after successful initialization
         } catch (error) {
             console.log('boop')
-        }*/
-          await this.delay(2000)
+        }
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
