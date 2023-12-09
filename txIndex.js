@@ -43,22 +43,24 @@ class TxIndex {
     }
 
     static async initializeIndex(genesisBlock) {
-        await ensureDbOpen(); // Ensure the database is open
+        //await ensureDbOpen(); // Ensure the database is open
         await txIndexDB.put('genesisBlock', genesisBlock);
-        await txIndexDB.put('indexExists', true);
         await TxIndex.getInstance().extractBlockData(genesisBlock);
     }
 
     async extractBlockData(startHeight) {
         let chainTip = await this.fetchChainTip();
+        console.log('building index until'+chainTip)
         for (let height = startHeight; height <= chainTip; height++) {
-            //console.log(height)
-            let blockData = await this.fetchBlockData(height);
-            //console.log(blockData)
+            console.log(height)
+            //let blockData = await this.fetchBlockData(height);
+            console.log(blockData)
             await this.processBlockData(blockData, height);
             chainTip = await this.fetchChainTip();
         }
         console.log('indexed to chaintip');
+        await txIndexDB.put('indexExists', true);
+        return console.log('built index')
     }
 
     async fetchChainTip() {
@@ -102,7 +104,7 @@ class TxIndex {
                     console.log(txData.payload)
                     this.transparentIndex.push(txData.payload);
                     const txDetails = await this.processTransaction(txData.payload, txData.decodedTx, txId, txData.marker);
-                    await this.saveTransactionData(txId, txData.decodedTx, txData.payload, blockHeight, txDetails);
+                    //await this.saveTransactionData(txId, txData.decodedTx, txData.payload, blockHeight, txDetails);
                     console.log(txDetails);
                 }
             }
@@ -177,7 +179,7 @@ class TxIndex {
                     console.error('Stream encountered an error:', err);
                     reject(err);
                 })
-                .on('end', () => {
+                .on('close', () => {
                     console.log('Stream ended');
                     resolve(data);
                 });
@@ -185,13 +187,113 @@ class TxIndex {
     }
 
     static async clearTxIndex() {
+
+            return new Promise((resolve, reject) => {
+                try {
+                    // Create a stream to read all keys in the database
+                    const stream = txIndexDB.createReadStream();
+
+                    stream.on('data', async ({ key }) => {
+                        await txIndexDB.del(key);
+                    });
+
+                    stream.on('error', (error) => {
+                        console.error('Error in clearing txIndexDB:', error);
+                        reject(error);
+                    });
+
+                    stream.on('close', () => {
+                        console.log('txIndexDB cleared successfully.');
+                        resolve();
+                    });
+                } catch (error) {
+                    console.error('Error in clearing txIndexDB:', error);
+                    reject(error);
+                }
+            });
+        }
+
+   async initializeOrLoadDB(db, genesisBlock) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const genesis = await txIndexDB.get('genesisBlock');
+                    console.log('Database already initialized. Genesis block:', genesis);
+                    // Database already exists, resolve the promise
+                    resolve();
+                } catch (error) {
+                    if (error.type === 'NotFoundError') {
+                        console.log('Initializing database with genesis block:', genesisBlock);
+                        try {
+                            await txIndexDB.put('genesisBlock', genesisBlock);
+                            // Initialization successful, resolve the promise
+                            resolve();
+                        } catch (putError) {
+                            console.error('Error initializing database:', putError);
+                            reject(putError); // Reject the promise on initialization error
+                        }
+                    } else {
+                        console.error('Error accessing database:', error);
+                        reject(error); // Reject the promise on other errors
+                    }
+                }
+            });
+        }
+
+
+    static async resetIndexFlag() {
+        await txIndexDB.del('indexExists');
+        await txIndexDB.del('genesisBlock');
+        console.log('Index flags reset successfully.');
+    }
+
+    static async findMaxIndexedBlock() {
+        return new Promise((resolve, reject) => {
+            let maxBlockHeight = 0;
+            txIndexDB.createKeyStream()
+                .on('data', (key) => {
+                    const height = parseInt(key.split('-')[1]);
+                    console.log('txindex height '+height)
+                    if (height > maxBlockHeight) {
+                        maxBlockHeight = height;
+                    }
+                })
+                .on('error', (err) => {
+                    console.log("can't find maxIndexedBlock"+err)
+                    reject(err);
+                })
+                .on('close', async () => {
+                    try {
+                        await txIndexDB.put('maxIndexHeight', maxBlockHeight);  // Save the max block height
+                        resolve(maxBlockHeight);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+        });
+    }
+
+
+   static async checkForIndex() {
         try {
-            await txIndexDB.clear();
-            console.log('txIndexDB cleared successfully.');
+            const indexExistsValue = await txIndexDB.get('indexExists');
+            if (indexExistsValue !== undefined) {
+                console.log(`'indexExists' key found with value: ${indexExistsValue}`);
+                return true; // The index exists
+            } else {
+                console.log("'indexExists' key found but with undefined or null value.");
+                return false; // The index does not exist or is undefined
+            }
         } catch (error) {
-            console.error('Error in clearing txIndexDB:', error);
+            if (error.type === 'NotFoundError') {
+                console.log("'indexExists' key not found in txIndexDB.");
+                return false; // The index does not exist
+            } else {
+                console.error('Error checking for index:', error);
+                throw error; // Handle other errors appropriately
+            }
         }
     }
+
 }
 
 module.exports = TxIndex;

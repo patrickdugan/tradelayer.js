@@ -9,7 +9,8 @@ async function runIntegrationTest() {
     console.log("Starting integration test...");
 
     // Access the singleton instance of Main
-    await TxIndex.clearTxIndex()
+    //await TxIndex.clearTxIndex()
+    //await TxIndex.resetIndexFlag();
     const mainProcessor = Main.getInstance(test=true);
     await mainProcessor.initialize(); // Assuming init() initializes the entire flow
 

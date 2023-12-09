@@ -20,7 +20,7 @@ const TxIndex = require('./txIndex.js') // Indexes TradeLayer transactions
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
 //const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
-const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
+//const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
@@ -46,7 +46,7 @@ class Main {
 
         this.client = new Litecoin.Client(config);
         this.tradeLayerManager = new TradeLayerManager();
-        this.txIndex = new TxIndex();
+        this.txIndex = TxIndex.getInstance();        
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -59,32 +59,29 @@ class Main {
         return Main.instance;
     }
 
-    async initializeOrLoadDB(db, genesisBlock) {
-        try {
-            const genesis = await txIndexDB.get('genesisBlock');
-            console.log('Database already initialized. Genesis block:', genesis);
-            // Database already exists, you can load or process data from here
-        } catch (error) {
-            // If the genesis block is not found, initialize the database
-            if (error.type === 'NotFoundError') {
-                console.log('Initializing database with genesis block:', genesisBlock);
-                await TxIndex.put('genesisBlock', genesisBlock);
-                // Perform other initialization tasks if necessary
-            } else {
-                // Handle other errors
-                console.error('Error accessing database:', error);
-            }
-        }
+    async delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async initialize() {
-
-        // Check for existing index, build one if needed
+          await this.delay(2000)
+        const txIndex = TxIndex.getInstance();
+            await this.delay(2000)
+        /*try {
+            await txIndex.initializeOrLoadDB(db, genesisBlock);
+            // Proceed with further operations after successful initialization
+        } catch (error) {
+            console.log('boop')
+        }*/
+          await this.delay(2000)
+          console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
-        console.log('indexExists'+indexExists)
+        console.log('indexExists' + indexExists);
+          await this.delay(2000)
         if (!indexExists) {
-            console.log('building txIndex')
-            await this.txIndex.buildIndex(this.genesisBlock);
+            console.log('building txIndex');
+            await this.delay(2000)
+            await TxIndex.initializeIndex(this.genesisBlock);
         }
 
         // Construct consensus from index, or load from Persistence if available
