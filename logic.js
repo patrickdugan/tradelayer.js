@@ -12,7 +12,6 @@ const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules
-const Litecoin = require('litecoin'); // Bitcoin RPC module
 const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity

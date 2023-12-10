@@ -134,6 +134,7 @@ class Main {
 
     async constructOrLoadConsensus() {
         let consensusState;
+
         try {
             //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
             const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
@@ -151,13 +152,16 @@ class Main {
     }
 
    async constructConsensusFromIndex(startHeight) {
+
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
+
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
 
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
-        console.log(allTxData)
+        //console.log(allTxData)
+
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
@@ -175,9 +179,14 @@ class Main {
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload);
+                         await this.delay(2000)
+
                 if(decodedParams.valid==true){
+                   await this.delay(2000)
                     console.log(decodedParams)
-                    await Logic.typeSwitch(decodedParams.type, decodedParams);
+                   await this.delay(2000)
+
+                    //await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }

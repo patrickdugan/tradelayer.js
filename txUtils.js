@@ -14,7 +14,7 @@ const client = new Litecoin.Client({
 });
 
 // Promisify the necessary client functions
-const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
+const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client,'getrawtransaction'));
 const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
@@ -27,32 +27,33 @@ const TxUtils = {
     async getRawTransaction(txId) {
         try {
             // Use the promisified version of getRawTransaction
+            console.log('getting raw '+txid)
             return await getRawTransactionAsync(txId, true); // true for verbose mode
         } catch (error) {
             console.error(`Error fetching transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
     async getSender(txId) {
         const tx = await this.getRawTransaction(txId);
         if (!tx || !tx.vin || tx.vin.length === 0) {
-            throw new Error(`Invalid transaction data for ${txId}`);
+            return new Error(`Invalid transaction data for ${txId}`);
         }
 
         const vin = tx.vin[0]; // Assuming we're only interested in the first input
         if (!vin.txid) {
-            throw new Error(`No previous transaction reference in input for ${txId}`);
+            return new Error(`No previous transaction reference in input for ${txId}`);
         }
 
         const parentTx = await this.getRawTransaction(vin.txid);
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
-            throw new Error(`Invalid parent transaction data for ${vin.txid}`);
+            return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
 
         const output = parentTx.vout[vin.vout];
         if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-            throw new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
+            return new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
         }
 
         const senderAddress = output.scriptPubKey.addresses[0]; // Assuming single address
@@ -65,7 +66,7 @@ const TxUtils = {
         try {
             const tx = await this.getRawTransaction(txId);
             if (!tx || !tx.vout) {
-                throw new Error(`Invalid transaction data for ${txId}`);
+                return new Error(`Invalid transaction data for ${txId}`);
             }
 
             let referenceOutput = null;
@@ -85,11 +86,11 @@ const TxUtils = {
                 console.log(satoshis)
                 return { address, satoshis };
             } else {
-                throw new Error("Reference output not found");
+                return new Error("Reference output not found");
             }
         } catch (error) {
             console.error(`Error in getReference for transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -106,6 +107,7 @@ const TxUtils = {
     async decoderawtransaction(hexString) {
         try {
             // Use the promisified version of decoderawtransaction
+            console.log('decoding')
             return await decoderawtransactionAsync(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
@@ -125,6 +127,7 @@ const TxUtils = {
 
     async getPayload(txId) {
         try {
+            console.log('getting payload'+txId)
             const tx = await this.getRawTransaction(txId);
             if (!tx || !tx.vout) {
                 throw new Error(`Invalid transaction data for ${txId}`);

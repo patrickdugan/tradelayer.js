@@ -14,8 +14,13 @@ class Activation {
 
         this.hardcodedAdminAddress = testAdmin;
         this.consensusVector = {};
+        this.txRegistry = this.initializeTxRegistry()
 
         Activation.instance = this; // Set the instance
+    }
+
+    async delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     // Static method to get the singleton instance
@@ -66,6 +71,7 @@ class Activation {
     async saveActivationsList() {
         try {
             const activationsDB = db.getDatabase('activations');
+            //console.log(this.txRegistry)
             await activationsDB.insertAsync({ _id: 'activationsList', value: JSON.stringify(this.txRegistry) });
             console.log('Activations list saved successfully.');
         } catch (error) {
@@ -78,21 +84,43 @@ class Activation {
         try {
             const activationsDB = db.getDatabase('activations');
             const entries = await activationsDB.findAsync({});
-            let data = {};
-            entries.forEach(entry => {
-                data[entry._id] = entry.value;
-            });
-            this.txRegistry = JSON.parse(data['activationsList'] || '{}');
-            console.log('Activations list loaded successfully.');
+
+            if (entries.length === 0) {
+                // If no entries found, initialize the txRegistry with default values
+                console.log('No activations list found, initializing with default values.');
+                this.txRegistry = this.initializeTxRegistry();
+                //console.log(this.txRegistry)
+                await this.saveActivationsList(); // Save the newly created default activations list
+            } else {
+                // If entries are found, parse the activations list
+                let data = {};
+                entries.forEach(entry => {
+                    data[entry._id] = entry.value;
+                });
+
+                if (data['activationsList']) {
+                    this.txRegistry = JSON.parse(data['activationsList']);
+                    console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
+                } else {
+                    console.error('Activations list not found in the database, initializing with default values.');
+                    this.txRegistry = this.initializeTxRegistry();
+                    await this.saveActivationsList(); // Save the newly created default activations list
+                }
+            }
         } catch (error) {
             console.error('Error loading activations list:', error);
-            this.txRegistry = {}; // Reset to empty object if loading fails
+            this.txRegistry = this.initializeTxRegistry(); // Initialize with default values in case of any error
+            await this.saveActivationsList(); // Save the newly created default activations list
         }
     }
 
+
         // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, senderAddress) {
+               await this.delay(2000)
+
         console.log(`Activating transaction type: ${txType}`);
+        await this.delay(2000)
         await this.loadActivationsList(); // Make sure to load the activations list first
         if (txType === undefined) {
             console.error("Transaction type is undefined.");
@@ -102,62 +130,65 @@ class Activation {
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
             await TradeLayerManager.initializeTokens();  // Create propertyId 1 and 2 for TL token
-            await TradeLayerManager.initializeContractSeries();
-            await TradeLayerManager.initializeTxRegistry();  // With pre-populated types and logic
+            //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
-            await this.saveActivationsList(); // Save the updated activations list
+            console.log(this.txRegistry)
+            //return await this.saveActivationsList(); // Save the updated activations list
+
         }else{
             // Check if the transaction type exists in the registry
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
-                await this.saveActivationsList(); // Save the updated activations list
+                return await this.saveActivationsList(); // Save the updated activations list
             } else {
                 console.error(`Transaction type ${txType} not found in registry.`);
             }
         }
+
     }
 
-    async initializeTxRegistry() {
+    initializeTxRegistry() {
         // Initialize the transaction registry
-        this.txRegistry = {
-            0: { name: "Activate TradeLayer", logicFunction: Logic.activateTradeLayer, active: true },
-            1: { name: "Token Issue", logicFunction: Logic.tokenIssue, active: false },
-            2: { name: "Send", logicFunction: Logic.sendToken, active: false },
-            3: { name: "Trade Token for UTXO", logicFunction: Logic.tradeTokenForUTXO, active: false },
-            4: { name: "Commit Token", logicFunction: Logic.commitToken, active: false },
-            5: { name: "On-chain Token for Token", logicFunction: Logic.onChainTokenForToken, active: false },
-            6: { name: "Create Whitelist", logicFunction: Logic.createWhitelist, active: false },
-            7: { name: "Update Admin", logicFunction: Logic.updateAdmin, active: false },
-            8: { name: "Issue Attestation", logicFunction: Logic.issueAttestation, active: false },
-            9: { name: "Revoke Attestation", logicFunction: Logic.revokeAttestation, active: false },
-            10: { name: "Grant Managed Token", logicFunction: Logic.grantManagedToken, active: false },
-            11: { name: "Redeem Managed Token", logicFunction: Logic.redeemManagedToken, active: false },
-            12: { name: "Create Oracle", logicFunction: Logic.createOracle, active: false },
-            13: { name: "Publish Oracle Data", logicFunction: Logic.publishOracleData, active: false },
-            14: { name: "Close Oracle", logicFunction: Logic.closeOracle, active: false },
-            15: { name: "Create Future Contract Series", logicFunction: Logic.createFutureContractSeries, active: false },
-            16: { name: "Exercise Derivative", logicFunction: Logic.exerciseDerivative, active: false },
-            17: { name: "Trade Contract On-chain", logicFunction: Logic.tradeContractOnchain, active: false },
-            18: { name: "Trade Contract Channel", logicFunction: Logic.tradeContractChannel, active: false },
-            19: { name: "Trade Tokens Channel", logicFunction: Logic.tradeTokensChannel, active: false },
-            20: { name: "Withdrawal", logicFunction: Logic.withdrawal, active: false },
-            21: { name: "Transfer", logicFunction: Logic.transfer, active: false },
-            22: { name: "Settle Channel PNL", logicFunction: Logic.settleChannelPNL, active: false },
-            23: { name: "Mint Synthetic", logicFunction: Logic.mintSynthetic, active: false },
-            24: { name: "Redeem Synthetic", logicFunction: Logic.redeemSynthetic, active: false },
-            25: { name: "Pay to Tokens", logicFunction: Logic.payToTokens, active: false },
-            26: { name: "Create Option Chain", logicFunction: Logic.createOptionChain, active: false },
-            27: { name: "Trade Bai Urbun", logicFunction: Logic.tradeBaiUrbun, active: false },
-            28: { name: "Trade Murabaha", logicFunction: Logic.tradeMurabaha, active: false },
-            29: { name: "Issue Invoice", logicFunction: Logic.issueInvoice, active: false },
-            30: { name: "Batch Move Zk Rollup", logicFunction: Logic.batchMoveZkRollup, active: false },
-            31: { name: "Publish New Tx", logicFunction: Logic.publishNewTx, active: false },
-            32: { name: "Create Derivative of LRC20 or RGB", logicFunction: Logic.createDerivativeOfLRC20OrRGB, active: false },
-            33: { name: "Register OP_CTV Covenant", logicFunction: Logic.registerOPCTVCovenant, active: false },
-            34: { name: "Redeem OP_CTV Covenant", logicFunction: Logic.redeemOPCTVCovenant, active: false },
-            35: { name: "Mint Colored Coin", logicFunction: Logic.mintColoredCoin, active: false },
+        return {
+            0: { name: "Activate TradeLayer", active: true },
+            1: { name: "Token Issue", active: false },
+            2: { name: "Send", active: false },
+            3: { name: "Trade Token for UTXO", active: false },
+            4: { name: "Commit Token", active: false },
+            5: { name: "On-chain Token for Token", active: false },
+            6: { name: "Create Whitelist", active: false },
+            7: { name: "Update Admin", active: false },
+            8: { name: "Issue Attestation", active: false },
+            9: { name: "Revoke Attestation", active: false },
+            10: { name: "Grant Managed Token", active: false },
+            11: { name: "Redeem Managed Token", active: false },
+            12: { name: "Create Oracle", active: false },
+            13: { name: "Publish Oracle Data", active: false },
+            14: { name: "Close Oracle", active: false },
+            15: { name: "Create Future Contract Series", active: false },
+            16: { name: "Exercise Derivative", active: false },
+            17: { name: "Trade Contract On-chain", active: false },
+            18: { name: "Trade Contract Channel", active: false },
+            19: { name: "Trade Tokens Channel", active: false },
+            20: { name: "Withdrawal", active: false },
+            21: { name: "Transfer", active: false },
+            22: { name: "Settle Channel PNL", active: false },
+            23: { name: "Mint Synthetic", active: false },
+            24: { name: "Redeem Synthetic", active: false },
+            25: { name: "Pay to Tokens", active: false },
+            26: { name: "Create Option Chain", active: false },
+            27: { name: "Trade Bai Urbun", active: false },
+            28: { name: "Trade Murabaha", active: false },
+            29: { name: "Issue Invoice", active: false },
+            30: { name: "Batch Move Zk Rollup", active: false },
+            31: { name: "Publish New Tx", active: false },
+            32: { name: "Create Derivative of LRC20 or RGB", active: false },
+            33: { name: "Register OP_CTV Covenant", active: false },
+            34: { name: "Redeem OP_CTV Covenant", active: false },
+            35: { name: "Mint Colored Coin", active: false }
             // ... potentially other transaction types ...
-        };
+        }
+
     }
 
      /**

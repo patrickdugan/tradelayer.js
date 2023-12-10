@@ -154,10 +154,11 @@ class TxIndex {
 
 
     async fetchTransactionData(txId) {
+        console.log('fetching tx data '+txId)
         return new Promise((resolve, reject) => {
             this.client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
-                    console.log(error);
+                    console.log('blah '+error);
                     reject(error);
                 } else {
                     resolve(transaction.hex);

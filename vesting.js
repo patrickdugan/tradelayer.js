@@ -1,6 +1,6 @@
 const TallyMap = require('./tally.js');
 const InsuranceFund = require('./insurance.js');
-const Property = require('./property.js'); // Assuming Property has the createToken method
+const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
 
 class TradeLayerManager {
@@ -20,7 +20,7 @@ class TradeLayerManager {
         return TradeLayerManager.instance;
     }
 
-    static initializeTokens() {
+    static async initializeTokens() {
         const TLTokenId = 1;
         const TLTotalAmount = 1500000;
 
@@ -28,11 +28,13 @@ class TradeLayerManager {
         const TLVESTTotalAmount = 1500000;
 
         const amountToInsuranceFund = 200000;
+        const propertyManager = PropertyManager.getInstance(); // Use the singleton instance
+        await propertyManager.load(); // Load existing properties
+        console.log('property ' +propertyManager)
+        TLTokenId = propertyManager.createToken('TL', 1500000, 'Fixed');
+        TLVESTTokenId = propertyManager.createToken('TLVEST', 1500000, 'Vesting');
 
-        // Create TL Token
-        Property.createToken(TLTokenId, TLTotalAmount,3);
-        // Create TLVEST Token
-        Property.createToken(TLVESTTokenId, TLVESTTotalAmount,4);
+        console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
 
         // Distribute initial amount to insurance fund
         insuranceFund.add(TLTokenId, amountToInsuranceFund, amountToInsuranceFund, 0);

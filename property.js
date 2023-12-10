@@ -2,32 +2,65 @@ const { Level } = require('level')
 var db = require('./db')
 
 class PropertyManager {
-    constructor(dbPath) {
-        this.propertyIndex = new Map();
-        this.nextPropertyId = 1;
+    static instance = null;
+
+    constructor() {
+        if (!PropertyManager.instance) {
+            this.propertyIndex = new Map();
+            this.nextPropertyId = 1;
+            PropertyManager.instance = this;
+        }
+        return PropertyManager.instance;
+    }
+
+    static getInstance() {
+        if (!PropertyManager.instance) {
+            PropertyManager.instance = new PropertyManager();
+        }
+        return PropertyManager.instance;
     }
 
     async load() {
         try {
-            const propertyIndexJSON = await this.db.get('propertyIndex');
-            this.propertyIndex = new Map(JSON.parse(propertyIndexJSON));
-            const nextPropertyIdString = await this.db.get('nextPropertyId');
-            this.nextPropertyId = parseInt(nextPropertyIdString, 10);
-        } catch (error) {
-            if (error.notFound) {
-                this.propertyIndex = new Map();
-                this.nextPropertyId = 1;
+            const propertyIndexEntry = await new Promise((resolve, reject) => {
+                db.getDatabase('propertyList').findOne({ _id: 'propertyIndex' }, (err, doc) => {
+                    if (err) reject(err);
+                    else resolve(doc);
+                });
+            });
+
+            const nextPropertyIdEntry = await new Promise((resolve, reject) => {
+                db.getDatabase('propertyList').findOne({ _id: 'nextPropertyId' }, (err, doc) => {
+                    if (err) reject(err);
+                    else resolve(doc);
+                });
+            });
+
+            if (propertyIndexEntry) {
+                this.propertyIndex = new Map(JSON.parse(propertyIndexEntry.value));
             } else {
-                console.error('Error loading data from LevelDB:', error);
+                this.propertyIndex = new Map();
             }
+
+            if (nextPropertyIdEntry) {
+                this.nextPropertyId = parseInt(nextPropertyIdEntry.value, 10);
+            } else {
+                this.nextPropertyId = 1;
+            }
+
+        } catch (error) {
+            console.error('Error loading data from NeDB:', error);
+            this.propertyIndex = new Map();
+            this.nextPropertyId = 1;
         }
     }
 
-    getNextPropertyId() {
+
+    static getNextPropertyId() {
         return this.nextPropertyId++;
     }
 
-    createToken(ticker, totalInCirculation, type) {
+    static createToken(ticker, totalInCirculation, type) {
         // Get the next available property ID
         const propertyId = this.getNextPropertyId();
 
@@ -41,7 +74,7 @@ class PropertyManager {
         return propertyId; // Return the new token's property ID
     }
 
-    addProperty(propertyId, ticker, totalInCirculation, type) {
+    static addProperty(propertyId, ticker, totalInCirculation, type) {
         if (this.propertyIndex.has(propertyId)) {
             throw new Error('Property ID already exists.');
         }
@@ -71,18 +104,18 @@ class PropertyManager {
         });
     }
 
-    isPropertyIdValid(propertyId) {
+    static isPropertyIdValid(propertyId) {
         return this.propertyIndex.has(propertyId);
     }
 
-    getPropertyData(propertyId) {
+    static getPropertyData(propertyId) {
         if (!this.isPropertyIdValid(propertyId)) {
             return null;
         }
         return this.propertyIndex.get(propertyId);
     }
 
-    getPropertyIndex() {
+    static getPropertyIndex() {
         const propertyIndexJSON = {};
         this.propertyIndex.forEach((value, key) => {
             propertyIndexJSON[key] = {
@@ -98,13 +131,16 @@ class PropertyManager {
         return propertyIndexJSON;
     }
 
-    async save() {
-        const propertyIndexJSON = JSON.stringify([...this.propertyIndex]);
-        await this.db.put('propertyIndex', propertyIndexJSON);
-        await this.db.put('nextPropertyId', this.nextPropertyId.toString());
+    static async save() {
+      const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
+      const nextPropertyIdData = { _id: 'nextPropertyId', value: this.nextPropertyId.toString() };
+      const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
+
+      await db.getDatabase('propertyList').update({ _id: 'nextPropertyId' }, nextPropertyIdData, { upsert: true });
+      await db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true });
     }
 
-    async verifyIfManaged(propertyId) {
+    static async verifyIfManaged(propertyId) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');
@@ -112,7 +148,7 @@ class PropertyManager {
         return property.type === 'Managed';
     }
 
-    async updateAdmin(propertyId, newAdminAddress) {
+    static async updateAdmin(propertyId, newAdminAddress) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');
@@ -126,10 +162,6 @@ class PropertyManager {
         await this.save();
 
         console.log(`Admin for property ${propertyId} updated to ${newAdminAddress}`);
-    }
-
-    async close() {
-        await this.db.close()
     }
 }
 

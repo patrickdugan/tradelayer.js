@@ -1,6 +1,5 @@
 const contractListDB = require('./db')
 
-
 class ContractsRegistry {
 
   constructor() {
