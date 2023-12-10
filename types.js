@@ -134,10 +134,12 @@ const Types = {
     }
 
     var type = Number(encodedPayload.slice(0,1).toString(36))
-    console.log(type)
+    encodedPayload=encodedPayload.slice(1,encodedPayload.length-1).toString(36)
+    console.log(type,encodedPayload)
     switch (type) {
        case 0:
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
+                params.type = 0
                 if(Validity.validateActivateTradeLayer(txId,params)){
                   params.valid = true//save this tx and its validity to db
                   //call logic function

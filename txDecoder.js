@@ -2,7 +2,7 @@
 const Decode = {
    // Decode Activate TradeLayer Transaction
     decodeActivateTradeLayer: (payload) => {
-        return { txId: payload };
+        return { txType: parseInt(payload,36)};
     },
 
     // Decode Token Issue Transaction

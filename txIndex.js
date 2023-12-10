@@ -138,6 +138,7 @@ class TxIndex {
     }
 
     async processBlockData(blockData, blockHeight) {
+            const txIndexDB = db.getDatabase('txIndex');
         for (const txId of blockData.tx) {
             const txHex = await this.fetchTransactionData(txId);
             const txData = await this.DecodeRawTransaction(txHex);
@@ -146,7 +147,7 @@ class TxIndex {
                 //console.log(`Processing txId: ${txId}`);
                 const payload = txData.payload;
                 const txDetails = await this.processTransaction(payload, txData.decodedTx, txId, txData.marker);
-                await db.getDatabase('txIndex').insertAsync({ _id: txId, value: txDetails});
+                await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
     }
@@ -201,7 +202,7 @@ class TxIndex {
         const sender = await txUtils.getSender(txId);
         const reference = await txUtils.getReference(txId);
         const decodedParams = Types.decodePayload(txId, marker, payload);
-        return { sender, reference, payload, decodedParams };
+        return { sender, reference, payload, decodedParams, marker };
     }
 
     async saveTransactionData(txId, txData, payload, blockHeight,txDetails) {
@@ -268,41 +269,37 @@ class TxIndex {
             });
         }
 
-        async initializeOrLoadDB(genesisBlock) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    // Initialize your NeDB database
-                    const db = new Datastore({ filename: 'your_nedb_database.db', autoload: true });
+    async initializeOrLoadDB(genesisBlock) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Access the txIndex database using dbInstance
+                const txIndexDB = db.getDatabase('txIndex');
 
-                    // Attempt to find the 'genesisBlock' key
-                    db.findOne({ _id: 'genesisBlock' }, (err, doc) => {
-                        if (err) {
-                            console.error('Error accessing database:', err);
-                            reject(err);
-                        } else if (!doc) {
+                // Attempt to find the 'genesisBlock' key
+                txIndexDB.findOneAsync({ _id: 'genesisBlock' })
+                    .then(doc => {
+                        if (!doc) {
                             // If 'genesisBlock' key does not exist, initialize it
                             console.log('Initializing database with genesis block:', genesisBlock);
-                            db.insert({ _id: 'genesisBlock', value: genesisBlock }, (insertErr) => {
-                                if (insertErr) {
-                                    console.error('Error initializing database:', insertErr);
-                                    reject(insertErr);
-                                } else {
-                                    // Initialization successful, resolve the promise
-                                    resolve();
-                                }
-                            });
+                            return txIndexDB.insertAsync({ _id: 'genesisBlock', value: genesisBlock });
                         } else {
                             console.log('Database already initialized. Genesis block:', doc.value);
                             // Database already exists, resolve the promise
-                            resolve();
+                            return Promise.resolve();
                         }
+                    })
+                    .then(() => resolve())
+                    .catch(error => {
+                        console.error('Error accessing database:', error);
+                        reject(error);
                     });
-                } catch (error) {
-                    console.error('Error accessing database:', error);
-                    reject(error);
-                }
-            });
-        }
+            } catch (error) {
+                console.error('Error accessing database:', error);
+                reject(error);
+            }
+        });
+    }
+
 
 
     static async resetIndexFlag() {

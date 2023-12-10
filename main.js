@@ -24,9 +24,11 @@ const PropertyManager = require('./property.js'); // Manages properties
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
-const Decode = require('./txDecoder.js'); // Decodes transactions
-const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
+const Logic = require('./logic.js')
+const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
+const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
+const COIN = 100000000
 
 class Main {
     static instance;
@@ -149,42 +151,46 @@ class Main {
         return consensusState;
     }
 
-    async constructConsensusFromIndex(startHeight) {
-    let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-      console.log('maxIndexedBlock = '+currentBlockHeight)
-        let maxProcessedHeight = startHeight - 1; // Initialize to one less than startHeight
+   async constructConsensusFromIndex(startHeight) {
+        let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+        let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
+        const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
+
+        // Fetch all transaction data
+        const allTxData = await txIndexDB.findAsync({});
+        console.log(allTxData)
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
-        const txDataSet = await TxIndexDB.get(`tx-${blockHeight}`);
+            // Filter transactions for the current block height
+            const txDataSet = allTxData.filter(txData => 
+                txData._id.startsWith(`tx-${blockHeight}-`));
 
-          for (const txData of txDataSet) {
-              const txId = txData.txid;
-              const payload = txData.payload; // Assume payload is included in txData
-              const txType = Types.decodeTransactionType(txData); // Function to decode txType from txData
+            // Process each transaction
+            for (const txData of txDataSet) {
+                const txId = txData.value.txid;
+                const payload = txData.value.payload;
+                const marker = txData.value.marker
+                  // Assuming 'sender' and 'reference' are objects with an 'address' property
+                const senderAddress = txData.value.sender.senderAddress;
+                const referenceAddress = txData.value.reference.address;
+                const senderUTXO = txData.value.sender.amount
+                const referenceUTXO = txData.value.reference.amount/COIN
+                console.log(senderAddress, referenceAddress)
+                const decodedParams = Types.decodePayload(txId, marker, payload);
+                if(decodedParams.valid==true){
+                    await Logic.typeSwitch(decodedParams.type, decodedParams);
+                }else{console.log('invalid tx '+decodedParams.reason)}
+                // Additional processing for each transaction
+            }
+            maxProcessedHeight = blockHeight; // Update max processed height after each block
+        }
 
-              const decodedParams = Types.decodePayload(txId, txType, payload);
-              await Logic.typeSwitch(txType, decodedParams);  // Process liquidations and settlements if necessary
-              
-              for (const contract of ContractsRegistry.getAllContracts()) {
-                      if (MarginMap.needsLiquidation(contract)) {
-                          await MarginMap.triggerLiquidations(contract);
-                      }
-                      if (ContractsRegistry.hasOpenPositions(contract)) {
-                          let positions = await Clearing.fetchPositionsForAdjustment(blockHeight, contract);
-                          const blob = await Clearing.makeSettlement(blockHeight, contract);
-                          await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
-                      }
-                  }
-              }
+        //insert save of maxProcessedHeight in consensus sub-DB
 
-              // Process channels and other end-of-block logic
-              await Channels.processConfirmedWithdrawals();
-              maxProcessedHeight = blockHeight; // Update max processed height after each block
-              await consensusDB.put('maxConsensusBlock', maxProcessedHeight);
-
-          }
-
-        return this.syncIfNecessary()
+        return this.syncIfNecessary();
     }
+
+
+
 
     async syncIfNecessary() {
         const blockLag = await this.checkBlockLag();
@@ -238,7 +244,7 @@ class Main {
     }
 
     async blockHandlerBegin(blockHash, blockHeight) {
-        console.log(`Beginning to process block ${blockHeight}`);
+        //console.log(`Beginning to process block ${blockHeight}`);
 
         // Check for reorganization using ReOrgChecker
         /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
@@ -250,11 +256,11 @@ class Main {
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
         }*/
-        return console.log('no re-org detected')
+        return console.log('no re-org detected ' +blockHeight)
     }
 
     async blockHandlerMiddle(blockHash, blockHeight) {
-        console.log(`Processing transactions in block ${blockHeight}`);
+        //console.log(`Processing transactions in block ${blockHeight}`);
 
         // Retrieve the block data
         const blockData = await this.txIndex.fetchBlockData(blockHeight);
@@ -267,6 +273,7 @@ class Main {
 
                 // Extract and decode the payload
                 const payload = TxUtils.getPayload(txId);
+                console.log(payload)
                 const txType = TxUtils.decodeTransactionType(txData);
 
                 // Decode the transaction based on its type and payload
@@ -292,7 +299,7 @@ class Main {
     }
 
     async blockHandlerEnd(blockHash, blockHeight) {
-        console.log(`Finished processing block ${blockHeight}`);
+        //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
 
         // Call the method to process confirmed withdrawals

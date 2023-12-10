@@ -49,7 +49,7 @@ const Logic = {
         }
     }
 
-    activateTradeLayer: function(transaction, txType) { 
+    activateTradeLayer: async function(transaction, txType) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         const firstTxId = transaction.txId; // This should uniquely identify the first transaction
         const senderAddress = transaction.senderAddress;
