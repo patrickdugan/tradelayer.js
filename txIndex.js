@@ -140,23 +140,20 @@ class TxIndex {
     async processBlockData(blockData, blockHeight) {
             const txIndexDB = db.getDatabase('txIndex');
         for (const txId of blockData.tx) {
-            console.log('tx id in block '+blockHeight+' '+txId)
             const txHex = await this.fetchTransactionData(txId);
-            console.log('tx hex '+txHex)
             const txData = await this.DecodeRawTransaction(txHex);
             
-            if (txData != null && txData!= undefine && txData.marker === 'tl') {
-                //console.log(`Processing txId: ${txId}`);
+            if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
-                const txDetails = await this.processTransaction(payload, txData.decodedTx, txData.txId, txData.marker);
+                const txDetails = await this.processTransaction(payload, txId, txData.marker);
+                console.log(txDetails)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
     }
 
-
     async fetchTransactionData(txId) {
-        console.log('fetching tx data '+txId)
+        //console.log('fetching tx data '+txId)
         return new Promise((resolve, reject) => {
             this.client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
@@ -200,9 +197,8 @@ class TxIndex {
         }
     }
 
-    async processTransaction(payload, decodedTx, txId, marker) {
+    async processTransaction(payload, txId, marker) {
         // Process the transaction...
-        console.log('processing transaction ' +txId)
         const sender = await txUtils.getSender(txId);
         const reference = await txUtils.getReference(txId);
         const decodedParams = Types.decodePayload(txId, marker, payload);

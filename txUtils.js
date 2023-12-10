@@ -14,7 +14,7 @@ const client = new Litecoin.Client({
 });
 
 // Promisify the necessary client functions
-const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client,'getrawtransaction'));
+const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
 const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
@@ -24,43 +24,51 @@ const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtr
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
-    async getRawTransaction(txId) {
+    async getRawTransaction(txid) {
+        let transaction;
         try {
-            console.info('getRawTransaction called with txId:', txId);
-
-            // Test call with hardcoded value
-            const testResult = await getRawTransactionAsync('txId', true);
-            console.info('Test call result:', testResult);
-
-            if (!txId) {
-                throw new Error('txId is undefined in getRawTransaction');
-            }
-
-            // Use the promisified version of getRawTransaction
-            return await getRawTransactionAsync(txId, true); // true for verbose mode
+            transaction = await getRawTransactionAsync(txid, true);
+            //console.log(`Transaction:`, transaction);
         } catch (error) {
-            console.error(`Error fetching transaction ${txId}:`, error);
-            return error;
+            console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
+        return transaction;
     },
+
+    /*async fetchTransactionData(txId) {
+        console.log('fetching tx data '+txId)
+        return new Promise((resolve, reject) => {
+            this.client.getRawTransaction(txId, true, (error, transaction) => {
+                if (error) {
+                    console.log('blah '+error);
+                    reject(error);
+                } else {
+                    resolve(transaction);
+                }
+            });
+        });
+    },*/
 
 
     async getSender(txId) {
-        console.log('txId incoming for sender get ' +txId+typeof txId, txId.length)
-        const tx = await getRawTransactionAsync(txId, true);
-        console.log('returned tx info' +tx)
+        let tx
+        try{
+            tx = await this.getRawTransaction(txId)
+        }catch(err){
+            console.log('err getting tx for sender'+err)
+        }
+
         if (!tx || !tx.vin || tx.vin.length === 0) {
             return new Error(`Invalid transaction data for ${txId}`);
         }
 
         const vin = tx.vin[0]; // Assuming we're only interested in the first input
-        console.log(tx)
         if (!vin.txid) {
-            return new Error(`No previous transaction reference in input for ${txId}`);
+            return new Error(`No previous transaction reference in input for ${vin.txid}`);
         }
-                console.log('get sender tx id '+vin.txid)
+                //console.log('get sender tx id '+vin.txid)
 
-        const parentTx = await getRawTransactionAsync(vin.txid, true);
+        const parentTx = this.getRawTransaction(vin.txid)
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
             return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
@@ -72,14 +80,14 @@ const TxUtils = {
 
         const senderAddress = output.scriptPubKey.addresses[0]; // Assuming single address
         const amount = output.value; // Amount in LTC
-
+        //console.log(senderAddress,amount)
         return { senderAddress, amount };
     },
 
     async getReference(txId) {
-        console.log('get reference tx id '+txId)
+        let tx
         try {
-            const tx = await getRawTransactionAsync(txId, true);
+            tx = await getRawTransactionAsync(txId, true);
             if (!tx || !tx.vout) {
                 return new Error(`Invalid transaction data for ${txId}`);
             }

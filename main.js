@@ -75,6 +75,8 @@ class Main {
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
+
+        await this.delay(1000)
         if (!indexExists) {
             console.log('building txIndex');
             await TxIndex.initializeIndex(this.genesisBlock);
@@ -180,7 +182,7 @@ class Main {
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log(senderAddress, referenceAddress)
-                const decodedParams = Types.decodePayload(txId, marker, payload);
+                const decodedParams = Types.decodePayload(txId, marker, payload,sender,reference,senderUTXO,referenceUTXO);
 
                if(decodedParams.valid==true){
                     console.log('decoded params' +JSON.stringify(decodedParams))
