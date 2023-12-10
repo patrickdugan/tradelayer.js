@@ -122,9 +122,9 @@ class Main {
             if (chainTip > maxIndexedBlock) {
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
                 await TxIndex.extractBlockData(maxIndexedBlock)
-                constructOrLoadConsensus()
             } else {
                 console.log("TxIndex is already up to date.");
+                return constructOrLoadConsensus()
             }
         } catch (error) {
             console.error("Error during syncIndex:", error);
@@ -138,22 +138,23 @@ class Main {
         try {
             //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
             const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
-            consensusState = await this.constructConsensusFromIndex(startHeight);
+            return this.constructConsensusFromIndex(startHeight);
         } catch (error) {
             if (error.type === 'NotFoundError') {
                 // If no saved state, start constructing consensus from genesis block
-                consensusState = await this.constructConsensusFromIndex(genesisBlockHeight);
+                console.log("no consensus found")
+                return this.constructConsensusFromIndex(genesisBlockHeight);
             } else {
                 console.error('Error loading consensus state:', error);
                 throw error;
             }
         }
-        return consensusState;
     }
 
    async constructConsensusFromIndex(startHeight) {
 
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+        console.log('max indexed block '+currentBlockHeight)
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
@@ -166,10 +167,11 @@ class Main {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-${blockHeight}-`));
-
+              //console.log(txDataSet)
             // Process each transaction
             for (const txData of txDataSet) {
-                const txId = txData.value.txid;
+                const txId = txData._id.split('-')[2];
+                console.log(txId, typeof txId);
                 const payload = txData.value.payload;
                 const marker = txData.value.marker
                   // Assuming 'sender' and 'reference' are objects with an 'address' property
@@ -179,12 +181,9 @@ class Main {
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload);
-                         await this.delay(2000)
 
-                if(decodedParams.valid==true){
-                   await this.delay(2000)
-                    console.log(decodedParams)
-                   await this.delay(2000)
+               if(decodedParams.valid==true){
+                    console.log('decoded params' +JSON.stringify(decodedParams))
 
                     //await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{console.log('invalid tx '+decodedParams.reason)}
@@ -223,6 +222,7 @@ class Main {
 
         while (true) {
             const latestBlock = await this.txIndex.fetchChainTip();
+            console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
                 const blockData = await this.txIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber, consensus);

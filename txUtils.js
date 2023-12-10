@@ -26,8 +26,17 @@ const DUST_THRESHOLD= 54600
 const TxUtils = {
     async getRawTransaction(txId) {
         try {
+            console.info('getRawTransaction called with txId:', txId);
+
+            // Test call with hardcoded value
+            const testResult = await getRawTransactionAsync('txId', true);
+            console.info('Test call result:', testResult);
+
+            if (!txId) {
+                throw new Error('txId is undefined in getRawTransaction');
+            }
+
             // Use the promisified version of getRawTransaction
-            console.log('getting raw '+txid)
             return await getRawTransactionAsync(txId, true); // true for verbose mode
         } catch (error) {
             console.error(`Error fetching transaction ${txId}:`, error);
@@ -35,18 +44,23 @@ const TxUtils = {
         }
     },
 
+
     async getSender(txId) {
-        const tx = await this.getRawTransaction(txId);
+        console.log('txId incoming for sender get ' +txId+typeof txId, txId.length)
+        const tx = await getRawTransactionAsync(txId, true);
+        console.log('returned tx info' +tx)
         if (!tx || !tx.vin || tx.vin.length === 0) {
             return new Error(`Invalid transaction data for ${txId}`);
         }
 
         const vin = tx.vin[0]; // Assuming we're only interested in the first input
+        console.log(tx)
         if (!vin.txid) {
             return new Error(`No previous transaction reference in input for ${txId}`);
         }
+                console.log('get sender tx id '+vin.txid)
 
-        const parentTx = await this.getRawTransaction(vin.txid);
+        const parentTx = await getRawTransactionAsync(vin.txid, true);
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
             return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
@@ -63,8 +77,9 @@ const TxUtils = {
     },
 
     async getReference(txId) {
+        console.log('get reference tx id '+txId)
         try {
-            const tx = await this.getRawTransaction(txId);
+            const tx = await getRawTransactionAsync(txId, true);
             if (!tx || !tx.vout) {
                 return new Error(`Invalid transaction data for ${txId}`);
             }
@@ -100,7 +115,7 @@ const TxUtils = {
             return await listUnspentAsync(minconf, maxconf, addresses);
         } catch (error) {
             console.error(`Error listing UTXOs:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -111,7 +126,7 @@ const TxUtils = {
             return await decoderawtransactionAsync(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -121,16 +136,17 @@ const TxUtils = {
             return await signrawtransactionwithwalletAsync(rawTx);
         } catch (error) {
             console.error(`Error signing raw transaction with wallet:`, error);
-            throw error;
+            return error;
         }
     },
 
     async getPayload(txId) {
         try {
-            console.log('getting payload'+txId)
-            const tx = await this.getRawTransaction(txId);
+            console.log('getting payload'+txId, typeof txId)
+            const tx = await getRawTransactionAsync(txId, true);
+            console.log(tx)
             if (!tx || !tx.vout) {
-                throw new Error(`Invalid transaction data for ${txId}`);
+                return new Error(`Invalid transaction data for ${txId}`);
             }
 
             for (const output of tx.vout) {
@@ -144,13 +160,13 @@ const TxUtils = {
             }
         } catch (error) {
             console.error(`Error in getPayload for transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
     async getAdditionalInputs(txId) {
         try {
-            const tx = await this.getRawTransaction(txId);
+            const tx = await getRawTransactionAsync(txId, true);
             if (!tx || !tx.vin || tx.vin.length <= 1) {
                 return []; // No additional inputs beyond the first
             }
@@ -160,17 +176,17 @@ const TxUtils = {
                 const input = tx.vin[i];
 
                 if (!input.txid) {
-                    throw new Error(`No previous transaction reference in input for ${txId}`);
+                    return new Error(`No previous transaction reference in input for ${txId}`);
                 }
 
-                const parentTx = await this.getRawTransaction(input.txid);
+                const parentTx = await getRawTransactionAsync(input.txid, true);
                 if (!parentTx || !parentTx.vout || parentTx.vout.length <= input.vout) {
-                    throw new Error(`Invalid parent transaction data for ${input.txid}`);
+                    return new Error(`Invalid parent transaction data for ${input.txid}`);
                 }
 
                 const output = parentTx.vout[input.vout];
                 if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-                    throw new Error(`No output found for vin ${input.vout} in transaction ${input.txid}`);
+                    return new Error(`No output found for vin ${input.vout} in transaction ${input.txid}`);
                 }
 
                 const address = output.scriptPubKey.addresses[0]; // Assuming single address
@@ -182,7 +198,7 @@ const TxUtils = {
             return additionalInputs;
         } catch (error) {
             console.error(`Error in getAdditionalInputs for transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -226,7 +242,7 @@ const TxUtils = {
 
         // Check if the total amount is still insufficient
         if (totalAmount < requiredAmount) {
-            throw new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
+            return new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
         }
 
         return selectedUtxos;
@@ -237,7 +253,7 @@ const TxUtils = {
 
     for (const input of inputs) {
         // Fetch the raw transaction to which this input refers
-        const tx = await this.getRawTransaction(input.txid);
+        const tx = await getRawTransactionAsync(input.txid, true);
         const utxo = tx.vout[input.vout];
         const scriptPubKey = utxo.scriptPubKey.hex;
         const value = Math.round(utxo.value*COIN)
@@ -336,7 +352,7 @@ const TxUtils = {
             return rawTx;
         } catch (error) {
             console.error(`Error in createRawTransaction:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -361,7 +377,7 @@ const TxUtils = {
         // Retrieve the UTXO for the senderChannel address
         const utxos = await listUnspentAsync('listunspent', 0, 9999999, [senderChannel]);
         if (utxos.length === 0) {
-            throw new Error('No UTXOs found for the sender channel address');
+            return new Error('No UTXOs found for the sender channel address');
         }
         // Select the appropriate UTXO (e.g., based on criteria like highest amount or specific logic)
         const selectedUtxo = utxos[0]; // Simple selection logic, adjust as needed
@@ -429,12 +445,12 @@ const TxUtils = {
     // The reference output is the last output before the OP_RETURN or null data output
         let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
         if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
-            throw new Error('No OP_RETURN output found or no outputs before OP_RETURN');
+            return new Error('No OP_RETURN output found or no outputs before OP_RETURN');
         }
         let paymentOutput = decodedTx.vout[paymentOutputIndex - 1]; // Getting the output before OP_RETURN
 
         if (!paymentOutput || paymentOutput.value < expectedUTXOValue) {
-            throw new Error('Transaction does not meet the expected UTXO value criteria');
+            return new Error('Transaction does not meet the expected UTXO value criteria');
         }
 
         // Step 3: If the transaction is valid, prepare to co-sign it
@@ -492,7 +508,7 @@ const TxUtils = {
             return txid;
         } catch (error) {
             console.error('Error in sendTransaction:', error);
-            throw error;
+            return error;
         }
     },
 
@@ -504,7 +520,7 @@ const TxUtils = {
         const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
         console.log(suitableUtxo)
         if (!suitableUtxo) {
-            throw new Error('No suitable UTXO found.');
+            return new Error('No suitable UTXO found.');
         }
 
         return {

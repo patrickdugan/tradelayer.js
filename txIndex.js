@@ -140,13 +140,15 @@ class TxIndex {
     async processBlockData(blockData, blockHeight) {
             const txIndexDB = db.getDatabase('txIndex');
         for (const txId of blockData.tx) {
+            console.log('tx id in block '+blockHeight+' '+txId)
             const txHex = await this.fetchTransactionData(txId);
+            console.log('tx hex '+txHex)
             const txData = await this.DecodeRawTransaction(txHex);
             
-            if (txData != null && txData.marker === 'tl') {
+            if (txData != null && txData!= undefine && txData.marker === 'tl') {
                 //console.log(`Processing txId: ${txId}`);
                 const payload = txData.payload;
-                const txDetails = await this.processTransaction(payload, txData.decodedTx, txId, txData.marker);
+                const txDetails = await this.processTransaction(payload, txData.decodedTx, txData.txId, txData.marker);
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
@@ -200,6 +202,7 @@ class TxIndex {
 
     async processTransaction(payload, decodedTx, txId, marker) {
         // Process the transaction...
+        console.log('processing transaction ' +txId)
         const sender = await txUtils.getSender(txId);
         const reference = await txUtils.getReference(txId);
         const decodedParams = Types.decodePayload(txId, marker, payload);

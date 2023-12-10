@@ -9,7 +9,7 @@ const Decode = {
         throw new Error("Invalid txType: not a valid number");
     }
 
-    return { txType };
+    return { txTypeToActivate: txType };
     },
 
     // Decode Token Issue Transaction
