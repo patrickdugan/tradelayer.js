@@ -1,4 +1,3 @@
-const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
