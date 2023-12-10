@@ -4,11 +4,23 @@ const Property = require('./property.js'); // Assuming Property has the createTo
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
 
 class TradeLayerManager {
+    static instance = null;
+
     constructor(adminAddress) {
-        this.adminAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'
+        if (!TradeLayerManager.instance) {
+            this.adminAddress = adminAddress;
+            TradeLayerManager.instance = this;
+        }
     }
 
-    initializeTokens() {
+    static getInstance(adminAddress){
+        if (!TradeLayerManager.instance) {
+            TradeLayerManager.instance = new TradeLayerManager(adminAddress);
+        }
+        return TradeLayerManager.instance;
+    }
+
+    static initializeTokens() {
         const TLTokenId = 1;
         const TLTotalAmount = 1500000;
 
@@ -28,7 +40,7 @@ class TradeLayerManager {
         TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount,"availble")
     }
 
-    initializeContractSeries() {
+    static initializeContractSeries() {
         const LTC_TL_Future_ContractId = 1;
         const contractProperties = {
             // Define contract properties such as margin requirements, expiry, etc.
@@ -47,7 +59,7 @@ class TradeLayerManager {
         // Additional setup if required, such as initializing order books, setting initial market conditions, etc.
     }
 
-    updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {
+    static updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {
         const logScaleMin = 1000;
         const logScaleMax = 100000000;
         let vestingFactor = Math.log(cumulativeVolumeLTC) / Math.log(logScaleMax);
@@ -56,7 +68,7 @@ class TradeLayerManager {
         // Update vesting balances per address
     }
 
-    calculateTradeRebates(cumulativeVolumeLTC) {
+    static calculateTradeRebates(cumulativeVolumeLTC) {
 	    const baseVolume = 1000; // The volume where rebate calculation starts
 	    const minRebate = 0.000003125; // The minimum rebate value
 	    const maxRebate = 0.0001; // The maximum rebate value
@@ -74,7 +86,7 @@ class TradeLayerManager {
 	    return Math.max(rebate, minRebate);
 	}
 
-    performBuyback(feeCaches) {
+    static performBuyback(feeCaches) {
         feeCaches.forEach(cache => {
             const orderbook = this.fetchOrderbookForToken(cache.tokenId);
             const buybackAmount = this.calculateBuybackAmount(cache, orderbook);
@@ -82,12 +94,12 @@ class TradeLayerManager {
         });
     }
 
-    fetchOrderbookForToken(tokenId) {
+    static fetchOrderbookForToken(tokenId) {
         // Fetch the orderbook for the given token
         // Implementation depends on your system's data sources
     }
 
-    calculateBuybackAmount(cache, orderbook) {
+    static calculateBuybackAmount(cache, orderbook) {
         let availableFunds = cache.funds;
         let totalBuybackAmount = 0;
 

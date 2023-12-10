@@ -1,6 +1,7 @@
 
 const TradeChannels = require('./channels.js')
 const Activation = require('./activation.js')
+const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8");
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -30,43 +31,116 @@ const db = require('./db.js'); // Adjust the path if necessary
 const Logic = {
 
     typeSwitch(txNumber, params){
+        console.log(txNumber, params)
         switch (txNumber) {
-            case 0: Logic.activateTradeLayer(params); break;
-            case 1: Logic.tokenIssue(params); break;
-            case 2: Logic.sendToken(params); break;
-            case 3: Logic.tradeTokenForUTXO(params); break;
-            case 4: Logic.commitToken(params); break;
-            case 5: Logic.onChainTokenToToken(params); break;
-            case 6: Logic.cancelOrder(params); break;
-            case 7: Logic.createWhitelist(params); break;
-            case 8: Logic.updateAdmin(params); break;
-            case 9: Logic.issueAttestation(params); break;
-            case 10: Logic.revokeAttestation(params); break;
-            case 11: Logic.grantManagedToken(params); break;
-            case 12: Logic.redeemManagedToken(params); break;
-            case 13: Logic.createOracle(params); break;
-            case 14: Logic.publishOracleData(params); break;
-            case 15: Logic.closeOracle(params); break;
-            case 16: Logic.createFutureContractSeries(params); break;
-            case 17: Logic.updateOracleAdmin(params); break;
-            case 18: Logic.closeOracle(params); break; // Note: This repeats case 15
-            case 19: Logic.createOracleFutureContract(params); break;
-            case 20: Logic.exerciseDerivative(params); break;
-            case 21: Logic.nativeContractWithOnChainData(params); break;
-            case 22: Logic.tradeContractOnchain(params); break;
-            case 23: Logic.tradeContractChannel(params); break;
-            case 24: Logic.tradeTokensChannel(params); break;
-            case 25: Logic.withdrawal(params); break;
-            case 26: Logic.transfer(params); break;
-            case 27: Logic.settleChannelPNL(params); break;
-            case 28: Logic.mintSynthetic(params); break;
-            case 29: Logic.redeemSynthetic(params); break;
-            case 30: Logic.payToTokens(params); break;
-            case 31: Logic.batchMoveZkRollup(params); break;
-            case 32: Logic.publishNewTx(params); break;
-            case 33: Logic.createDerivativeOfLRC20OrRGB(params); break;
-            case 34: Logic.registerOPCTVCovenant(params); break;
-            case 35: Logic.mintColoredCoin(params); break;
+           case 0:
+                Logic.activateTradeLayer(params.transaction, params.txType);
+                break;
+            case 1:
+                Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
+                break;
+            case 2:
+                Logic.sendToken(params.sendAll, params.senderAddress, params.recipientAddresses, params.propertyIdNumbers, params.amounts);
+                break;
+            case 3:
+                Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
+                break;
+            case 4:
+                Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
+                break;
+            case 5:
+                Logic.onChainTokenToToken(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.amountOffered, params.amountExpected);
+                break;
+            case 6:
+                Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
+                break;
+           case 7:
+                Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
+                break;
+            case 8:
+                Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries);
+                break;
+            case 9:
+                Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                break;
+            case 10:
+                Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                break;
+            case 11:
+                Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager);
+                break;
+            case 12:
+                Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager);
+                break;
+            case 13:
+                Logic.createOracle(params.adminAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
+                break;
+            case 14:
+                Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
+                break;
+            case 15:
+                Logic.closeOracle(params.oracleId, params.oracleRegistry);
+                break;
+            case 16:
+                Logic.createFutureContractSeries(params.contractId, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.expiryPeriod, params.series, params.inverse, params.fee, params.contractsRegistry);
+                break;
+            case 17:
+                Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
+                break;
+            case 18:
+                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry);
+                break;
+            case 19:
+                Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
+                break;
+            case 20:
+                Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.channelAddress, params.TradeChannel, params.TallyMap);
+                break;
+            case 21:
+                Logic.withdrawal(params.channelAddress, params.propertyId, params.amount);
+                break;
+            case 22:
+                Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
+                break;
+            case 23:
+                Logic.settleChannelPNL(params.channelAddress, params.txParams);
+                break;
+            case 24:
+                Logic.mintSynthetic(params.propertyId, params.contractId, params.amount);
+                break;
+            case 25:
+                Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount);
+                break;
+            case 26:
+                Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount);
+                break;
+            case 27:
+                Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle);
+                break;
+            case 28:
+                Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock);
+                break;
+            case 29:
+                Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight);
+                break;
+            case 30:
+                Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce);
+                break;
+            case 31:
+                Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof);
+                break;
+            case 32:
+                Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
+                break;
+            case 33:
+                Logic.createDerivativeOfLRC20OrRGB(params);
+                break;
+            case 34:
+                Logic.registerOP_CTVCovenant(params);
+                break;
+            case 35:
+                Logic.mintColoredCoin(params);
+                break;
             default:
                 console.log(`Unhandled transaction type: ${txNumber}`);
         }
@@ -74,11 +148,8 @@ const Logic = {
 
     async activateTradeLayer(transaction, txType) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
-        const firstTxId = transaction.txId; // This should uniquely identify the first transaction
-        const senderAddress = transaction.senderAddress;
-
         // Call the activateSystem method from the Activation class instance
-        const activationResult = await Activation.activate(txType);
+        const activationResult = await activation.activate(txType);
 
         // Log or handle the result of activation
         console.log(activationResult);

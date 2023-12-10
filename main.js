@@ -176,6 +176,7 @@ class Main {
                 console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload);
                 if(decodedParams.valid==true){
+                    console.log(decodedParams)
                     await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction

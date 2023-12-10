@@ -2,7 +2,14 @@
 const Decode = {
    // Decode Activate TradeLayer Transaction
     decodeActivateTradeLayer: (payload) => {
-        return { txType: parseInt(payload,36)};
+    
+    const txTypePart = Number(payload.slice(1, 2)); // Extracts the second character
+    const txType = parseInt(txTypePart, 36);
+    if (isNaN(txType)) {
+        throw new Error("Invalid txType: not a valid number");
+    }
+
+    return { txType };
     },
 
     // Decode Token Issue Transaction

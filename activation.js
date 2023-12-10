@@ -1,24 +1,50 @@
-const {activationsDB} = require('./db')
+const db = require('./db')
 const Logic = require('./logic.js');
-const TL = require('./vesting.js')
+const TradeLayerManager = require('./vesting.js')
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
 class Activation {
-    constructor(dbPath, adminAddress) {
+    static instance = null;  // Static instance holder
 
-        this.hardcodedAdminAddress = adminAddress;
+    constructor(adminAddress) {
+        if (Activation.instance) {
+            return Activation.instance;
+        }
+
+        this.hardcodedAdminAddress = testAdmin;
         this.consensusVector = {};
+
+        Activation.instance = this; // Set the instance
     }
 
-    async updateConsensusVector(txType, newState) {
+    // Static method to get the singleton instance
+    static getInstance(dbPath, adminAddress) {
+        if (!Activation.instance) {
+            Activation.instance = new Activation(dbPath, adminAddress);
+        }
+        return Activation.instance;
+    }
+
+
+    static async updateConsensusVector(txType, newState) {
         this.consensusVector[txType] = newState;
         await this.saveConsensusVector();
     }
 
     async loadConsensusVector() {
         try {
-            const storedVector = await this.db.get('consensusVector');
+            const storedVector = await db.getDatabase('consensus').findAsync({})
+                .then(entries => {
+                    entries.forEach(entry => {
+                        data[entry._id] = entry.value;
+                    });
+                    resolve(data);
+                })
+                .catch(err => {
+                    console.error('Error loading index:', err);
+                    reject(err);
+                });
             this.consensusVector = JSON.parse(storedVector);
         } catch (error) {
             console.error('Error loading consensus vector:', error);
@@ -26,9 +52,10 @@ class Activation {
         }
     }
 
-    async saveConsensusVector() {
+    async saveConsensusVector(vector) {
+        //populate vector with consensus hashes - arguably this and the other one belong to consensus.js and just the save activations belongs here
         try {
-            await activationsDB.put('consensusVector', JSON.stringify(this.consensusVector));
+            await db.getDatabase('consensus').insertAsync({ _id: `consensus-vector`, value: vector});
             console.log('Consensus vector saved successfully.');
         } catch (error) {
             console.error('Error saving consensus vector:', error);
@@ -38,18 +65,24 @@ class Activation {
     // New Method to save activations list
     async saveActivationsList() {
         try {
-            await activationsDB.put('activationsList', JSON.stringify(this.txRegistry));
+            const activationsDB = db.getDatabase('activations');
+            await activationsDB.insertAsync({ _id: 'activationsList', value: JSON.stringify(this.txRegistry) });
             console.log('Activations list saved successfully.');
         } catch (error) {
             console.error('Error saving activations list:', error);
         }
     }
 
-    // New Method to load activations list
+   // New Method to load activations list
     async loadActivationsList() {
         try {
-            const storedList = await activationsDB.get('activationsList');
-            this.txRegistry = JSON.parse(storedList);
+            const activationsDB = db.getDatabase('activations');
+            const entries = await activationsDB.findAsync({});
+            let data = {};
+            entries.forEach(entry => {
+                data[entry._id] = entry.value;
+            });
+            this.txRegistry = JSON.parse(data['activationsList'] || '{}');
             console.log('Activations list loaded successfully.');
         } catch (error) {
             console.error('Error loading activations list:', error);
@@ -57,20 +90,30 @@ class Activation {
         }
     }
 
-
         // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, senderAddress) {
-
-    if (txType === 0) {
-                // Initial setup for the first transaction
-                await TL.initializeTokens();  // Create propertyId 1 and 2 for TL token
-                await TL.initializeContractSeries();
-                await this.initializeTxRegistry();  // With pre-populated types and logic
-        }else{
-            await loadActivationsList()
+        console.log(`Activating transaction type: ${txType}`);
+        await this.loadActivationsList(); // Make sure to load the activations list first
+        if (txType === undefined) {
+            console.error("Transaction type is undefined.");
+            return; // Exit the function if txType is undefined
+        }
+        if (txType === 0) {
+            // Handle the special case for the initial transaction
+            //const TL = .getInstance(testAdmin);
+            await TradeLayerManager.initializeTokens();  // Create propertyId 1 and 2 for TL token
+            await TradeLayerManager.initializeContractSeries();
+            await TradeLayerManager.initializeTxRegistry();  // With pre-populated types and logic
             this.txRegistry[txType].active = true;
             await this.saveActivationsList(); // Save the updated activations list
-           
+        }else{
+            // Check if the transaction type exists in the registry
+            if (this.txRegistry[txType]) {
+                this.txRegistry[txType].active = true;
+                await this.saveActivationsList(); // Save the updated activations list
+            } else {
+                console.error(`Transaction type ${txType} not found in registry.`);
+            }
         }
     }
 
@@ -122,7 +165,7 @@ class Activation {
      * @param {number} txTypeNumber - The transaction type number to check.
      * @returns {boolean} - Returns true if the transaction type is active, false otherwise.
      */
-    isTxTypeActive(txTypeNumber) {
+    async isTxTypeActive(txTypeNumber) {
         // Assuming txRegistry is accessible within this context
         await loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
