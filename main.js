@@ -69,7 +69,7 @@ class Main {
     async initialize() {
         const txIndex = TxIndex.getInstance();
         try {
-            await txIndex.initializeOrLoadDB(db, genesisBlock);
+            await txIndex.initializeOrLoadDB(this.genesisBlock);
             // Proceed with further operations after successful initialization
         } catch (error) {
             console.log('boop')
@@ -81,7 +81,9 @@ class Main {
         await this.delay(1000)
         if (!indexExists) {
             console.log('building txIndex');
-            await TxIndex.initializeIndex(this.genesisBlock);
+            await this.initOrLoadTxIndex()
+            //await TxIndex.initializeIndex(this.genesisBlock);
+
         }
 
         // Construct consensus from index, or load from Persistence if available
@@ -105,31 +107,38 @@ class Main {
 
     async initOrLoadTxIndex() {
         // Check if the txIndex exists by trying to find the max indexed block
-        const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
-        console.log(maxIndexedBlock)
+        var maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
+        console.log('max Indexed Block ' + JSON.stringify(maxIndexedBlock))
         if (maxIndexedBlock === 0 || maxIndexedBlock === null) {
             // Initialize the txIndex if it doesn't exist
-            await TxIndex.initializeIndex(genesisBlock);
+            console.log('about to init index with ' +this.genesisBlock)
+            await TxIndex.initializeIndex(this.genesisBlock);
+            maxIndexedBlock= this.genesisBlock
         }
         // Proceed to synchronize the index
-        await syncIndex(txIndexDB, txIndexModule, maxIndexedBlock);
+        await this.syncIndex(maxIndexedBlock);
     }
 
-    async syncIndex(txIndexDB, txIndexModule) {
+    async syncIndex(maxIndexedBlock) {
+      console.log('sync Index maxIndexedBlock '+maxIndexedBlock)
         try {
             // Find the maximum indexed block in the database
-            const maxIndexedBlock = await TxIndex.findMaxIndexedBlock();
-            if(maxIndexedBlock===null){initOrLoadTxIndex}
+            if(maxIndexedBlock===null){this.initOrLoadTxIndex()}
             // Fetch the current chain tip (latest block number) from the blockchain
-            const chainTip = await TxIndex.fetchChainTip();
-
+            const chainTip = await this.getBlockCountAsync()
+            console.log('sync index retrieved chaintip '+chainTip)
             // If the chain tip is greater than the max indexed block, sync the index
-            if (chainTip > maxIndexedBlock) {
+            if (chainTip > maxIndexedBlock && (maxIndexedBlock !=0 || maxIndexedBlock != {})){
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
-                await TxIndex.extractBlockData(maxIndexedBlock)
-            } else {
+                console.log('building tx index '+maxIndexedBlock)
+                return await TxIndex.extractBlockData(maxIndexedBlock)
+            } else if(maxIndexedBlock==0|| maxIndexedBlock == {}){
+              console.log('building txIndex from genesis')
+                return await TxIndex.extractBlockData(this.genesisBlock)
+            }else if(maxIndexedBlock==chainTip){
+
                 console.log("TxIndex is already up to date.");
-                return constructOrLoadConsensus()
+                return this.constructOrLoadConsensus(maxIndexedBlock)
             }
         } catch (error) {
             console.error("Error during syncIndex:", error);
@@ -159,15 +168,14 @@ class Main {
    async constructConsensusFromIndex(startHeight) {
 
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-        console.log('max indexed block '+currentBlockHeight)
+        console.log('construct Consensus from Index max indexed block '+currentBlockHeight)
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
-
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
-        //console.log(allTxData)
-
+        console.log(allTxData)
+        await this.delay(5000)
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
@@ -185,7 +193,7 @@ class Main {
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log(senderAddress, referenceAddress)
-                const decodedParams = Types.decodePayload(txId, marker, payload,sender,reference,senderUTXO,referenceUTXO);
+                const decodedParams = Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
 
                if(decodedParams.valid==true){
                     console.log('decoded params' +JSON.stringify(decodedParams))
