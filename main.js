@@ -174,7 +174,7 @@ class Main {
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
-        console.log(allTxData)
+        console.log('loaded txIndex '+JSON.stringify(allTxData))
         await this.delay(5000)
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
@@ -194,15 +194,27 @@ class Main {
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
-
+                console.log(decodedParams)
                if(decodedParams.valid==true){
                     console.log('decoded params' +JSON.stringify(decodedParams))
 
-                    //await Logic.typeSwitch(decodedParams.type, decodedParams);
+                  await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
             maxProcessedHeight = blockHeight; // Update max processed height after each block
+        }
+
+        try {
+            await db.getDatabase('consensus').updateAsync(
+                { _id: 'MaxProcessedHeight' },
+                { $set: { value: maxProcessedHeight } },
+                { upsert: true }
+            );
+            console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+        } catch (error) {
+            console.error('Error updating MaxProcessedHeight:', error);
+            throw error; // or handle the error as needed
         }
 
         //insert save of maxProcessedHeight in consensus sub-DB
@@ -218,24 +230,27 @@ class Main {
         /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
         }else if (blockLag === 0) {*/
-            this.processIncomingBlocks(); // Start processing new blocks as they come
+            this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus); // Start processing new blocks as they come
         //}
     }
 
     async checkBlockLag() {
-        const chaintip = await this.getCurrentBlockHeight()
-        const maxConsensusBlock = await TxIndex.findMaxIndexedBlock()
-        return chaintip - maxConsensusBlock;
+        const chaintip = await this.getBlockCountAsync()
+        const maxConsensusBlock = await this.loadMaxProcessedHeight()
+        console.log(maxConsensusBlock)
+        var lag = chaintip - maxConsensusBlock
+        return {'lag':lag, 'chainTip':chaintip, 'maxConsensus':maxConsensusBlock}
     }
 
 
-    async processIncomingBlocks(consensus) {
+    async processIncomingBlocks(lag, maxConsensusBlock) {
         // Continuously loop through incoming blocks and process them
-        let latestProcessedBlock = this.genesisBlock;
+        let latestProcessedBlock = maxConsensusBlock
+        console.log('entering real-time mode '+latestProcessedBlock)
 
         while (true) {
-            const latestBlock = await this.getCurrentBlockHeight()
-            console.log(latestBlock)
+            const latestBlock = await this.getBlockCountAsync()
+            //console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber, consensus);
@@ -283,7 +298,7 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             await TxIndex.processBlockData(blockData, blockHeight);
-            console.log(`Processed block ${blockHeight} successfully.`);
+            //console.log(`Processed block ${blockHeight} successfully.`);
         } catch (error) {
             console.error(`Error processing block ${blockHeight}:`, error);
         }
@@ -319,7 +334,7 @@ class Main {
     }
 
     async handleReorg(blockHeight) {
-        console.log(`Handling reorganization at block ${blockHeight}`);
+        //console.log(`Handling reorganization at block ${blockHeight}`);
         // Add logic to handle a blockchain reorganization
         await this.blockchainPersistence.handleReorg();
         // This could involve reverting to a previous state, re-processing blocks, etc.
@@ -395,6 +410,26 @@ class Main {
               // Handle invalid withdrawal, e.g., logging, notifying the user, etc.
           }
       }
+    }
+
+
+    async loadMaxProcessedHeight() {
+        const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
+
+        try {
+            const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
+            if (maxProcessedHeightDoc) {
+                const maxProcessedHeight = maxProcessedHeightDoc.value;
+                console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
+                return maxProcessedHeight; // Return the retrieved value
+            } else {
+                console.log('MaxProcessedHeight not found in the database.');
+                return null; // Return null or an appropriate default value if not found
+            }
+        } catch (error) {
+            console.error('Error retrieving MaxProcessedHeight:', error);
+            throw error; // Rethrow the error or handle it as needed
+        }
     }
 
     // ... other methods ...

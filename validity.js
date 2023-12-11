@@ -3,7 +3,7 @@ const db = require('./db')
 
 const Validity = {
     // 0: Activate TradeLayer
-    validateActivateTradeLayer: async (txid, params, sender) => {
+    validateActivateTradeLayer: (txid, params, sender) => {
             return sender === "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
         //}
     },

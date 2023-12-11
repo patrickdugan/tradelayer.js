@@ -74,7 +74,7 @@ class TxIndex {
         let chainTip = await this.fetchChainTip();
         //console.log('building index until' + chainTip);
         for (let height = startHeight; height <= chainTip; height++) {
-            console.log(height);
+            //console.log(height);
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)
             await this.processBlockData(blockData, height);
@@ -149,7 +149,7 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                console.log(txDetails)
+                console.log(payload)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }

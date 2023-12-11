@@ -151,7 +151,7 @@ const Logic = {
         const activationResult = await activation.activate(txType);
 
         // Log or handle the result of activation
-        console.log(activationResult);
+        console.log('activation result ' +activationResult);
         return activationResult; // You might want to return this for further processing
  
     },
