@@ -21,25 +21,23 @@ class TradeLayerManager {
     }
 
     static async initializeTokens() {
-        const TLTokenId = 1;
+        var TLTokenId = 1;
         const TLTotalAmount = 1500000;
 
-        const TLVESTTokenId = 2;
+        var TLVESTTokenId = 2;
         const TLVESTTotalAmount = 1500000;
-
-        const amountToInsuranceFund = 200000;
-        const propertyManager = PropertyManager.getInstance(); // Use the singleton instance
-        await propertyManager.load(); // Load existing properties
-        console.log('property ' +propertyManager)
-        TLTokenId = propertyManager.createToken('TL', 1500000, 'Fixed');
-        TLVESTTokenId = propertyManager.createToken('TLVEST', 1500000, 'Vesting');
+        var propertyManager = PropertyManager.getInstance()
+        var amountToInsuranceFund = 200000;
+        TLTokenId = propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
+        TLVESTTokenId = propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
 
         console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
-
+        var insuranceFund = new InsuranceFund(1,0,0.5)
         // Distribute initial amount to insurance fund
-        insuranceFund.add(TLTokenId, amountToInsuranceFund, amountToInsuranceFund, 0);
-        TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount,"vestingReserve")
-        TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount,"availble")
+        insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
+        insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
+        TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,"vestingReserve")
+        TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsurancefund,"available")
     }
 
     static initializeContractSeries() {

@@ -2,17 +2,40 @@ const db = require('./db.js');
 const path = require('path');
 
 class InsuranceFund {
-    constructor(contractSeriesId) {
+    constructor(contractSeriesId, balance, hedgeRatio) {
         this.contractSeriesId = contractSeriesId;
-        this.balance = 0;
+        this.balances = []; //{propertyId: '',amountAvailable:0,amountVesting:0}
         this.hedgeRatio = 0.5; // 50/50 hedging with the contract
         // Additional properties for hedging strategy
     }
 
-    async deposit(amount) {
-        this.balance += amount;
+    async deposit(propertyId, amount, vesting) {
+        let propertyFound = false;
+
+        for (const balance of this.balances) {
+            if (balance.propertyId === propertyId) {
+                if (vesting) {
+                    balance.amountVesting += amount;
+                } else {
+                    balance.amountAvailable += amount;
+                }
+                propertyFound = true;
+                break; // Exit loop after updating the existing propertyId
+            }
+        }
+
+        // If the propertyId was not found in the array, add a new entry
+        if (!propertyFound) {
+            const newBalance = {
+                propertyId: propertyId,
+                amountAvailable: vesting ? 0 : amount,
+                amountVesting: vesting ? amount : 0
+            };
+            this.balances.push(newBalance);
+        }
+
         await this.saveSnapshot();
-        // Additional logic for hedging strategy
+        // Additional logic for hedging strategy (if any)
     }
 
     async withdraw(amount) {
@@ -33,7 +56,9 @@ class InsuranceFund {
 
     async saveSnapshot() {
         const snapshot = {
-            balance: this.balance,
+            balances: this.balances,
+            contractSeriesId: this.contractSeriesId, // Use a colon here
+            hedgeRatio: this.hedgeRatio, // Use a colon here
             timestamp: new Date().toISOString()
         };
         await new Promise((resolve, reject) => {
@@ -43,6 +68,7 @@ class InsuranceFund {
             });
         });
     }
+
 
     async getSnapshot(timestamp) {
         return new Promise((resolve, reject) => {

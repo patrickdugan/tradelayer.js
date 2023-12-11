@@ -77,8 +77,6 @@ class Main {
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
-
-        await this.delay(1000)
         if (!indexExists) {
             console.log('building txIndex');
             await this.initOrLoadTxIndex()
@@ -175,7 +173,6 @@ class Main {
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
         console.log('loaded txIndex '+JSON.stringify(allTxData))
-        await this.delay(5000)
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 

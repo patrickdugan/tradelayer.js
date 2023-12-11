@@ -56,11 +56,11 @@ class PropertyManager {
     }
 
 
-    static getNextPropertyId() {
+    getNextPropertyId() {
         return this.nextPropertyId++;
     }
 
-    static createToken(ticker, totalInCirculation, type) {
+    createToken(ticker, totalInCirculation, type) {
         // Get the next available property ID
         const propertyId = this.getNextPropertyId();
 
@@ -74,7 +74,7 @@ class PropertyManager {
         return propertyId; // Return the new token's property ID
     }
 
-    static addProperty(propertyId, ticker, totalInCirculation, type) {
+    addProperty(propertyId, ticker, totalInCirculation, type) {
         if (this.propertyIndex.has(propertyId)) {
             throw new Error('Property ID already exists.');
         }
@@ -104,18 +104,18 @@ class PropertyManager {
         });
     }
 
-    static isPropertyIdValid(propertyId) {
+    isPropertyIdValid(propertyId) {
         return this.propertyIndex.has(propertyId);
     }
 
-    static getPropertyData(propertyId) {
+    getPropertyData(propertyId) {
         if (!this.isPropertyIdValid(propertyId)) {
             return null;
         }
         return this.propertyIndex.get(propertyId);
     }
 
-    static getPropertyIndex() {
+    getPropertyIndex() {
         const propertyIndexJSON = {};
         this.propertyIndex.forEach((value, key) => {
             propertyIndexJSON[key] = {
@@ -131,7 +131,7 @@ class PropertyManager {
         return propertyIndexJSON;
     }
 
-    static async save() {
+    async save() {
       const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
       const nextPropertyIdData = { _id: 'nextPropertyId', value: this.nextPropertyId.toString() };
       const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
@@ -140,7 +140,7 @@ class PropertyManager {
       await db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true });
     }
 
-    static async verifyIfManaged(propertyId) {
+    async verifyIfManaged(propertyId) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');
@@ -148,7 +148,7 @@ class PropertyManager {
         return property.type === 'Managed';
     }
 
-    static async updateAdmin(propertyId, newAdminAddress) {
+    async updateAdmin(propertyId, newAdminAddress) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');

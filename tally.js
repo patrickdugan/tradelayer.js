@@ -57,6 +57,18 @@ class TallyMap {
         return balances;
     }
 
+    async saveToDB(blockHeight) {
+        const serializedData = JSON.stringify([...this.addresses]);
+        await db.put(`tallyMap-${blockHeight}`, serializedData);
+    }
+
+    async loadFromDB(blockHeight) {
+        const serializedData = await db.get(`tallyMap-${blockHeight}`);
+        if (serializedData) {
+            this.addresses = new Map(JSON.parse(serializedData));
+        }
+    }
+
     static totalTokens(propertyId) {
         let total = 0;
         for (const addressObj of this.addresses.values()) {

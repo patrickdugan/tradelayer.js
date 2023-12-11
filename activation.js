@@ -117,10 +117,8 @@ class Activation {
 
         // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, senderAddress) {
-               await this.delay(2000)
 
         console.log('Activating transaction type:' +txType);
-        await this.delay(2000)
         await this.loadActivationsList(); // Make sure to load the activations list first
         if (txType === undefined) {
             console.error("Transaction type is undefined.");
