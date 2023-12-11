@@ -73,9 +73,9 @@ class Activation {
             const activationsDB = db.getDatabase('activations');
             //console.log(this.txRegistry)
             await activationsDB.insertAsync({ _id: 'activationsList', value: JSON.stringify(this.txRegistry) });
-            console.log('Activations list saved successfully.');
+            return console.log('Activations list saved successfully.');
         } catch (error) {
-            console.error('Error saving activations list:', error);
+            return console.error('Error saving activations list:', error);
         }
     }
 
@@ -119,7 +119,7 @@ class Activation {
     async activate(txType, senderAddress) {
                await this.delay(2000)
 
-        console.log(`Activating transaction type: ${txType}`);
+        console.log('Activating transaction type:' +txType);
         await this.delay(2000)
         await this.loadActivationsList(); // Make sure to load the activations list first
         if (txType === undefined) {
@@ -133,7 +133,7 @@ class Activation {
             //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
             console.log(this.txRegistry)
-            //return await this.saveActivationsList(); // Save the updated activations list
+            return await this.saveActivationsList(); // Save the updated activations list
 
         }else{
             // Check if the transaction type exists in the registry

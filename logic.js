@@ -29,11 +29,11 @@ const db = require('./db.js'); // Adjust the path if necessary
 // logic.js
 const Logic = {
 
-    typeSwitch(txNumber, params){
+    async typeSwitch(txNumber, params){
         console.log(txNumber, params)
         switch (txNumber) {
            case 0:
-                Logic.activateTradeLayer(params.transaction, params.txType);
+                return await Logic.activateTradeLayer(params.txTypeToActivate, params.type);
                 break;
             case 1:
                 Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
@@ -148,6 +148,7 @@ const Logic = {
     async activateTradeLayer(transaction, txType) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         // Call the activateSystem method from the Activation class instance
+        console.log('in activate TradeLayer logic function '+ transaction, txType)
         const activationResult = await activation.activate(txType);
 
         // Log or handle the result of activation

@@ -198,7 +198,7 @@ class Main {
                if(decodedParams.valid==true){
                     console.log('decoded params' +JSON.stringify(decodedParams))
 
-                  await Logic.typeSwitch(decodedParams.type, decodedParams);
+                   await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
