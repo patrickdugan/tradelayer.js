@@ -1,5 +1,5 @@
-const level = require('level'); // LevelDB for storage
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
+const util = require('util')
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -24,9 +24,11 @@ const PropertyManager = require('./property.js'); // Manages properties
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
-const Decode = require('./txDecoder.js'); // Decodes transactions
-const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
+const Logic = require('./logic.js')
+const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
+const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
+const COIN = 100000000
 
 class Main {
     static instance;
@@ -46,7 +48,8 @@ class Main {
 
         this.client = new Litecoin.Client(config);
         this.tradeLayerManager = new TradeLayerManager();
-        this.txIndex = TxIndex.getInstance();        
+        this.txIndex = TxIndex.getInstance();  
+        this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -64,23 +67,20 @@ class Main {
     }
 
     async initialize() {
-          await this.delay(2000)
         const txIndex = TxIndex.getInstance();
-            await this.delay(2000)
-        /*try {
+        try {
             await txIndex.initializeOrLoadDB(db, genesisBlock);
             // Proceed with further operations after successful initialization
         } catch (error) {
             console.log('boop')
-        }*/
-          await this.delay(2000)
+        }
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
-          await this.delay(2000)
+
+        await this.delay(1000)
         if (!indexExists) {
             console.log('building txIndex');
-            await this.delay(2000)
             await TxIndex.initializeIndex(this.genesisBlock);
         }
 
@@ -94,8 +94,9 @@ class Main {
 
     async getCurrentBlockHeight() {
       try {
-        const blockchainInfo = await client.cmd('getblockchaininfo');
-        return blockchainInfo.blocks;
+        const blockchainInfo = await this.getBlockCountAsync();
+        console.log(blockchainInfo)
+        return blockchainInfo;
       } catch (error) {
         console.error('Error fetching current block height:', error);
         throw error; // or handle error as needed
@@ -126,9 +127,9 @@ class Main {
             if (chainTip > maxIndexedBlock) {
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
                 await TxIndex.extractBlockData(maxIndexedBlock)
-                constructOrLoadConsensus()
             } else {
                 console.log("TxIndex is already up to date.");
+                return constructOrLoadConsensus()
             }
         } catch (error) {
             console.error("Error during syncIndex:", error);
@@ -138,71 +139,84 @@ class Main {
 
     async constructOrLoadConsensus() {
         let consensusState;
+
         try {
             //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
             const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
-            consensusState = await this.constructConsensusFromIndex(startHeight);
+            return this.constructConsensusFromIndex(startHeight);
         } catch (error) {
             if (error.type === 'NotFoundError') {
                 // If no saved state, start constructing consensus from genesis block
-                consensusState = await this.constructConsensusFromIndex(genesisBlockHeight);
+                console.log("no consensus found")
+                return this.constructConsensusFromIndex(genesisBlockHeight);
             } else {
                 console.error('Error loading consensus state:', error);
                 throw error;
             }
         }
-        return consensusState;
     }
 
-    async constructConsensusFromIndex(startHeight) {
-    let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-      console.log('maxIndexedBlock = '+currentBlockHeight)
-        let maxProcessedHeight = startHeight - 1; // Initialize to one less than startHeight
+   async constructConsensusFromIndex(startHeight) {
+
+        let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+        console.log('max indexed block '+currentBlockHeight)
+        let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
+
+        const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
+
+        // Fetch all transaction data
+        const allTxData = await txIndexDB.findAsync({});
+        //console.log(allTxData)
+
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
-        const txDataSet = await TxIndexDB.get(`tx-${blockHeight}`);
+            // Filter transactions for the current block height
+            const txDataSet = allTxData.filter(txData => 
+                txData._id.startsWith(`tx-${blockHeight}-`));
+              //console.log(txDataSet)
+            // Process each transaction
+            for (const txData of txDataSet) {
+                const txId = txData._id.split('-')[2];
+                console.log(txId, typeof txId);
+                const payload = txData.value.payload;
+                const marker = txData.value.marker
+                  // Assuming 'sender' and 'reference' are objects with an 'address' property
+                const senderAddress = txData.value.sender.senderAddress;
+                const referenceAddress = txData.value.reference.address;
+                const senderUTXO = txData.value.sender.amount
+                const referenceUTXO = txData.value.reference.amount/COIN
+                console.log(senderAddress, referenceAddress)
+                const decodedParams = Types.decodePayload(txId, marker, payload,sender,reference,senderUTXO,referenceUTXO);
 
-          for (const txData of txDataSet) {
-              const txId = txData.txid;
-              const payload = txData.payload; // Assume payload is included in txData
-              const txType = Types.decodeTransactionType(txData); // Function to decode txType from txData
+               if(decodedParams.valid==true){
+                    console.log('decoded params' +JSON.stringify(decodedParams))
 
-              const decodedParams = Types.decodePayload(txId, txType, payload);
-              await Logic.typeSwitch(txType, decodedParams);  // Process liquidations and settlements if necessary
-              
-              for (const contract of ContractsRegistry.getAllContracts()) {
-                      if (MarginMap.needsLiquidation(contract)) {
-                          await MarginMap.triggerLiquidations(contract);
-                      }
-                      if (ContractsRegistry.hasOpenPositions(contract)) {
-                          let positions = await Clearing.fetchPositionsForAdjustment(blockHeight, contract);
-                          const blob = await Clearing.makeSettlement(blockHeight, contract);
-                          await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
-                      }
-                  }
-              }
+                    //await Logic.typeSwitch(decodedParams.type, decodedParams);
+                }else{console.log('invalid tx '+decodedParams.reason)}
+                // Additional processing for each transaction
+            }
+            maxProcessedHeight = blockHeight; // Update max processed height after each block
+        }
 
-              // Process channels and other end-of-block logic
-              await Channels.processConfirmedWithdrawals();
-              maxProcessedHeight = blockHeight; // Update max processed height after each block
-              await consensusDB.put('maxConsensusBlock', maxProcessedHeight);
+        //insert save of maxProcessedHeight in consensus sub-DB
 
-          }
-
-        return syncIfNecessary()
+        return this.syncIfNecessary();
     }
+
+
+
 
     async syncIfNecessary() {
-        const blockLag = await checkBlockLag();
-        if (blockLag > 0) {
+        const blockLag = await this.checkBlockLag();
+        /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
-        }else if (blockLag === 0) {
-            processIncomingBlocks(); // Start processing new blocks as they come
-        }
+        }else if (blockLag === 0) {*/
+            this.processIncomingBlocks(); // Start processing new blocks as they come
+        //}
     }
 
     async checkBlockLag() {
-        const chaintip = await this.txIndex.fetchChainTip();
-        const maxConsensusBlock = await consensusDB.get('maxConsensusBlock');
+        const chaintip = await this.getCurrentBlockHeight()
+        const maxConsensusBlock = await TxIndex.findMaxIndexedBlock()
         return chaintip - maxConsensusBlock;
     }
 
@@ -212,9 +226,10 @@ class Main {
         let latestProcessedBlock = this.genesisBlock;
 
         while (true) {
-            const latestBlock = await this.txIndex.fetchChainTip();
+            const latestBlock = await this.getCurrentBlockHeight()
+            console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
-                const blockData = await this.txIndex.fetchBlockData(blockNumber);
+                const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber, consensus);
                 latestProcessedBlock = blockNumber;
             }
@@ -228,9 +243,7 @@ class Main {
         await this.blockHandlerBegin(blockData.hash, blockNumber);
 
         // Process each transaction in the block
-        for (const transaction of blockData.tx) {
-            await this.blockHandlerMiddle(transaction, blockNumber);
-        }
+        await this.blockHandlerMid(blockData, blockNumber);
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
@@ -243,10 +256,10 @@ class Main {
     }
 
     async blockHandlerBegin(blockHash, blockHeight) {
-        console.log(`Beginning to process block ${blockHeight}`);
+        //console.log(`Beginning to process block ${blockHeight}`);
 
         // Check for reorganization using ReOrgChecker
-        const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
+        /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
         if (reorgDetected) {
             console.log(`Reorganization detected at block ${blockHeight}`);
             await this.handleReorg(blockHeight);
@@ -254,53 +267,35 @@ class Main {
             // Proceed with regular block processing
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
-        }
+        }*/
+        return console.log('no re-org detected ' +blockHeight)
     }
 
-    async blockHandlerMiddle(blockHash, blockHeight) {
-        console.log(`Processing transactions in block ${blockHeight}`);
-
-        // Retrieve the block data
-        const blockData = await this.txIndex.fetchBlockData(blockHeight);
-
-        // Iterate over each transaction in the block
-        for (const txId of blockData.tx) {
-            try {
-                // Fetch detailed transaction data
-                const txData = await TxUtils.getRawTransaction(txId);
-
-                // Extract and decode the payload
-                const payload = TxUtils.getPayload(txId);
-                const txType = TxUtils.decodeTransactionType(txData);
-
-                // Decode the transaction based on its type and payload
-                const decodedParams = Types.decodePayload(txId, txType, payload);
-
-                // Process the transaction based on the decoded parameters
-                await TxIndex.processTransaction(txType, decodedParams, blockHeight);
-                Logic.typeSwitch(txType, decodedParams);
-
-            } catch (error) {
-                console.error(`Error processing transaction ${txId}: ${error.message}`);
-            }
+    async blockHandlerMid(blockHash, blockHeight) {
+        try {
+            const blockData = await TxIndex.fetchBlockData(blockHeight);
+            await TxIndex.processBlockData(blockData, blockHeight);
+            console.log(`Processed block ${blockHeight} successfully.`);
+        } catch (error) {
+            console.error(`Error processing block ${blockHeight}:`, error);
         }
-
-         // Loop through contracts to trigger liquidations
-        for (const contract of ContractsRegistry.getAllContracts()) {
+       // Loop through contracts to trigger liquidations
+        /*for (const contract of ContractsRegistry.getAllContracts()) {
             if (MarginMap.needsLiquidation(contract)) {
                 const orders = await MarginMap.triggerLiquidations(contract);
                 // Handle the created liquidation orders
                 // ...
             }
-        }
+        }*/
+        return console.log('processed ' + blockHash)
     }
 
     async blockHandlerEnd(blockHash, blockHeight) {
-        console.log(`Finished processing block ${blockHeight}`);
+        //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
 
         // Call the method to process confirmed withdrawals
-        await Channels.processConfirmedWithdrawals();
+        /*await Channels.processConfirmedWithdrawals();
          for (const contract of ContractsRegistry.getAllContracts()) {
             // Check if the contract has open positions
             if (ContractsRegistry.hasOpenPositions(contract)) {
@@ -311,7 +306,8 @@ class Main {
                 // Perform audit tasks for the contract
                 await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
             }
-        }
+        }*/
+        return ('block finish '+blockHeight)
     }
 
     async handleReorg(blockHeight) {

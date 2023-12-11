@@ -125,7 +125,7 @@ const Types = {
   },
 
   // Function to decode a payload based on the transaction ID and encoded payload
-  decodePayload: (txId, marker, encodedPayload) => {
+  decodePayload: (txId, marker, encodedPayload,sender,reference, senderAmount,referenceAmount) => {
     let index = 0;
     let params = {};
 
@@ -134,18 +134,19 @@ const Types = {
     }
 
     var type = Number(encodedPayload.slice(0,1).toString(36))
-    console.log(type)
+    encodedPayload=encodedPayload.slice(1,encodedPayload.length-1).toString(36)
+    console.log(type,encodedPayload)
     switch (type) {
        case 0:
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                if(Validity.validateActivateTradeLayer(txId,params)){
-                  params.valid = true//save this tx and its validity to db
+                params.type = 0
+                console.log(params.txTypeToActivate, params.type)
+                params.valid = Validity.validateActivateTradeLayer(txId,params,sender)//save this tx and its validity to db
                   //call logic function
-                }else{
-                  params.valid = false
+                if(params.valid === false){    
                   params.reason = "Not sent from admin address"
-                  //save invalid tx to db
                 }
+                  //save invalid tx to db 
                 break;
             case 1:
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
@@ -252,12 +253,11 @@ const Types = {
             case 35:
                 params = Decode.decodeMintColoredCoin(encodedPayload.substr(index));
                 break;
-      default:
-        throw new Error('Unknown transaction type');
+          default:
+            throw new Error('Unknown transaction type');
+        }
+            return params 
     }
-
-    return params;
-  },
 };
 
 module.exports = Types;

@@ -24,48 +24,72 @@ const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtr
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
-    async getRawTransaction(txId) {
+    async getRawTransaction(txid) {
+        let transaction;
         try {
-            // Use the promisified version of getRawTransaction
-            return await getRawTransactionAsync(txId, true); // true for verbose mode
+            transaction = await getRawTransactionAsync(txid, true);
+            //console.log(`Transaction:`, transaction);
         } catch (error) {
-            console.error(`Error fetching transaction ${txId}:`, error);
-            throw error;
+            console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
+        return transaction;
     },
 
+    /*async fetchTransactionData(txId) {
+        console.log('fetching tx data '+txId)
+        return new Promise((resolve, reject) => {
+            this.client.getRawTransaction(txId, true, (error, transaction) => {
+                if (error) {
+                    console.log('blah '+error);
+                    reject(error);
+                } else {
+                    resolve(transaction);
+                }
+            });
+        });
+    },*/
+
+
     async getSender(txId) {
-        const tx = await this.getRawTransaction(txId);
+        let tx
+        try{
+            tx = await this.getRawTransaction(txId)
+        }catch(err){
+            console.log('err getting tx for sender'+err)
+        }
+
         if (!tx || !tx.vin || tx.vin.length === 0) {
-            throw new Error(`Invalid transaction data for ${txId}`);
+            return new Error(`Invalid transaction data for ${txId}`);
         }
 
         const vin = tx.vin[0]; // Assuming we're only interested in the first input
         if (!vin.txid) {
-            throw new Error(`No previous transaction reference in input for ${txId}`);
+            return new Error(`No previous transaction reference in input for ${vin.txid}`);
         }
+                //console.log('get sender tx id '+vin.txid)
 
-        const parentTx = await this.getRawTransaction(vin.txid);
+        const parentTx = await this.getRawTransaction(vin.txid)
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
-            throw new Error(`Invalid parent transaction data for ${vin.txid}`);
+            return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
 
         const output = parentTx.vout[vin.vout];
         if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-            throw new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
+            return new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
         }
 
         const senderAddress = output.scriptPubKey.addresses[0]; // Assuming single address
         const amount = output.value; // Amount in LTC
-
+        //console.log(senderAddress,amount)
         return { senderAddress, amount };
     },
 
     async getReference(txId) {
+        let tx
         try {
-            const tx = await this.getRawTransaction(txId);
+            tx = await getRawTransactionAsync(txId, true);
             if (!tx || !tx.vout) {
-                throw new Error(`Invalid transaction data for ${txId}`);
+                return new Error(`Invalid transaction data for ${txId}`);
             }
 
             let referenceOutput = null;
@@ -85,11 +109,11 @@ const TxUtils = {
                 console.log(satoshis)
                 return { address, satoshis };
             } else {
-                throw new Error("Reference output not found");
+                return new Error("Reference output not found");
             }
         } catch (error) {
             console.error(`Error in getReference for transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -99,17 +123,18 @@ const TxUtils = {
             return await listUnspentAsync(minconf, maxconf, addresses);
         } catch (error) {
             console.error(`Error listing UTXOs:`, error);
-            throw error;
+            return error;
         }
     },
 
     async decoderawtransaction(hexString) {
         try {
             // Use the promisified version of decoderawtransaction
+            console.log('decoding')
             return await decoderawtransactionAsync(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -119,37 +144,49 @@ const TxUtils = {
             return await signrawtransactionwithwalletAsync(rawTx);
         } catch (error) {
             console.error(`Error signing raw transaction with wallet:`, error);
-            throw error;
+            return error;
         }
     },
 
-    async getPayload(txId) {
-        try {
-            const tx = await this.getRawTransaction(txId);
-            if (!tx || !tx.vout) {
-                throw new Error(`Invalid transaction data for ${txId}`);
+        async getPayload(rawTx) {
+            if (!rawTx || !rawTx.vout) {
+                console.error("Invalid transaction data or missing 'vout' property.");
+                return null; // Return null to indicate no payload was found and maintain consistent return type
             }
 
-            for (const output of tx.vout) {
-                // Check if the output's script type is 'nulldata', which is used for OP_RETURN
+            for (const output of rawTx.vout) {
                 if (output.scriptPubKey.type === 'nulldata') {
-                    // The actual payload data is typically in the 'asm' part of the scriptPubKey
-                    // It's usually hex-encoded, so you might need to convert it from hex to a string
                     const payloadData = output.scriptPubKey.asm;
-                    return payloadData;
+
+                    // If payload data needs to be converted from hex to string, add that logic here.
+                    // Example: Convert hex to string if needed
+                    // const payloadString = hexToString(payloadData); 
+
+                    // Logging the payload for debugging - consider the sensitivity of this data
+                    console.log("Extracted payload: ", payloadData);
+
+                    return payloadData; // Return the payload data as is or after conversion
                 }
             }
 
-            throw new Error("Payload not found in transaction");
-        } catch (error) {
-            console.error(`Error in getPayload for transaction ${txId}:`, error);
-            throw error;
-        }
-    },
+            console.log("No payload found in transaction.");
+            return null; // Return null if no payload is found
+        },
+
+        // Example helper function to convert hex to string (if needed)
+        hexToString(hexString) {
+            var str = '';
+            for (var i = 0; i < hexString.length; i += 2) {
+                var v = parseInt(hexString.substr(i, 2), 16);
+                if (v) str += String.fromCharCode(v);
+            }
+            return str;
+        },
+
 
     async getAdditionalInputs(txId) {
         try {
-            const tx = await this.getRawTransaction(txId);
+            const tx = await getRawTransactionAsync(txId, true);
             if (!tx || !tx.vin || tx.vin.length <= 1) {
                 return []; // No additional inputs beyond the first
             }
@@ -159,17 +196,17 @@ const TxUtils = {
                 const input = tx.vin[i];
 
                 if (!input.txid) {
-                    throw new Error(`No previous transaction reference in input for ${txId}`);
+                    return new Error(`No previous transaction reference in input for ${txId}`);
                 }
 
-                const parentTx = await this.getRawTransaction(input.txid);
+                const parentTx = await getRawTransactionAsync(input.txid, true);
                 if (!parentTx || !parentTx.vout || parentTx.vout.length <= input.vout) {
-                    throw new Error(`Invalid parent transaction data for ${input.txid}`);
+                    return new Error(`Invalid parent transaction data for ${input.txid}`);
                 }
 
                 const output = parentTx.vout[input.vout];
                 if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-                    throw new Error(`No output found for vin ${input.vout} in transaction ${input.txid}`);
+                    return new Error(`No output found for vin ${input.vout} in transaction ${input.txid}`);
                 }
 
                 const address = output.scriptPubKey.addresses[0]; // Assuming single address
@@ -181,7 +218,7 @@ const TxUtils = {
             return additionalInputs;
         } catch (error) {
             console.error(`Error in getAdditionalInputs for transaction ${txId}:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -225,50 +262,50 @@ const TxUtils = {
 
         // Check if the total amount is still insufficient
         if (totalAmount < requiredAmount) {
-            throw new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
+            return new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
         }
 
         return selectedUtxos;
     },
 
-     async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
-    const transaction = new litecore.Transaction();
+    async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
+        const transaction = new litecore.Transaction();
 
-    for (const input of inputs) {
-        // Fetch the raw transaction to which this input refers
-        const tx = await this.getRawTransaction(input.txid);
-        const utxo = tx.vout[input.vout];
-        const scriptPubKey = utxo.scriptPubKey.hex;
-        const value = Math.round(utxo.value*COIN)
-        console.log(value)
-        // Add UTXO to the transaction
-        transaction.from({
-            txId: input.txid,
-            outputIndex: input.vout,
-            script: scriptPubKey,
-            satoshis: value // Convert LTC to satoshis
-        });
-    }
-
-        // Add outputs
-        outputs.forEach(output => {
-            if (output.address) {
-                transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
-                console.log(output.amount*COIN)
-            }
-            // Handle data (OP_RETURN) outputs
-            else if (output.data) {
-                const script = litecore.Script.buildDataOut(output.data, 'hex');
-                transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
-            }
-        });
-
-        // Set locktime if specified
-        if (locktime > 0) {
-            transaction.lockUntilDate(locktime);
+        for (const input of inputs) {
+            // Fetch the raw transaction to which this input refers
+            const tx = await getRawTransactionAsync(input.txid, true);
+            const utxo = tx.vout[input.vout];
+            const scriptPubKey = utxo.scriptPubKey.hex;
+            const value = Math.round(utxo.value*COIN)
+            console.log(value)
+            // Add UTXO to the transaction
+            transaction.from({
+                txId: input.txid,
+                outputIndex: input.vout,
+                script: scriptPubKey,
+                satoshis: value // Convert LTC to satoshis
+            });
         }
 
-        return transaction;
+            // Add outputs
+            outputs.forEach(output => {
+                if (output.address) {
+                    transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
+                    console.log(output.amount*COIN)
+                }
+                // Handle data (OP_RETURN) outputs
+                else if (output.data) {
+                    const script = litecore.Script.buildDataOut(output.data, 'hex');
+                    transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
+                }
+            });
+
+            // Set locktime if specified
+            if (locktime > 0) {
+                transaction.lockUntilDate(locktime);
+            }
+
+            return transaction;
     },
 
     addPayload(payload, rawTx) {
@@ -335,7 +372,7 @@ const TxUtils = {
             return rawTx;
         } catch (error) {
             console.error(`Error in createRawTransaction:`, error);
-            throw error;
+            return error;
         }
     },
 
@@ -360,7 +397,7 @@ const TxUtils = {
         // Retrieve the UTXO for the senderChannel address
         const utxos = await listUnspentAsync('listunspent', 0, 9999999, [senderChannel]);
         if (utxos.length === 0) {
-            throw new Error('No UTXOs found for the sender channel address');
+            return new Error('No UTXOs found for the sender channel address');
         }
         // Select the appropriate UTXO (e.g., based on criteria like highest amount or specific logic)
         const selectedUtxo = utxos[0]; // Simple selection logic, adjust as needed
@@ -428,12 +465,12 @@ const TxUtils = {
     // The reference output is the last output before the OP_RETURN or null data output
         let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
         if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
-            throw new Error('No OP_RETURN output found or no outputs before OP_RETURN');
+            return new Error('No OP_RETURN output found or no outputs before OP_RETURN');
         }
         let paymentOutput = decodedTx.vout[paymentOutputIndex - 1]; // Getting the output before OP_RETURN
 
         if (!paymentOutput || paymentOutput.value < expectedUTXOValue) {
-            throw new Error('Transaction does not meet the expected UTXO value criteria');
+            return new Error('Transaction does not meet the expected UTXO value criteria');
         }
 
         // Step 3: If the transaction is valid, prepare to co-sign it
@@ -491,11 +528,9 @@ const TxUtils = {
             return txid;
         } catch (error) {
             console.error('Error in sendTransaction:', error);
-            throw error;
+            return error;
         }
     },
-
-
 
     async findSuitableUTXO(address, minAmount) {
         
@@ -503,7 +538,7 @@ const TxUtils = {
         const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
         console.log(suitableUtxo)
         if (!suitableUtxo) {
-            throw new Error('No suitable UTXO found.');
+            return new Error('No suitable UTXO found.');
         }
 
         return {
@@ -513,6 +548,13 @@ const TxUtils = {
             script: suitableUtxo.scriptPubKey,
             satoshis: Math.round(suitableUtxo.amount * 1e8) // Convert LTC to satoshis
         };
+    },
+
+    decodeTransactionType (encodedPayload){
+        // Implementation to decode the transaction type from the encoded payload
+        // For example, if the transaction type is the first byte of the payload:
+        const txType = parseInt(encodedPayload.substring(0, 2), 16);
+        return txType;
     }
 
 };
