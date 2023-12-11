@@ -68,7 +68,7 @@ const TxUtils = {
         }
                 //console.log('get sender tx id '+vin.txid)
 
-        const parentTx = this.getRawTransaction(vin.txid)
+        const parentTx = await this.getRawTransaction(vin.txid)
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
             return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
@@ -148,29 +148,41 @@ const TxUtils = {
         }
     },
 
-    async getPayload(txId) {
-        try {
-            console.log('getting payload'+txId, typeof txId)
-            const tx = await getRawTransactionAsync(txId, true);
-            console.log(tx)
-            if (!tx || !tx.vout) {
-                return new Error(`Invalid transaction data for ${txId}`);
+        async getPayload(rawTx) {
+            if (!rawTx || !rawTx.vout) {
+                console.error("Invalid transaction data or missing 'vout' property.");
+                return null; // Return null to indicate no payload was found and maintain consistent return type
             }
 
-            for (const output of tx.vout) {
-                // Check if the output's script type is 'nulldata', which is used for OP_RETURN
+            for (const output of rawTx.vout) {
                 if (output.scriptPubKey.type === 'nulldata') {
-                    // The actual payload data is typically in the 'asm' part of the scriptPubKey
-                    // It's usually hex-encoded, so you might need to convert it from hex to a string
                     const payloadData = output.scriptPubKey.asm;
-                    return payloadData;
+
+                    // If payload data needs to be converted from hex to string, add that logic here.
+                    // Example: Convert hex to string if needed
+                    // const payloadString = hexToString(payloadData); 
+
+                    // Logging the payload for debugging - consider the sensitivity of this data
+                    console.log("Extracted payload: ", payloadData);
+
+                    return payloadData; // Return the payload data as is or after conversion
                 }
             }
-        } catch (error) {
-            console.error(`Error in getPayload for transaction ${txId}:`, error);
-            return error;
-        }
-    },
+
+            console.log("No payload found in transaction.");
+            return null; // Return null if no payload is found
+        },
+
+        // Example helper function to convert hex to string (if needed)
+        hexToString(hexString) {
+            var str = '';
+            for (var i = 0; i < hexString.length; i += 2) {
+                var v = parseInt(hexString.substr(i, 2), 16);
+                if (v) str += String.fromCharCode(v);
+            }
+            return str;
+        },
+
 
     async getAdditionalInputs(txId) {
         try {
@@ -256,44 +268,44 @@ const TxUtils = {
         return selectedUtxos;
     },
 
-     async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
-    const transaction = new litecore.Transaction();
+    async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
+        const transaction = new litecore.Transaction();
 
-    for (const input of inputs) {
-        // Fetch the raw transaction to which this input refers
-        const tx = await getRawTransactionAsync(input.txid, true);
-        const utxo = tx.vout[input.vout];
-        const scriptPubKey = utxo.scriptPubKey.hex;
-        const value = Math.round(utxo.value*COIN)
-        console.log(value)
-        // Add UTXO to the transaction
-        transaction.from({
-            txId: input.txid,
-            outputIndex: input.vout,
-            script: scriptPubKey,
-            satoshis: value // Convert LTC to satoshis
-        });
-    }
-
-        // Add outputs
-        outputs.forEach(output => {
-            if (output.address) {
-                transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
-                console.log(output.amount*COIN)
-            }
-            // Handle data (OP_RETURN) outputs
-            else if (output.data) {
-                const script = litecore.Script.buildDataOut(output.data, 'hex');
-                transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
-            }
-        });
-
-        // Set locktime if specified
-        if (locktime > 0) {
-            transaction.lockUntilDate(locktime);
+        for (const input of inputs) {
+            // Fetch the raw transaction to which this input refers
+            const tx = await getRawTransactionAsync(input.txid, true);
+            const utxo = tx.vout[input.vout];
+            const scriptPubKey = utxo.scriptPubKey.hex;
+            const value = Math.round(utxo.value*COIN)
+            console.log(value)
+            // Add UTXO to the transaction
+            transaction.from({
+                txId: input.txid,
+                outputIndex: input.vout,
+                script: scriptPubKey,
+                satoshis: value // Convert LTC to satoshis
+            });
         }
 
-        return transaction;
+            // Add outputs
+            outputs.forEach(output => {
+                if (output.address) {
+                    transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
+                    console.log(output.amount*COIN)
+                }
+                // Handle data (OP_RETURN) outputs
+                else if (output.data) {
+                    const script = litecore.Script.buildDataOut(output.data, 'hex');
+                    transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
+                }
+            });
+
+            // Set locktime if specified
+            if (locktime > 0) {
+                transaction.lockUntilDate(locktime);
+            }
+
+            return transaction;
     },
 
     addPayload(payload, rawTx) {
@@ -520,8 +532,6 @@ const TxUtils = {
         }
     },
 
-
-
     async findSuitableUTXO(address, minAmount) {
         
         const utxos = await listUnspentAsync(0, 9999999, [address]);
@@ -538,6 +548,13 @@ const TxUtils = {
             script: suitableUtxo.scriptPubKey,
             satoshis: Math.round(suitableUtxo.amount * 1e8) // Convert LTC to satoshis
         };
+    },
+
+    decodeTransactionType (encodedPayload){
+        // Implementation to decode the transaction type from the encoded payload
+        // For example, if the transaction type is the first byte of the payload:
+        const txType = parseInt(encodedPayload.substring(0, 2), 16);
+        return txType;
     }
 
 };

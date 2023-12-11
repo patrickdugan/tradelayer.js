@@ -1,4 +1,5 @@
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
+const util = require('util')
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -47,7 +48,8 @@ class Main {
 
         this.client = new Litecoin.Client(config);
         this.tradeLayerManager = new TradeLayerManager();
-        this.txIndex = TxIndex.getInstance();        
+        this.txIndex = TxIndex.getInstance();  
+        this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -92,8 +94,9 @@ class Main {
 
     async getCurrentBlockHeight() {
       try {
-        const blockchainInfo = await client.cmd('getblockchaininfo');
-        return blockchainInfo.blocks;
+        const blockchainInfo = await this.getBlockCountAsync();
+        console.log(blockchainInfo)
+        return blockchainInfo;
       } catch (error) {
         console.error('Error fetching current block height:', error);
         throw error; // or handle error as needed
@@ -212,7 +215,7 @@ class Main {
     }
 
     async checkBlockLag() {
-        const chaintip = await this.txIndex.fetchChainTip();
+        const chaintip = await this.getCurrentBlockHeight()
         const maxConsensusBlock = await TxIndex.findMaxIndexedBlock()
         return chaintip - maxConsensusBlock;
     }
@@ -223,10 +226,10 @@ class Main {
         let latestProcessedBlock = this.genesisBlock;
 
         while (true) {
-            const latestBlock = await this.txIndex.fetchChainTip();
+            const latestBlock = await this.getCurrentBlockHeight()
             console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
-                const blockData = await this.txIndex.fetchBlockData(blockNumber);
+                const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber, consensus);
                 latestProcessedBlock = blockNumber;
             }
@@ -240,9 +243,7 @@ class Main {
         await this.blockHandlerBegin(blockData.hash, blockNumber);
 
         // Process each transaction in the block
-        for (const transaction of blockData.tx) {
-            await this.blockHandlerMiddle(transaction, blockNumber);
-        }
+        await this.blockHandlerMid(blockData, blockNumber);
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
@@ -270,36 +271,15 @@ class Main {
         return console.log('no re-org detected ' +blockHeight)
     }
 
-    async blockHandlerMiddle(blockHash, blockHeight) {
-        //console.log(`Processing transactions in block ${blockHeight}`);
-
-        // Retrieve the block data
-        const blockData = await this.txIndex.fetchBlockData(blockHeight);
-
-        // Iterate over each transaction in the block
-        for (const txId of blockData.tx) {
-            try {
-                // Fetch detailed transaction data
-                const txData = await TxUtils.getRawTransaction(txId);
-
-                // Extract and decode the payload
-                const payload = TxUtils.getPayload(txId);
-                console.log(payload)
-                const txType = TxUtils.decodeTransactionType(txData);
-
-                // Decode the transaction based on its type and payload
-                const decodedParams = Types.decodePayload(txId, txType, payload);
-
-                // Process the transaction based on the decoded parameters
-                await TxIndex.processTransaction(txType, decodedParams, blockHeight);
-                Logic.typeSwitch(txType, decodedParams);
-
-            } catch (error) {
-                console.error(`Error processing transaction ${txId}: ${error.message}`);
-            }
+    async blockHandlerMid(blockHash, blockHeight) {
+        try {
+            const blockData = await TxIndex.fetchBlockData(blockHeight);
+            await TxIndex.processBlockData(blockData, blockHeight);
+            console.log(`Processed block ${blockHeight} successfully.`);
+        } catch (error) {
+            console.error(`Error processing block ${blockHeight}:`, error);
         }
-
-         // Loop through contracts to trigger liquidations
+       // Loop through contracts to trigger liquidations
         /*for (const contract of ContractsRegistry.getAllContracts()) {
             if (MarginMap.needsLiquidation(contract)) {
                 const orders = await MarginMap.triggerLiquidations(contract);
@@ -307,6 +287,7 @@ class Main {
                 // ...
             }
         }*/
+        return console.log('processed ' + blockHash)
     }
 
     async blockHandlerEnd(blockHash, blockHeight) {

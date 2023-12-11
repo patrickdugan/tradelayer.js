@@ -5,6 +5,17 @@ const txUtils = require('./txUtils');
 const Types = require('./types.js');
 const db = require('./db.js');
 
+const clientConfig = /*test ?*/ {
+            host: '127.0.0.1',
+            port: 18332,
+            user: 'user',
+            pass: 'pass',
+            timeout: 10000
+        }
+
+const client = new litecoin.Client(clientConfig);
+
+
 class TxIndex {
     static instance;
 
@@ -13,13 +24,7 @@ class TxIndex {
             return TxIndex.instance;
         }
 
-        const clientConfig = /*test ?*/ {
-            host: '127.0.0.1',
-            port: 18332,
-            user: 'user',
-            pass: 'pass',
-            timeout: 10000
-        } /*: {
+         /*: {
             host: '127.0.0.1',
             port: 8332,
             user: 'user',
@@ -27,9 +32,9 @@ class TxIndex {
             timeout: 10000
         };*/
 
-        this.client = new litecoin.Client(clientConfig);
-        this.decoderawtransactionAsync = util.promisify(this.client.cmd.bind(this.client, 'decoderawtransaction'));
-        this.getTransactionAsync = util.promisify(this.client.cmd.bind(this.client, 'gettransaction'));
+        this.decoderawtransactionAsync = util.promisify(client.cmd.bind(this.client, 'decoderawtransaction'));
+        this.getTransactionAsync = util.promisify(client.cmd.bind(this.client, 'gettransaction'));
+        this.getBlockCountAsync = util.promisify(client.cmd.bind(this.client, 'getblockcount'))
         this.transparentIndex = [];
 
         TxIndex.instance = this;
@@ -66,66 +71,64 @@ class TxIndex {
         }
     }
 
-   async extractBlockData(startHeight) {
-    let chainTip = await this.fetchChainTip();
-    console.log('building index until' + chainTip);
-    for (let height = startHeight; height <= chainTip; height++) {
-        //console.log(height);
-        let blockData = await this.fetchBlockData(height);
-        //console.log(blockData)
-        await this.processBlockData(blockData, height);
-        //chainTip = await this.fetchChainTip();
-    }
-    console.log('indexed to chaintip');
-    
-    // Use the correct NeDB method to insert or update the 'indexExists' document
-     // After processing the block, update 'MaxHeight'
-        try {
-            await db.getDatabase('txIndex').updateAsync(
-                { _id: 'MaxHeight' },
-                { _id: 'MaxHeight', value: chainTip },
-                { upsert: true }
-            );
-        } catch (error) {
-            console.error('Error updating MaxHeight:', error);
-            throw error;
+    static async extractBlockData(startHeight) {
+        let chainTip = await this.fetchChainTip();
+        console.log('building index until' + chainTip);
+        for (let height = startHeight; height <= chainTip; height++) {
+            //console.log(height);
+            let blockData = await this.fetchBlockData(height);
+            //console.log(blockData)
+            await this.processBlockData(blockData, height);
+            //chainTip = await this.fetchChainTip();
         }
+        console.log('indexed to chaintip');
+        
+        // Use the correct NeDB method to insert or update the 'indexExists' document
+         // After processing the block, update 'MaxHeight'
+            try {
+                await db.getDatabase('txIndex').updateAsync(
+                    { _id: 'MaxHeight' },
+                    { _id: 'MaxHeight', value: chainTip },
+                    { upsert: true }
+                );
+            } catch (error) {
+                console.error('Error updating MaxHeight:', error);
+                throw error;
+            }
 
-        try {
-            await db.getDatabase('txIndex').updateAsync(
-                { _id: 'indexExists' },
-                { _id: 'indexExists', value: true },
-                { upsert: true } // This option ensures that the document is inserted if it doesn't exist or updated if it does.
-            );
-            console.log('Index flag set successfully.');
-        } catch (error) {
-            console.error('Error setting the index flag:', error);
-            throw error;
-        }
+            try {
+                await db.getDatabase('txIndex').updateAsync(
+                    { _id: 'indexExists' },
+                    { _id: 'indexExists', value: true },
+                    { upsert: true } // This option ensures that the document is inserted if it doesn't exist or updated if it does.
+                );
+                console.log('Index flag set successfully.');
+            } catch (error) {
+                console.error('Error setting the index flag:', error);
+                throw error;
+            }
 
-            console.log('built index');
+                console.log('built index');
     }
 
 
-    async fetchChainTip() {
+    static async fetchChainTip() {
+            try {
+            const chainTip = await this.getBlockCountAsync();
+            return chainTip;
+        } catch (error) {
+            console.error('Error fetching chain tip:', error);
+            return error; // Rethrow the error to be handled by the caller
+        }
+    }
+
+    static async fetchBlockData(height) {
         return new Promise((resolve, reject) => {
-            this.client.getBlockCount((error, chainTip) => {
+            client.getBlockHash(height, (error, blockHash) => {
                 if (error) {
                     reject(error);
                 } else {
-                    resolve(chainTip);
-                }
-            });
-        });
-    }
-
-    async fetchBlockData(height) {
-        return new Promise((resolve, reject) => {
-            this.client.getBlockHash(height, (error, blockHash) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    this.client.getBlock(blockHash, (error, block) => {
+                    client.getBlock(blockHash, (error, block) => {
                         if (error) {
                             reject(error);
                         } else {
@@ -137,11 +140,11 @@ class TxIndex {
         });
     }
 
-    async processBlockData(blockData, blockHeight) {
+    static async processBlockData(blockData, blockHeight) {
             const txIndexDB = db.getDatabase('txIndex');
         for (const txId of blockData.tx) {
-            const txHex = await this.fetchTransactionData(txId);
-            const txData = await this.DecodeRawTransaction(txHex);
+            const txHex = await TxIndex.fetchTransactionData(txId);
+            const txData = await TxIndex.DecodeRawTransaction(txHex);
             
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
@@ -152,10 +155,10 @@ class TxIndex {
         }
     }
 
-    async fetchTransactionData(txId) {
+    static async fetchTransactionData(txId) {
         //console.log('fetching tx data '+txId)
         return new Promise((resolve, reject) => {
-            this.client.getRawTransaction(txId, true, (error, transaction) => {
+            client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
                     console.log('blah '+error);
                     reject(error);
@@ -166,7 +169,7 @@ class TxIndex {
         });
     }
 
-     async DecodeRawTransaction(rawTx) {
+    static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await this.decoderawtransactionAsync(rawTx);
             
@@ -283,7 +286,7 @@ class TxIndex {
                             console.log('Initializing database with genesis block:', genesisBlock);
                             return txIndexDB.insertAsync({ _id: 'genesisBlock', value: genesisBlock });
                         } else {
-                            console.log('Database already initialized. Genesis block:', doc.value);
+                            //console.log('Database already initialized. Genesis block:', doc.value);
                             // Database already exists, resolve the promise
                             return Promise.resolve();
                         }
