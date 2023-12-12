@@ -296,10 +296,6 @@ class Main {
         await this.blockHandlerEnd(blockData.hash, blockNumber);
     }
 
-
-    // Listen for the shutdown event
-    shutdownEmitter.on('shutdown', gracefulShutdown);
-
      async shutdown() {
         console.log('Saving state to database...');
         // Code to save state to database

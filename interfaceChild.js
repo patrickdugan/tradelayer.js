@@ -58,6 +58,67 @@ class InterfaceChild {
         return await this.sendCommandToMainProcess('listActivations');
     }
 
+
+    async getConsensusHashForBlock(blockHeight) {
+        return await this.sendCommandToMainProcess('getConsensusHashForBlock', { blockHeight });
+    }
+
+    async getFeatureActivationStatus(featureId) {
+        return await this.sendCommandToMainProcess('getFeatureActivationStatus', { featureId });
+    }
+
+    async getAllBalancesForAddress(address) {
+        return await this.sendCommandToMainProcess('getAllBalancesForAddress', { address });
+    }
+
+    async getTotalTokens(propertyId) {
+        return await this.sendCommandToMainProcess('getTotalTokens', { propertyId });
+    }
+
+    async getBalancesAcrossAllWallets() {
+        return await this.sendCommandToMainProcess('getBalancesAcrossAllWallets');
+    }
+
+    async isTransactionTypeActive(txType) {
+        return await this.sendCommandToMainProcess('isTransactionTypeActive', { txType });
+    }
+
+    async getAllActiveTransactionTypes() {
+        return await this.sendCommandToMainProcess('getAllActiveTransactionTypes');
+    }
+
+    async getAddressesWithBalanceForProperty(propertyId) {
+        return await this.sendCommandToMainProcess('getAddressesWithBalanceForProperty', { propertyId });
+    }
+
+    async getTransaction(txid) {
+        return await this.sendCommandToMainProcess('getTransaction', { txid });
+    }
+
+    async getProperty(propertyId) {
+        return await this.sendCommandToMainProcess('getProperty', { propertyId });
+    }
+
+    async listProperties() {
+        return await this.sendCommandToMainProcess('listProperties');
+    }
+
+    async getGrants(propertyId) {
+        return await this.sendCommandToMainProcess('getGrants', { propertyId });
+    }
+
+    async getPayToToken(propertyId) {
+        return await this.sendCommandToMainProcess('getPayToToken', { propertyId });
+    }
+
+    async listBlockTransactions(blockIndex) {
+        return await this.sendCommandToMainProcess('listBlockTransactions', { blockIndex });
+    }
+
+    async listPendingTransactions(addressFilter) {
+        return await this.sendCommandToMainProcess('listPendingTransactions', { addressFilter });
+    }
+
     // ... Continue adding all methods from Interface.js ...
 }
 

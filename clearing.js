@@ -106,7 +106,7 @@ class Clearing {
      * @param {number} blockHeight - The block height for which to load clearing deltas.
      * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
      */
-    async function loadClearingDeltasForBlock(blockHeight) {
+    async loadClearingDeltasForBlock(blockHeight) {
         try {
             const clearingDeltas = [];
             const query = { blockHeight: blockHeight }; // Query to match the block height

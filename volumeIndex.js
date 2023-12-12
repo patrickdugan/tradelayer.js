@@ -1,7 +1,7 @@
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
-const {volumeIndexDB, propertyListDB, contractsListDB} = require('./db.js')
+const db = require('./db.js')
 const Litecoin = require('litecoin')
-
+const util = require('util')
 const client = new Litecoin.Client({
 
             host: '127.0.0.1',
@@ -10,6 +10,9 @@ const client = new Litecoin.Client({
             pass: 'pass',
             timeout: 10000
         });
+
+const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
+
 
 class VolumeIndex {
     constructor(dbPath) {
@@ -90,9 +93,8 @@ class VolumeIndex {
     }
 
     async runVolumeIndexing() {
-        const blockchainInfo = await client.cmd('getblockchaininfo');
-        var blockNumber = blockchainInfo.blocks;
-        for (let blockNumber = 1; blockNumber <= latestBlockNumber; blockNumber++) {
+        const latestBlockNumber = await getBlockCountAsync()
+        for (let blockNumber = 3082500; blockNumber <= latestBlockNumber; blockNumber++) {
             await this.processBlock(blockNumber);
         }
     }
