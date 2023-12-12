@@ -20,7 +20,7 @@ class PropertyManager {
         return PropertyManager.instance;
     }
 
-    async load() {
+    static async load() {
         try {
             const propertyIndexEntry = await new Promise((resolve, reject) => {
                 db.getDatabase('propertyList').findOne({ _id: 'propertyIndex' }, (err, doc) => {
@@ -56,11 +56,11 @@ class PropertyManager {
     }
 
 
-    getNextPropertyId() {
+    static getNextPropertyId() {
         return this.nextPropertyId++;
     }
 
-    createToken(ticker, totalInCirculation, type) {
+    static createToken(ticker, totalInCirculation, type) {
         // Get the next available property ID
         const propertyId = this.getNextPropertyId();
 
@@ -74,7 +74,7 @@ class PropertyManager {
         return propertyId; // Return the new token's property ID
     }
 
-    addProperty(propertyId, ticker, totalInCirculation, type) {
+    static async addProperty(propertyId, ticker, totalInCirculation, type) {
         if (this.propertyIndex.has(propertyId)) {
             throw new Error('Property ID already exists.');
         }
@@ -102,20 +102,23 @@ class PropertyManager {
             marginAmount: 0,
             vestingAmount: 0
         });
+
+        await this.save()
     }
 
-    isPropertyIdValid(propertyId) {
+    static isPropertyIdValid(propertyId) {
         return this.propertyIndex.has(propertyId);
     }
 
-    getPropertyData(propertyId) {
+    static getPropertyData(propertyId) {
         if (!this.isPropertyIdValid(propertyId)) {
             return null;
         }
         return this.propertyIndex.get(propertyId);
     }
 
-    getPropertyIndex() {
+    static async getPropertyIndex() {
+        await this.load()
         const propertyIndexJSON = {};
         this.propertyIndex.forEach((value, key) => {
             propertyIndexJSON[key] = {
@@ -131,7 +134,7 @@ class PropertyManager {
         return propertyIndexJSON;
     }
 
-    async save() {
+    static async save() {
       const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
       const nextPropertyIdData = { _id: 'nextPropertyId', value: this.nextPropertyId.toString() };
       const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
@@ -140,7 +143,7 @@ class PropertyManager {
       await db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true });
     }
 
-    async verifyIfManaged(propertyId) {
+    static async verifyIfManaged(propertyId) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');
@@ -148,7 +151,7 @@ class PropertyManager {
         return property.type === 'Managed';
     }
 
-    async updateAdmin(propertyId, newAdminAddress) {
+    static async updateAdmin(propertyId, newAdminAddress) {
         const property = this.getPropertyData(propertyId);
         if (!property) {
             throw new Error('Property not found');

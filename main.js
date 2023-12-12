@@ -266,9 +266,9 @@ class Main {
         console.log('entering real-time mode '+latestProcessedBlock)
 
         while (true) {
-            if (shutdownRequested) {
+            /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
-            }
+            }*/
             const latestBlock = await this.getBlockCountAsync()
             //console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
@@ -277,9 +277,9 @@ class Main {
                 latestProcessedBlock = blockNumber;
             }
 
-            shutdownEmitter.on('shutdown', () => {
+            /*shutdownEmitter.on('shutdown', () => {
                 shutdown();
-            });
+            });*/
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }

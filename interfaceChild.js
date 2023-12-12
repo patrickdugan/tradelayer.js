@@ -31,6 +31,10 @@ class InterfaceChild {
         });
     }
 
+    async initMain() {
+        return await this.sendCommandToMainProcess('initMain');
+    }
+
     // Example method: Get balances for an address
     async getAllBalancesForAddress(address) {
         return await this.sendCommandToMainProcess('getAllBalancesForAddress', { address });

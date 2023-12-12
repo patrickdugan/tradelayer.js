@@ -26,18 +26,18 @@ class TradeLayerManager {
 
         var TLVESTTokenId = 2;
         const TLVESTTotalAmount = 1500000;
-        var propertyManager = PropertyManager.getInstance()
         var amountToInsuranceFund = 250000;
-        TLTokenId = propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
-        TLVESTTokenId = propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
+        TLTokenId = PropertyManager.createToken('TL', TLTotalAmount, 'Fixed');
+        TLVESTTokenId = PropertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
 
         console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
         var insuranceFund = new InsuranceFund(1,0,0.5)
         // Distribute initial amount to insurance fund
         insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
         insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
-        await TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,"vestingReserve")
-        await TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsuranceFund,"available")
+        await TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,0,0,TLTotalAmount-amountToInsuranceFund)
+        await TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsuranceFund,TLVESTTotalAmount-amountToInsuranceFund,0,0)
+        await TallyMap.getAddressBalances(this.adminAddress)
     }
 
     static initializeContractSeries() {

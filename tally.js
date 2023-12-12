@@ -27,7 +27,7 @@ class TallyMap {
     }
 
     
-    static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange) {
+    static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange,vestingChange) {
             const instance = await this.getInstance();
             if (!instance.addresses.has(address)) {
                 instance.addresses.set(address, {});
@@ -35,12 +35,13 @@ class TallyMap {
             const addressObj = instance.addresses.get(address);
 
             if (!addressObj[propertyId]) {
-                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0 };
+                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, vesting: 0 };
             }
 
             const newAmount = addressObj[propertyId].amount + amountChange;
             const newAvailable = addressObj[propertyId].available + availableChange;
             const newReserved = addressObj[propertyId].reserved + reservedChange;
+            const newVesting = addressObj[propertyId].vesting+vestingChange
 
             if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
                 throw new Error("Balance cannot go negative");
@@ -49,20 +50,23 @@ class TallyMap {
             addressObj[propertyId].amount = newAmount;
             addressObj[propertyId].available = newAvailable;
             addressObj[propertyId].reserved = newReserved;
+            addressObj[propertyId].vesting = newVesting
 
-            console.log('new amount '+newAmount+ 'newAvailable '+newAvailable + 'newReserved'+ newReserved)
+            console.log('new amount '+newAmount+ 'newAvailable '+newAvailable + 'newReserved'+ newReserved+'newVesting '+newVesting)
             const blockHeight = TxIndex.fetchChainTip()
 
-            await instance.saveDeltaToDB({'address':address,'newAmount':newAmount,'newAvailable':newAvailable,'newReserved':newReserved})
+            await instance.saveDeltaToDB(addressObj)
     }
 
 
-    static getAddressBalances(address) {
-        if (!this.addresses.has(address)) {
+    static async getAddressBalances(address) {
+        const instance = await this.getInstance();
+
+        if (!instance.addresses.has(address)) {
             return [];
         }
 
-        const addressObj = this.addresses.get(address);
+        const addressObj = instance.addresses.get(address);
         const balances = [];
 
         for (const propertyId in addressObj) {
@@ -73,9 +77,11 @@ class TallyMap {
                     amount: balanceObj.amount,
                     available: balanceObj.available,
                     reserved: balanceObj.reserved,
+                    vesting: balanceObj.vesting
                 });
             }
         }
+        console.log(balances)
         return balances;
     }
 

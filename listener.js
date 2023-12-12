@@ -1,100 +1,57 @@
-const TallyMap = require('./tally');
-const TxIndex = require('./TxIndex');
-const PropertyManager = require('./property');
-const Interface = require('./Interface');
+const express = require('express');
+const TallyMap = require('./tally.js');
+const TxIndex = require('./txIndex.js');
+const PropertyManager = require('./property.js');
+const Interface = require('./interface.js');
 const interfaceInstance = new Interface();
+const Main = require('./main.js');
 
-// ... Import other necessary modules ...
+let isInitialized = false; // A flag to track the initialization status
+const app = express();
+const port = 3000; // Choose a port that suits your setup
 
-async function listen() {
-    process.on('message', async (message) => {
-        try {
-            const { command, args } = message;
-            switch (command) {
-                case 'getAllBalancesForAddress':
-                    const balances = await TallyMap.getAddressBalances(args.address);
-                    process.send({ data: balances });
-                    break;
+app.use(express.json()); // Middleware to parse JSON bodies
 
-                case 'getTransaction':
-                    const transaction = await TxIndex.getTransactionDetails(args.txid);
-                    process.send({ data: transaction });
-                    break;
+app.post('/initMain', async (req, res) => {
+    try {
+        console.log('Initializing');
+        const mainProcessor = Main.getInstance(req.body.test); // Use req.body for arguments
+        mainProcessor.initialize();
+        res.status(200).send('Main process initialized successfully');
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
+// Add other endpoints similarly, replacing cases in your switch statement
+// Example for 'getAllBalancesForAddress'
+app.post('/getAllBalancesForAddress', async (req, res) => {
+    try {
+        console.log(req.body.address)
+        const balances = await TallyMap.getAddressBalances(req.body.address);
+        res.status(200).json(balances);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
-                case 'getConsensusHashForBlock':
-                    result = await interfaceInstance.getConsensusHashForBlock(args.blockHeight);
-                    break;
+app.post('/listProperties', async (req, res) => {
+    try {
+        console.log('fetching property list')
+        const properties = await PropertyManager.getPropertyIndex();
+        res.json(properties);
+    } catch (error) {
+        //res.status(500).send('Error: ' + error.message);
+    }
+});
 
-                case 'getFeatureActivationStatus':
-                    result = await interfaceInstance.getFeatureActivationStatus(args.featureId);
-                    break;
+// Endpoint to check the initialization status
+app.get('/initStatus', (req, res) => {
+    res.json({ initialized: isInitialized });
+});
 
-                case 'getAllBalancesForAddress':
-                    result = await interfaceInstance.getAllBalancesForAddress(args.address);
-                    break;
+// ... Add other endpoints ...
 
-                case 'getTotalTokens':
-                    result = await interfaceInstance.getTotalTokens(args.propertyId);
-                    break;
-
-                case 'getBalancesAcrossAllWallets':
-                    result = await interfaceInstance.getBalancesAcrossAllWallets();
-                    break;
-
-                case 'isTransactionTypeActive':
-                    result = await interfaceInstance.isTransactionTypeActive(args.txType);
-                    break;
-
-                case 'getAllActiveTransactionTypes':
-                    result = await interfaceInstance.getAllActiveTransactionTypes();
-                    break;
-
-                case 'getAddressesWithBalanceForProperty':
-                    result = await interfaceInstance.getAddressesWithBalanceForProperty(args.propertyId);
-                    break;
-
-                case 'getTransaction':
-                    result = await interfaceInstance.getTransaction(args.txid);
-                    break;
-
-                case 'getProperty':
-                    result = await interfaceInstance.getProperty(args.propertyId);
-                    break;
-
-                case 'listProperties':
-                    result = await interfaceInstance.listProperties();
-                    break;
-
-                case 'getGrants':
-                    result = await interfaceInstance.getGrants(args.propertyId);
-                    break;
-
-                case 'getPayToToken':
-                    result = await interfaceInstance.getPayToToken(args.propertyId);
-                    break;
-
-                case 'listBlockTransactions':
-                    result = await interfaceInstance.listBlockTransactions(args.blockIndex);
-                    break;
-
-                case 'listBlocksTransactions':
-                    result = await interfaceInstance.listBlocksTransactions(args.firstBlock, args.lastBlock);
-                    break;
-
-                case 'listPendingTransactions':
-                    result = await interfaceInstance.listPendingTransactions(args.addressFilter);
-                    break;
-
-                // ... Add other cases for each method in Interface.js ...
-
-                default:
-                    process.send({ error: 'Unknown command' });
-            }
-        } catch (error) {
-            process.send({ error: error.message });
-        }
-    });
-}
-
-module.exports = listen;
+app.listen(port, () => {
+    console.log(`Express server running on port ${port}`);
+});
