@@ -27,7 +27,7 @@ class TradeLayerManager {
         var TLVESTTokenId = 2;
         const TLVESTTotalAmount = 1500000;
         var propertyManager = PropertyManager.getInstance()
-        var amountToInsuranceFund = 200000;
+        var amountToInsuranceFund = 250000;
         TLTokenId = propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
         TLVESTTokenId = propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
 
@@ -36,8 +36,8 @@ class TradeLayerManager {
         // Distribute initial amount to insurance fund
         insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
         insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
-        TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,"vestingReserve")
-        TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsurancefund,"available")
+        await TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,"vestingReserve")
+        await TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsuranceFund,"available")
     }
 
     static initializeContractSeries() {

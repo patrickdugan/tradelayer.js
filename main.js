@@ -170,6 +170,13 @@ class Main {
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
+
+        const tallyMapInstance = TallyMap.getInstance();
+        const lastConsensusHeight = await this.loadMaxProcessedHeight();
+
+        // Apply deltas from the last known block height to the current block height
+        //await tallyMapInstance.applyDeltasSinceLastHeight(lastHeight);
+
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
         console.log('loaded txIndex '+JSON.stringify(allTxData))
@@ -202,6 +209,11 @@ class Main {
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 
+        // Calculate the delta (changes made to TallyMap) and save it
+        /*const delta = this.calculateDelta();
+        await tallyMapInstance.saveDeltaToDB(currentBlockHeight, delta);
+        await setMaxConsensusHeightInDB(currentBlockHeight);*/
+
         try {
             await db.getDatabase('consensus').updateAsync(
                 { _id: 'MaxProcessedHeight' },
@@ -220,6 +232,9 @@ class Main {
     }
 
 
+    calculateDelta() {
+        // Logic to calculate the changes (delta) made to TallyMap
+    }
 
 
     async syncIfNecessary() {
@@ -409,7 +424,7 @@ class Main {
       }
     }
 
-
+ 
     async loadMaxProcessedHeight() {
         const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
 

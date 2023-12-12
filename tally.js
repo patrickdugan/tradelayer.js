@@ -1,4 +1,5 @@
-var tallyMapDB = require('./db')
+var db = require('./db')
+var TxIndex = require('./txindex.js')
 
 class TallyMap {
     static instance;
@@ -11,29 +12,50 @@ class TallyMap {
         return TallyMap.instance;
     }
 
-    
-    static updateBalance(address, propertyId, amountChange, availableChange, reservedChange) {
-        if (!this.addresses.has(address)) {
-            this.addresses.set(address, {});
+
+    /**
+     * Ensures that only one instance of TallyMap exists and attempts to load it from DB.
+     * @param {number} blockHeight - The block height for which to load the tally map.
+     * @returns {Promise<TallyMap>} - A promise that resolves to the singleton instance of the TallyMap.
+     */
+    static async getInstance(blockHeight) {
+        if (!TallyMap.instance) {
+            TallyMap.instance = new TallyMap();
         }
-        const addressObj = this.addresses.get(address);
-
-        if (!addressObj[propertyId]) {
-            addressObj[propertyId] = { amount: 0, available: 0, reserved: 0 };
-        }
-
-        const newAmount = addressObj[propertyId].amount + amountChange;
-        const newAvailable = addressObj[propertyId].available + availableChange;
-        const newReserved = addressObj[propertyId].reserved + reservedChange;
-
-        if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
-            throw new Error("Balance cannot go negative");
-        }
-
-        addressObj[propertyId].amount = newAmount;
-        addressObj[propertyId].available = newAvailable;
-        addressObj[propertyId].reserved = newReserved;
+        await TallyMap.instance.loadFromDB(blockHeight);
+        return TallyMap.instance;
     }
+
+    
+    static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange) {
+            const instance = await this.getInstance();
+            if (!instance.addresses.has(address)) {
+                instance.addresses.set(address, {});
+            }
+            const addressObj = instance.addresses.get(address);
+
+            if (!addressObj[propertyId]) {
+                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0 };
+            }
+
+            const newAmount = addressObj[propertyId].amount + amountChange;
+            const newAvailable = addressObj[propertyId].available + availableChange;
+            const newReserved = addressObj[propertyId].reserved + reservedChange;
+
+            if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
+                throw new Error("Balance cannot go negative");
+            }
+
+            addressObj[propertyId].amount = newAmount;
+            addressObj[propertyId].available = newAvailable;
+            addressObj[propertyId].reserved = newReserved;
+
+            console.log('new amount '+newAmount+ 'newAvailable '+newAvailable + 'newReserved'+ newReserved)
+            const blockHeight = TxIndex.fetchChainTip()
+
+            await instance.saveDeltaToDB({'address':address,'newAmount':newAmount,'newAvailable':newAvailable,'newReserved':newReserved})
+    }
+
 
     static getAddressBalances(address) {
         if (!this.addresses.has(address)) {
@@ -59,14 +81,62 @@ class TallyMap {
 
     async saveToDB(blockHeight) {
         const serializedData = JSON.stringify([...this.addresses]);
-        await db.put(`tallyMap-${blockHeight}`, serializedData);
+        await db.put(`tallyMap`, serializedData);
     }
 
     async loadFromDB(blockHeight) {
-        const serializedData = await db.get(`tallyMap-${blockHeight}`);
-        if (serializedData) {
-            this.addresses = new Map(JSON.parse(serializedData));
+        try {
+            const query = { _id: `tallyMap` };
+            const result = await db.getDatabase('tallyMap').findOneAsync(query);
+
+            if (result && result.value) {
+                this.addresses = new Map(JSON.parse(result.value));
+            }
+        } catch (error) {
+            console.error('Error loading tally map from DB:', error);
         }
+    }
+
+
+    async applyDeltasSinceLastHeight(lastHeight) {
+        // Retrieve and apply all deltas from lastHeight to the current height
+        for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
+            const serializedDelta = await db.get(`tallyMapDelta-${height}`);
+            if (serializedDelta) {
+                const delta = JSON.parse(serializedDelta);
+                this.applyDelta(delta);
+            }
+        }
+    }
+
+    // Function to record a delta
+    async recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
+        const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
+        const delta = { address, propertyId, amountChange };
+        return await db.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(delta));
+    }
+
+// Function to apply a delta to the TallyMap
+    applyDeltaToTallyMap(delta) {
+        const { address, propertyId, amountChange } = delta;
+        // Logic to apply the change to TallyMap
+        TallyMap.updateBalance(address, propertyId, amountChange);
+    }
+
+    async saveDeltaToDB(blockHeight, delta) {
+        const serializedDelta = JSON.stringify(delta);
+        await db.getDatabase('tallyMap').insert(`tallyMapDelta-${blockHeight}`, serializedDelta);
+    }
+
+    // Function to save the aggregated block delta
+    saveBlockDelta(blockHeight, blockDelta) {
+        const deltaKey = `blockDelta-${blockHeight}`;
+        db.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(blockDelta));
+    }
+
+    // Function to load all deltas for a block
+    async loadDeltasForBlock(blockHeight) {
+        // Load and parse all deltas from the database for the given block height
     }
 
     static totalTokens(propertyId) {
@@ -92,13 +162,6 @@ class TallyMap {
         } catch (error) {
             console.error('Error loading data:', error);
         }
-    }
-
-    static getSingletonInstance() {
-        if (!TallyMap.instance) {
-            throw new Error("TallyMap instance has not been created yet");
-        }
-        return TallyMap.instance;
     }
 
     // Get the tally for a specific address and property

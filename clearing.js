@@ -101,6 +101,29 @@ class Clearing {
         });
     }
 
+        /**
+     * Loads clearing deltas from the clearing database for a given block height.
+     * @param {number} blockHeight - The block height for which to load clearing deltas.
+     * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
+     */
+    async function loadClearingDeltasForBlock(blockHeight) {
+        try {
+            const clearingDeltas = [];
+            const query = { blockHeight: blockHeight }; // Query to match the block height
+
+            // Fetch the deltas from the database
+            const results = await db.getDatabase('clearing').findAsync(query);
+            results.forEach(doc => {
+                clearingDeltas.push(doc.value); // Assuming each document has a 'value' field with the delta data
+            });
+
+            return clearingDeltas;
+        } catch (error) {
+            console.error('Error loading clearing deltas:', error);
+            throw error;
+        }
+    }
+
     async closeChannelsIfNeeded() {
         console.log('Closing channels if needed');
 
