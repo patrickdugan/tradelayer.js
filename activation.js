@@ -67,15 +67,17 @@ class Activation {
         }
     }
 
-    // New Method to save activations list
     async saveActivationsList() {
         try {
             const activationsDB = db.getDatabase('activations');
-            //console.log(this.txRegistry)
-            await activationsDB.insertAsync({ _id: 'activationsList', value: JSON.stringify(this.txRegistry) });
-            return console.log('Activations list saved successfully.');
+            const query = { _id: 'activationsList' };
+            const update = { $set: { value: JSON.stringify(this.txRegistry) } };
+            const options = { upsert: true }; // This option will insert if not found
+
+            await activationsDB.updateAsync(query, update, options);
+            console.log('Activations list saved successfully.');
         } catch (error) {
-            return console.error('Error saving activations list:', error);
+            console.error('Error saving activations list:', error);
         }
     }
 

@@ -1,5 +1,10 @@
+// Define a global shutdown event
+const EventEmitter = require('events');
+class ShutdownEmitter extends EventEmitter {}
+const shutdownEmitter = new ShutdownEmitter();
 const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const util = require('util')
+const listen = require('./listener');
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -261,19 +266,26 @@ class Main {
         console.log('entering real-time mode '+latestProcessedBlock)
 
         while (true) {
+            if (shutdownRequested) {
+                break; // Break the loop if shutdown is requested
+            }
             const latestBlock = await this.getBlockCountAsync()
             //console.log(latestBlock)
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
-                await this.processBlock(blockData, blockNumber, consensus);
+                await this.processBlock(blockData, blockNumber);
                 latestProcessedBlock = blockNumber;
             }
+
+            shutdownEmitter.on('shutdown', () => {
+                shutdown();
+            });
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         }
     }
 
-    async processBlock(blockData, blockNumber, consensus) {
+    async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
         await this.blockHandlerBegin(blockData.hash, blockNumber);
 
@@ -284,11 +296,16 @@ class Main {
         await this.blockHandlerEnd(blockData.hash, blockNumber);
     }
 
+
+    // Listen for the shutdown event
+    shutdownEmitter.on('shutdown', gracefulShutdown);
+
      async shutdown() {
-        console.log('Shutting down TradeLayer...');
-        // Add shutdown logic here
-        // This could include saving state, closing database connections, etc.
-    }
+        console.log('Saving state to database...');
+        // Code to save state to database
+        console.log('Shutdown completed.');
+        process.exit(0); // or use another method to exit gracefully
+      }
 
     async blockHandlerBegin(blockHash, blockHeight) {
         //console.log(`Beginning to process block ${blockHeight}`);
@@ -303,7 +320,7 @@ class Main {
             await this.blockchainPersistence.updateLastKnownBlock(blockHash);
             // Additional block begin logic here
         }*/
-        return console.log('no re-org detected ' +blockHeight)
+        return //console.log('no re-org detected ' +blockHeight)
     }
 
     async blockHandlerMid(blockHash, blockHeight) {
@@ -322,7 +339,8 @@ class Main {
                 // ...
             }
         }*/
-        return console.log('processed ' + blockHash)
+        return 
+        //console.log('processed ' + blockHash)
     }
 
     async blockHandlerEnd(blockHash, blockHeight) {
@@ -342,7 +360,7 @@ class Main {
                 await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
             }
         }*/
-        return ('block finish '+blockHeight)
+        return //console.log('block finish '+blockHeight)
     }
 
     async handleReorg(blockHeight) {

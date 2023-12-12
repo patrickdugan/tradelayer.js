@@ -208,7 +208,7 @@ class TxIndex {
         return { sender, reference, payload, decodedParams, marker };
     }
 
-    async saveTransactionData(txId, txData, payload, blockHeight,txDetails) {
+    async saveTransactionData(txId, txData, payload, blockHeight, txDetails) {
         const indexKey = `tx-${blockHeight}-${txId}`;
         const document = {
             _id: indexKey,
@@ -218,23 +218,26 @@ class TxIndex {
         console.log(document);
 
         try {
-            // Attempt to insert the document
-            await db.getDatabase('txIndex').insertAsync([document]);
-            console.log(`Transaction data saved for ${indexKey}`);
-        } catch (error) {
-            // Check if the error is due to a unique constraint violation
-            if (error.errorType === 'uniqueViolated') {
-                // Handle the duplicate key error here (e.g., skip or update)
-                console.log(`Duplicate key error for ${indexKey}: ${error}`);
-                // You can choose to skip the insertion or update the existing document here
-                // For example, to update an existing document, you can use the updateAsync method:
-                // await db.getDatabase('txIndex').updateAsync({ _id: indexKey }, { $set: { txData, payload } });
+            // Check if the document already exists
+            const existingDocument = await db.getDatabase('txIndex').findOneAsync({ _id: indexKey });
+
+            if (existingDocument) {
+                // Document exists, perform an update
+                const update = { $set: { txData, payload } };
+                await db.getDatabase('txIndex').updateAsync({ _id: indexKey }, update);
+                console.log(`Transaction data updated for ${indexKey}`);
             } else {
-                // Handle other errors
-                console.error(`Error saving transaction data for ${indexKey}: ${error}`);
+                // Document does not exist, perform an insert
+                await db.getDatabase('txIndex').insertAsync(document);
+                console.log(`Transaction data inserted for ${indexKey}`);
             }
+        } catch (error) {
+            // Handle any errors
+            console.error(`Error saving transaction data for ${indexKey}: ${error}`);
         }
     }
+
+
 
      async loadIndex() {
         return new Promise((resolve, reject) => {
