@@ -38,16 +38,17 @@ app.post('/getAllBalancesForAddress', async (req, res) => {
     }
 });
 
-
 app.post('/listProperties', async (req, res) => {
     try {
-        console.log('fetching property list')
-        const properties = await PropertyManager.load();
-        res.json(properties);
+        console.log('express calling property list');
+        const propertiesArray = await PropertyManager.getPropertyIndex(); // Await the getPropertyIndex method
+        res.json(propertiesArray); // Send the array representation of the properties
     } catch (error) {
-        //res.status(500).send('Error: ' + error.message);
+        console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
     }
 });
+
 
 // Endpoint to check the initialization status
 app.get('/initStatus', (req, res) => {

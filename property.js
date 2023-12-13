@@ -20,28 +20,33 @@ class PropertyManager {
         return PropertyManager.instance;
     }
 
-    async load() {
-       let propertyIndexEntry
-       console.log('loading property list')
+    static async load() {
+        console.log('loading property list');
         try {
-            const propertyIndexEntry = await new Promise((resolve, reject) => {
-
-                db.getDatabase('propertyList').findOne({ _id: 'propertyIndex' }, (err, doc) => {
-                    if (err) reject(err);
-                    else resolve(doc);
-                });
-            });
-
+            const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
             if (propertyIndexEntry && propertyIndexEntry.value) {
-                this.propertyIndex = new Map(JSON.parse(propertyIndexEntry.value));
+                // Check if the value is a string and parse it as JSON
+                const data = typeof propertyIndexEntry.value === 'string' ? JSON.parse(propertyIndexEntry.value) : propertyIndexEntry.value;
+
+                // Ensure the data is an array of arrays before converting it to a Map
+                if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
+                    this.propertyIndex = new Map(data);
+                } else {
+                    console.error('Invalid data format for propertyIndex:', data);
+                    this.propertyIndex = new Map();
+                }
+            } else {
+                this.propertyIndex = new Map(); // Initialize with an empty Map if no data is found
             }
         } catch (error) {
             console.error('Error loading data from NeDB:', error);
+            this.propertyIndex = new Map(); // Use an empty Map in case of an error
         }
     }
 
+
     async getNextPropertyId() {
-        await this.load();
+        await PropertyManager.load();
         let maxId = 0;
         for (let key of this.propertyIndex.keys()) {
             maxId = Math.max(maxId, key);
@@ -64,7 +69,7 @@ class PropertyManager {
       }
 
     async addProperty(propertyId, ticker, totalInCirculation, type) {
-        await this.load();
+        await PropertyManager.load();
         
         const propertyTypeIndexes = {
             'Fixed': 1,
@@ -89,8 +94,24 @@ class PropertyManager {
             marginAmount: 0,
             vestingAmount: 0
         });
-
+        console.log('updated Property Index '+this.propertyIndex)
         await this.save();
+    }
+
+    async inspectPropertyIndex() {
+        const propertyManager = PropertyManager.getInstance();
+
+        // Load the properties
+        await PropertyManager.load();
+
+        // Convert the Map into an array of key-value pairs
+        const propertiesArray = Array.from(propertyManager.propertyIndex.entries());
+
+        // Alternatively, convert the Map into an object for easier visualization
+        const propertiesObject = Object.fromEntries(propertyManager.propertyIndex);
+
+        console.log('Properties as Array:', propertiesArray);
+        console.log('Properties as Object:', propertiesObject);
     }
 
     async save() {
@@ -110,11 +131,21 @@ class PropertyManager {
         return this.propertyIndex.get(propertyId) || null;
     }
 
-    async getPropertyIndex() {
-        await this.load();
-        return [...this.propertyIndex.entries()];
+    static async getPropertyIndex() {
+        await this.load(); // Ensure the property list is loaded
+        // Transform the Map into an array of objects, each representing a property
+        return Array.from(this.propertyIndex).map(([id, property]) => ({
+            id,
+            ticker: property.ticker,
+            totalInCirculation: property.totalInCirculation,
+            type: property.type,
+            feeAmount: property.feeAmount,
+            insuranceAmount: property.insuranceAmount,
+            reserveAmount: property.reserveAmount,
+            marginAmount: property.marginAmount,
+            vestingAmount: property.vestingAmount
+        }));
     }
-
     // ... other methods like verifyIfManaged, updateAdmin ...
 }
 
