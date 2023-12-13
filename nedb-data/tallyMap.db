@@ -1,1 +1,2 @@
-{"_id":"tallyMap","data":"[[\"test-address\",{\"1\":{\"amount\":100,\"available\":50,\"reserved\":30,\"vesting\":20}}]]"}
+{"_id":"tallyMap","data":"[[\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",{\"1\":{\"amount\":1250000,\"available\":0,\"reserved\":0,\"vesting\":1250000}}]]"}
+{"_id":"tallyMap","data":"[[\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",{\"1\":{\"amount\":1250000,\"available\":0,\"reserved\":0,\"vesting\":1250000},\"2\":{\"amount\":1250000,\"available\":1250000,\"reserved\":0,\"vesting\":0}}]]"}

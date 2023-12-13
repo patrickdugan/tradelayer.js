@@ -20,7 +20,7 @@ class TradeLayerManager {
         return TradeLayerManager.instance;
     }
 
-    static async initializeTokens() {
+    async initializeTokens() {
         var TLTokenId = 1;
         const TLTotalAmount = 1500000;
 

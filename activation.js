@@ -129,8 +129,8 @@ class Activation {
         if (txType === 0) {
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
-            await TradeLayerManager.initializeTokens();  // Create propertyId 1 and 2 for TL token
-            //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
+            const tradeLayerManager = TradeLayerManager.getInstance(this.hardcodedAdminAddress);
+            await tradeLayerManager.initializeTokens();            //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
             console.log(this.txRegistry)
             return await this.saveActivationsList(); // Save the updated activations list
