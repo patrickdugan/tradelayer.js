@@ -116,6 +116,40 @@ const TxUtils = {
             return error;
         }
     },
+ 
+    async function getReferenceAddresses(txId) {
+        let tx;
+        try {
+            tx = await getRawTransactionAsync(txId, true); // Fetch the raw transaction data
+            if (!tx || !tx.vout) {
+                return new Error(`Invalid transaction data for ${txId}`);
+            }
+
+            const referenceAddresses = [];
+
+            // Iterate over outputs to find reference outputs
+            for (let i = 0; i < tx.vout.length; i++) {
+                const output = tx.vout[i];
+
+                // Check for OP_RETURN
+                if (output.scriptPubKey.type === 'nulldata') {
+                    // If OP_RETURN is found, previous output is a reference (if it exists)
+                    if (i > 0) {
+                        const prevOutput = tx.vout[i - 1];
+                        referenceAddresses.push(prevOutput.scriptPubKey.addresses[0]);
+                    }
+                } else if (output.value < 2 * DUST_THRESHOLD / COIN) {
+                    // If the output amount is less than twice the dust threshold, consider it as a reference
+                    referenceAddresses.push(output.scriptPubKey.addresses[0]);
+                }
+            }
+
+            return referenceAddresses.length > 0 ? referenceAddresses : new Error("No reference outputs found");
+        } catch (error) {
+            console.error(`Error in getReferenceAddresses for transaction ${txId}:`, error);
+            return error;
+        }
+    },
 
     async listUnspent(minconf, maxconf, addresses) {
         try {

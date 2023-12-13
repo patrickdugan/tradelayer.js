@@ -22,14 +22,30 @@ const Encode = {
 
     // Encode Send Transaction
     encodeSend(params) {
-        const payload = [
-            params.sendAll ? '1' : '0',
-            params.address,
-            params.propertyId.map(id => id.toString(36)).join(','),
-            params.amount.map(amt => amt.toString(36)).join(',')
-        ];
-        return payload.join(';');
+        if (params.sendAll) {
+            // Handle sendAll case
+            return `1;${params.address}`;
+        } else if (Array.isArray(params.propertyId) && Array.isArray(params.amount)) {
+            // Handle multi-send
+            const payload = [
+                '0', // Not sendAll
+                '', // Address is omitted for multi-send
+                params.propertyId.map(id => id.toString(36)).join(','),
+                params.amount.map(amt => amt.toString(36)).join(',')
+            ];
+            return payload.join(';');
+        } else {
+            // Handle single send
+            const payload = [
+                '0', // Not sendAll
+                params.address,
+                params.propertyId.toString(36),
+                params.amount.toString(36)
+            ];
+            return payload.join(';');
+        }
     },
+
 
 
     encodeTradeTokenForUTXO: (params) => {

@@ -28,14 +28,23 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
-        const parts = payload.split(',');
-        return {
-            sendAll: parts[0] === '1',
-            address: parts[1],
-            propertyIdNumber: parseInt(parts[2], 36),
-            amount: parseInt(parts[3], 36)
-        };
+        const parts = payload.split(';');
+        const sendAll = parts[0] === '1';
+        const address = parts[1];
+        const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
+        const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
+
+        if (sendAll) {
+            return { sendAll, address };
+        } else if (address === '') {
+            // Multi-send
+            return { sendAll, multiSend: propertyIds.map((id, index) => ({ propertyId: id, amount: amounts[index] })) };
+        } else {
+            // Single send
+            return { sendAll, address, propertyId: propertyIds[0], amount: amounts[0] };
+        }
     },
+
 
     // Decode Trade Token for UTXO Transaction
     decodeTradeTokenForUTXO: (payload) => {

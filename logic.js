@@ -157,17 +157,14 @@ const Logic = {
  
     },
 
-    async tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+    async function tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+        const propertyManager = PropertyManager.getInstance();
+        
         // Generate a new property ID
-        const newPropertyId = propertyManager.getNextPropertyId();
+        const newPropertyId = await propertyManager.getNextPropertyId();
 
         // Determine the type of the token based on whether it's managed or an NFT
-        let tokenType = 'Fixed';
-        if (isManaged) {
-            tokenType = 'Managed';
-        } else if (isNFT) {
-            tokenType = 'Non-Fungible';
-        }
+        let tokenType = isNFT ? 'Non-Fungible' : isManaged ? 'Managed' : 'Fixed';
 
         // Define the token data
         const tokenData = {
@@ -177,28 +174,27 @@ const Logic = {
             type: tokenType,
             url: url,
             whitelistId: whitelistId,
-            backupAddress: isManaged ? backupAddress : '',
+            backupAddress: backupAddress,
             isNFT: isNFT
         };
 
-        // Add the property to the property manager
-        propertyManager.addProperty(
-            tokenData.propertyId,
-            tokenData.ticker,
-            tokenData.totalInCirculation,
-            tokenData.type
-        );
+        // Create the token in the property manager
+        try {
+            await propertyManager.createToken(ticker, initialAmount, tokenType);
+            await propertyManager.save(); // Save the updated property list to the database
 
-        // Save the updated property list to the database
-        await propertyManager.save();
+            return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
+        } catch (error) {
+            console.error('Error creating token:', error);
+            return error.message;
+        }
+    }
 
-        return `Token ${tokenData.ticker} (ID: ${tokenData.propertyId}) created. Type: ${tokenData.type}`;
-    },
 
     async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts) {
         if (sendAll) {
             // Handle sending all available balances
-            // Implementation remains the same as before
+            await sendAll(senderAddress,recipientAddresses)
         } else {
             // Check if handling a multi-send or single send
             const isMultiSend = Array.isArray(propertyIdNumbers) && Array.isArray(amounts);
@@ -219,12 +215,63 @@ const Logic = {
                 }
             } else {
                 // Handle single send
-                await processSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
+                await sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
             }
         }
 
         // Save the updated tally map to the database
-        await tallyMap.save();
+        //await TallyMap.recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange)
+        await TallyMap.save();
+    },
+
+    async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
+        const tallyMapInstance = await TallyMap.getInstance();
+
+        // Check if sender has enough balance
+        const senderBalance = tallyMapInstance.getTally(senderAddress, propertyId);
+        if (senderBalance < amount) {
+            throw new Error("Insufficient balance");
+        }
+
+        // Perform the send operation
+        await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
+        await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+
+        // Handle special case for TLVEST
+        if (propertyId === 'TLVEST') {
+            // Update the vesting column of TL accordingly
+            // Logic for updating TL vesting...
+        }
+
+        return "Send operation successful";
+    },
+
+    async sendAll(senderAddress, receiverAddress) {
+        const tallyMapInstance = await TallyMap.getInstance();
+
+        // Get all balances for the sender
+        const senderBalances = tallyMapInstance.getAddressBalances(senderAddress);
+
+        if (senderBalances.length === 0) {
+            throw new Error("No balances to send");
+        }
+
+        // Iterate through each token balance and send it to the receiver
+        for (const balance of senderBalances) {
+            const { propertyId, amount } = balance;
+            if (amount > 0) {
+                await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
+                await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+
+                // Handle special case for TLVEST
+                if (propertyId === 'TLVEST') {
+                    // Update the vesting column of TL accordingly
+                    // Logic for updating TL vesting...
+                }
+            }
+        }
+
+        return "All balances sent successfully";
     },
 
     // Helper function to process a single send operation
