@@ -27,8 +27,9 @@ class TradeLayerManager {
         var TLVESTTokenId = 2;
         const TLVESTTotalAmount = 1500000;
         var amountToInsuranceFund = 250000;
-        TLTokenId = PropertyManager.createToken('TL', TLTotalAmount, 'Fixed');
-        TLVESTTokenId = PropertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
+        const propertyManager = PropertyManager.getInstance()
+        TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
+        TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
 
         console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
         var insuranceFund = new InsuranceFund(1,0,0.5)

@@ -23,22 +23,26 @@ app.post('/initMain', async (req, res) => {
     }
 });
 
-// Add other endpoints similarly, replacing cases in your switch statement
-// Example for 'getAllBalancesForAddress'
 app.post('/getAllBalancesForAddress', async (req, res) => {
     try {
-        console.log(req.body.address)
-        const balances = await TallyMap.getAddressBalances(req.body.address);
+        const tallyMapInstance = await TallyMap.getInstance();
+        if (!tallyMapInstance) {
+            throw new Error("Failed to get TallyMap instance");
+        }
+        await tallyMapInstance.loadFromDB(); // Wait for the tally map to load
+        const balances = tallyMapInstance.getAddressBalances(req.body.address);
         res.status(200).json(balances);
     } catch (error) {
+        console.error(error); // Log the full error for debugging
         res.status(500).send('Error: ' + error.message);
     }
 });
 
+
 app.post('/listProperties', async (req, res) => {
     try {
         console.log('fetching property list')
-        const properties = await PropertyManager.getPropertyIndex();
+        const properties = await PropertyManager.load();
         res.json(properties);
     } catch (error) {
         //res.status(500).send('Error: ' + error.message);
