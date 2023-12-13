@@ -218,6 +218,7 @@ class TallyMap {
     }
 
     getAddressBalances(address) {
+        console.log('ze tally map'+this.addresses)
         const balances = [];
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address);

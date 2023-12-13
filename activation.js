@@ -1,5 +1,5 @@
 const db = require('./db')
-const Logic = require('./logic.js');
+//const Logic = require('./logic.js');
 const TradeLayerManager = require('./vesting.js')
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
@@ -24,9 +24,9 @@ class Activation {
     }
 
     // Static method to get the singleton instance
-    static getInstance(dbPath, adminAddress) {
+    static getInstance(adminAddress) {
         if (!Activation.instance) {
-            Activation.instance = new Activation(dbPath, adminAddress);
+            Activation.instance = new Activation(adminAddress);
         }
         return Activation.instance;
     }
@@ -198,7 +198,7 @@ class Activation {
      */
     async isTxTypeActive(txTypeNumber) {
         // Assuming txRegistry is accessible within this context
-        await loadActivationsList()
+        await this.loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
         if (txType && txType.active) {
             return true;

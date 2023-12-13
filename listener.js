@@ -24,6 +24,8 @@ app.post('/initMain', async (req, res) => {
 });
 
 app.post('/getAllBalancesForAddress', async (req, res) => {
+            console.log('trying to load balances' +req.body.address)
+
     try {
         const tallyMapInstance = await TallyMap.getInstance();
         if (!tallyMapInstance) {

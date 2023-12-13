@@ -1,26 +1,21 @@
-const PropertyManager = require('./PropertyManager');
-const TallyMap = require('./TallyMap');
-const Logic = require('./Logic');
+const PropertyManager = require('./property.js');
+const TallyMap = require('./tally.js');
+const Logic = require('./logic.js');
+const litecore = require('bitcore-lib-ltc');
+const TxUtils = require('./txUtils');
 
-async function testSendTLVEST() {
-    // Initialize components
-    const propertyManager = PropertyManager.getInstance();
-    const tallyMap = TallyMap.getInstance();
-
-    // Generate a new address (pseudo-code)
-    const newAddress = generateNewAddress();
-
-    // Send 1 TLVEST from admin address to new address
-    const adminAddress = 'admin-address'; // Replace with actual admin address
-    const TLVESTPropertyId = 2; // Assuming TLVEST has property ID 2
-    await Logic.sendToken(false, adminAddress, newAddress, TLVESTPropertyId, 1);
-
-    // Check balances
-    const newAddressBalance = await tallyMap.getTally(newAddress, TLVESTPropertyId);
-    console.log('New address balance:', newAddressBalance);
-
-    // Assertions (pseudo-code)
-    assert(newAddressBalance.vesting === 1, 'Vesting balance should be 1 TL');
+function generateNewAddress() {
+    const privateKey = new litecore.PrivateKey(); // Generate a new private key
+    const address = privateKey.toAddress(); // Generate the address from the private key
+    return {
+        address: address.toString(),
+        privateKey: privateKey.toString()
+    };
 }
 
-testSendTLVEST();
+    const { address, privateKey } = generateNewAddress();
+    console.log('Generated new address:', address);
+
+    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',address,2,1)
+
+

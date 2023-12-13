@@ -30,6 +30,7 @@ const db = require('./db.js'); // Adjust the path if necessary
 const Logic = {
 
     async typeSwitch(txNumber, params){
+        if(params.valid == false){return null}
         console.log(txNumber, params)
         switch (txNumber) {
            case 0:

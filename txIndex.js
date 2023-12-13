@@ -257,7 +257,7 @@ class TxIndex {
         });
     }
 
-       async upsertTxValidityAndReason(txId, blockHeight, isValid, reason) {
+    static async upsertTxValidityAndReason(txId, blockHeight, isValid, reason) {
         const indexKey = `tx-${blockHeight}-${txId}`;
         
         try {

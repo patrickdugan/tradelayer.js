@@ -1,4 +1,1 @@
 {"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"feeAmount\":0,\"insuranceAmount\":0,\"reserveAmount\":0,\"marginAmount\":0,\"vestingAmount\":0}],[2,{\"ticker\":\"TLVEST\",\"totalInCirculation\":1500000,\"type\":4,\"feeAmount\":0,\"insuranceAmount\":0,\"reserveAmount\":0,\"marginAmount\":0,\"vestingAmount\":0}]]"}
-{"$$deleted":true,"_id":"propertyIndex"}
-{"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"feeAmount\":0,\"insuranceAmount\":0,\"reserveAmount\":0,\"marginAmount\":0,\"vestingAmount\":0}]]"}
-{"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"feeAmount\":0,\"insuranceAmount\":0,\"reserveAmount\":0,\"marginAmount\":0,\"vestingAmount\":0}],[2,{\"ticker\":\"TLVEST\",\"totalInCirculation\":1500000,\"type\":4,\"feeAmount\":0,\"insuranceAmount\":0,\"reserveAmount\":0,\"marginAmount\":0,\"vestingAmount\":0}]]"}

@@ -17,7 +17,7 @@ const Validity = {
 
         // Check if the txTypeToActivate is already activated
         const activationInstance = Activation.getInstance();
-        const isAlreadyActivated = await activationInstance.checkIfActivated(params.txTypeToActivate);
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
         if (isAlreadyActivated) {
             params.valid = false;
             params.reason = 'Transaction type already activated';
@@ -34,6 +34,11 @@ const Validity = {
         params.reason = '';
         params.valid=true
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(1);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
         if (!(Number.isInteger(params.initialAmount) && params.initialAmount > 0)) {
             params.valid=false
             params.reason += 'Invalid initial amount; ';
@@ -60,6 +65,12 @@ const Validity = {
     validateSend: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
         params.reason = '';
         params.valid= true
+
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(2);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
         const senderTally = await tallyMap.getTally(params.senderAddress, params.propertyId);
         if (!senderTally || senderTally.available < params.amount) {
             params.valid=false
@@ -86,6 +97,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(3);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         if (!Number.isInteger(params.propertyIdNumber)) {
             params.valid = false;
             params.reason += 'Invalid property ID; ';
@@ -106,6 +123,12 @@ const Validity = {
     validateCommitToken: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
         params.reason = '';
         params.valid = true;
+
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(4);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
 
         const hasSufficientTokens = await tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
         if (!hasSufficientTokens) {
@@ -133,6 +156,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(5);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         const hasSufficientBalance = await tallyMap.hasSufficientBalance(params.senderAddress, params.offeredPropertyId, params.amountOffered);
         if (!hasSufficientBalance) {
             params.valid = false;
@@ -159,6 +188,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(6);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         if (!(typeof params.fromAddress === 'string')) {
             params.valid = false;
             params.reason += 'Invalid from address; ';
@@ -184,6 +219,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(7);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         if (!(params.backupAddress && typeof params.backupAddress === 'string')) {
             params.valid = false;
             params.reason += 'Invalid backup address; ';
@@ -201,6 +242,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(8);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         if (!(typeof params.newAddress === 'string')) {
             params.valid = false;
             params.reason += 'Invalid new address; ';
@@ -215,6 +262,12 @@ const Validity = {
     validateIssueAttestation: (params, whitelistRegistry) => {
         params.reason = '';
         params.valid = true;
+
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(9);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
 
         if (!(typeof params.targetAddress === 'string')) {
             params.valid = false;
@@ -231,6 +284,12 @@ const Validity = {
         params.reason = '';
         params.valid = true;
 
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(10);
+        if(isAlreadyActivated==false){
+            params.valid=false
+            params.reason += 'Tx type not yet activated '
+        }
+
         if (!(typeof params.targetAddress === 'string')) {
             params.valid = false;
             params.reason += 'Invalid target address; ';
@@ -244,6 +303,12 @@ const Validity = {
         validateGrantManagedToken: (params, propertyRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
@@ -270,6 +335,12 @@ const Validity = {
         validateRedeemManagedToken: (params, propertyRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(12);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
@@ -300,6 +371,12 @@ const Validity = {
                 params.reason = 'Sender address not authorized to create an oracle; ';
             }
 
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(13);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
             return params;
         },
 
@@ -309,6 +386,12 @@ const Validity = {
             params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
+            }
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(14);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
             }
 
             return params;
@@ -321,6 +404,11 @@ const Validity = {
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(15);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             return params;
         },
@@ -329,6 +417,12 @@ const Validity = {
         validateExerciseDerivative: (params, derivativeRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(16);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const isValidDerivative = derivativeRegistry.isValidDerivative(params.contractId);
             if (!isValidDerivative) {
@@ -350,6 +444,12 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(17);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
             const hasSufficientMargin = marginMap.hasSufficientMargin(params.senderAddress, params.contractId, params.amount);
             if (!hasSufficientMargin) {
                 params.valid = false;
@@ -370,6 +470,12 @@ const Validity = {
         validateTradeContractChannel: async (params, channelRegistry, whitelistRegistry, contractRegistry) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(18);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
             const contractDetails = await contractRegistry.getContractDetails(params.contractId);
@@ -394,6 +500,12 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(19);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
             const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
             const isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, params.propertyId1);
             if (!isAddressAWhitelisted) {
@@ -414,6 +526,12 @@ const Validity = {
         validateWithdrawal: (params, channelRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(20);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
             if (!isValidChannel) {
@@ -441,6 +559,12 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(21);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
             const isValidSourceChannel = channelRegistry.isValidChannel(params.fromChannelAddress);
             if (!isValidSourceChannel) {
                 params.valid = false;
@@ -466,6 +590,12 @@ const Validity = {
         validateSettleChannelPNL: (params, channelRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(22);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
 
             const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
             if (!isValidChannel) {
