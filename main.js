@@ -206,9 +206,11 @@ class Main {
                 console.log(decodedParams)
                if(decodedParams.valid==true){
                     console.log('decoded params' +JSON.stringify(decodedParams))
-
-                   await Logic.typeSwitch(decodedParams.type, decodedParams);
-                }else{console.log('invalid tx '+decodedParams.reason)}
+                  await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
+                  await Logic.typeSwitch(decodedParams.type, decodedParams);
+                }else{
+                  await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
+                  console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
             maxProcessedHeight = blockHeight; // Update max processed height after each block

@@ -157,7 +157,7 @@ const Logic = {
  
     },
 
-    async function tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+    async tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
         const propertyManager = PropertyManager.getInstance();
         
         // Generate a new property ID
@@ -188,7 +188,7 @@ const Logic = {
             console.error('Error creating token:', error);
             return error.message;
         }
-    }
+    },
 
 
     async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts) {
@@ -258,7 +258,7 @@ const Logic = {
 
         // Update TL vesting balance for recipient (increase)
         await TallyMap.updateBalance(recipientAddress, 1, 0, 0, 0, tlVestingMovement);
-    }
+    },
 
     async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
         const tallyMapInstance = await TallyMap.getInstance();

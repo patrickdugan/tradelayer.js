@@ -117,7 +117,7 @@ const TxUtils = {
         }
     },
  
-    async function getReferenceAddresses(txId) {
+    async getReferenceAddresses(txId) {
         let tx;
         try {
             tx = await getRawTransactionAsync(txId, true); // Fetch the raw transaction data

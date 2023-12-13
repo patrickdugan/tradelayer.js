@@ -26,8 +26,22 @@ class TallyMap {
         return TallyMap.instance;
     }
 
+    verifyPropertyIds() {
+        for (const [address, properties] of this.addresses.entries()) {
+            for (const propertyId in properties) {
+                if (!this.propertyIndex.has(propertyId)) {
+                    console.error(`Invalid propertyId ${propertyId} found for address ${address}`);
+                    // Handle the error - either remove the invalid entry or log it for further investigation
+                }
+            }
+        }
+    }
     
     static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange,vestingChange) {
+            if (!Number.isInteger(propertyId)) {
+                   return Error(`Invalid propertyId: ${propertyId}`);
+            }
+
             const instance = await this.getInstance();
             if (!instance.addresses.has(address)) {
                 instance.addresses.set(address, {});
@@ -60,7 +74,7 @@ class TallyMap {
     }
 
 
-      static async getAddressBalances(address) {
+    static async getAddressBalances(address) {
             const instance = await this.getInstance();
 
             // Check if the instance has been loaded

@@ -56,6 +56,10 @@ class PropertyManager {
 
     async createToken(ticker, totalInCirculation, type) {
         // Check if the ticker already exists
+
+        if (this.propertyIndex.has(ticker)) {
+            return new (`Error: Ticker "${ticker}" already exists.`);
+        }
         for (let [key, value] of this.propertyIndex.entries()) {
             if (value.ticker === ticker) {
                 return Error(`Ticker "${ticker}" already exists.`);

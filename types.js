@@ -141,12 +141,7 @@ const Types = {
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
                 params.type = 0
                 console.log(params.txTypeToActivate, params.type)
-                params.valid = Validity.validateActivateTradeLayer(txId,params,sender)//save this tx and its validity to db
-                  //call logic function
-                if(params.valid === false){    
-                  params.reason = "Not sent from admin address"
-                }
-                  //save invalid tx to db 
+                params = Validity.validateActivateTradeLayer(txId,params,sender)//save this tx and its validity to db
                 break;
             case 1:
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));

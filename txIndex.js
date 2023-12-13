@@ -257,7 +257,24 @@ class TxIndex {
         });
     }
 
-        static async clearTxIndex() {
+       async upsertTxValidityAndReason(txId, blockHeight, isValid, reason) {
+        const indexKey = `tx-${blockHeight}-${txId}`;
+        
+        try {
+            // Assuming the database instance is accessible as `db`
+            await db.getDatabase('txIndex').update(
+                { _id: indexKey },
+                { $set: { valid: isValid, reason: reason }},
+                { upsert: true }
+            );
+            console.log(`Transaction ${indexKey} validity updated in txIndex.`);
+        } catch (error) {
+            console.error(`Error updating transaction ${indexKey} in txIndex:`, error);
+        }
+    }
+
+
+    static async clearTxIndex() {
             return new Promise(async (resolve, reject) => {
                 try {
                     // Initialize your NeDB database
@@ -332,7 +349,29 @@ class TxIndex {
         }
     }
 
+    /**
+     * Retrieves and deserializes data for a given transaction ID from the txIndex database.
+     * @param {string} txId The transaction ID to query.
+     * @returns {Promise<object|null>} The deserialized transaction data or null if not found.
+     */
+    static async getTransactionData(txId) {
+        try {
+            const txIndexDB = db.getDatabase('txIndex');
+            const blockHeight = TxIndex.fetchChainTip()
+            const txData = await txIndexDB.findOneAsync({ _id: indexKey });
 
+            if (txData) {
+                console.log(`Transaction data found for ${txId}:`, txData);
+                return txData.value; // Return the value part of the transaction data
+            } else {
+                console.log(`No transaction data found for ${txId}.`);
+                return null;
+            }
+        } catch (error) {
+            console.error(`Error retrieving transaction data for ${txId}:`, error);
+            throw error;
+        }
+    }
 
     static async checkForIndex() {
         try {
