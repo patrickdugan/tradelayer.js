@@ -27,6 +27,8 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 //const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Activation = require('./activation.js')
+const activationInstance = Activation.getInstance()
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
@@ -204,9 +206,21 @@ class Main {
                 const referenceUTXO = txData.value.reference.amount/COIN
                 //console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
+                decodedParams.blockHeight=blockHeight
+                if(decodedParams.type >0){
+                      const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
+                      if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
+                        decodedParams.valid = false
+                        decodedParams.reason += 'Tx not yet activated despite being otherwise valid '
+                        console.log(decodedParams.reason)
+                      }else if ((blockHeight<activationBlock)&&(decodedParams.valid==true)){
+                        decodedParams.valid = false
+                        decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues '
+                        console.log(decodedParams.reason)
+                      }
+                }
                console.log('decoded params' +JSON.stringify(decodedParams))
-               if(decodedParams.valid==true){
-                    
+               if(decodedParams.valid==true){    
                   await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
                   await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{

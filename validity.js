@@ -1,6 +1,7 @@
 const TxUtils = require('./txUtils.js')
 const db = require('./db')
 const Activation = require('./activation.js')
+const activationInstance = Activation.getInstance();
 
 const Validity = {
     // 0: Activate TradeLayer
@@ -16,7 +17,7 @@ const Validity = {
         }
 
         // Check if the txTypeToActivate is already activated
-        const activationInstance = Activation.getInstance();
+ 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
         if (isAlreadyActivated) {
             params.valid = false;
@@ -62,7 +63,7 @@ const Validity = {
         return params.valid
     },
     // 2: Send
-    validateSend: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
+    validateSend: async (params) => {
         params.reason = '';
         params.valid= true
 
@@ -71,13 +72,15 @@ const Validity = {
             params.valid=false
             params.reason += 'Tx type not yet activated '
         }
-        const senderTally = await tallyMap.getTally(params.senderAddress, params.propertyId);
+        
+        const TallyMap = require('./tally.js')
+        const senderTally = await TallyMap.getTally(params.senderAddress, params.propertyId);
         if (!senderTally || senderTally.available < params.amount) {
             params.valid=false
             params.reason += 'Insufficient available balance; ';
         }
 
-        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
+        /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
         if (!isSenderWhitelisted) {
             params.valid=false
             params.reason += 'Sender address not whitelisted; ';
@@ -87,13 +90,13 @@ const Validity = {
         if (!senderKYCCleared) {
             params.valid=false
             params.reason += 'Sender address KYC not cleared; ';
-        }
+        }*/
 
         params.valid = senderTally && senderTally.available >= params.amount && isSenderWhitelisted && senderKYCCleared;
     },
 
         // 3: Trade Token for UTXO
-    validateTradeTokenForUTXO: async (params, tallyMap) => {
+    validateTradeTokenForUTXO: async (params) => {
         params.reason = '';
         params.valid = true;
 

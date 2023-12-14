@@ -34,7 +34,7 @@ const Logic = {
         console.log('tx number and params ' +txNumber, params)
         switch (txNumber) {
            case 0:
-                return await Logic.activateTradeLayer(params.txTypeToActivate, params.type);
+                return await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
                 Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
@@ -146,11 +146,11 @@ const Logic = {
         }
     },
 
-    async activateTradeLayer(transaction, txType) { 
+    async activateTradeLayer(transaction, txType, block) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         // Call the activateSystem method from the Activation class instance
         console.log('in activate TradeLayer logic function '+ transaction, txType)
-        const activationResult = await activation.activate(txType);
+        const activationResult = await activation.activate(txType, block);
 
         // Log or handle the result of activation
         console.log('activation result ' +activationResult);

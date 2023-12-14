@@ -18,11 +18,11 @@ class TallyMap {
      * @param {number} blockHeight - The block height for which to load the tally map.
      * @returns {Promise<TallyMap>} - A promise that resolves to the singleton instance of the TallyMap.
      */
-    static async getInstance(blockHeight) {
+    static async getInstance() {
         if (!TallyMap.instance) {
             TallyMap.instance = new TallyMap();
         }
-        await TallyMap.instance.loadFromDB(blockHeight);
+        await TallyMap.instance.loadFromDB();
         return TallyMap.instance;
     }
 
@@ -196,7 +196,7 @@ class TallyMap {
         // Load and parse all deltas from the database for the given block height
     }
 
-    static totalTokens(propertyId) {
+    totalTokens(propertyId) {
         let total = 0;
         for (const addressObj of this.addresses.values()) {
             if (addressObj[propertyId]) {
@@ -206,11 +206,12 @@ class TallyMap {
         return total;
     }
     // Get the tally for a specific address and property
-    static getTally(address, propertyId) {
-        if (!this.addresses.has(address)) {
+    static async getTally(address, propertyId) {
+        const instance = await TallyMap.getInstance(); // Ensure instance is loaded
+        if (!instance.addresses.has(address)) {
             return 0;
         }
-        const addressObj = this.addresses.get(address);
+        const addressObj = instance.addresses.get(address);
         if (!addressObj[propertyId]) {
             return 0;
         }

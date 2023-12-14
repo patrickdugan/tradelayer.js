@@ -132,22 +132,23 @@ const Types = {
     if (marker !='tl'){
       throw new Error('Invalid payload');
     }
-    console.log('encoded payload before slicing '+ encodedPayload)
+    //console.log('encoded payload before slicing '+ encodedPayload)
     var type = Number(encodedPayload.slice(0,1).toString(36))
+        params.type = type;
     encodedPayload=encodedPayload.slice(1,encodedPayload.length).toString(36)
-    console.log('type and payload'+ type+' '+encodedPayload)
+    //console.log('type and payload'+ type+' '+encodedPayload)
     switch (type) {
        case 0:
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                params.type = 0
-                console.log(params.txTypeToActivate, params.type)
-                params = Validity.validateActivateTradeLayer(txId,params,sender)//save this tx and its validity to db
+                params = Validity.validateActivateTradeLayer(txId,params,sender)
                 break;
             case 1:
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
+                params = Validity.validateTokenIssue(params)
                 break;
             case 2:
                 params = Decode.decodeSend(encodedPayload.substr(index));
+                params = Validity.validateSend(params)
                 break;
             case 3:
                 params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));

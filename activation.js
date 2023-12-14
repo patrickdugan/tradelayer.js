@@ -91,7 +91,7 @@ class Activation {
                 // If no entries found, initialize the txRegistry with default values
                 console.log('No activations list found, initializing with default values.');
                 this.txRegistry = this.initializeTxRegistry();
-                //console.log(this.txRegistry)
+                console.log(this.txRegistry)
                 await this.saveActivationsList(); // Save the newly created default activations list
             } else {
                 // If entries are found, parse the activations list
@@ -117,8 +117,8 @@ class Activation {
     }
 
 
-        // Example helper functions (implementations depend on your specific logic and data structures)
-    async activate(txType, senderAddress) {
+    // Example helper functions (implementations depend on your specific logic and data structures)
+    async activate(txType, block) {
 
         console.log('Activating transaction type:' +txType);
         await this.loadActivationsList(); // Make sure to load the activations list first
@@ -130,21 +130,22 @@ class Activation {
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
             const tradeLayerManager = TradeLayerManager.getInstance(this.hardcodedAdminAddress);
-            await tradeLayerManager.initializeTokens();            //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
+            await tradeLayerManager.initializeTokens(); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
+            this.txRegistry[txType].activationBlock = block
             console.log(this.txRegistry)
             return await this.saveActivationsList(); // Save the updated activations list
-
         }else{
             // Check if the transaction type exists in the registry
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
+                this.txRegistry[txType].activationBlock = block
+                console.log('activating '+txType+ ' '+this.txRegistry)
                 return await this.saveActivationsList(); // Save the updated activations list
             } else {
                 console.error(`Transaction type ${txType} not found in registry.`);
             }
         }
-
     }
 
     initializeTxRegistry() {
@@ -191,6 +192,16 @@ class Activation {
 
     }
 
+    // Function to get the activation block of a transaction type
+    getActivationBlock(txType) {
+        if (this.txRegistry.hasOwnProperty(txType)) {
+            return this.txRegistry[txType].activationBlock || null; // Returns the activation block if available, otherwise null
+        } else {
+            console.error(`Transaction type ${txType} not found in registry.`);
+            return null; // Return null if the transaction type is not found
+        }
+    }
+
      /**
      * Checks if a transaction type is active in the transaction registry.
      * @param {number} txTypeNumber - The transaction type number to check.
@@ -200,7 +211,7 @@ class Activation {
         // Assuming txRegistry is accessible within this context
         await this.loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
-        if (txType && txType.active) {
+        if (txType && txType.active==true) {
             return true;
         }
         return false;
