@@ -132,10 +132,10 @@ const Types = {
     if (marker !='tl'){
       throw new Error('Invalid payload');
     }
-
+    console.log('encoded payload before slicing '+ encodedPayload)
     var type = Number(encodedPayload.slice(0,1).toString(36))
-    encodedPayload=encodedPayload.slice(1,encodedPayload.length-1).toString(36)
-    console.log(type,encodedPayload)
+    encodedPayload=encodedPayload.slice(1,encodedPayload.length).toString(36)
+    console.log('type and payload'+ type+' '+encodedPayload)
     switch (type) {
        case 0:
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));

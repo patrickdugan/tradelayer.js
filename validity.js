@@ -30,7 +30,7 @@ const Validity = {
     },
   
      // 1: Token Issue
-    validateTokenIssue: (params) => {
+    validateTokenIssue: async (params) => {
         params.reason = '';
         params.valid=true
 
@@ -93,7 +93,7 @@ const Validity = {
     },
 
         // 3: Trade Token for UTXO
-    validateTradeTokenForUTXO: (params, tallyMap) => {
+    validateTradeTokenForUTXO: async (params, tallyMap) => {
         params.reason = '';
         params.valid = true;
 
@@ -184,7 +184,7 @@ const Validity = {
     },
 
     // 6: Cancel Order
-    validateCancelOrder: (params, orderBook) => {
+    validateCancelOrder: async (params, orderBook) => {
         params.reason = '';
         params.valid = true;
 
@@ -215,7 +215,7 @@ const Validity = {
     },
 
     // 7: Create Whitelist
-    validateCreateWhitelist: (params) => {
+    validateCreateWhitelist: async (params) => {
         params.reason = '';
         params.valid = true;
 
@@ -238,7 +238,7 @@ const Validity = {
     },
 
     // 8: Update Admin
-    validateUpdateAdmin: (params, registry) => {
+    validateUpdateAdmin: async (params, registry) => {
         params.reason = '';
         params.valid = true;
 
@@ -259,7 +259,7 @@ const Validity = {
     },
 
     // 9: Issue Attestation
-    validateIssueAttestation: (params, whitelistRegistry) => {
+    validateIssueAttestation: async (params, whitelistRegistry) => {
         params.reason = '';
         params.valid = true;
 
@@ -280,7 +280,7 @@ const Validity = {
     },
 
     // 10: Revoke Attestation
-    validateRevokeAttestation: (params, whitelistRegistry) => {
+    validateRevokeAttestation: async (params, whitelistRegistry) => {
         params.reason = '';
         params.valid = true;
 
@@ -300,7 +300,7 @@ const Validity = {
         return params;
             },
         // 11: Grant Managed Token
-        validateGrantManagedToken: (params, propertyRegistry, tallyMap) => {
+        validateGrantManagedToken: async (params, propertyRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
 
@@ -332,7 +332,7 @@ const Validity = {
         },
 
         // 12: Redeem Managed Token
-        validateRedeemManagedToken: (params, propertyRegistry, tallyMap) => {
+        validateRedeemManagedToken: async (params, propertyRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
 
@@ -364,7 +364,7 @@ const Validity = {
         },
 
         // 13: Create Oracle
-        validateCreateOracle: (params, oracleRegistry) => {
+        validateCreateOracle: async (params, oracleRegistry) => {
             params.reason = '';
             params.valid = oracleRegistry.canCreateOracle(params.senderAddress);
             if (!params.valid) {
@@ -381,7 +381,7 @@ const Validity = {
         },
 
         // 14: Publish Oracle Data
-        validatePublishOracleData: (params, oracleRegistry) => {
+        validatePublishOracleData: async (params, oracleRegistry) => {
             params.reason = '';
             params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
@@ -398,7 +398,7 @@ const Validity = {
         },
 
         // 15: Close Oracle
-        validateCloseOracle: (params, oracleRegistry) => {
+        validateCloseOracle: async (params, oracleRegistry) => {
             params.reason = '';
             params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
@@ -414,7 +414,7 @@ const Validity = {
         },
 
         // 16: Exercise Derivative
-        validateExerciseDerivative: (params, derivativeRegistry, marginMap) => {
+        validateExerciseDerivative: async (params, derivativeRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
 
@@ -523,7 +523,7 @@ const Validity = {
         },
 
         // 20: Withdrawal
-        validateWithdrawal: (params, channelRegistry, tallyMap) => {
+        validateWithdrawal: async (params, channelRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
 
@@ -555,7 +555,7 @@ const Validity = {
         },
 
         // 21: Transfer
-        validateTransfer: (params, channelRegistry, tallyMap) => {
+        validateTransfer: async (params, channelRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
 
@@ -587,7 +587,7 @@ const Validity = {
         },
 
         // 22: Settle Channel PNL
-        validateSettleChannelPNL: (params, channelRegistry, marginMap) => {
+        validateSettleChannelPNL: async (params, channelRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
 

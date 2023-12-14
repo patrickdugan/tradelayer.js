@@ -28,20 +28,24 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
+      //console.log('send payload to decode '+ payload)
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
         const address = parts[1];
-        const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
-        const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
 
         if (sendAll) {
             return { sendAll, address };
-        } else if (address === '') {
-            // Multi-send
-            return { sendAll, multiSend: propertyIds.map((id, index) => ({ propertyId: id, amount: amounts[index] })) };
-        } else {
+        } else if (parts.length === 4) {
             // Single send
-            return { sendAll, address, propertyId: propertyIds[0], amount: amounts[0] };
+            const propertyId = parseInt(parts[2], 36); // Decode propertyId from base36
+            const amount = parseInt(parts[3], 36); // Decode amount from base36
+            console.log('decoding single send amount ' +amount + ' '+ parts[3])
+            return { sendAll, address, propertyId, amount };
+        } else {
+            // Multi-send
+            const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
+            const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
+            return { sendAll, multiSend: propertyIds.map((id, index) => ({ propertyId: id, amount: amounts[index] })) };
         }
     },
 

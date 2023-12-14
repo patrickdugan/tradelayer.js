@@ -31,7 +31,7 @@ const Logic = {
 
     async typeSwitch(txNumber, params){
         if(params.valid == false){return null}
-        console.log(txNumber, params)
+        console.log('tx number and params ' +txNumber, params)
         switch (txNumber) {
            case 0:
                 return await Logic.activateTradeLayer(params.txTypeToActivate, params.type);
@@ -195,11 +195,12 @@ const Logic = {
     async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts) {
         if (sendAll) {
             // Handle sending all available balances
+            console.log('sendingAll')
             await sendAll(senderAddress,recipientAddresses)
         } else {
             // Check if handling a multi-send or single send
             const isMultiSend = Array.isArray(propertyIdNumbers) && Array.isArray(amounts);
-
+            console.log('multisend')
             if (isMultiSend) {
                 // Ensure arrays are of the same length
                 if (propertyIdNumbers.length !== amounts.length || propertyIdNumbers.length !== recipientAddresses.length) {
@@ -217,6 +218,7 @@ const Logic = {
             } else {
                 // Special handling for TLVEST (Property ID 2)
                     if (propertyId === 2) {
+                        console.log('vesting single send')
                         // Get TLVEST and TL balances for the sender
                         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
                         const tlTally = await TallyMap.getTally(senderAddress, 1);
@@ -232,9 +234,10 @@ const Logic = {
 
                         // Update TL vesting balance for recipient (increase)
                         await TallyMap.updateBalance(recipientAddress, 1, 0, 0, 0, tlVestingMovement);
+                    }else{
+                        console.log('vanilla single send')
+                        await sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
                     }
-                // Handle single send
-                await sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
             }
         }
 

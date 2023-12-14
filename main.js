@@ -171,7 +171,7 @@ class Main {
    async constructConsensusFromIndex(startHeight) {
 
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-        console.log('construct Consensus from Index max indexed block '+currentBlockHeight)
+        console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
@@ -193,19 +193,20 @@ class Main {
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
-                console.log(txId, typeof txId);
+                //console.log(txId, typeof txId);
                 const payload = txData.value.payload;
+                //console.log('reading payload '+payload)
                 const marker = txData.value.marker
                   // Assuming 'sender' and 'reference' are objects with an 'address' property
                 const senderAddress = txData.value.sender.senderAddress;
                 const referenceAddress = txData.value.reference.address;
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                console.log(senderAddress, referenceAddress)
+                //console.log(senderAddress, referenceAddress)
                 const decodedParams = Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
-                console.log(decodedParams)
+               console.log('decoded params' +JSON.stringify(decodedParams))
                if(decodedParams.valid==true){
-                    console.log('decoded params' +JSON.stringify(decodedParams))
+                    
                   await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
                   await Logic.typeSwitch(decodedParams.type, decodedParams);
                 }else{

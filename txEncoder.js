@@ -36,6 +36,7 @@ const Encode = {
             return payload.join(';');
         } else {
             // Handle single send
+            console.log('encoding single send amount '+params.amount + 'encoded '+params.amount.toString(36))
             const payload = [
                 '0', // Not sendAll
                 params.address,

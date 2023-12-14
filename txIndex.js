@@ -149,7 +149,7 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                console.log(payload)
+                console.log('payload '+payload)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
@@ -173,9 +173,6 @@ class TxIndex {
         try {
             const decodedTx = await decoderawtransactionAsync(rawTx);
             //console.log(decodedTx)
-            if(rawTx=="02000000000101be64c98a4c17b5861b45b2602873212cb0ada374539c7b61593b2d3e47b8e5cd0100000000ffffffff020000000000000000066a04746c303080b9ff0600000000160014ebecd536259ef21bc6ecc18e45b35412f04722900247304402201ac4b0e373e7555d502e80b5424683dd1da2ca8052793bd2c62d64b2e9370367022014e72b32507262b3c78848b81558acfb2c9f9cb2a8c7968b65615888e7f04d0b012103d6521aea309f7a2768a1cabcb917664966cabc28bc23874b12f73c1989972c5f00000000"){
-                console.log('Decoded Transaction:', decodedTx);
-            }
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
             if (opReturnOutput) {
                 const opReturnData = opReturnOutput.scriptPubKey.hex;
@@ -183,7 +180,7 @@ class TxIndex {
                 // Extract and log the "tl" marker
                 const markerHex = opReturnData.substring(4, 8); // '746c' for 'tl'
                 const marker = Buffer.from(markerHex, 'hex').toString();
-                if(marker=='tl'){console.log('Marker:', marker);}
+                //if(marker=='tl'){console.log('Marker:', marker);}
                 // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(8);
                 const payload = Buffer.from(payloadHex, 'hex').toString();

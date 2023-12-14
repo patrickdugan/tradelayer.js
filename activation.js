@@ -102,7 +102,7 @@ class Activation {
 
                 if (data['activationsList']) {
                     this.txRegistry = JSON.parse(data['activationsList']);
-                    console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
+                    //console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
                 } else {
                     console.error('Activations list not found in the database, initializing with default values.');
                     this.txRegistry = this.initializeTxRegistry();
