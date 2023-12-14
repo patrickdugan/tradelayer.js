@@ -17,7 +17,7 @@ const Validity = {
         // Check if the txTypeToActivate is already activated
  
         const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
-        console.log('isAlreadyActivated '+isAlreadyActivated)
+        console.log('isAlreadyActivated '+isAlreadyActivated, params.txTypeToActivate)
         if (isAlreadyActivated) {
             params.valid = false;
             params.reason = 'Transaction type already activated';

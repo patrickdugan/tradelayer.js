@@ -102,7 +102,7 @@ class Activation {
 
                 if (data['activationsList']) {
                     this.txRegistry = JSON.parse(data['activationsList']);
-                    console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
+                    //console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
                 } else {
                     console.error('Activations list not found in the database, initializing with default values.');
                     this.txRegistry = this.initializeTxRegistry();
@@ -211,7 +211,9 @@ class Activation {
         // Assuming txRegistry is accessible within this context
         await this.loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
-        if (txType && txType.active==true) {
+        console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
+        if(txType==undefined){return false}
+        if (txType.active==true) {
             return true;
         }
         return false;

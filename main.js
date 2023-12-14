@@ -170,10 +170,12 @@ class Main {
         }
     }
 
-   async constructConsensusFromIndex(startHeight) {
+   async constructConsensusFromIndex(startHeight, realtime) {
 
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-        console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
+        if(realtime!=true){
+          console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
+        }
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
@@ -186,7 +188,7 @@ class Main {
 
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
-        console.log('loaded txIndex '+JSON.stringify(allTxData))
+        //console.log('loaded txIndex '+JSON.stringify(allTxData))
         for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
@@ -207,10 +209,10 @@ class Main {
                 const referenceAddress = txData.value.reference.address;
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                //console.log(senderAddress, referenceAddress)
-                const decodedParams = await Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
+                console.log(type, payload)
+                const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.blockHeight=blockHeight
-                console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
+                //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
                 if(decodedParams.type >0){
                       const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
                       if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
@@ -223,10 +225,11 @@ class Main {
                         console.log(decodedParams.reason)
                       }
                 }
-               console.log('decoded params' +JSON.stringify(decodedParams))
-               if(decodedParams.valid==true){    
-                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
+               //console.log('decoded params with validity' +JSON.stringify(decodedParams))
+               if(decodedParams.valid==true){
+                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams))
                   await Logic.typeSwitch(type, decodedParams);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                 }else{
                   await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
@@ -246,7 +249,7 @@ class Main {
                 { $set: { value: maxProcessedHeight } },
                 { upsert: true }
             );
-            console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);}
         } catch (error) {
             console.error('Error updating MaxProcessedHeight:', error);
             throw error; // or handle the error as needed
@@ -254,7 +257,9 @@ class Main {
 
         //insert save of maxProcessedHeight in consensus sub-DB
 
-        return this.syncIfNecessary();
+        if(realtime ==false || realtime==undefined || realtime==null){
+          return this.syncIfNecessary();
+        }else{return maxProcessedHeight}
     }
 
 
@@ -275,7 +280,7 @@ class Main {
     async checkBlockLag() {
         const chaintip = await this.getBlockCountAsync()
         const maxConsensusBlock = await this.loadMaxProcessedHeight()
-        console.log(maxConsensusBlock)
+        //console.log(maxConsensusBlock)
         var lag = chaintip - maxConsensusBlock
         return {'lag':lag, 'chainTip':chaintip, 'maxConsensus':maxConsensusBlock}
     }
@@ -344,6 +349,7 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             await TxIndex.processBlockData(blockData, blockHeight);
+            await this.constructConsensusFromIndex(blockHeight,true)
             //console.log(`Processed block ${blockHeight} successfully.`);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
@@ -467,7 +473,7 @@ class Main {
             const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
             if (maxProcessedHeightDoc) {
                 const maxProcessedHeight = maxProcessedHeightDoc.value;
-                console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
+                //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
                 return maxProcessedHeight; // Return the retrieved value
             } else {
                 console.log('MaxProcessedHeight not found in the database.');

@@ -72,9 +72,9 @@ class TxIndex {
 
     static async extractBlockData(startHeight) {
         let chainTip = await this.fetchChainTip();
-        //console.log('building index until' + chainTip);
+        console.log('building index until' + chainTip);
         for (let height = startHeight; height <= chainTip; height++) {
-            //console.log(height);
+            if(height%1000==1){console.log('indexed to '+height)};
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)
             await this.processBlockData(blockData, height);
@@ -149,7 +149,7 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                console.log('payload '+payload)
+                //console.log('payload '+payload)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
@@ -222,11 +222,11 @@ class TxIndex {
                 // Document exists, perform an update
                 const update = { $set: { txData, payload } };
                 await db.getDatabase('txIndex').updateAsync({ _id: indexKey }, update);
-                console.log(`Transaction data updated for ${indexKey}`);
+                //console.log(`Transaction data updated for ${indexKey}`);
             } else {
                 // Document does not exist, perform an insert
                 await db.getDatabase('txIndex').insertAsync(document);
-                console.log(`Transaction data inserted for ${indexKey}`);
+                //console.log(`Transaction data inserted for ${indexKey}`);
             }
         } catch (error) {
             // Handle any errors
@@ -264,7 +264,7 @@ class TxIndex {
                 { $set: { type:type, valid: isValid, reason: reason }},
                 { upsert: true }
             );
-            console.log(`Transaction ${indexKey} validity updated in txIndex.`);
+            //console.log(`Transaction ${indexKey} validity updated in txIndex.`);
         } catch (error) {
             console.error(`Error updating transaction ${indexKey} in txIndex:`, error);
         }
@@ -337,8 +337,8 @@ class TxIndex {
                 return maxHeightDoc.value;
             } else {
                 // Handle the case where MaxHeight hasn't been set yet
-                console.log('MaxHeight not found in txIndexDB.');
-                return 0; // or an appropriate default/fallback value
+                //console.log('MaxHeight not found in txIndexDB.');
+                return 3082500; // or an appropriate default/fallback value
             }
         } catch (err) {
             console.error('Error finding MaxIndexedBlock:', err);

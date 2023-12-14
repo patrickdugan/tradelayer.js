@@ -1,4 +1,3 @@
-const TallyMap = require('./tally.js');
 const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
@@ -36,6 +35,7 @@ class TradeLayerManager {
         // Distribute initial amount to insurance fund
         insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
         insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
+        const TallyMap = require('./tally.js');
         await TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,0,0,TLTotalAmount-amountToInsuranceFund)
         await TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsuranceFund,TLVESTTotalAmount-amountToInsuranceFund,0,0)
         await TallyMap.getAddressBalances(this.adminAddress)

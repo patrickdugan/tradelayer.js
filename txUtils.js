@@ -572,13 +572,16 @@ const TxUtils = {
 
             // Step 2: Create a new transaction
             const utxos = await this.listUnspent(1, 9999999, [adminAddress]);
+            console.log(utxos)
             if (!utxos || utxos.length === 0) {
                 throw new Error('No UTXOs available for the admin address');
             }
 
-            // Select an UTXO to use
-            const utxo = utxos[0]; // Simple selection, adjust as needed
+            
+            const minAmountSatoshis = STANDARD_FEE;
 
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(adminAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(activationPayload)

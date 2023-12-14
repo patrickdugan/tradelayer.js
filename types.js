@@ -132,26 +132,26 @@ const Types = {
     if (marker !='tl'){
       return Error('Invalid payload');
     }
-
+    console.log('checking that type is here '+type)
     switch (type) {
        case 0:
-                console.log('decoding activate '+params)
+                //console.log('decoding activate '+params)
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                console.log('validating activate '+JSON.stringify(params))
+                //console.log('validating activate '+JSON.stringify(params))
                 params = await Validity.validateActivateTradeLayer(txId,params,sender)     
-                console.log('back from validity function'+JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
+                //console.log('back from validity function'+JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 1:
-                console.log('decoding issuance '+params)
+                //console.log('decoding issuance '+params)
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
-                console.log('validating issuance '+JSON.stringify(params))
+                //console.log('validating issuance '+JSON.stringify(params))
                 params = await Validity.validateTokenIssue(params)               
-                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
+                //console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 2:
-                console.log('decoding send '+params)
+                //console.log('decoding send '+params)
                 params = Decode.decodeSend(encodedPayload.substr(index));
-                console.log('validating send '+JSON.stringify(params))
+                //console.log('validating send '+JSON.stringify(params))
                 params = await Validity.validateSend(params)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
