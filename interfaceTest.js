@@ -13,6 +13,8 @@ async function runTest() {
     console.log(`Balance for ${adminAddress}:`, balance);
     const properties = await expressInterface.listProperties();
     console.log('Properties:', properties);
+    const activations = await expressInterface.getActivations()
+    console.log('Activations:', activations)
 
 
 }

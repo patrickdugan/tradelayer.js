@@ -254,14 +254,14 @@ class TxIndex {
         });
     }
 
-    static async upsertTxValidityAndReason(txId, blockHeight, isValid, reason) {
+    static async upsertTxValidityAndReason(txId, type, blockHeight, isValid, reason) {
         const indexKey = `tx-${blockHeight}-${txId}`;
         
         try {
             // Assuming the database instance is accessible as `db`
             await db.getDatabase('txIndex').update(
                 { _id: indexKey },
-                { $set: { valid: isValid, reason: reason }},
+                { $set: { type:type, valid: isValid, reason: reason }},
                 { upsert: true }
             );
             console.log(`Transaction ${indexKey} validity updated in txIndex.`);

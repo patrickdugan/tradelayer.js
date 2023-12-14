@@ -125,30 +125,35 @@ const Types = {
   },
 
   // Function to decode a payload based on the transaction ID and encoded payload
-  decodePayload: (txId, marker, encodedPayload,sender,reference, senderAmount,referenceAmount) => {
+   decodePayload: async (txId, type, marker, encodedPayload,sender,reference, senderAmount,referenceAmount) => {
     let index = 0;
     let params = {};
 
     if (marker !='tl'){
-      throw new Error('Invalid payload');
+      return Error('Invalid payload');
     }
-    //console.log('encoded payload before slicing '+ encodedPayload)
-    var type = Number(encodedPayload.slice(0,1).toString(36))
-        params.type = type;
-    encodedPayload=encodedPayload.slice(1,encodedPayload.length).toString(36)
-    //console.log('type and payload'+ type+' '+encodedPayload)
+
     switch (type) {
        case 0:
+                console.log('decoding activate '+params)
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                params = Validity.validateActivateTradeLayer(txId,params,sender)
+                console.log('validating activate '+JSON.stringify(params))
+                params = await Validity.validateActivateTradeLayer(txId,params,sender)     
+                console.log('back from validity function'+JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 1:
+                console.log('decoding issuance '+params)
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
-                params = Validity.validateTokenIssue(params)
+                console.log('validating issuance '+JSON.stringify(params))
+                params = await Validity.validateTokenIssue(params)               
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 2:
+                console.log('decoding send '+params)
                 params = Decode.decodeSend(encodedPayload.substr(index));
-                params = Validity.validateSend(params)
+                console.log('validating send '+JSON.stringify(params))
+                params = await Validity.validateSend(params)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 3:
                 params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));

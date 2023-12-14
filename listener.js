@@ -5,6 +5,8 @@ const PropertyManager = require('./property.js');
 const Interface = require('./interface.js');
 const interfaceInstance = new Interface();
 const Main = require('./main.js');
+const Activations = require('./activation.js')
+var activationsInstance = Activations.getInstance()
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -47,6 +49,17 @@ app.post('/listProperties', async (req, res) => {
         res.json(propertiesArray); // Send the array representation of the properties
     } catch (error) {
         console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/getActivations', async (req, res) => {
+    try {
+        console.log('express calling activations');
+        const activations = await activationsInstance.loadActivationsList(); // Await the getPropertyIndex method
+        res.json(activations); // Send the array representation of the properties
+    } catch (error) {
+        console.error('Error fetching activations:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });

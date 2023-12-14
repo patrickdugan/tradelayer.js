@@ -196,17 +196,21 @@ class Main {
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
                 //console.log(txId, typeof txId);
-                const payload = txData.value.payload;
-                //console.log('reading payload '+payload)
+                var payload = txData.value.payload;
+                console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
+                const type = Number(payload.slice(0,1).toString(36))
+                payload=payload.slice(1,payload.length).toString(36)
+
                   // Assuming 'sender' and 'reference' are objects with an 'address' property
                 const senderAddress = txData.value.sender.senderAddress;
                 const referenceAddress = txData.value.reference.address;
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
                 //console.log(senderAddress, referenceAddress)
-                const decodedParams = Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
+                const decodedParams = await Types.decodePayload(txId, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.blockHeight=blockHeight
+                console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
                 if(decodedParams.type >0){
                       const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
                       if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
@@ -221,10 +225,10 @@ class Main {
                 }
                console.log('decoded params' +JSON.stringify(decodedParams))
                if(decodedParams.valid==true){    
-                  await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
-                  await Logic.typeSwitch(decodedParams.type, decodedParams);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
+                  await Logic.typeSwitch(type, decodedParams);
                 }else{
-                  await TxIndex.upsertTxValidityAndReason(txId, blockHeight, decodedParams.valid, decodedParams.reason);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
@@ -342,7 +346,7 @@ class Main {
             await TxIndex.processBlockData(blockData, blockHeight);
             //console.log(`Processed block ${blockHeight} successfully.`);
         } catch (error) {
-            console.error(`Error processing block ${blockHeight}:`, error);
+            console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
        // Loop through contracts to trigger liquidations
         /*for (const contract of ContractsRegistry.getAllContracts()) {

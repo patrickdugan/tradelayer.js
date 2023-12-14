@@ -17,8 +17,10 @@ function clearDatastore(dbPath, dbName) {
 const txIndexDbPath = path.join(__dirname, 'nedb-data', 'txIndex.db');
 const propertyListDbPath = path.join(__dirname, 'nedb-data', 'propertyList.db');
 const tallyMapDbPath = path.join(__dirname, 'nedb-data', 'tallyMap.db');
+const activationsDbPath = path.join(__dirname, 'nedb-data', 'activations.db');
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
 clearDatastore(propertyListDbPath, 'propertyList');
 clearDatastore(tallyMapDbPath, 'tallyMap');
+clearDatastore(activationsDbPath, 'activations')

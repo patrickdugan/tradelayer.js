@@ -563,11 +563,11 @@ const TxUtils = {
 
 
 
-    async sendActivationTransaction(adminAddress, txTypeToActivate) {
+    async activationTransaction(adminAddress, txTypeToActivate) {
         try {
             // Step 1: Create the activation payload
             // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            const activationPayload = 'tl0'
+            var activationPayload = 'tl0'
             activationPayload += Encode.encodeActivateTradeLayer({'code':txTypeToActivate});
 
             // Step 2: Create a new transaction

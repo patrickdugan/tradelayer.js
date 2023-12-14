@@ -29,6 +29,16 @@ const expressInterface = {
             console.error('Error in getAllBalancesForAddress:', error.response ? error.response.data : error.message);
             throw error;
         }
+    },
+
+    async getActivations() {
+        try {
+            const response = await axios.post(`${serverUrl}/getActivations`);
+            return response.data;
+        } catch (error) {
+            console.error('Error in getActivations:', error.response ? error.response.data : error.message);
+            throw error;
+        }
     }
 };
 

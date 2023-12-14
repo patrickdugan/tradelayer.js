@@ -6,35 +6,36 @@ const activationInstance = Activation.getInstance();
 const Validity = {
     // 0: Activate TradeLayer
     validateActivateTradeLayer: async (txId, params, sender) => {
-        // Initialize with no reason and valid as false
-        params.reason = '';
-        params.valid = false;
-
+        params.valid = true;
+        console.log('inside validating activation '+JSON.stringify(params))
         // Check if the sender is the admin address
-        if (sender !== "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8") {
+        if (sender != "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8") {
+            params.valid=false
             params.reason = 'Not sent from admin address';
-            return params;
         }
 
         // Check if the txTypeToActivate is already activated
  
         const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
+        console.log('isAlreadyActivated '+isAlreadyActivated)
         if (isAlreadyActivated) {
             params.valid = false;
             params.reason = 'Transaction type already activated';
-            return params;
         }
 
-        // If all checks pass, set the transaction as valid
-        params.valid = true;
+        if(params.txTypeToActivate>35){
+            params.valid = false;
+            params.reason = 'Tx Type out of bounds';
+        }
+        console.log('inside validating activation '+JSON.stringify(params))
+
         return params;
     },
   
      // 1: Token Issue
     validateTokenIssue: async (params) => {
-        params.reason = '';
         params.valid=true
-
+        console.log('inside issuance validation '+JSON.stringify(params))
         const isAlreadyActivated = await activationInstance.isTxTypeActive(1);
         if(isAlreadyActivated==false){
             params.valid=false
@@ -60,7 +61,7 @@ const Validity = {
             params.reason += 'Invalid property ID for vesting type; ';
         }
 
-        return params.valid
+        return params
     },
     // 2: Send
     validateSend: async (params) => {
@@ -92,7 +93,7 @@ const Validity = {
             params.reason += 'Sender address KYC not cleared; ';
         }*/
 
-        params.valid = senderTally && senderTally.available >= params.amount && isSenderWhitelisted && senderKYCCleared;
+        return params
     },
 
         // 3: Trade Token for UTXO

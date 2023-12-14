@@ -86,7 +86,7 @@ class Activation {
         try {
             const activationsDB = db.getDatabase('activations');
             const entries = await activationsDB.findAsync({});
-
+            //console.log('loaded activations '+JSON.stringify(entries))
             if (entries.length === 0) {
                 // If no entries found, initialize the txRegistry with default values
                 console.log('No activations list found, initializing with default values.');
@@ -102,7 +102,7 @@ class Activation {
 
                 if (data['activationsList']) {
                     this.txRegistry = JSON.parse(data['activationsList']);
-                    //console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
+                    console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
                 } else {
                     console.error('Activations list not found in the database, initializing with default values.');
                     this.txRegistry = this.initializeTxRegistry();
@@ -151,7 +151,7 @@ class Activation {
     initializeTxRegistry() {
         // Initialize the transaction registry
         return {
-            0: { name: "Activate TradeLayer", active: true },
+            0: { name: "Activate TradeLayer", active: false },
             1: { name: "Token Issue", active: false },
             2: { name: "Send", active: false },
             3: { name: "Trade Token for UTXO", active: false },
