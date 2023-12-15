@@ -64,7 +64,7 @@ const Validity = {
         return params
     },
     // 2: Send
-    validateSend: async (params) => {
+    validateSend: async (sender, params) => {
         params.reason = '';
         params.valid= true
 
@@ -75,10 +75,15 @@ const Validity = {
         }
         
         const TallyMap = require('./tally.js')
-        const senderTally = await TallyMap.getTally(params.senderAddress, params.propertyId);
-        if (!senderTally || senderTally.available < params.amount) {
+        const senderTally = await TallyMap.getTally(sender, params.propertyIds);
+        console.log('checking senderTally '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
+        if (senderTally==0) {
             params.valid=false
-            params.reason += 'Insufficient available balance; ';
+            params.reason += 'Bug with Tally Loading'
+            
+        }else if(senderTally.available < params.amount){
+            params.valid=false
+            params.reason += 'Insufficient available balance'
         }
 
         /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);

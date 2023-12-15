@@ -27,18 +27,18 @@ const Decode = {
         const address = parts[1];
 
         if (sendAll) {
-            return { sendAll, address };
+            return { sendAll:sendAll, address:address };
         } else if (parts.length === 4) {
             // Single send
             const propertyId = parseInt(parts[2], 36); // Decode propertyId from base36
             const amount = parseInt(parts[3], 36); // Decode amount from base36
             console.log('decoding single send amount ' +amount + ' '+ parts[3])
-            return { sendAll, address, propertyId, amount };
+            return { sendAll: sendAll, address:address, propertyIds:propertyId, amounts:amount };
         } else {
             // Multi-send
             const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
             const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
-            return { sendAll, multiSend: propertyIds.map((id, index) => ({ propertyId: id, amount: amounts[index] })) };
+            return { sendAll:sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
     },
 

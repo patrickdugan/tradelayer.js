@@ -146,7 +146,7 @@ class TallyMap {
                 // Convert the array back into a Map
                 this.addresses = new Map(mapDataArray.map(([key, value]) => [key, value]));
             } else {
-                console.log('failed to load tallyMap, starting a new map')
+                //console.log('failed to load tallyMap, starting a new map')
                 this.addresses = new Map(); // Ensure addresses is always a Map
             }
         } catch (error) {
@@ -215,7 +215,11 @@ class TallyMap {
         if (!addressObj[propertyId]) {
             return 0;
         }
-        return addressObj[propertyId].amount; // or other specific fields like available, reserved
+        return {amount: addressObj[propertyId].amount, 
+            available: addressObj[propertyId].available, 
+            reserved: addressObj[propertyId].reserved, 
+            margined: addressObj[propertyId].margined, 
+            vesting:addressObj[propertyId].vesting}; // or other specific fields like available, reserved
     }
 
     getAddressBalances(address) {

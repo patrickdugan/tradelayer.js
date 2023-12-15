@@ -41,7 +41,7 @@ const Logic = {
                 Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
                 break;
             case 2:
-                Logic.sendToken(params.sendAll, params.senderAddress, params.recipientAddresses, params.propertyIdNumbers, params.amounts);
+                Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
                 break;
             case 3:
                 Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
@@ -194,6 +194,7 @@ const Logic = {
 
 
     async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts) {
+        console.log('send logic parameters '+sendAll + ' '+ senderAddress + ' '+ recipientAddresses + ' ' + propertyIdNumbers + ' '+ amounts)
         if (sendAll) {
             // Handle sending all available balances
             console.log('sendingAll')
@@ -218,14 +219,17 @@ const Logic = {
                 }
             } else {
                 // Special handling for TLVEST (Property ID 2)
-                    if (propertyId === 2) {
-                        console.log('vesting single send')
+                console.log('propertyIdnumbers ' +propertyIdNumbers)
+                    if (propertyIdNumbers == 2) {
+                        console.log('vesting single send '+senderAddress)
                         // Get TLVEST and TL balances for the sender
                         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
                         const tlTally = await TallyMap.getTally(senderAddress, 1);
 
+                        console.log('tallys for vesting '+ JSON.stringify(tlVestTally)+' '+JSON.stringify(tlTally))
+
                         // Calculate the proportion of TLVEST being moved
-                        const proportion = amount / tlVestTally.available;
+                        const proportion = amounts / tlVestTally.available;
 
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
@@ -234,17 +238,19 @@ const Logic = {
                         await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
 
                         // Update TL vesting balance for recipient (increase)
-                        await TallyMap.updateBalance(recipientAddress, 1, 0, 0, 0, tlVestingMovement);
-                    }else{
+                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+                    }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send')
-                        await sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
+                        await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
                     }
             }
         }
 
         // Save the updated tally map to the database
         //await TallyMap.recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange)
-        await TallyMap.save();
+        const tallyInstance = await TallyMap.getInstance()
+        await tallyInstance.saveToDB();
+        return console.log('sent')
     },
 
     async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts){
