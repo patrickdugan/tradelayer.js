@@ -37,9 +37,10 @@ class TallyMap {
         }
     }
     
-    static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange,vestingChange) {
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange) {
+            console.log(propertyId, availableChange, reservedChange)
             if (!Number.isInteger(propertyId)) {
-                   return Error(`Invalid propertyId: ${propertyId}`);
+                return Error(`Invalid propertyId: ${propertyId}`);
             }
 
             const instance = await this.getInstance();
@@ -49,29 +50,51 @@ class TallyMap {
             const addressObj = instance.addresses.get(address);
 
             if (!addressObj[propertyId]) {
-                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, vesting: 0 };
+                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }
 
-            const newAmount = addressObj[propertyId].amount + amountChange;
-            const newAvailable = addressObj[propertyId].available + availableChange;
-            const newReserved = addressObj[propertyId].reserved + reservedChange;
-            const newVesting = addressObj[propertyId].vesting+vestingChange
-
-            if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
-                throw new Error("Balance cannot go negative");
+            // Check and update available balance
+            if (addressObj[propertyId].available + availableChange < 0) {
+                throw new Error("Available balance cannot go negative");
             }
+            addressObj[propertyId].available += availableChange;
 
-            addressObj[propertyId].amount = newAmount;
-            addressObj[propertyId].available = newAvailable;
-            addressObj[propertyId].reserved = newReserved;
-            addressObj[propertyId].vesting = newVesting
+            // Check and update reserved balance
+            if (addressObj[propertyId].reserved + reservedChange < 0) {
+                console.log(JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
+                throw new Error("Reserved balance cannot go negative "+propertyId + ' '+availableChange+' '+ reservedChange);
+            }
+            addressObj[propertyId].reserved += reservedChange;
+
+            // Check and update margin balance
+            if (addressObj[propertyId].margin + marginChange < 0) {
+                throw new Error("Margin balance cannot go negative");
+            }
+            addressObj[propertyId].margin += marginChange;
+
+            // Check and update vesting balance
+            if (addressObj[propertyId].vesting + vestingChange < 0) {
+                throw new Error("Vesting balance cannot go negative");
+            }
+            addressObj[propertyId].vesting += vestingChange;
+
+            // Update the total amount
+            addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
+
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
-
             console.log('Updated balance for address:', address, 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
-            //console.log('new amount '+newAmount+ 'newAvailable '+newAvailable + 'newReserved'+ newReserved+'newVesting '+newVesting)
-            //const blockHeight = TxIndex.fetchChainTip()
-    }
+        }
+
+
+        static calculateTotal(balanceObj) {
+            return balanceObj.available + balanceObj.reserved + balanceObj.margin + balanceObj.vesting;
+        }
+
+        static roundToEightDecimals(number) {
+            return Math.floor(number * 1e8) / 1e8;
+        }
+
 
 
     static async getAddressBalances(address) {

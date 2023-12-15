@@ -36,8 +36,8 @@ class TradeLayerManager {
         insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
         insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
         const TallyMap = require('./tally.js');
-        await TallyMap.updateBalance(this.adminAddress,TLTokenId,TLTotalAmount-amountToInsuranceFund,0,0,TLTotalAmount-amountToInsuranceFund)
-        await TallyMap.updateBalance(this.adminAddress,TLVESTTokenId,TLVESTTotalAmount-amountToInsuranceFund,TLVESTTotalAmount-amountToInsuranceFund,0,0)
+        await TallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund);
+        await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
         await TallyMap.getAddressBalances(this.adminAddress)
     }
 

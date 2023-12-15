@@ -234,15 +234,15 @@ const Logic = {
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
 
-                        // Update TL vesting balance for sender (decrease)
-                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
+                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
+                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
 
-                        // Update TL vesting balance for recipient (increase)
+                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
                         await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send')
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
-                    }
+                }
             }
         }
 
@@ -264,12 +264,18 @@ const Logic = {
         // Calculate the amount of TL to move from vesting to available
         const tlVestingMovement = tlTally.vesting * proportion;
 
-        // Update TL vesting balance for sender (decrease)
-        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
+        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
+        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
 
-        // Update TL vesting balance for recipient (increase)
-        await TallyMap.updateBalance(recipientAddress, 1, 0, 0, 0, tlVestingMovement);
+        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
+        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
     },
+
+
+    roundToEightDecimals(number) {
+        return Math.floor(number * 1e8) / 1e8;
+    },
+
 
     async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
         const tallyMapInstance = await TallyMap.getInstance();
@@ -281,8 +287,8 @@ const Logic = {
         }
 
         // Perform the send operation
-        await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
-        await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
+        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
 
         // Handle special case for TLVEST
         if (propertyId === 2) {
@@ -307,8 +313,8 @@ const Logic = {
         for (const balance of senderBalances) {
             const { propertyId, amount } = balance;
             if (amount > 0) {
-                await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
-                await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+                await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
+                await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
 
                 // Handle special case for TLVEST
                 if (propertyId === 'TLVEST') {
@@ -371,18 +377,18 @@ const Logic = {
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(tallyMap, tradeChannelManager, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
     // Validate sender address
-	    if (!tallyMap.isAddressValid(senderAddress)) {
+	    if (!TallyMap.isAddressValid(senderAddress)) {
 	        throw new Error('Invalid sender address');
 	    }
 
 	    // Check if the sender has sufficient balance
-	    if (!tallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
+	    if (!TallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
 	        throw new Error('Insufficient token balance for commitment');
 	    }
 
 	    // Deduct tokens from available balance and add to reserved balance
-	    tallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 'available');
-	    tallyMap.updateBalance(senderAddress, propertyId, tokenAmount, 'reserved');
+	    TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
+	    TallyMap.updateBalance(senderAddress, propertyId, 0, tokenAmount, 0, 0);
 
 	    // Determine which column (A or B) to assign the tokens in the channel registry
 	    const channelColumn = tradeChannelManager.determineCommitColumn(senderAddress, transactionTime);

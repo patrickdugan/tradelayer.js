@@ -16,6 +16,7 @@ const client = new Litecoin.Client({
 
 // Promisify the necessary client functions
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
+const getBlockDataAsync = util.promisify(client.getBlock.bind(client))
 const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
@@ -34,6 +35,17 @@ const TxUtils = {
             console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
         return transaction;
+    },
+
+    async getBlockHeight(blockhash){
+        let block;
+        try {
+            block = await getBlockDataAsync(blockhash, 1);
+            //console.log(`Block data:`, block);
+        } catch (error) {
+            console.error(`Error fetching transaction for txid ${blockhash}:`, error);
+        }
+        return block.height;
     },
 
     /*async fetchTransactionData(txId) {
@@ -577,7 +589,7 @@ const TxUtils = {
                 throw new Error('No UTXOs available for the admin address');
             }
 
-            
+
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use

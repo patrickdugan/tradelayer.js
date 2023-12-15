@@ -91,7 +91,7 @@ class Activation {
                 // If no entries found, initialize the txRegistry with default values
                 console.log('No activations list found, initializing with default values.');
                 this.txRegistry = this.initializeTxRegistry();
-                console.log(this.txRegistry)
+                //console.log(this.txRegistry)
                 await this.saveActivationsList(); // Save the newly created default activations list
             } else {
                 // If entries are found, parse the activations list
@@ -133,14 +133,14 @@ class Activation {
             await tradeLayerManager.initializeTokens(); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
             this.txRegistry[txType].activationBlock = block
-            console.log(this.txRegistry)
+            //console.log(this.txRegistry)
             return await this.saveActivationsList(); // Save the updated activations list
         }else{
             // Check if the transaction type exists in the registry
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
                 this.txRegistry[txType].activationBlock = block
-                console.log('activating '+txType+ ' '+this.txRegistry)
+                //console.log('activating '+txType+ ' '+this.txRegistry)
                 return await this.saveActivationsList(); // Save the updated activations list
             } else {
                 console.error(`Transaction type ${txType} not found in registry.`);
@@ -211,12 +211,21 @@ class Activation {
         // Assuming txRegistry is accessible within this context
         await this.loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
-        console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
+        //console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
         if(txType==undefined){return false}
         if (txType.active==true) {
             return true;
         }
         return false;
+    }
+
+    async checkActivationBlock(txTypeNumber){
+        await this.loadActivationsList()
+        //console.log('checking for activation block ' +this.txRegistry[txTypeNumber])
+        const txType = this.txRegistry[txTypeNumber];
+        //console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
+        if(txType==undefined){return null}
+        if(txType.blockHeight==undefined){return null}else{return txType.blockHeight};
     }
 
     async isSenderGenesisAdmin(address) {
