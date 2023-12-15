@@ -26,7 +26,7 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 //const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 //const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
-//const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance()
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -197,6 +197,10 @@ class Main {
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
+                 // Check if the transaction has already been processed
+                if (await Consensus.checkIfTxProcessed(txId)) {
+                    continue; // Skip this transaction if it's already processed
+                }
                 //console.log(txId, typeof txId);
                 var payload = txData.value.payload;
                 console.log('reading payload in consensus builder '+payload)
@@ -227,6 +231,7 @@ class Main {
                 }
                //console.log('decoded params with validity' +JSON.stringify(decodedParams))
                if(decodedParams.valid==true){
+                  await Consensus.markTxAsProcessed(txId);
                   console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams))
                   await Logic.typeSwitch(type, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
