@@ -96,6 +96,22 @@ class TallyMap {
         }
 
 
+        static async setInitializationFlag() {
+            const db = dbInstance.getDatabase('tallyMap');
+            await db.updateAsync(
+                { _id: '$TLinit' },
+                { _id: '$TLinit', initialized: true },
+                { upsert: true }
+            );
+        }
+
+    static async checkInitializationFlag() {
+            const db = dbInstance.getDatabase('tallyMap');
+            const result = await db.findOneAsync({ _id: '$TLinit' });
+            if(result==undefined){return false}
+            return result ? result.initialized : false;
+        }
+
 
     static async getAddressBalances(address) {
             const instance = await this.getInstance();
@@ -119,7 +135,6 @@ class TallyMap {
 
             const addressObj = instance.addresses.get(address);
             console.log(`Data for address ${address}:`, addressObj);
-
             const balances = [];
             for (const propertyId in addressObj) {
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
@@ -133,10 +148,9 @@ class TallyMap {
                     });
                 }
             }
-
             console.log(`Balances for address ${address}:`, balances);
             return balances;
-        }
+    }
 
 
       async saveToDB() {

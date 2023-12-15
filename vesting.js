@@ -22,26 +22,35 @@ class TradeLayerManager {
     }
 
     async initializeTokens() {
-
-        var TLTokenId = 1;
-        const TLTotalAmount = 1500000;
-
-        var TLVESTTokenId = 2;
-        const TLVESTTotalAmount = 1500000;
-        var amountToInsuranceFund = 250000;
-        const propertyManager = PropertyManager.getInstance()
-        TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
-        TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
-
-        console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
-        var insuranceFund = new InsuranceFund(1,0,0.5)
-        // Distribute initial amount to insurance fund
-        insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
-        insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
         const TallyMap = require('./tally.js');
-        await TallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund);
-        await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
-        await TallyMap.getAddressBalances(this.adminAddress)
+         const alreadyInitialized = await TallyMap.checkInitializationFlag();
+
+        if (!alreadyInitialized) {
+            var TLTokenId = 1;
+            const TLTotalAmount = 1500000;
+
+            var TLVESTTokenId = 2;
+            const TLVESTTotalAmount = 1500000;
+            var amountToInsuranceFund = 250000;
+            const propertyManager = PropertyManager.getInstance()
+            TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
+            TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
+
+            console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
+            var insuranceFund = new InsuranceFund(1,0,0.5)
+            // Distribute initial amount to insurance fund
+            insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
+            insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
+            
+            await TallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund);
+            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
+            
+            const balances = await TallyMap.getAddressBalances(this.adminAddress)
+
+            // After initializing tokens, set the flag
+            await TallyMap.setInitializationFlag();
+            return balances
+        }
     }
 
     static initializeContractSeries() {

@@ -9,7 +9,7 @@ const Validity = {
         params.valid = true;
         console.log('inside validating activation '+JSON.stringify(params))
 
-         console.log('trying to debug this strings passing thing '+parseInt(params.txTypeToActivate)+params.txTypeToActivate +parseInt(params.txTypeToActivate)==NaN)
+         //console.log('trying to debug this strings passing thing '+parseInt(params.txTypeToActivate)+params.txTypeToActivate +parseInt(params.txTypeToActivate)==NaN)
         if(isNaN(parseInt(params.txTypeToActivate))==true){
             params.valid = false;
             params.reason = 'Tx Type is not an integer';
@@ -21,9 +21,8 @@ const Validity = {
             params.reason = 'Not sent from admin address';
         }
 
-
         // Check if the txTypeToActivate is already activated
- 
+         
         const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
         //console.log('isAlreadyActivated '+isAlreadyActivated, params.txTypeToActivate)
         const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate)
@@ -35,6 +34,8 @@ const Validity = {
             params.valid = false;
             params.reason = 'Transaction type already activated';
         }
+
+
 
         if(params.txTypeToActivate>35){
             params.valid = false;
@@ -79,7 +80,7 @@ const Validity = {
         return params
     },
     // 2: Send
-    validateSend: async (sender, params) => {
+    validateSend: async (sender, params, txId) => {
         params.reason = '';
         params.valid= true
 
@@ -88,7 +89,17 @@ const Validity = {
             params.valid=false
             params.reason += 'Tx type not yet activated '
         }
-        
+
+        const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate)
+
+        const rawTxData = await TxUtils.getRawTransaction(txId)
+        const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
+        console.log('comparing heights' +activationBlock + ' ' + confirmedBlock)
+        if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) {
+            params.valid = false;
+            params.reason = 'Transaction type activated in the future';
+        }
+
         const TallyMap = require('./tally.js')
         const senderTally = await TallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
