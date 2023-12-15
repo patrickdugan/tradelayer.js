@@ -150,7 +150,7 @@ const Logic = {
     async activateTradeLayer(txType, block) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         // Call the activateSystem method from the Activation class instance
-        console.log('in activate TradeLayer logic function '+ txType)
+        console.log('in activate TradeLayer logic function '+ txType+ ' block ' +block)
         const activationResult = await activation.activate(txType, block);
 
         // Log or handle the result of activation

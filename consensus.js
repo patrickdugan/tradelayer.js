@@ -1,4 +1,4 @@
-const dbInstance = require('./db.js');
+const db = require('./db.js');
 const path = require('path');
 const util = require('util');
 
@@ -41,7 +41,7 @@ class ConsensusDatabase {
         return !!result;
     }
 
-    async function markTxAsProcessed(txId) {
+    static async markTxAsProcessed(txId) {
         await db.getDatabase('consensus').insertAsync({ _id: txId, processed: true });
     }
 }

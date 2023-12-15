@@ -42,9 +42,6 @@ const Validity = {
             params.reason = 'Tx Type out of bounds';
         }
 
-        
-        console.log('inside validating activation '+JSON.stringify(params))
-
         return params;
     },
   

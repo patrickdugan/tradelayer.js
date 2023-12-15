@@ -215,7 +215,7 @@ class Main {
                 const referenceUTXO = txData.value.reference.amount/COIN
                 //console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
-                decodedParams.blockHeight=blockHeight
+                decodedParams.block=blockHeight
                 console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
                 if(decodedParams.type >0){
                       const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
