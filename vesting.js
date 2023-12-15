@@ -12,14 +12,17 @@ class TradeLayerManager {
         }
     }
 
-    static getInstance(adminAddress){
+    static async getInstance(adminAddress){
         if (!TradeLayerManager.instance) {
             TradeLayerManager.instance = new TradeLayerManager(adminAddress);
+            console.log('generating new TL manager')
         }
+        console.log('returning TL Manager')
         return TradeLayerManager.instance;
     }
 
     async initializeTokens() {
+
         var TLTokenId = 1;
         const TLTotalAmount = 1500000;
 

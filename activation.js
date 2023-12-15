@@ -119,24 +119,27 @@ class Activation {
 
     // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, block) {
-
-        console.log('Activating transaction type:' +txType);
+        txType = parseInt(txType)
+        console.log('Activating transaction type:' +txType +(txType === 0) );
         await this.loadActivationsList(); // Make sure to load the activations list first
         if (txType === undefined) {
             console.error("Transaction type is undefined.");
             return; // Exit the function if txType is undefined
         }
         if (txType === 0) {
+            console.log('in the activate 0 block')
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
-            const tradeLayerManager = TradeLayerManager.getInstance(this.hardcodedAdminAddress);
+            const tradeLayerManager = await TradeLayerManager.getInstance(this.hardcodedAdminAddress);
             await tradeLayerManager.initializeTokens(); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             this.txRegistry[txType].active = true;
             this.txRegistry[txType].activationBlock = block
             //console.log(this.txRegistry)
-            return await this.saveActivationsList(); // Save the updated activations list
+            await this.saveActivationsList()
+            return this.txRegistry[txType] ; // Save the updated activations list
         }else{
             // Check if the transaction type exists in the registry
+            console.log('in the general activations block')
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
                 this.txRegistry[txType].activationBlock = block
