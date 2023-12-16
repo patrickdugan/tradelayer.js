@@ -203,7 +203,7 @@ class Main {
                 }
                 //console.log(txId, typeof txId);
                 var payload = txData.value.payload;
-                console.log('reading payload in consensus builder '+payload)
+                //console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
                 const type = Number(payload.slice(0,1).toString(36))
                 payload=payload.slice(1,payload.length).toString(36)
@@ -216,7 +216,7 @@ class Main {
                 //console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
-                console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
+                //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
                 if(decodedParams.type >0){
                       const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
                       if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
@@ -236,6 +236,7 @@ class Main {
                   await Logic.typeSwitch(type, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                 }else{
+                  await Consensus.markTxAsProcessed(txId);
                   await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction

@@ -151,7 +151,7 @@ const Types = {
             case 2:
                 //console.log('decoding send '+params)
                 params = Decode.decodeSend(encodedPayload.substr(index));
-                //console.log('validating send '+JSON.stringify(params))
+                console.log('validating send '+JSON.stringify(params))
                 params.senderAddress= sender
                 params = await Validity.validateSend(sender, params, txId)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)

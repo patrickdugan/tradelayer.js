@@ -15,6 +15,14 @@ class Orderbook {
         }
     }
 
+    // Function to divide two numbers with an option to round up or down to the nearest Satoshi
+    divideAndRound(number1, number2, roundUp = false) {
+        const result = new BigNumber(number1).dividedBy(new BigNumber(number2));
+        return roundUp
+            ? result.decimalPlaces(8, BigNumber.ROUND_UP).toString()
+            : result.decimalPlaces(8, BigNumber.ROUND_DOWN).toString();
+    }
+
     async save(pair) {
         // Save order book to LevelDB
         if (pair in this.orderBooks) {

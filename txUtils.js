@@ -393,8 +393,6 @@ const TxUtils = {
             return transaction.serialize();
     },
 
-
-
     signTransaction(rawTx, privateKey) {
         const transaction = new litecore.Transaction(rawTx);
         const privateKeyObj = new litecore.PrivateKey(privateKey);
@@ -536,6 +534,54 @@ const TxUtils = {
         return coSignedTx; // Return the co-signed transaction
     },
 
+
+    async issuePropertyTransaction(fromAddress, initialAmount, ticker, whitelists, managed, backupAddress, nft) {
+        try {
+            // Get private key for the fromAddress
+            const privateKey = await dumpprivkeyAsync(fromAddress);
+
+            // Find a suitable UTXO
+            const minAmountSatoshis = STANDARD_FEE;
+            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+
+            // Create the transaction
+            let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
+
+            // Add change address
+            transaction.change(fromAddress);
+
+            // Prepare the payload for property issuance
+            var payload = 'tl1'; // 'tl1' indicates property issuance
+            payload += Encode.encodeTokenIssue({
+                initialAmount: initialAmount,
+                ticker: ticker,
+                whitelists: whitelists,
+                managed: managed,
+                backupAddress: backupAddress,
+                nft: nft
+            });
+            console.log('Preparing payload for property issuance:', payload);
+
+            // Add OP_RETURN data
+            transaction.addData(payload);
+
+            // Sign the transaction
+            transaction.sign(privateKey);
+
+            // Serialize and send the transaction
+            const serializedTx = transaction.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            console.log('Property issuance transaction sent:', txid);
+            return txid;
+        } catch (error) {
+            console.error('Error in issuePropertyTransaction:', error);
+            throw error; // Rethrow the error for handling upstream
+        }
+    },
+
+// Usage example
+// issuePropertyTransaction('admin-address', 1000000, 'MyToken', [1, 2, 3], true, 'backup-address', false);
+
    async sendTransaction(fromAddress, toAddress, propertyId, amount, sendAll) {
         try {
             // Get private key for the fromAddress
@@ -572,8 +618,6 @@ const TxUtils = {
             return error;
         }
     },
-
-
 
     async activationTransaction(adminAddress, txTypeToActivate) {
         try {

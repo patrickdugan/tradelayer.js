@@ -125,7 +125,7 @@ class TallyMap {
             }
 
             // Log the serialized form of the data from the DB
-            console.log('Serialized data from DB:', JSON.stringify([...instance.addresses]));
+            //console.log('Serialized data from DB:', JSON.stringify([...instance.addresses]));
 
             // Check if the address exists in the map
             if (!instance.addresses.has(address)) {
@@ -134,7 +134,7 @@ class TallyMap {
             }
 
             const addressObj = instance.addresses.get(address);
-            console.log(`Data for address ${address}:`, addressObj);
+            //console.log(`Data for address ${address}:`, addressObj);
             const balances = [];
             for (const propertyId in addressObj) {
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
@@ -148,7 +148,7 @@ class TallyMap {
                     });
                 }
             }
-            console.log(`Balances for address ${address}:`, balances);
+            //console.log(`Balances for address ${address}:`, balances);
             return balances;
     }
 
@@ -163,7 +163,7 @@ class TallyMap {
 
             // Check if the entry exists
             const existingEntry = await db.findOneAsync({ _id: 'tallyMap' });
-            console.log('about to save this '+serializedData)
+            //console.log('about to save this '+serializedData)
             if (existingEntry) {
                 await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, {});
             } else {

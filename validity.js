@@ -87,12 +87,12 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate)
+        const activationBlock = await activationInstance.checkActivationBlock(2)
 
         const rawTxData = await TxUtils.getRawTransaction(txId)
         const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
-        console.log('comparing heights' +activationBlock + ' ' + confirmedBlock)
-        if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) {
+        console.log('send comparing heights' +activationBlock + ' ' + confirmedBlock)
+        if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) { //come back and tighten this up when checkAct block returns null
             params.valid = false;
             params.reason = 'Transaction type activated in the future';
         }
@@ -104,7 +104,9 @@ const Validity = {
             params.valid=false
             params.reason += 'Bug with Tally Loading'
             
-        }else if(senderTally.available < params.amount){
+        }
+        console.log('checking we have enough tokens '+senderTally.available+ ' '+ params.amounts)
+        if(senderTally.available < params.amounts){
             params.valid=false
             params.reason += 'Insufficient available balance'
         }

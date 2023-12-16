@@ -202,8 +202,8 @@ const Logic = {
         } else {
             // Check if handling a multi-send or single send
             const isMultiSend = Array.isArray(propertyIdNumbers) && Array.isArray(amounts);
-            console.log('multisend')
             if (isMultiSend) {
+                console.log('multisend '+ isMultiSend + ' is this an array? '+propertyIdNumbers+ ' what about amounts '+amounts)
                 // Ensure arrays are of the same length
                 if (propertyIdNumbers.length !== amounts.length || propertyIdNumbers.length !== recipientAddresses.length) {
                     throw new Error('Property IDs, amounts, and recipient addresses arrays must have the same length.');
@@ -255,20 +255,43 @@ const Logic = {
 
     async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts){
         // Get TLVEST and TL balances for the sender
+        
+        const BigNumber = require('bignumber.js');
+
+            // Ensuring amount is a whole number
+            const roundedAmount = new BigNumber(amount).integerValue(BigNumber.ROUND_DOWN);
+
+            if (roundedAmount.isLessThanOrEqualTo(0)) {
+                throw new Error("Amount must be greater than zero");
+            }
+
         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
         const tlTally = await TallyMap.getTally(senderAddress, 1);
 
-        // Calculate the proportion of TLVEST being moved
-        const proportion = amount / tlVestTally.available;
-
         // Calculate the amount of TL to move from vesting to available
-        const tlVestingMovement = tlTally.vesting * proportion;
-
+        const tlVestingMovement = calculateVestingMovement(amounts, tlVestTally,tlTally)
         await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
         await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
 
         await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
         await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+    },
+
+    calculateVestingMovement(amount, tlVestTally, tlTally) {
+    // Convert all values to BigNumber for accurate calculation
+        const amountBN = new BigNumber(amount);
+        const tlVestAvailableBN = new BigNumber(tlVestTally.available);
+        const tlVestingBN = new BigNumber(tlTally.vesting);
+
+        // Calculate the proportion of TLVEST being moved
+        // Using BigNumber's division method for precision
+        const proportionBN = amountBN.dividedBy(tlVestAvailableBN);
+
+        // Calculate the amount of TL to move from vesting to available
+        // Ensure result is rounded down to avoid fractional vesting movement
+        const tlVestingMovementBN = tlVestingBN.multipliedBy(proportionBN).integerValue(BigNumber.ROUND_DOWN);
+
+        return tlVestingMovementBN.toString(); // Convert back to string for further processing
     },
 
 

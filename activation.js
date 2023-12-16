@@ -74,7 +74,7 @@ class Activation {
         const update = { $set: { value: JSON.stringify(this.txRegistry) } };
         const options = { upsert: true }; // This option will insert if not found
 
-        console.log('Saving activations list:', JSON.stringify(this.txRegistry));
+        //console.log('Saving activations list:', JSON.stringify(this.txRegistry));
         await activationsDB.updateAsync(query, update, options);
         console.log('Activations list saved successfully.');
     } catch (error) {
@@ -122,14 +122,14 @@ class Activation {
     // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, block) {
         txType = parseInt(txType)
-        console.log('Activating transaction type:' +txType +(txType === 0) + ' block '+ block );
+        //console.log('Activating transaction type:' +txType +(txType === 0) + ' block '+ block );
         await this.loadActivationsList(); // Make sure to load the activations list first
         if (txType === undefined) {
             console.error("Transaction type is undefined.");
             return; // Exit the function if txType is undefined
         }
         if (txType === 0) {
-            console.log('in the activate 0 block')
+            //console.log('in the activate 0 block')
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
             const tradeLayerManager = await TradeLayerManager.getInstance(this.hardcodedAdminAddress);
@@ -137,16 +137,16 @@ class Activation {
             console.log('balances '+ balances + "if undefined this is a repeat that successfully prevented inflation")
             this.txRegistry[txType].active = true;
             this.txRegistry[txType].activationBlock = block
-            console.log(JSON.stringify(this.txRegistry))
+            //console.log(JSON.stringify(this.txRegistry))
             await this.saveActivationsList()
             return this.txRegistry[txType] ; // Save the updated activations list
         }else{
             // Check if the transaction type exists in the registry
-            console.log('in the general activations block')
+            //console.log('in the general activations block')
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
                 this.txRegistry[txType].activationBlock = block
-                console.log('activating '+txType+ ' '+JSON.stringify(this.txRegistry))
+                //console.log('activating '+txType+ ' '+JSON.stringify(this.txRegistry))
                 return await this.saveActivationsList(); // Save the updated activations list
             } else {
                 console.error(`Transaction type ${txType} not found in registry.`);
