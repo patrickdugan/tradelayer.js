@@ -70,8 +70,9 @@ const Encode = {
 
     // Encode On-chain Token for Token Transaction
     encodeOnChainTokenForToken: (params) => {
+        console.log('encoding token trade '+JSON.stringify(params))
         const payload = [
-            params.propertyId.toString(36),
+            params.propertyIdOffered.toString(36),
             params.propertyIdDesired.toString(36),
             params.amountOffered.toString(36),
             params.amountExpected.toString(36),

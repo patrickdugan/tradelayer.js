@@ -164,6 +164,10 @@ const Types = {
                 break;
             case 5:
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
+                console.log('validating token trade '+JSON.stringify(params))
+                params.senderAddress= sender
+                params = await Validity.validateOnChainTokenForToken(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 6:
                 params = Decode.decodeCancelOrder(encodedPayload.substr(index))

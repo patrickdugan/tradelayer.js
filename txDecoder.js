@@ -67,8 +67,8 @@ const Decode = {
     decodeOnChainTokenForToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdNumber: parseInt(parts[0], 36),
-            propertyIdNumberDesired: parseInt(parts[1], 36),
+            propertyIdOffered: parseInt(parts[0], 36),
+            propertyIdDesired: parseInt(parts[1], 36),
             amountOffered: parseInt(parts[2], 36),
             amountExpected: parseInt(parts[3], 36)
         };

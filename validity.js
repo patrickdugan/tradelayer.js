@@ -2,6 +2,7 @@ const TxUtils = require('./txUtils.js')
 const db = require('./db')
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance();
+//const whiteLists = require('./whitelists.js')
 
 const Validity = {
     // 0: Activate TradeLayer
@@ -186,9 +187,14 @@ const Validity = {
     },
 
     // 5: On-chain Token for Token
-    validateOnChainTokenForToken: async (params, tallyMap, whitelistRegistry) => {
+    validateOnChainTokenForToken: async (sender, params, txId) => {
         params.reason = '';
         params.valid = true;
+
+        if (!params.propertyIdOffered || !params.propertyIdDesired || !params.amountOffered || !params.amountExpected) {
+            params.valid= false 
+            params.reason += 'Missing required parameters for tradeTokens '
+        }
 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(5);
         if(isAlreadyActivated==false){
@@ -196,13 +202,20 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const hasSufficientBalance = await tallyMap.hasSufficientBalance(params.senderAddress, params.offeredPropertyId, params.amountOffered);
+        const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
+        if(isVEST){
+            params.valid =false
+            params.reason += "Vesting tokens cannot be traded"
+        }
+
+        const TallyMap = require('./tally.js')
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered);
         if (!hasSufficientBalance) {
             params.valid = false;
             params.reason += 'Insufficient balance for offered token; ';
         }
 
-        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
+        /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
         if (!isSenderWhitelisted) {
             params.valid = false;
             params.reason += 'Sender not whitelisted for offered property; ';
@@ -212,7 +225,7 @@ const Validity = {
         if (!isRecipientWhitelisted) {
             params.valid = false;
             params.reason += 'Recipient not whitelisted for desired property; ';
-        }
+        }*/
 
         return params;
     },

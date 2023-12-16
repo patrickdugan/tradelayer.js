@@ -5,7 +5,7 @@ const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
-//const Orderbook = require('./orderbook.js'); // Manages the order book
+const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
 const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
@@ -423,10 +423,12 @@ const Logic = {
 	},
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected) {
-        // Validate input parameters
-        if (!fromAddress || !offeredPropertyId || !desiredPropertyId || !amountOffered || !amountExpected) {
-            throw new Error('Missing required parameters for tradeTokens');
-        }
+        // Construct the pair key for the Orderbook instance
+        const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
+
+        // Retrieve or create the Orderbook instance for this pair
+        const orderbook = await getOrderbookInstance(pairKey);
+
 
         // Construct the order object
         const order = {

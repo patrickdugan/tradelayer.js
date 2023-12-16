@@ -1,19 +1,26 @@
 const BigNumber = require('bignumber.js')
-const { Level } = require('level')
+const dbInstance = require('./db.js'); // Import your database instance
 
 class Orderbook {
-    constructor(dbPath, tickSize = new BigNumber('0.000000001')) {
-        this.tickSize = tickSize;
-        this.db = new Level(dbPath);
-        this.orderBooks = {}; // This will be populated from LevelDB
-    }
-
-    async load() {
-        // Load order books from LevelDB
-        for await (const [key, value] of this.db.iterator({ gt: 'book-', lt: 'book-\xFF' })) {
-            this.orderBooks[key.split('-')[1]] = JSON.parse(value);
+      constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
+            this.tickSize = tickSize;
+            this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
+            this.orderBooks = {};
+            this.loadOrCreateOrderBook(); // Load or create an order book based on the orderBookKey
         }
-    }
+
+        async loadOrCreateOrderBook() {
+            const orderBooksDB = dbInstance.getDatabase('orderBooks');
+            const orderBookData = await orderBooksDB.findOneAsync({ _id: this.orderBookKey });
+            
+            if (orderBookData) {
+                this.orderBooks[this.orderBookKey] = JSON.parse(orderBookData.value);
+            } else {
+                // If no data found, create a new order book
+                this.orderBooks[this.orderBookKey] = { buy: [], sell: [] };
+                await this.saveOrderBook(this.orderBookKey);
+            }
+        }
 
     // Function to divide two numbers with an option to round up or down to the nearest Satoshi
     divideAndRound(number1, number2, roundUp = false) {
@@ -23,12 +30,16 @@ class Orderbook {
             : result.decimalPlaces(8, BigNumber.ROUND_DOWN).toString();
     }
 
-    async save(pair) {
-        // Save order book to LevelDB
-        if (pair in this.orderBooks) {
-            await this.db.put(`book-${pair}`, JSON.stringify(this.orderBooks[pair]));
-        }
-    }
+    async saveOrderBook(pair) {
+        // Save order book to your database
+        const orderBooksDB = dbInstance.getDatabase('orderBooks');
+        await orderBooksDB.updateAsync(
+          { _id: pair },
+          { _id: pair, value: JSON.stringify(this.orderBooks[pair]) },
+          { upsert: true }
+        );
+      }
+
 
     // Adds a token order to the order book
     addTokenOrder({ propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, time }) {
@@ -85,6 +96,7 @@ class Orderbook {
 
     calculatePrice(amountOffered, amountExpected) {
         const priceRatio = new BigNumber(amountOffered).dividedBy(amountExpected);
+        console.log('price ratio '+priceRatio)
         return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP);
     }
 
@@ -246,14 +258,6 @@ class Orderbook {
                 // Handle error, potentially rolling back any partial updates or retrying
             }
         }
-    }
-
-    async clear() {
-        await this.db.clear();
-    }
-
-    async close() {
-        await this.db.close()
     }
 }
 

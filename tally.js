@@ -152,6 +152,35 @@ class TallyMap {
             return balances;
     }
 
+    /**
+     * Checks if a sender has a sufficient balance of a specific property.
+     * @param {string} senderAddress - The address of the sender.
+     * @param {number} propertyId - The ID of the property to check.
+     * @param {number} requiredAmount - The amount required for the transaction.
+     * @returns {Promise<{hasSufficient: boolean, reason: string}>} - An object indicating if the balance is sufficient and a reason if it's not.
+     */
+    static async hasSufficientBalance(senderAddress, propertyId, requiredAmount) {
+        try {
+            const senderTally = await this.getTally(senderAddress, propertyId);
+            console.log('Checking senderTally', senderAddress, propertyId, JSON.stringify(senderTally));
+
+            if (!senderTally || senderTally.available === undefined) {
+                return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
+            }
+
+            console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
+
+            if (senderTally.available < requiredAmount) {
+                return { hasSufficient: false, reason: 'Insufficient available balance' };
+            }
+
+            return { hasSufficient: true, reason: '' };
+        } catch (error) {
+            console.error('Error in hasSufficientBalance:', error);
+            return { hasSufficient: false, reason: 'Unexpected error checking balance' };
+        }
+    }
+
 
       async saveToDB() {
             const db = dbInstance.getDatabase('tallyMap');

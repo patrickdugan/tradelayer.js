@@ -1,72 +1,23 @@
-const { Buffer } = require('buffer');
-
-/**
- * Pushes bytes to the end of a buffer.
- */
- function pushBackBytes(buffer, value) {
-    if (Array.isArray(value)) {
-        buffer.push(...value);
-    } else if (Buffer.isBuffer(value)) {
-        buffer.push(value);
-    } else {
-        console.error(`ERROR: Invalid value type for pushBackBytes: ${typeof value}`);
-    }
-}
-
-//000000000000000000000000020000000000000000989680
-//00000000000000020000000000989680
-
-/**
- * Returns a buffer of bytes containing the version and hash160 for an address.
- */
-function addressToBytes(address) {
-    const addressBytes = Buffer.from(address, 'base256');
-    if (addressBytes.length === 25) {
-        return addressBytes.slice(0, 21); // truncate checksum
-    } else {
-        console.error(`ERROR: unexpected size when decoding address ${address}.`);
-        return Buffer.alloc(0);
-    }
-}
-
-function createPayload_SimpleSend(propertyId, amount) {
-    const payload = [];
-    const messageType = 0;
-    const messageVer = 0;
-
-    // messageVer (2 bytes, little-endian)
-    payload.push(messageVer & 0xFF, (messageVer >> 8) & 0xFF);
-
-    // messageType (2 bytes, little-endian)
-    payload.push(messageType & 0xFF, (messageType >> 8) & 0xFF);
-
-    // propertyId (4 bytes, little-endian)
-    payload.push(
-        propertyId & 0xFF,
-        (propertyId >> 8) & 0xFF,
-        (propertyId >> 16) & 0xFF,
-        (propertyId >> 24) & 0xFF
-    );
-
-    // Convert amount from decimal string to 64-bit integer (8 bytes)
-    let amountBigInt = BigInt(Math.round(parseFloat(amount) * 1e8)); // Assuming 8 decimal places
-    let amountBuffer = Buffer.alloc(8);
-    for (let i = 7; i >= 0; i--) {
-        amountBuffer.writeUInt8(Number(amountBigInt & BigInt(0xFF)), i);
-        amountBigInt >>= BigInt(8);
+function testPayloadSeparation(hexPayload) {
+    // Decode from hex to plaintext
+    const asmBuffer = new Buffer(hexPayload, "hex");
+    const message =  asmBuffer.toString();
+    console.log(message);
+    // Assuming the payload format is 'tlXX' where XX are digits
+    if (!plaintextPayload.startsWith('tl')) {
+        throw new Error('Invalid payload');
     }
 
-    payload.push(...amountBuffer);
+    const marker = plaintextPayload.substring(0, 2); // 'tl'
+    const restOfPayload = plaintextPayload.substring(2); // '00' in this case
 
-    return Buffer.from(payload);
+    const transactionId = restOfPayload.charAt(0); // First '0'
+    const otherData = restOfPayload.substring(1); // Second '0'
+
+    console.log(`Marker: ${marker}`);
+    console.log(`Transaction ID: ${transactionId}`);
+    console.log(`Other Data: ${otherData}`);
 }
 
-
-
-
-// Define other payload creation functions similarly...
-
-const propertyId = 2;
-const amount = '0.1';
-const payload = createPayload_SimpleSend(propertyId, amount);
-console.log(payload.toString('hex'));
+// Example usage
+testPayloadSeparation('808479860');

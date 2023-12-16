@@ -578,6 +578,48 @@ const TxUtils = {
             throw error; // Rethrow the error for handling upstream
         }
     },
+    
+    async tokenTradeTransaction(fromAddress, propertyIdOffered, propertyIdDesired, amountOffered, amountExpected) {
+        try {
+                // Get private key for the fromAddress
+                const privateKey = await dumpprivkeyAsync(fromAddress);
+
+                // Find a suitable UTXO
+                const minAmountSatoshis = STANDARD_FEE;
+                const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+
+                // Create the transaction
+                let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
+
+                // Add change address
+                transaction.change(fromAddress);
+
+                // Prepare the payload for token trade
+                var payload = 'tl5'; // 'tl5' indicates token-to-token trade
+                payload += Encode.encodeOnChainTokenForToken({
+                    propertyIdOffered: propertyIdOffered,
+                    propertyIdDesired: propertyIdDesired,
+                    amountOffered: amountOffered,
+                    amountExpected: amountExpected
+                });
+                console.log('Preparing payload for token trade:', payload);
+
+                // Add OP_RETURN data
+                transaction.addData(payload);
+
+                // Sign the transaction
+                transaction.sign(privateKey);
+
+                // Serialize and send the transaction
+                const serializedTx = transaction.serialize();
+                const txid = await sendrawtransactionAsync(serializedTx);
+                console.log('Token trade transaction sent:', txid);
+                return txid;
+            } catch (error) {
+                console.error('Error in tokenTradeTransaction:', error);
+                throw error; // Rethrow the error for handling upstream
+            }
+        },
 
 // Usage example
 // issuePropertyTransaction('admin-address', 1000000, 'MyToken', [1, 2, 3], true, 'backup-address', false);
