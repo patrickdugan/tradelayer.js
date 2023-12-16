@@ -54,7 +54,7 @@ class PropertyManager {
         return maxId + 1;
     }
 
-    async createToken(ticker, totalInCirculation, type) {
+    async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
         // Check if the ticker already exists
 
         if (this.propertyIndex.has(ticker)) {
@@ -67,13 +67,12 @@ class PropertyManager {
         }
 
         const propertyId = await this.getNextPropertyId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type);
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
       }
 
-    async addProperty(propertyId, ticker, totalInCirculation, type) {
-        await PropertyManager.load();
+    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress) {
         
         const propertyTypeIndexes = {
             'Fixed': 1,
@@ -92,14 +91,11 @@ class PropertyManager {
             ticker,
             totalInCirculation,
             type: propertyTypeIndexes[type],
-            feeAmount: 0,
-            insuranceAmount: 0,
-            reserveAmount: 0,
-            marginAmount: 0,
-            vestingAmount: 0
+            whitelistId: whitelistId,
+            backupAddress: backupAddress
         });
-        console.log('updated Property Index '+this.propertyIndex)
         await this.save();
+        return console.log('updated Property Index '+this.propertyIndex)
     }
 
     async inspectPropertyIndex() {

@@ -38,6 +38,7 @@ const tallyMapDbPath = path.join(__dirname, 'nedb-data', 'tallyMap.db');
 const activationsDbPath = path.join(__dirname, 'nedb-data', 'activations.db');
 const consensusDbPath = path.join(__dirname, 'nedb-data', 'consensus.db');
 const orderBooksDbPath = path.join(__dirname, 'nedb-data', 'orderBooks.db'); // Path to orderBooks.db
+const insuranceDbPath = path.join(__dirname, 'nedb-data', 'insurance.db'); // Path to orderBooks.db
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
@@ -46,3 +47,4 @@ clearDatastore(tallyMapDbPath, 'tallyMap');
 clearDatastore(activationsDbPath, 'activations');
 clearDatastore(consensusDbPath, 'consensus');
 clearDatastore(orderBooksDbPath, 'orderBooks'); // Clear the orderBooks database
+clearDatastore(insuranceDbPath, 'insurance');

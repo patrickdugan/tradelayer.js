@@ -8,16 +8,25 @@ class Orderbook {
             this.orderBooks = {};
             this.loadOrCreateOrderBook(); // Load or create an order book based on the orderBookKey
         }
-
+         // Static async method to get an instance of Orderbook
+        static async getOrderbookInstance(orderBookKey) {
+            const orderbook = new Orderbook(orderBookKey);
+            await orderbook.loadOrCreateOrderBook(); // Load or create the order book
+            return orderbook;
+        }
+        
         async loadOrCreateOrderBook() {
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             const orderBookData = await orderBooksDB.findOneAsync({ _id: this.orderBookKey });
             
             if (orderBookData) {
                 this.orderBooks[this.orderBookKey] = JSON.parse(orderBookData.value);
+                console.log(JSON.stringify(orderBookData.value))
             } else {
                 // If no data found, create a new order book
                 this.orderBooks[this.orderBookKey] = { buy: [], sell: [] };
+                console.log(this.orderBooks[this.orderBookKey])
+
                 await this.saveOrderBook(this.orderBookKey);
             }
         }
@@ -47,7 +56,9 @@ class Orderbook {
         const order = { propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, price, time };
 
         const orderBookKey = `${propertyIdNumber}-${propertyIdNumberDesired}`;
+        console.log('inserting orders '+ order)
         this.insertOrder(order, orderBookKey);
+        console.log('matching orders '+orderBookKey)
         this.matchOrders(orderBookKey);
     }
 
@@ -70,7 +81,7 @@ class Orderbook {
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
         }
-
+        console.log('ze book '+this.orderBooks[orderBookKey])
         // Determine if it's a buy or sell order based on the property IDs
         let side = {} 
         if (isContractOrder == false) {
@@ -80,10 +91,13 @@ class Orderbook {
         } else if (isContractOrder == true && sell == false) {
             side = 'buy'
         }
+        console.log(side)
         
         // Insert the order into the correct side of the book
         const bookSide = this.orderBooks[orderBookKey][side];
+        console.log('bookSide '+bookSide)
         const index = bookSide.findIndex((o) => o.time > order.time);
+        console.log(index)
         if (index === -1) {
             bookSide.push(order);
         } else {

@@ -144,6 +144,7 @@ const Types = {
             case 1:
                 //console.log('decoding issuance '+params)
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
+                params.senderAddress = sender
                 //console.log('validating issuance '+JSON.stringify(params))
                 params = await Validity.validateTokenIssue(params)               
                 //console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
@@ -153,6 +154,7 @@ const Types = {
                 params = Decode.decodeSend(encodedPayload.substr(index));
                 console.log('validating send '+JSON.stringify(params))
                 params.senderAddress= sender
+                params.txid = txId
                 params = await Validity.validateSend(sender, params, txId)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;

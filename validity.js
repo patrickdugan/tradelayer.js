@@ -102,8 +102,10 @@ const Validity = {
         const senderTally = await TallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
         if (senderTally==0) {
-            params.valid=false
-            params.reason += 'Bug with Tally Loading'
+            var balances = await TallyMap.getAddressBalances(sender)
+            if(balances ==[]){
+                TallyMap.diagonistic(sender, params.propertyIds)
+            }
             
         }
         console.log('checking we have enough tokens '+senderTally.available+ ' '+ params.amounts)

@@ -38,7 +38,7 @@ const Logic = {
                 return await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
-                Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
+                Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
                 break;
             case 2:
                 Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
@@ -50,7 +50,7 @@ const Logic = {
                 Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
                 break;
             case 5:
-                Logic.onChainTokenToToken(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.amountOffered, params.amountExpected);
+                Logic.onChainTokenToToken(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.amountOffered, params.amountExpected, params.txid);
                 break;
             case 6:
                 Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
@@ -159,32 +159,26 @@ const Logic = {
  
     },
 
-    async tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
         const propertyManager = PropertyManager.getInstance();
-        
-        // Generate a new property ID
-        const newPropertyId = await propertyManager.getNextPropertyId();
 
         // Determine the type of the token based on whether it's managed or an NFT
         let tokenType = isNFT ? 'Non-Fungible' : isManaged ? 'Managed' : 'Fixed';
 
         // Define the token data
         const tokenData = {
-            propertyId: newPropertyId,
             ticker: ticker,
             totalInCirculation: initialAmount,
             type: tokenType,
-            url: url,
             whitelistId: whitelistId,
-            backupAddress: backupAddress,
-            isNFT: isNFT
+            backupAddress: backupAddress
         };
 
         // Create the token in the property manager
         try {
-            await propertyManager.createToken(ticker, initialAmount, tokenType);
-            await propertyManager.save(); // Save the updated property list to the database
-
+            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
+            console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
+            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
         } catch (error) {
             console.error('Error creating token:', error);
@@ -248,8 +242,6 @@ const Logic = {
 
         // Save the updated tally map to the database
         //await TallyMap.recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange)
-        const tallyInstance = await TallyMap.getInstance()
-        await tallyInstance.saveToDB();
         return console.log('sent')
     },
 
@@ -304,9 +296,10 @@ const Logic = {
         const tallyMapInstance = await TallyMap.getInstance();
 
         // Check if sender has enough balance
-        const senderBalance = tallyMapInstance.getTally(senderAddress, propertyId);
+        const senderBalance = TallyMap.getTally(senderAddress, propertyId);
+        console.log('checking balance before sending ' +JSON.stringify(senderBalance))
         if (senderBalance < amount) {
-            throw new Error("Insufficient balance");
+            /*throw new Error*/console.log("Insufficient balance");
         }
 
         // Perform the send operation
@@ -361,8 +354,8 @@ const Logic = {
 	        throw new Error('Insufficient available balance for transaction.');
 	    }
 
-	    tallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
-	    tallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
+	    TallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
+	    TallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
 	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
 	},
 
@@ -422,13 +415,15 @@ const Logic = {
 	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
 	},
 
-    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected) {
+    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid) {
         // Construct the pair key for the Orderbook instance
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
 
         // Retrieve or create the Orderbook instance for this pair
-        const orderbook = await getOrderbookInstance(pairKey);
+        const orderbook = await new Orderbook.getOrderbookInstance(pairKey);
 
+        const txInfo = await TxUtils.getRawTransaction(txid)
+        const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
 
         // Construct the order object
         const order = {
@@ -437,8 +432,10 @@ const Logic = {
             desiredPropertyId,
             amountOffered,
             amountExpected,
-            time: Date.now() // or a more precise timestamp depending on requirements
+            blockTime: confirmedBlock 
         };
+
+        console.log('entering order into book '+order)
 
         // Add the order to the order book
         orderbook.addTokenOrder(order);

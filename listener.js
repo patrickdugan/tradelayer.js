@@ -6,6 +6,7 @@ const Interface = require('./interface.js');
 const interfaceInstance = new Interface();
 const Main = require('./main.js');
 const Activations = require('./activation.js')
+const Orderbook = require('./orderbook.js')
 var activationsInstance = Activations.getInstance()
 
 let isInitialized = false; // A flag to track the initialization status
@@ -69,6 +70,25 @@ app.post('/getActivations', async (req, res) => {
 app.get('/initStatus', (req, res) => {
     res.json({ initialized: isInitialized });
 });
+
+app.post('/getOrderBook', async (req, res) => {
+    try {
+        const { propertyId1, propertyId2 } = req.body;
+        const orderBookKey = `${propertyId1}-${propertyId2}`;
+
+        // Instantiate your Orderbook class with the specific orderBookKey
+        const orderbook = new Orderbook(orderBookKey);
+        await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
+
+        // Retrieve the specific order book data
+        const orderBookData = orderbook.orderBooks[orderBookKey] || {};
+        res.json(orderBookData);
+    } catch (error) {
+        console.error('Error fetching order book:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 
 // ... Add other endpoints ...
 

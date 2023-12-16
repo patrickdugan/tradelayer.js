@@ -17,7 +17,7 @@ function randomNumber(min, max) {
 
 // Function to issue a random token
 async function issueRandomToken() {
-    const fromAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; // Replace with the actual admin address
+    const fromAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; 
     const initialAmount = randomNumber(1000, 1000000); // Random amount between 1,000 and 1,000,000
     const ticker = createRandomTicker();
     const whitelists = []; // Assuming no whitelists for simplicity

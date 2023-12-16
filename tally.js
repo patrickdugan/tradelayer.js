@@ -36,7 +36,7 @@ class TallyMap {
             }
         }
     }
-    
+
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange) {
             console.log(propertyId, availableChange, reservedChange)
             if (!Number.isInteger(propertyId)) {
@@ -182,23 +182,19 @@ class TallyMap {
     }
 
 
-      async saveToDB() {
+    async saveToDB() {
+        try {
             const db = dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
-            const tallyMapDocument = {
-                _id: 'tallyMap', 
-                data: serializedData
-            };
 
-            // Check if the entry exists
-            const existingEntry = await db.findOneAsync({ _id: 'tallyMap' });
-            //console.log('about to save this '+serializedData)
-            if (existingEntry) {
-                await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, {});
-            } else {
-                await db.insertAsync(tallyMapDocument);
-            }
+            // Use upsert option
+            await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
+            console.log('TallyMap saved successfully.');
+        } catch (error) {
+            console.error('Error saving TallyMap:', error);
+        }
     }
+
 
     async loadFromDB() {
         try {
@@ -275,10 +271,12 @@ class TallyMap {
     static async getTally(address, propertyId) {
         const instance = await TallyMap.getInstance(); // Ensure instance is loaded
         if (!instance.addresses.has(address)) {
+            console.log("can't find address in tallyMap")
             return 0;
         }
         const addressObj = instance.addresses.get(address);
         if (!addressObj[propertyId]) {
+            console.log("can't find property in address")
             return 0;
         }
         return {amount: addressObj[propertyId].amount, 
