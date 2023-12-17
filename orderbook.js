@@ -61,6 +61,11 @@ class Orderbook {
         const orderbook = new Orderbook(normalizedOrderBookKey);
         await orderbook.loadOrCreateOrderBook();
 
+        // Calculate the price for the order and round to the nearest tick interval
+        const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
+        console.log('Calculated Price:', calculatedPrice);
+        order.price = calculatedPrice; // Append the calculated price to the order object
+
         // Determine if the order is a sell order
         const isSellOrder = order.offeredPropertyId < order.desiredPropertyId;
 
@@ -69,14 +74,16 @@ class Orderbook {
         console.log('Order Insertion Confirmation:', orderConfirmation);
 
         // Match orders in the orderbook
-        const matchResult = await orderbook.matchOrders();
+        const matchResult = await orderbook.matchOrders(normalizedOrderBookKey);
         console.log('Match Result:', matchResult);
         console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
+
         // Save the updated orderbook back to the database
         await orderbook.saveOrderBook(normalizedOrderBookKey);
 
         return matchResult;
     }
+
 
     normalizeOrderBookKey(propertyId1, propertyId2) {
         // Ensure lower property ID is first in the key
@@ -120,109 +127,52 @@ class Orderbook {
         return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP);
     }
 
-    async matchOrders(orderBookKey, isContract = false) {
-        const orderBook = this.orderBooks[orderBookKey];
-        if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-            return 'first order in the book'; // Nothing to match
-        }
+    async matchOrders(orderBookKey) {
+            const orderBook = this.orderBooks[orderBookKey];
+            if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+                return 'No matches found due to empty book'; // No orders to match
+            }
 
-        const matches = [];
+            let matches = [];
+            let matchOccurred = false;
 
-        // Sort buy orders from highest to lowest price and sell orders from lowest to highest price
-        orderBook.buy.sort((a, b) => b.price.comparedTo(a.price) || a.time - b.time); // Highest price and oldest first
-        orderBook.sell.sort((a, b) => a.price.comparedTo(b.price) || a.time - b.time); // Lowest price and oldest first
+            // Sort buy and sell orders
+            orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
+            orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
 
-        // While there is still potential for matches
-        while (orderBook.sell.length > 0 && orderBook.buy.length > 0 &&
-               orderBook.sell[0].price.lte(orderBook.buy[0].price)) {
+            // Match orders
+            while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
+                let sellOrder = orderBook.sell[0];
+                let buyOrder = orderBook.buy[0];
 
-            let sellOrder = orderBook.sell[0];
-            let buyOrder = orderBook.buy[0];
+                // Check for price match
+                if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                    // Determine the amount to trade (minimum of the two orders)
+                    let amountToTrade = BigNumber.min(sellOrder.amountOffered, buyOrder.amountExpected);
 
-            // Determine the amount to trade which is the minimum of the two orders
-            const amountToTrade = BigNumber.minimum(sellOrder.amountOffered, buyOrder.amountExpected);
+                    // Update orders after the match
+                    sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountToTrade);
+                    buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountToTrade);
 
-            // Update orders
-            sellOrder.amountOffered = sellOrder.amountOffered.minus(amountToTrade);
-            buyOrder.amountExpected = buyOrder.amountExpected.minus(amountToTrade);
+                    // Add to matches
+                    matches.push({ sellOrder, buyOrder, amountToTrade: amountToTrade.toString() });
+                    matchOccurred = true;
 
-            // Determine order role (maker, taker, split)
-            let orderRole = '';
-            if (sellOrder.time < buyOrder.time) {
-                orderRole = 'maker';
-            } else if (sellOrder.time > buyOrder.time) {
-                orderRole = 'taker';
+                    // Remove filled orders from the order book
+                    if (sellOrder.amountOffered.isZero()) orderBook.sell.shift();
+                    if (buyOrder.amountExpected.isZero()) orderBook.buy.shift();
+                } else {
+                    break; // No more matches possible
+                }
+            }
+
+            // Return matches or indicate no matches
+            if (matchOccurred) {
+                return { orderBook: this.orderBooks[orderBookKey], matches };
             } else {
-                orderRole = 'split';
+                return 'No matches found';
             }
-
-            // Calculate fees based on the role
-            let takerFee, makerRebate;
-            if (isContract) {
-                takerFee = amountToTrade.times(0.0001);
-                makerRebate = orderRole === 'split' ? takerFee.div(2) : takerFee;
-            } else {
-                takerFee = amountToTrade.times(0.0002);
-                makerRebate = orderRole === 'split' ? takerFee.div(2) : (orderRole === 'maker' ? takerFee : new BigNumber(0));
-            }
-
-            // Adjust balances based on fees
-            if (orderRole === 'maker' || orderRole === 'split') {
-                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
-                sellOrder.amountOffered = sellOrder.amountOffered.plus(makerRebate);
-            } else {
-                // In case of taker, the whole fee is deducted from the buyer
-                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
-            }
-
-            // If an order is completely filled, remove it from the order book
-            if (sellOrder.amountOffered.isZero()) {
-                orderBook.sell.shift();
-            }
-            if (buyOrder.amountExpected.isZero()) {
-                orderBook.buy.shift();
-            }
-
-            const matchedOrderDetails = {
-                sellOrderId: sellOrder.id,
-                buyOrderId: buyOrder.id,
-                amountToTrade: amountToTrade.toString(),
-                price: sellOrder.price.toString(),
-                takerFee: takerFee.toString(),
-                makerRebate: makerRebate.toString(),
-                orderRole: orderRole
-            };
-
-            matches.push(matchedOrderDetails);
-
-            // Partial matches remain in the order book (already updated)
         }
-
-            // Check if there were any matches
-            if (matches.length === 0) {
-                return 'No matches found'; // No matches occurred
-            }
-
-        const matchResults = {
-            orderBook: this.orderBooks[orderBookKey],
-            matches
-        };
-
-        if (isContract) {
-            this.processContractMatches(matchResults.matches);
-        } else {
-            this.processTokenMatches(matchResults.matches);
-        }
-
-        this.save(orderBookKey);
-
-        // Return the updated order book and the matches
-        return {
-            orderBook: this.orderBooks[orderBookKey],
-            matches
-        };
-    }
-
 
     processTokenMatches(matches) {
         matches.forEach(match => {

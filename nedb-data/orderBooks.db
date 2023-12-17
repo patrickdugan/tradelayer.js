@@ -2,6 +2,6 @@
 {"_id":"3-4","value":"{\"buy\":[],\"sell\":[]}"}
 {"_id":"4-3","value":"{\"buy\":[],\"sell\":[]}"}
 {"_id":"4-3","value":"{\"buy\":[],\"sell\":[]}"}
-{"_id":"3-4","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266}]}"}
-{"_id":"3-4","value":"{\"buy\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":200,\"amountExpected\":150,\"blockTime\":3091266}],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266}]}"}
-{"_id":"3-4","value":"{\"buy\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":200,\"amountExpected\":150,\"blockTime\":3091266},{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":20,\"amountExpected\":10,\"blockTime\":3091317}],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266}]}"}
+{"_id":"3-4","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266,\"price\":\"2\"}]}"}
+{"_id":"3-4","value":"{\"buy\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":200,\"amountExpected\":150,\"blockTime\":3091266,\"price\":\"1.33333333\"}],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266,\"price\":\"2\"}]}"}
+{"_id":"3-4","value":"{\"buy\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":200,\"amountExpected\":150,\"blockTime\":3091266,\"price\":\"1.33333333\"}],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":4,\"amountOffered\":\"90\",\"amountExpected\":50,\"blockTime\":3091266,\"price\":\"2\"}]}"}
