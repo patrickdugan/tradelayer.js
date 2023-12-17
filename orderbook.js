@@ -1,35 +1,67 @@
 const BigNumber = require('bignumber.js')
-const { Level } = require('level')
+const dbInstance = require('./db.js'); // Import your database instance
 
 class Orderbook {
-    constructor(dbPath, tickSize = new BigNumber('0.000000001')) {
-        this.tickSize = tickSize;
-        this.db = new Level(dbPath);
-        this.orderBooks = {}; // This will be populated from LevelDB
+      constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
+            this.tickSize = tickSize;
+            this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
+            this.orderBooks = {};
+            this.loadOrCreateOrderBook(); // Load or create an order book based on the orderBookKey
+        }
+         // Static async method to get an instance of Orderbook
+        static async getOrderbookInstance(orderBookKey) {
+            const orderbook = new Orderbook(orderBookKey);
+            await orderbook.loadOrCreateOrderBook(); // Load or create the order book
+            return orderbook;
+        }
+
+        async loadOrCreateOrderBook() {
+            const orderBooksDB = dbInstance.getDatabase('orderBooks');
+            const orderBookData = await orderBooksDB.findOneAsync({ _id: this.orderBookKey });
+            
+            if (orderBookData) {
+                this.orderBooks[this.orderBookKey] = JSON.parse(orderBookData.value);
+                console.log(JSON.stringify(orderBookData.value))
+            } else {
+                // If no data found, create a new order book
+                this.orderBooks[this.orderBookKey] = { buy: [], sell: [] };
+                console.log(this.orderBooks[this.orderBookKey])
+
+                await this.saveOrderBook(this.orderBookKey);
+            }
+        }
+
+    // Function to divide two numbers with an option to round up or down to the nearest Satoshi
+    divideAndRound(number1, number2, roundUp = false) {
+        const result = new BigNumber(number1).dividedBy(new BigNumber(number2));
+        return roundUp
+            ? result.decimalPlaces(8, BigNumber.ROUND_UP).toString()
+            : result.decimalPlaces(8, BigNumber.ROUND_DOWN).toString();
     }
 
-    async load() {
-        // Load order books from LevelDB
-        for await (const [key, value] of this.db.iterator({ gt: 'book-', lt: 'book-\xFF' })) {
-            this.orderBooks[key.split('-')[1]] = JSON.parse(value);
-        }
-    }
+    async saveOrderBook(pair) {
+        // Save order book to your database
+        console.log('saving pair '+JSON.stringify(pair)/*, + ' '+ JSON.stringify(this.orderbooks[pair])*/)
+        const orderBooksDB = dbInstance.getDatabase('orderBooks');
+        await orderBooksDB.updateAsync(
+          { _id: pair },
+          { _id: pair, value: JSON.stringify(this.orderBooks[pair]) },
+          { upsert: true }
+        );
+      }
 
-    async save(pair) {
-        // Save order book to LevelDB
-        if (pair in this.orderBooks) {
-            await this.db.put(`book-${pair}`, JSON.stringify(this.orderBooks[pair]));
-        }
-    }
 
     // Adds a token order to the order book
-    addTokenOrder({ propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, time }) {
-        const price = this.calculatePrice(amountOffered, amountExpected);
-        const order = { propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, price, time };
+    async addTokenOrder(order){
+        const price = this.calculatePrice(order.amountOffered, order.amountExpected);
 
-        const orderBookKey = `${propertyIdNumber}-${propertyIdNumberDesired}`;
-        this.insertOrder(order, orderBookKey);
-        this.matchOrders(orderBookKey);
+        const orderBookKey = `${order.offeredPropertyId}-${order.desiredPropertyId}`;
+        console.log('inserting orders '+ JSON.stringify(order)+ ' of orderBookKey '+orderBookKey)
+        const orderConfirmation = await this.insertOrder(order, orderBookKey);
+        console.log('matching order '+orderConfirmation)
+        const matchResult = await this.matchOrders(orderBookKey);
+        console.log('match result ' +matchResult)
+        return matchResult
     }
 
     addContractOrder({ contractId, amount, price, time, sell }) {
@@ -46,44 +78,50 @@ class Orderbook {
         this.matchOrders(orderBookKey);
     }
 
-    insertOrder(order, orderBookKey, isContractOrder = false) {
+    async insertOrder(order, orderBookKey, isContractOrder = false) {
         // If order book does not exist, create it
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
         }
-
+        console.log('ze book '+JSON.stringify(this.orderBooks[orderBookKey]))
         // Determine if it's a buy or sell order based on the property IDs
         let side = {} 
         if (isContractOrder == false) {
-            side = order.propertyIdNumber < order.propertyIdNumberDesired ? 'buy' : 'sell';
+            side = order.offeredPropertyId < order.desiredPropertyId ? 'buy' : 'sell';
         } else if (isContractOrder == true && sell == true) {
             side = 'sell';
         } else if (isContractOrder == true && sell == false) {
             side = 'buy'
         }
+        console.log(side)
         
         // Insert the order into the correct side of the book
         const bookSide = this.orderBooks[orderBookKey][side];
+        console.log('bookSide '+bookSide)
         const index = bookSide.findIndex((o) => o.time > order.time);
+        console.log(index)
         if (index === -1) {
             bookSide.push(order);
         } else {
             bookSide.splice(index, 0, order);
         }
-
+     
         // Save the updated order book
-        this.save(orderBookKey);
+        await this.saveOrderBook(orderBookKey);
+
+        return 'updated book ' +JSON.stringify(this.orderBooks)
     }
 
     calculatePrice(amountOffered, amountExpected) {
         const priceRatio = new BigNumber(amountOffered).dividedBy(amountExpected);
+        console.log('price ratio '+priceRatio)
         return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP);
     }
 
-    matchOrders(orderBookKey, isContract = false) {
+    async matchOrders(orderBookKey, isContract = false) {
         const orderBook = this.orderBooks[orderBookKey];
         if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-            return {}; // Nothing to match
+            return 'first order in the book'; // Nothing to match
         }
 
         const matches = [];
@@ -94,9 +132,8 @@ class Orderbook {
 
         // While there is still potential for matches
         while (orderBook.sell.length > 0 && orderBook.buy.length > 0 &&
-            orderBook.sell[0].price.lte(orderBook.buy[0].price)) {
+               orderBook.sell[0].price.lte(orderBook.buy[0].price)) {
 
-            // Match the top of the buy and sell orders
             let sellOrder = orderBook.sell[0];
             let buyOrder = orderBook.buy[0];
 
@@ -107,41 +144,62 @@ class Orderbook {
             sellOrder.amountOffered = sellOrder.amountOffered.minus(amountToTrade);
             buyOrder.amountExpected = buyOrder.amountExpected.minus(amountToTrade);
 
-            // Deduct taker fee from buyer and give maker rebate to seller
-            if (isContract == false) {
-                const takerFee = amountToTrade.times(0.0002);
-                const makerRebate = takerFee.div(2);
+            // Determine order role (maker, taker, split)
+            let orderRole = '';
+            if (sellOrder.time < buyOrder.time) {
+                orderRole = 'maker';
+            } else if (sellOrder.time > buyOrder.time) {
+                orderRole = 'taker';
+            } else {
+                orderRole = 'split';
             }
 
-            if (isContract == true) {
-                const takerFee = amountToTrade.times(0.0001);
-                const makerRebate = takerFee.div(2);
+            // Calculate fees based on the role
+            let takerFee, makerRebate;
+            if (isContract) {
+                takerFee = amountToTrade.times(0.0001);
+                makerRebate = orderRole === 'split' ? takerFee.div(2) : takerFee;
+            } else {
+                takerFee = amountToTrade.times(0.0002);
+                makerRebate = orderRole === 'split' ? takerFee.div(2) : (orderRole === 'maker' ? takerFee : new BigNumber(0));
             }
-            buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
-            sellOrder.amountOffered = sellOrder.amountOffered.plus(makerRebate);
+
+            // Adjust balances based on fees
+            if (orderRole === 'maker' || orderRole === 'split') {
+                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
+                sellOrder.amountOffered = sellOrder.amountOffered.plus(makerRebate);
+            } else {
+                // In case of taker, the whole fee is deducted from the buyer
+                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
+            }
 
             // If an order is completely filled, remove it from the order book
             if (sellOrder.amountOffered.isZero()) {
-                orderBook.sell.shift(); // Remove the sell order
+                orderBook.sell.shift();
             }
             if (buyOrder.amountExpected.isZero()) {
-                orderBook.buy.shift(); // Remove the buy order
+                orderBook.buy.shift();
             }
 
             const matchedOrderDetails = {
-                sellOrderId: sellOrder.id, // Assuming we have unique IDs for orders 
+                sellOrderId: sellOrder.id,
                 buyOrderId: buyOrder.id,
                 amountToTrade: amountToTrade.toString(),
                 price: sellOrder.price.toString(),
                 takerFee: takerFee.toString(),
-                makerRebate: makerRebate.toString()
+                makerRebate: makerRebate.toString(),
+                orderRole: orderRole
             };
 
             matches.push(matchedOrderDetails);
 
-            // Partial matches: remaining amounts stay in the order book
-            // (They are already updated in the order objects)
-        }// Process the matches differently based on whether they're token or contract matches
+            // Partial matches remain in the order book (already updated)
+        }
+
+            // Check if there were any matches
+            if (matches.length === 0) {
+                return 'No matches found'; // No matches occurred
+            }
 
         const matchResults = {
             orderBook: this.orderBooks[orderBookKey],
@@ -162,6 +220,7 @@ class Orderbook {
             matches
         };
     }
+
 
     processTokenMatches(matches) {
         matches.forEach(match => {
@@ -238,14 +297,6 @@ class Orderbook {
                 // Handle error, potentially rolling back any partial updates or retrying
             }
         }
-    }
-
-    async clear() {
-        await this.db.clear();
-    }
-
-    async close() {
-        await this.db.close()
     }
 }
 

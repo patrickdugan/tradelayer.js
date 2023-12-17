@@ -1,4 +1,4 @@
-const Datastore = require('nedb');
+const db = require('./db.js');
 const path = require('path');
 const util = require('util');
 
@@ -8,31 +8,22 @@ class ConsensusDatabase {
             return ConsensusDatabase.instance;
         }
 
-        this.consensusDB = new Datastore({ 
-            filename: path.join(__dirname, 'nedb-data/consensus.db'), 
-            autoload: true 
-        });
-
-        // Promisify NeDB methods
-        this.consensusDB.findAsync = util.promisify(this.consensusDB.find.bind(this.consensusDB));
-        this.consensusDB.insertAsync = util.promisify(this.consensusDB.insert.bind(this.consensusDB));
-
         ConsensusDatabase.instance = this;
     }
 
-    async storeConsensusHash(blockHeight, consensusHash) {
+    static async storeConsensusHash(blockHeight, consensusHash) {
         const doc = { blockHeight, consensusHash };
         try {
-            await this.consensusDB.insertAsync(doc);
+            await db.getDatabase('consensus').insertAsync(doc);
             console.log(`Consensus hash for block ${blockHeight} stored.`);
         } catch (err) {
             console.error('Error storing consensus hash:', err);
         }
     }
 
-    async getConsensusHash(blockHeight) {
+    static async getConsensusHash(blockHeight) {
             try {
-                const docs = await this.consensusDB.findAsync({ blockHeight });
+                const docs = await db.getDatabase('consensus').findAsync({ blockHeight });
                 if (docs.length > 0) {
                     return docs[0].consensusHash;
                 } else {
@@ -42,6 +33,16 @@ class ConsensusDatabase {
                 console.error('Error retrieving consensus hash:', err);
                 return null;
             }
+    }
+
+
+    static async checkIfTxProcessed(txId) {
+        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        return !!result;
+    }
+
+    static async markTxAsProcessed(txId) {
+        await db.getDatabase('consensus').insertAsync({ _id: txId, processed: true });
     }
 }
 

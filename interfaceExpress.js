@@ -39,7 +39,18 @@ const expressInterface = {
             console.error('Error in getActivations:', error.response ? error.response.data : error.message);
             throw error;
         }
+    },
+
+    async getOrderBook(propertyId1, propertyId2) {
+        try {
+            const response = await axios.post(`${serverUrl}/getOrderBook`, { propertyId1, propertyId2 });
+            return response.data;
+        } catch (error) {
+            console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);
+            throw error;
+        }
     }
+
 };
 
 module.exports = expressInterface;

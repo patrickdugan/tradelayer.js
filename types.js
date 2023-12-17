@@ -144,6 +144,7 @@ const Types = {
             case 1:
                 //console.log('decoding issuance '+params)
                 params = Decode.decodeTokenIssue(encodedPayload.substr(index));
+                params.senderAddress = sender
                 //console.log('validating issuance '+JSON.stringify(params))
                 params = await Validity.validateTokenIssue(params)               
                 //console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
@@ -151,9 +152,10 @@ const Types = {
             case 2:
                 //console.log('decoding send '+params)
                 params = Decode.decodeSend(encodedPayload.substr(index));
-                //console.log('validating send '+JSON.stringify(params))
+                console.log('validating send '+JSON.stringify(params))
                 params.senderAddress= sender
-                params = await Validity.validateSend(sender, params)
+                params.txid = txId
+                params = await Validity.validateSend(sender, params, txId)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 3:
@@ -164,6 +166,11 @@ const Types = {
                 break;
             case 5:
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
+                console.log('validating token trade '+JSON.stringify(params))
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateOnChainTokenForToken(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 6:
                 params = Decode.decodeCancelOrder(encodedPayload.substr(index))

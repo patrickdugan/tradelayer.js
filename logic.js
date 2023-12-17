@@ -5,7 +5,7 @@ const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
-//const Orderbook = require('./orderbook.js'); // Manages the order book
+const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
 const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
@@ -38,7 +38,7 @@ const Logic = {
                 return await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
-                Logic.tokenIssue(params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
+                Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
                 break;
             case 2:
                 Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
@@ -50,7 +50,7 @@ const Logic = {
                 Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
                 break;
             case 5:
-                Logic.onChainTokenToToken(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.amountOffered, params.amountExpected);
+                Logic.onChainTokenToToken(params.fromAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid);
                 break;
             case 6:
                 Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
@@ -150,7 +150,7 @@ const Logic = {
     async activateTradeLayer(txType, block) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         // Call the activateSystem method from the Activation class instance
-        console.log('in activate TradeLayer logic function '+ txType)
+        console.log('in activate TradeLayer logic function '+ txType+ ' block ' +block)
         const activationResult = await activation.activate(txType, block);
 
         // Log or handle the result of activation
@@ -159,32 +159,26 @@ const Logic = {
  
     },
 
-    async tokenIssue(initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
         const propertyManager = PropertyManager.getInstance();
-        
-        // Generate a new property ID
-        const newPropertyId = await propertyManager.getNextPropertyId();
 
         // Determine the type of the token based on whether it's managed or an NFT
         let tokenType = isNFT ? 'Non-Fungible' : isManaged ? 'Managed' : 'Fixed';
 
         // Define the token data
         const tokenData = {
-            propertyId: newPropertyId,
             ticker: ticker,
             totalInCirculation: initialAmount,
             type: tokenType,
-            url: url,
             whitelistId: whitelistId,
-            backupAddress: backupAddress,
-            isNFT: isNFT
+            backupAddress: backupAddress
         };
 
         // Create the token in the property manager
         try {
-            await propertyManager.createToken(ticker, initialAmount, tokenType);
-            await propertyManager.save(); // Save the updated property list to the database
-
+            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
+            console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
+            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
         } catch (error) {
             console.error('Error creating token:', error);
@@ -202,8 +196,8 @@ const Logic = {
         } else {
             // Check if handling a multi-send or single send
             const isMultiSend = Array.isArray(propertyIdNumbers) && Array.isArray(amounts);
-            console.log('multisend')
             if (isMultiSend) {
+                console.log('multisend '+ isMultiSend + ' is this an array? '+propertyIdNumbers+ ' what about amounts '+amounts)
                 // Ensure arrays are of the same length
                 if (propertyIdNumbers.length !== amounts.length || propertyIdNumbers.length !== recipientAddresses.length) {
                     throw new Error('Property IDs, amounts, and recipient addresses arrays must have the same length.');
@@ -234,55 +228,83 @@ const Logic = {
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
 
-                        // Update TL vesting balance for sender (decrease)
-                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
+                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
+                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
 
-                        // Update TL vesting balance for recipient (increase)
+                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
                         await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send')
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
-                    }
+                }
             }
         }
 
         // Save the updated tally map to the database
         //await TallyMap.recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange)
-        const tallyInstance = await TallyMap.getInstance()
-        await tallyInstance.saveToDB();
         return console.log('sent')
     },
 
     async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts){
         // Get TLVEST and TL balances for the sender
+        
+        const BigNumber = require('bignumber.js');
+
+            // Ensuring amount is a whole number
+            const roundedAmount = new BigNumber(amount).integerValue(BigNumber.ROUND_DOWN);
+
+            if (roundedAmount.isLessThanOrEqualTo(0)) {
+                throw new Error("Amount must be greater than zero");
+            }
+
         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
         const tlTally = await TallyMap.getTally(senderAddress, 1);
 
+        // Calculate the amount of TL to move from vesting to available
+        const tlVestingMovement = calculateVestingMovement(amounts, tlVestTally,tlTally)
+        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
+        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
+
+        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
+        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+    },
+
+    calculateVestingMovement(amount, tlVestTally, tlTally) {
+    // Convert all values to BigNumber for accurate calculation
+        const amountBN = new BigNumber(amount);
+        const tlVestAvailableBN = new BigNumber(tlVestTally.available);
+        const tlVestingBN = new BigNumber(tlTally.vesting);
+
         // Calculate the proportion of TLVEST being moved
-        const proportion = amount / tlVestTally.available;
+        // Using BigNumber's division method for precision
+        const proportionBN = amountBN.dividedBy(tlVestAvailableBN);
 
         // Calculate the amount of TL to move from vesting to available
-        const tlVestingMovement = tlTally.vesting * proportion;
+        // Ensure result is rounded down to avoid fractional vesting movement
+        const tlVestingMovementBN = tlVestingBN.multipliedBy(proportionBN).integerValue(BigNumber.ROUND_DOWN);
 
-        // Update TL vesting balance for sender (decrease)
-        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
-
-        // Update TL vesting balance for recipient (increase)
-        await TallyMap.updateBalance(recipientAddress, 1, 0, 0, 0, tlVestingMovement);
+        return tlVestingMovementBN.toString(); // Convert back to string for further processing
     },
+
+
+    roundToEightDecimals(number) {
+        return Math.floor(number * 1e8) / 1e8;
+    },
+
 
     async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
         const tallyMapInstance = await TallyMap.getInstance();
 
         // Check if sender has enough balance
-        const senderBalance = tallyMapInstance.getTally(senderAddress, propertyId);
+        const senderBalance = TallyMap.getTally(senderAddress, propertyId);
+        console.log('checking balance before sending ' +JSON.stringify(senderBalance))
         if (senderBalance < amount) {
-            throw new Error("Insufficient balance");
+            /*throw new Error*/console.log("Insufficient balance");
         }
 
         // Perform the send operation
-        await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
-        await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
+        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
 
         // Handle special case for TLVEST
         if (propertyId === 2) {
@@ -307,8 +329,8 @@ const Logic = {
         for (const balance of senderBalances) {
             const { propertyId, amount } = balance;
             if (amount > 0) {
-                await TallyMap.updateBalance(senderAddress, propertyId, -amount, -amount, 0, 0);
-                await TallyMap.updateBalance(receiverAddress, propertyId, amount, amount, 0, 0);
+                await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
+                await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
 
                 // Handle special case for TLVEST
                 if (propertyId === 'TLVEST') {
@@ -332,8 +354,8 @@ const Logic = {
 	        throw new Error('Insufficient available balance for transaction.');
 	    }
 
-	    tallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
-	    tallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
+	    TallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
+	    TallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
 	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
 	},
 
@@ -371,18 +393,18 @@ const Logic = {
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(tallyMap, tradeChannelManager, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
     // Validate sender address
-	    if (!tallyMap.isAddressValid(senderAddress)) {
+	    if (!TallyMap.isAddressValid(senderAddress)) {
 	        throw new Error('Invalid sender address');
 	    }
 
 	    // Check if the sender has sufficient balance
-	    if (!tallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
+	    if (!TallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
 	        throw new Error('Insufficient token balance for commitment');
 	    }
 
 	    // Deduct tokens from available balance and add to reserved balance
-	    tallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 'available');
-	    tallyMap.updateBalance(senderAddress, propertyId, tokenAmount, 'reserved');
+	    TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
+	    TallyMap.updateBalance(senderAddress, propertyId, 0, tokenAmount, 0, 0);
 
 	    // Determine which column (A or B) to assign the tokens in the channel registry
 	    const channelColumn = tradeChannelManager.determineCommitColumn(senderAddress, transactionTime);
@@ -393,24 +415,31 @@ const Logic = {
 	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
 	},
 
-    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected) {
-        // Validate input parameters
-        if (!fromAddress || !offeredPropertyId || !desiredPropertyId || !amountOffered || !amountExpected) {
-            throw new Error('Missing required parameters for tradeTokens');
-        }
+    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid) {
+        // Construct the pair key for the Orderbook instance
+        const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
+        // Retrieve or create the Orderbook instance for this pair
+         console.log('loading orderbook for pair key '+pairKey)
+        const orderbook = await Orderbook.getOrderbookInstance(pairKey);
+        console.log('load orderbook for pair key '+JSON.stringify(orderbook))
+
+        const txInfo = await TxUtils.getRawTransaction(txid)
+        const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
 
         // Construct the order object
         const order = {
-            fromAddress,
-            offeredPropertyId,
-            desiredPropertyId,
-            amountOffered,
-            amountExpected,
-            time: Date.now() // or a more precise timestamp depending on requirements
+            fromAddress:fromAddress,
+            offeredPropertyId:offeredPropertyId,
+            desiredPropertyId:desiredPropertyId,
+            amountOffered:amountOffered,
+            amountExpected:amountExpected,
+            blockTime: confirmedBlock 
         };
 
+        console.log('entering order into book '+JSON.stringify(order))
+
         // Add the order to the order book
-        orderbook.addTokenOrder(order);
+        await orderbook.addTokenOrder(order);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);

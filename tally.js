@@ -36,10 +36,11 @@ class TallyMap {
             }
         }
     }
-    
-    static async updateBalance(address, propertyId, amountChange, availableChange, reservedChange,vestingChange) {
+
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange) {
+            console.log(propertyId, availableChange, reservedChange)
             if (!Number.isInteger(propertyId)) {
-                   return Error(`Invalid propertyId: ${propertyId}`);
+                return Error(`Invalid propertyId: ${propertyId}`);
             }
 
             const instance = await this.getInstance();
@@ -49,29 +50,67 @@ class TallyMap {
             const addressObj = instance.addresses.get(address);
 
             if (!addressObj[propertyId]) {
-                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, vesting: 0 };
+                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }
 
-            const newAmount = addressObj[propertyId].amount + amountChange;
-            const newAvailable = addressObj[propertyId].available + availableChange;
-            const newReserved = addressObj[propertyId].reserved + reservedChange;
-            const newVesting = addressObj[propertyId].vesting+vestingChange
-
-            if (newAmount < 0 || newAvailable < 0 || newReserved < 0) {
-                throw new Error("Balance cannot go negative");
+            // Check and update available balance
+            if (addressObj[propertyId].available + availableChange < 0) {
+                throw new Error("Available balance cannot go negative");
             }
+            addressObj[propertyId].available += availableChange;
 
-            addressObj[propertyId].amount = newAmount;
-            addressObj[propertyId].available = newAvailable;
-            addressObj[propertyId].reserved = newReserved;
-            addressObj[propertyId].vesting = newVesting
+            // Check and update reserved balance
+            if (addressObj[propertyId].reserved + reservedChange < 0) {
+                console.log(JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
+                throw new Error("Reserved balance cannot go negative "+propertyId + ' '+availableChange+' '+ reservedChange);
+            }
+            addressObj[propertyId].reserved += reservedChange;
+
+            // Check and update margin balance
+            if (addressObj[propertyId].margin + marginChange < 0) {
+                throw new Error("Margin balance cannot go negative");
+            }
+            addressObj[propertyId].margin += marginChange;
+
+            // Check and update vesting balance
+            if (addressObj[propertyId].vesting + vestingChange < 0) {
+                throw new Error("Vesting balance cannot go negative");
+            }
+            addressObj[propertyId].vesting += vestingChange;
+
+            // Update the total amount
+            addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
+
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
-
             console.log('Updated balance for address:', address, 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
-            //console.log('new amount '+newAmount+ 'newAvailable '+newAvailable + 'newReserved'+ newReserved+'newVesting '+newVesting)
-            //const blockHeight = TxIndex.fetchChainTip()
-    }
+        }
+
+
+        static calculateTotal(balanceObj) {
+            return balanceObj.available + balanceObj.reserved + balanceObj.margin + balanceObj.vesting;
+        }
+
+        static roundToEightDecimals(number) {
+            return Math.floor(number * 1e8) / 1e8;
+        }
+
+
+        static async setInitializationFlag() {
+            const db = dbInstance.getDatabase('tallyMap');
+            await db.updateAsync(
+                { _id: '$TLinit' },
+                { _id: '$TLinit', initialized: true },
+                { upsert: true }
+            );
+        }
+
+    static async checkInitializationFlag() {
+            const db = dbInstance.getDatabase('tallyMap');
+            const result = await db.findOneAsync({ _id: '$TLinit' });
+            if(result==undefined){return false}
+            return result ? result.initialized : false;
+        }
 
 
     static async getAddressBalances(address) {
@@ -86,7 +125,7 @@ class TallyMap {
             }
 
             // Log the serialized form of the data from the DB
-            console.log('Serialized data from DB:', JSON.stringify([...instance.addresses]));
+            //console.log('Serialized data from DB:', JSON.stringify([...instance.addresses]));
 
             // Check if the address exists in the map
             if (!instance.addresses.has(address)) {
@@ -95,8 +134,7 @@ class TallyMap {
             }
 
             const addressObj = instance.addresses.get(address);
-            console.log(`Data for address ${address}:`, addressObj);
-
+            //console.log(`Data for address ${address}:`, addressObj);
             const balances = [];
             for (const propertyId in addressObj) {
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
@@ -110,29 +148,53 @@ class TallyMap {
                     });
                 }
             }
-
-            console.log(`Balances for address ${address}:`, balances);
+            //console.log(`Balances for address ${address}:`, balances);
             return balances;
+    }
+
+    /**
+     * Checks if a sender has a sufficient balance of a specific property.
+     * @param {string} senderAddress - The address of the sender.
+     * @param {number} propertyId - The ID of the property to check.
+     * @param {number} requiredAmount - The amount required for the transaction.
+     * @returns {Promise<{hasSufficient: boolean, reason: string}>} - An object indicating if the balance is sufficient and a reason if it's not.
+     */
+    static async hasSufficientBalance(senderAddress, propertyId, requiredAmount) {
+        try {
+            const senderTally = await this.getTally(senderAddress, propertyId);
+            console.log('Checking senderTally', senderAddress, propertyId, JSON.stringify(senderTally));
+
+            if (!senderTally || senderTally.available === undefined) {
+                return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
+            }
+
+            console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
+
+            if (senderTally.available < requiredAmount) {
+                return { hasSufficient: false, reason: 'Insufficient available balance' };
+            }
+
+            return { hasSufficient: true, reason: '' };
+        } catch (error) {
+            console.error('Error in hasSufficientBalance:', error);
+            return { hasSufficient: false, reason: 'Unexpected error checking balance' };
         }
+    }
 
 
-      async saveToDB() {
+    async saveToDB() {
+        try {
             const db = dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
-            const tallyMapDocument = {
-                _id: 'tallyMap', 
-                data: serializedData
-            };
 
-            // Check if the entry exists
-            const existingEntry = await db.findOneAsync({ _id: 'tallyMap' });
-            console.log('about to save this '+serializedData)
-            if (existingEntry) {
-                await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, {});
-            } else {
-                await db.insertAsync(tallyMapDocument);
-            }
+            // Use upsert option
+            await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
+            console.log('TallyMap saved successfully.');
+        } catch (error) {
+            console.error('Error saving TallyMap:', error);
+        }
     }
+
 
     async loadFromDB() {
         try {
@@ -209,10 +271,12 @@ class TallyMap {
     static async getTally(address, propertyId) {
         const instance = await TallyMap.getInstance(); // Ensure instance is loaded
         if (!instance.addresses.has(address)) {
+            console.log("can't find address in tallyMap")
             return 0;
         }
         const addressObj = instance.addresses.get(address);
         if (!addressObj[propertyId]) {
+            console.log("can't find property in address")
             return 0;
         }
         return {amount: addressObj[propertyId].amount, 

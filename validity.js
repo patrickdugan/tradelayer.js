@@ -2,12 +2,20 @@ const TxUtils = require('./txUtils.js')
 const db = require('./db')
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance();
+//const whiteLists = require('./whitelists.js')
 
 const Validity = {
     // 0: Activate TradeLayer
     validateActivateTradeLayer: async (txId, params, sender) => {
         params.valid = true;
         console.log('inside validating activation '+JSON.stringify(params))
+
+         //console.log('trying to debug this strings passing thing '+parseInt(params.txTypeToActivate)+params.txTypeToActivate +parseInt(params.txTypeToActivate)==NaN)
+        if(isNaN(parseInt(params.txTypeToActivate))==true){
+            params.valid = false;
+            params.reason = 'Tx Type is not an integer';
+        }
+
         // Check if the sender is the admin address
         if (sender != "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8") {
             params.valid=false
@@ -15,19 +23,25 @@ const Validity = {
         }
 
         // Check if the txTypeToActivate is already activated
- 
+         
         const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
-        console.log('isAlreadyActivated '+isAlreadyActivated, params.txTypeToActivate)
-        if (isAlreadyActivated) {
+        //console.log('isAlreadyActivated '+isAlreadyActivated, params.txTypeToActivate)
+        const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate)
+
+        const rawTxData = await TxUtils.getRawTransaction(txId)
+        const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
+        //console.log('comparing heights' +activationBlock + ' ' + confirmedBlock) 
+        if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) {
             params.valid = false;
             params.reason = 'Transaction type already activated';
         }
+
+
 
         if(params.txTypeToActivate>35){
             params.valid = false;
             params.reason = 'Tx Type out of bounds';
         }
-        console.log('inside validating activation '+JSON.stringify(params))
 
         return params;
     },
@@ -64,7 +78,7 @@ const Validity = {
         return params
     },
     // 2: Send
-    validateSend: async (sender, params) => {
+    validateSend: async (sender, params, txId) => {
         params.reason = '';
         params.valid= true
 
@@ -73,15 +87,29 @@ const Validity = {
             params.valid=false
             params.reason += 'Tx type not yet activated '
         }
-        
+
+        const activationBlock = await activationInstance.checkActivationBlock(2)
+
+        const rawTxData = await TxUtils.getRawTransaction(txId)
+        const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
+        console.log('send comparing heights' +activationBlock + ' ' + confirmedBlock)
+        if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) { //come back and tighten this up when checkAct block returns null
+            params.valid = false;
+            params.reason = 'Transaction type activated in the future';
+        }
+
         const TallyMap = require('./tally.js')
         const senderTally = await TallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
         if (senderTally==0) {
-            params.valid=false
-            params.reason += 'Bug with Tally Loading'
+            var balances = await TallyMap.getAddressBalances(sender)
+            if(balances ==[]){
+                TallyMap.diagonistic(sender, params.propertyIds)
+            }
             
-        }else if(senderTally.available < params.amount){
+        }
+        console.log('checking we have enough tokens '+senderTally.available+ ' '+ params.amounts)
+        if(senderTally.available < params.amounts){
             params.valid=false
             params.reason += 'Insufficient available balance'
         }
@@ -161,9 +189,14 @@ const Validity = {
     },
 
     // 5: On-chain Token for Token
-    validateOnChainTokenForToken: async (params, tallyMap, whitelistRegistry) => {
+    validateOnChainTokenForToken: async (sender, params, txId) => {
         params.reason = '';
         params.valid = true;
+
+        if (!params.propertyIdOffered || !params.propertyIdDesired || !params.amountOffered || !params.amountExpected) {
+            params.valid= false 
+            params.reason += 'Missing required parameters for tradeTokens '
+        }
 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(5);
         if(isAlreadyActivated==false){
@@ -171,13 +204,20 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const hasSufficientBalance = await tallyMap.hasSufficientBalance(params.senderAddress, params.offeredPropertyId, params.amountOffered);
+        const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
+        if(isVEST){
+            params.valid =false
+            params.reason += "Vesting tokens cannot be traded"
+        }
+
+        const TallyMap = require('./tally.js')
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
         if (!hasSufficientBalance) {
             params.valid = false;
             params.reason += 'Insufficient balance for offered token; ';
         }
 
-        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
+        /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
         if (!isSenderWhitelisted) {
             params.valid = false;
             params.reason += 'Sender not whitelisted for offered property; ';
@@ -187,7 +227,7 @@ const Validity = {
         if (!isRecipientWhitelisted) {
             params.valid = false;
             params.reason += 'Recipient not whitelisted for desired property; ';
-        }
+        }*/
 
         return params;
     },

@@ -11,11 +11,10 @@ const Decode = {
         return {
             initialAmount: parseInt(parts[0], 36),
             ticker: parts[1],
-            url: parts[2],
-            whitelists: parts[3].split(';').map(val => parseInt(val, 36)),
-            managed: parts[4] === '1',
-            backupAddress: parts[5],
-            nft: parts[6] === '1'
+            whitelists: parts[2].split(';').map(val => parseInt(val, 36)),
+            managed: parts[3] === '1',
+            backupAddress: parts[4],
+            nft: parts[5] === '1'
         };
     },
 
@@ -67,8 +66,8 @@ const Decode = {
     decodeOnChainTokenForToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdNumber: parseInt(parts[0], 36),
-            propertyIdNumberDesired: parseInt(parts[1], 36),
+            propertyIdOffered: parseInt(parts[0], 36),
+            propertyIdDesired: parseInt(parts[1], 36),
             amountOffered: parseInt(parts[2], 36),
             amountExpected: parseInt(parts[3], 36)
         };
