@@ -21,11 +21,11 @@ class Orderbook {
             
             if (orderBookData) {
                 this.orderBooks[this.orderBookKey] = JSON.parse(orderBookData.value);
-                console.log(JSON.stringify(orderBookData.value))
+                console.log('loading the orderbook for ' +this.orderBookKey + ' in the form of ' + JSON.stringify(orderBookData))
             } else {
                 // If no data found, create a new order book
                 this.orderBooks[this.orderBookKey] = { buy: [], sell: [] };
-                console.log(this.orderBooks[this.orderBookKey])
+                console.log('loading fresh orderbook '+this.orderBooks[this.orderBookKey])
 
                 await this.saveOrderBook(this.orderBookKey);
             }
@@ -52,16 +52,35 @@ class Orderbook {
 
 
     // Adds a token order to the order book
-    async addTokenOrder(order){
-        const price = this.calculatePrice(order.amountOffered, order.amountExpected);
+    async addTokenOrder(order) {
+        // Determine the correct orderbook key
+        const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
+        console.log('Normalized Order Book Key:', normalizedOrderBookKey);
 
-        const orderBookKey = `${order.offeredPropertyId}-${order.desiredPropertyId}`;
-        console.log('inserting orders '+ JSON.stringify(order)+ ' of orderBookKey '+orderBookKey)
-        const orderConfirmation = await this.insertOrder(order, orderBookKey);
-        console.log('matching order '+orderConfirmation)
-        const matchResult = await this.matchOrders(orderBookKey);
-        console.log('match result ' +matchResult)
-        return matchResult
+        // Create an instance of Orderbook for the pair and load its data
+        const orderbook = new Orderbook(normalizedOrderBookKey);
+        await orderbook.loadOrCreateOrderBook();
+
+        // Determine if the order is a sell order
+        const isSellOrder = order.offeredPropertyId < order.desiredPropertyId;
+
+        // Add the order to the orderbook
+        const orderConfirmation = await orderbook.insertOrder(order, normalizedOrderBookKey, isSellOrder);
+        console.log('Order Insertion Confirmation:', orderConfirmation);
+
+        // Match orders in the orderbook
+        const matchResult = await orderbook.matchOrders();
+        console.log('Match Result:', matchResult);
+        console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
+        // Save the updated orderbook back to the database
+        await orderbook.saveOrderBook(normalizedOrderBookKey);
+
+        return matchResult;
+    }
+
+    normalizeOrderBookKey(propertyId1, propertyId2) {
+        // Ensure lower property ID is first in the key
+        return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
     }
 
     addContractOrder({ contractId, amount, price, time, sell }) {
@@ -78,38 +97,21 @@ class Orderbook {
         this.matchOrders(orderBookKey);
     }
 
-    async insertOrder(order, orderBookKey, isContractOrder = false) {
-        // If order book does not exist, create it
+    async insertOrder(order, orderBookKey, isSellOrder) {
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
         }
-        console.log('ze book '+JSON.stringify(this.orderBooks[orderBookKey]))
-        // Determine if it's a buy or sell order based on the property IDs
-        let side = {} 
-        if (isContractOrder == false) {
-            side = order.offeredPropertyId < order.desiredPropertyId ? 'buy' : 'sell';
-        } else if (isContractOrder == true && sell == true) {
-            side = 'sell';
-        } else if (isContractOrder == true && sell == false) {
-            side = 'buy'
-        }
-        console.log(side)
-        
-        // Insert the order into the correct side of the book
+
+        const side = isSellOrder ? 'sell' : 'buy';
         const bookSide = this.orderBooks[orderBookKey][side];
-        console.log('bookSide '+bookSide)
+
         const index = bookSide.findIndex((o) => o.time > order.time);
-        console.log(index)
         if (index === -1) {
             bookSide.push(order);
         } else {
             bookSide.splice(index, 0, order);
         }
-     
-        // Save the updated order book
-        await this.saveOrderBook(orderBookKey);
-
-        return 'updated book ' +JSON.stringify(this.orderBooks)
+        return `Order added to ${side} side of book ${orderBookKey}`;
     }
 
     calculatePrice(amountOffered, amountExpected) {
