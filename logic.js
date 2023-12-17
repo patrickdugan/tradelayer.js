@@ -50,7 +50,7 @@ const Logic = {
                 Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
                 break;
             case 5:
-                Logic.onChainTokenToToken(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.amountOffered, params.amountExpected, params.txid);
+                Logic.onChainTokenToToken(params.fromAddress, params.propertyIdOffered, params.propertyIdOffered, params.amountOffered, params.amountExpected, params.txid);
                 break;
             case 6:
                 Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
@@ -418,27 +418,27 @@ const Logic = {
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid) {
         // Construct the pair key for the Orderbook instance
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
-
         // Retrieve or create the Orderbook instance for this pair
         const orderbook = await Orderbook.getOrderbookInstance(pairKey);
+        console.log('load orderbook for pair key '+JSON.stringify(orderbook))
 
         const txInfo = await TxUtils.getRawTransaction(txid)
         const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
 
         // Construct the order object
         const order = {
-            fromAddress,
-            offeredPropertyId,
-            desiredPropertyId,
-            amountOffered,
-            amountExpected,
+            fromAddress:fromAddress,
+            offeredPropertyId:offeredPropertyId,
+            desiredPropertyId:desiredPropertyId,
+            amountOffered:amountOffered,
+            amountExpected:amountExpected,
             blockTime: confirmedBlock 
         };
 
         console.log('entering order into book '+JSON.stringify(order))
 
         // Add the order to the order book
-        orderbook.addTokenOrder(order);
+        await orderbook.addTokenOrder(order);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);

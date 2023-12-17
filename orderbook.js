@@ -52,15 +52,16 @@ class Orderbook {
 
 
     // Adds a token order to the order book
-    addTokenOrder({ propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, time }) {
-        const price = this.calculatePrice(amountOffered, amountExpected);
-        const order = { propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, price, time };
+    async addTokenOrder(order){
+        const price = this.calculatePrice(order.amountOffered, order.amountExpected);
 
-        const orderBookKey = `${propertyIdNumber}-${propertyIdNumberDesired}`;
-        console.log('inserting orders '+ JSON.stringify(order))
-        this.insertOrder(order, orderBookKey);
-        console.log('matching orders '+orderBookKey)
-        this.matchOrders(orderBookKey);
+        const orderBookKey = `${order.offeredPropertyId}-${order.desiredPropertyId}`;
+        console.log('inserting orders '+ JSON.stringify(order)+ ' of orderBookKey '+orderBookKey)
+        const orderConfirmation = await this.insertOrder(order, orderBookKey);
+        console.log('matching order '+orderConfirmation)
+        const matchResult = await this.matchOrders(orderBookKey);
+        console.log('match result ' +matchResult)
+        return matchResult
     }
 
     addContractOrder({ contractId, amount, price, time, sell }) {
@@ -77,7 +78,7 @@ class Orderbook {
         this.matchOrders(orderBookKey);
     }
 
-    insertOrder(order, orderBookKey, isContractOrder = false) {
+    async insertOrder(order, orderBookKey, isContractOrder = false) {
         // If order book does not exist, create it
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
@@ -104,10 +105,11 @@ class Orderbook {
         } else {
             bookSide.splice(index, 0, order);
         }
-        console.log('updated book ' +JSON.stringify(this.orderBooks))
-
+     
         // Save the updated order book
-        this.saveOrderBook(orderBookKey);
+        await this.saveOrderBook(orderBookKey);
+
+        return 'updated book ' +JSON.stringify(this.orderBooks)
     }
 
     calculatePrice(amountOffered, amountExpected) {
@@ -116,10 +118,10 @@ class Orderbook {
         return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP);
     }
 
-    matchOrders(orderBookKey, isContract = false) {
+    async matchOrders(orderBookKey, isContract = false) {
         const orderBook = this.orderBooks[orderBookKey];
         if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-            return {}; // Nothing to match
+            return 'first order in the book'; // Nothing to match
         }
 
         const matches = [];
@@ -130,9 +132,8 @@ class Orderbook {
 
         // While there is still potential for matches
         while (orderBook.sell.length > 0 && orderBook.buy.length > 0 &&
-            orderBook.sell[0].price.lte(orderBook.buy[0].price)) {
+               orderBook.sell[0].price.lte(orderBook.buy[0].price)) {
 
-            // Match the top of the buy and sell orders
             let sellOrder = orderBook.sell[0];
             let buyOrder = orderBook.buy[0];
 
@@ -143,41 +144,62 @@ class Orderbook {
             sellOrder.amountOffered = sellOrder.amountOffered.minus(amountToTrade);
             buyOrder.amountExpected = buyOrder.amountExpected.minus(amountToTrade);
 
-            // Deduct taker fee from buyer and give maker rebate to seller
-            if (isContract == false) {
-                const takerFee = amountToTrade.times(0.0002);
-                const makerRebate = takerFee.div(2);
+            // Determine order role (maker, taker, split)
+            let orderRole = '';
+            if (sellOrder.time < buyOrder.time) {
+                orderRole = 'maker';
+            } else if (sellOrder.time > buyOrder.time) {
+                orderRole = 'taker';
+            } else {
+                orderRole = 'split';
             }
 
-            if (isContract == true) {
-                const takerFee = amountToTrade.times(0.0001);
-                const makerRebate = takerFee.div(2);
+            // Calculate fees based on the role
+            let takerFee, makerRebate;
+            if (isContract) {
+                takerFee = amountToTrade.times(0.0001);
+                makerRebate = orderRole === 'split' ? takerFee.div(2) : takerFee;
+            } else {
+                takerFee = amountToTrade.times(0.0002);
+                makerRebate = orderRole === 'split' ? takerFee.div(2) : (orderRole === 'maker' ? takerFee : new BigNumber(0));
             }
-            buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
-            sellOrder.amountOffered = sellOrder.amountOffered.plus(makerRebate);
+
+            // Adjust balances based on fees
+            if (orderRole === 'maker' || orderRole === 'split') {
+                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
+                sellOrder.amountOffered = sellOrder.amountOffered.plus(makerRebate);
+            } else {
+                // In case of taker, the whole fee is deducted from the buyer
+                buyOrder.amountExpected = buyOrder.amountExpected.minus(takerFee);
+            }
 
             // If an order is completely filled, remove it from the order book
             if (sellOrder.amountOffered.isZero()) {
-                orderBook.sell.shift(); // Remove the sell order
+                orderBook.sell.shift();
             }
             if (buyOrder.amountExpected.isZero()) {
-                orderBook.buy.shift(); // Remove the buy order
+                orderBook.buy.shift();
             }
 
             const matchedOrderDetails = {
-                sellOrderId: sellOrder.id, // Assuming we have unique IDs for orders 
+                sellOrderId: sellOrder.id,
                 buyOrderId: buyOrder.id,
                 amountToTrade: amountToTrade.toString(),
                 price: sellOrder.price.toString(),
                 takerFee: takerFee.toString(),
-                makerRebate: makerRebate.toString()
+                makerRebate: makerRebate.toString(),
+                orderRole: orderRole
             };
 
             matches.push(matchedOrderDetails);
 
-            // Partial matches: remaining amounts stay in the order book
-            // (They are already updated in the order objects)
-        }// Process the matches differently based on whether they're token or contract matches
+            // Partial matches remain in the order book (already updated)
+        }
+
+            // Check if there were any matches
+            if (matches.length === 0) {
+                return 'No matches found'; // No matches occurred
+            }
 
         const matchResults = {
             orderBook: this.orderBooks[orderBookKey],
@@ -198,6 +220,7 @@ class Orderbook {
             matches
         };
     }
+
 
     processTokenMatches(matches) {
         matches.forEach(match => {

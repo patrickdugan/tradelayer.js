@@ -1,3 +1,10 @@
 {"_id":"3-4","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"3-4","value":"{\"buy\":[],\"sell\":[]}"}
 {"_id":"4-3","value":"{\"buy\":[],\"sell\":[]}"}
-{"_id":"undefined-undefined","value":"{\"buy\":[],\"sell\":[{\"amountOffered\":200,\"amountExpected\":150,\"price\":\"1.33333333\"}]}"}
+{"_id":"4-3","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"3-3","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"3-3","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"4-4","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"4-4","value":"{\"buy\":[],\"sell\":[]}"}
+{"_id":"3-3","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":3,\"desiredPropertyId\":3,\"amountOffered\":100,\"amountExpected\":50,\"blockTime\":3091266}]}"}
+{"_id":"4-4","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":4,\"amountOffered\":200,\"amountExpected\":150,\"blockTime\":3091266}]}"}
