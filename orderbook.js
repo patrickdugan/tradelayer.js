@@ -87,7 +87,7 @@ class Orderbook {
         // Determine if it's a buy or sell order based on the property IDs
         let side = {} 
         if (isContractOrder == false) {
-            side = order.propertyIdNumber < order.propertyIdNumberDesired ? 'buy' : 'sell';
+            side = order.offeredPropertyId < order.desiredPropertyId ? 'buy' : 'sell';
         } else if (isContractOrder == true && sell == true) {
             side = 'sell';
         } else if (isContractOrder == true && sell == false) {

@@ -6,8 +6,7 @@ async function runTestTokenTrades() {
 
     // Sample data for token trades
     const trades = [
-        { offeredPropertyId: 3, desiredPropertyId: 4, amountOffered: 100, amountExpected: 50 },
-        { offeredPropertyId: 4, desiredPropertyId: 3, amountOffered: 200, amountExpected: 150 }
+        { offeredPropertyId: 4, desiredPropertyId: 3, amountOffered: 20, amountExpected: 10 }
     ];
 
     // Iterate over each trade and create a transaction
