@@ -14,7 +14,7 @@ class Orderbook {
             await orderbook.loadOrCreateOrderBook(); // Load or create the order book
             return orderbook;
         }
-        
+
         async loadOrCreateOrderBook() {
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             const orderBookData = await orderBooksDB.findOneAsync({ _id: this.orderBookKey });
@@ -41,6 +41,7 @@ class Orderbook {
 
     async saveOrderBook(pair) {
         // Save order book to your database
+        console.log('saving pair '+JSON.stringify(pair)/*, + ' '+ JSON.stringify(this.orderbooks[pair])*/)
         const orderBooksDB = dbInstance.getDatabase('orderBooks');
         await orderBooksDB.updateAsync(
           { _id: pair },
@@ -56,7 +57,7 @@ class Orderbook {
         const order = { propertyIdNumber, propertyIdNumberDesired, amountOffered, amountExpected, price, time };
 
         const orderBookKey = `${propertyIdNumber}-${propertyIdNumberDesired}`;
-        console.log('inserting orders '+ order)
+        console.log('inserting orders '+ JSON.stringify(order))
         this.insertOrder(order, orderBookKey);
         console.log('matching orders '+orderBookKey)
         this.matchOrders(orderBookKey);
@@ -81,7 +82,7 @@ class Orderbook {
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
         }
-        console.log('ze book '+this.orderBooks[orderBookKey])
+        console.log('ze book '+JSON.stringify(this.orderBooks[orderBookKey]))
         // Determine if it's a buy or sell order based on the property IDs
         let side = {} 
         if (isContractOrder == false) {
@@ -103,9 +104,10 @@ class Orderbook {
         } else {
             bookSide.splice(index, 0, order);
         }
+        console.log('updated book ' +JSON.stringify(this.orderBooks))
 
         // Save the updated order book
-        this.save(orderBookKey);
+        this.saveOrderBook(orderBookKey);
     }
 
     calculatePrice(amountOffered, amountExpected) {

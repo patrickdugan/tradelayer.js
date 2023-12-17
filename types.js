@@ -168,6 +168,7 @@ const Types = {
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
                 console.log('validating token trade '+JSON.stringify(params))
                 params.senderAddress= sender
+                params.txid=txId
                 params = await Validity.validateOnChainTokenForToken(sender, params, txId)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;

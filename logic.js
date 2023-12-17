@@ -420,10 +420,10 @@ const Logic = {
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
 
         // Retrieve or create the Orderbook instance for this pair
-        const orderbook = await new Orderbook.getOrderbookInstance(pairKey);
+        const orderbook = await Orderbook.getOrderbookInstance(pairKey);
 
         const txInfo = await TxUtils.getRawTransaction(txid)
-        const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
+        const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
 
         // Construct the order object
         const order = {
@@ -435,7 +435,7 @@ const Logic = {
             blockTime: confirmedBlock 
         };
 
-        console.log('entering order into book '+order)
+        console.log('entering order into book '+JSON.stringify(order))
 
         // Add the order to the order book
         orderbook.addTokenOrder(order);

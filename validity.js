@@ -211,7 +211,7 @@ const Validity = {
         }
 
         const TallyMap = require('./tally.js')
-        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered);
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
         if (!hasSufficientBalance) {
             params.valid = false;
             params.reason += 'Insufficient balance for offered token; ';
