@@ -52,7 +52,7 @@ class Orderbook {
 
 
     // Adds a token order to the order book
-    async addTokenOrder(order) {
+    async addTokenOrder(order, blockHeight) {
         // Determine the correct orderbook key
         const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
         console.log('Normalized Order Book Key:', normalizedOrderBookKey);
@@ -77,7 +77,7 @@ class Orderbook {
         const matchResult = await orderbook.matchOrders(normalizedOrderBookKey);
         if (matchResult.matches && matchResult.matches.length > 0) {
             console.log('Match Result:', matchResult);
-            await this.processTokenMatches(matchResult.matches);
+            await this.processTokenMatches(matchResult.matches, blockHeight);
         }
         console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
@@ -134,6 +134,7 @@ class Orderbook {
 
             const orderBook = this.orderBooks[orderBookKey];
             if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+
                 return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches
             }
 
@@ -174,13 +175,14 @@ class Orderbook {
             if (matchOccurred) {
                 return { orderBook: this.orderBooks[orderBookKey], matches };
             } else {
+
                 return 'No matches found';
             }
         }
 
     async processTokenMatches(matches, blockHeight) {
         const TallyMap = require('./tally.js');
-
+        const thisBlock = 
         if (!Array.isArray(matches) || matches.length === 0) {
             console.log('No valid matches to process');
             return;
@@ -196,8 +198,19 @@ class Orderbook {
             const buyOrderAddress = match.buyOrder.senderAddress;
             const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
             const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
+            
+            if(match.sellOrder.blockTime<blockHeight){
+                match.sellOrder.isNew = false
+                match.buyOrder.isNew = true
+            }else if(match.sellOrder.blockTime==match.buyOrder.blockTime){
+                match.sellOrder.isNew = true
+                match.buyOrder.isNew = true
+            }else{
+                match.buyOrder.isNew = false
+                match.sellOrder.isNew= true
+            }
 
-            let takerFee, makerRebate;
+            let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange;
             let amountToTrade = new BigNumber(match.amountToTrade).toNumber();
             
             // Determine order roles and calculate fees
@@ -207,54 +220,65 @@ class Orderbook {
                 takerFee = amountToTrade.times(0.0002);
                 makerRebate = takerFee.div(2);
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, makerRebate.toNumber(), 0, 0, 0);
                 await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
+                sellOrderAmountChange = new BigNumber(match.amountToTrade).plus(makerRebate).toNumber();
+                buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
+
             } else if (match.buyOrder.blockTime < match.sellOrder.blockTime) {
                 match.buyOrder.orderRole = 'maker';
                 match.sellOrder.orderRole = 'taker';
                 takerFee = amountToTrade.times(0.0002);
                 makerRebate = takerFee.div(2); 
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, makerRebate.toNumber(), 0, 0, 0);
                 await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
+                buyOrderAmountChange = new BigNumber(match.amountToTrade).plus(makerRebate).toNumber();
+                sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
             } else if (match.buyOrder.blockTime == match.sellOrder.blockTime) {
                 match.buyOrder.orderRole = 'split';
                 match.sellOrder.orderRole = 'split';
                 takerFee = amountToTrade.times(0.0001);
                 await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
                 await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
+                sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
+                buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
             }
 
-            // Update fee cache for both properties if applicable
-            if(match.sellOrder.)
-
             // Calculate changes in balances
-            const sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(makerRebate).toNumber();
-            const buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
+            const 
 
             // Update balances for seller
-            await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -sellOrderAmountChange, 0, 0, 0);
+            await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, sellOrderAmountChange, 0, 0, 0);
+            //seller gets paid, not sure if propertyId is correct or should be converse
 
             // Update balances for buyer
             await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, buyOrderAmountChange, 0, 0, 0);
+            //buyer gerts paid, not sure if propertyId is correct see above
 
             // Handle reserved balance updates for partial fills and new orders
-            if (match.sellOrder.isNew) {
+            if (match.sellOrder.isNew&&match.sellOrder.amountOffered == match.amountToTrade) {
                 // Debit from available balance for new orders
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, -sellOrderAmountChange, 0, 0);
-            } else if (match.sellOrder.amountOffered !== match.amountToTrade) {
-                // Move remaining amount to reserve for partial fills
+                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -sellOrderAmountChange, 0, 0, 0);
+            } else if (match.sellOrder.isNew &&match.sellOrder.amountOffered !== match.amountToTrade) {
+                // Move remaining amount to reserve for partial fills, debit from avail. for new order
                 const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.amountToTrade).toNumber();
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, sellOrderReservedChange, 0, 0);
+                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -match.amountToTrade, sellOrderReservedChange, 0, 0);
+            } else if(!match.sellOrder.isNew){
+                //partial fill or not, the order is already all in reserve so we debit from that alone
+                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.amountToTrade).toNumber();
+                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, -sellOrderReservedChange, 0, 0);
             }
 
-            if (match.buyOrder.isNew) {
+            if (match.buyOrder.isNew&&match.buyOrder.amountOffered == match.amountToTrade) {
                 // Debit from available balance for new orders
-                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, -buyOrderAmountChange, 0, 0);
-            } else if (match.buyOrder.amountExpected !== match.amountToTrade) {
-                // Move remaining amount to reserve for partial fills
+                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, -buyOrderAmountChange, 0, 0, 0);
+            } else if (match.buyOrder.isNew&& match.buyOrder.amountExpected !== match.amountToTrade) {
+                // Move remaining amount to reserve for partial fills, debit from avail. for new order
                 const buyOrderReservedChange = new BigNumber(match.buyOrder.amountExpected).minus(match.amountToTrade).toNumber();
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, buyOrderReservedChange, 0, 0);
+            }  else if(!match.buyOrder.isNew){
+                //partial fill or not, the order is already all in reserve so we debit from that alone
+                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountOffered).minus(match.amountToTrade).toNumber();
+                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, -buyOrderReservedChange, 0, 0);
             }
         }
     }
