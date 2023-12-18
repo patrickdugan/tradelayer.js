@@ -435,11 +435,10 @@ const Logic = {
             senderAddress: fromAddress 
         };
 
-        console.log('entering order into book '+JSON.stringify(order))
-        console.log('locating those Bermuda triangle properties '+order.fromAddress + ' '+ order.senderAddress)
+        console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
-        await orderbook.addTokenOrder(order, blockHeight);
+        await orderbook.addTokenOrder(order, blockHeight, txid);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);

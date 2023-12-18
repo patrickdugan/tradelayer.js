@@ -1,5 +1,6 @@
 var dbInstance = require('./db.js')
 var TxIndex = require('./txindex.js')
+var PropertyList = require('./property.js')
 
 class TallyMap {
     static instance;
@@ -27,7 +28,9 @@ class TallyMap {
         return TallyMap.instance;
     }
 
-    verifyPropertyIds() {
+    async verifyPropertyIds() {
+        let propertyIndex = await PropertyList.getPropertyIndex()    
+
         for (const [address, properties] of this.addresses.entries()) {
             for (const propertyId in properties) {
                 if (!this.propertyIndex.has(propertyId)) {
@@ -38,8 +41,14 @@ class TallyMap {
         }
     }
 
-    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange) {
-            console.log(propertyId, availableChange, reservedChange)
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
+            if(tradeSettlement=true){
+                console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange)
+            }
+            if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
+                throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
+            }
+
             if (!Number.isInteger(propertyId)) {
                 return Error(`Invalid propertyId: ${propertyId}`);
             }
@@ -62,7 +71,7 @@ class TallyMap {
 
             // Check and update reserved balance
             if (addressObj[propertyId].reserved + reservedChange < 0) {
-                console.log(JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
+                console.log('propertyId, reserved, reservedChange '+JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
                 throw new Error("Reserved balance cannot go negative "+propertyId + ' '+availableChange+' '+ reservedChange);
             }
             addressObj[propertyId].reserved += reservedChange;
@@ -83,7 +92,7 @@ class TallyMap {
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
-            console.log('Updated balance for address:', address, 'with propertyId:', propertyId);
+            console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
         }
 
@@ -217,7 +226,7 @@ class TallyMap {
     }
 
      // Method to save fee cache to the database
-    async saveFeeCacheToDB() {
+     static async saveFeeCacheToDB() {
         try {
             const db = dbInstance.getDatabase('feeCache');
             for (let [propertyId, feeAmount] of this.feeCache.entries()) {
@@ -235,14 +244,15 @@ class TallyMap {
     }
 
     
-    async loadFeeCacheFromDB() {
+    static async loadFeeCacheFromDB() {
+        let propertyIndex = await PropertyList.getPropertyIndex()    
         try {
             const db = dbInstance.getDatabase('feeCache');
             this.feeCache = new Map();
 
             // Assuming you have a list of property IDs, iterate through them
-            for (let propertyId of listOfPropertyIds) {
-                const query = { _id: 'feeCache-' + propertyId };
+            for (let id of propertyIndex) {
+                const query = { _id: 'feeCache-' + propertyIndex.id };
                 const result = await db.findOneAsync(query);
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
