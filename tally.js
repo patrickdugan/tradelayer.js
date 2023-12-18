@@ -7,6 +7,7 @@ class TallyMap {
     constructor(path) {
         if (!TallyMap.instance) {
             this.addresses = new Map();
+            this.feeCache = new Map(); // Map for storing fees for each propertyId
             TallyMap.instance = this;
         }
         return TallyMap.instance;
@@ -195,7 +196,6 @@ class TallyMap {
         }
     }
 
-
     async loadFromDB() {
         try {
             const query = { _id: 'tallyMap' };
@@ -216,6 +216,44 @@ class TallyMap {
         }
     }
 
+     // Method to save fee cache to the database
+    async saveFeeCacheToDB() {
+        try {
+            const db = dbInstance.getDatabase('feeCache');
+            for (let [propertyId, feeAmount] of this.feeCache.entries()) {
+                const serializedFeeAmount = JSON.stringify(feeAmount);
+                await db.updateAsync(
+                    { _id: 'feeCache-' + propertyId },
+                    { _id: 'feeCache-' + propertyId, value: serializedFeeAmount },
+                    { upsert: true }
+                );
+            }
+            console.log('FeeCache saved successfully.');
+        } catch (error) {
+            console.error('Error saving FeeCache:', error);
+        }
+    }
+
+    
+    async loadFeeCacheFromDB() {
+        try {
+            const db = dbInstance.getDatabase('feeCache');
+            this.feeCache = new Map();
+
+            // Assuming you have a list of property IDs, iterate through them
+            for (let propertyId of listOfPropertyIds) {
+                const query = { _id: 'feeCache-' + propertyId };
+                const result = await db.findOneAsync(query);
+                if (result && result.value) {
+                    const feeAmount = JSON.parse(result.value);
+                    this.feeCache.set(propertyId, feeAmount);
+                }
+            }
+            console.log('FeeCache loaded successfully.');
+        } catch (error) {
+            console.error('Error loading fee cache from dbInstance:', error);
+        }
+    }
 
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height
@@ -228,12 +266,58 @@ class TallyMap {
         }
     }
 
+     // Method to update fee cache for a property
+    static async updateFeeCache(propertyId, feeAmount) {
+        await this.loadFeeCacheFromDB();
+
+
+        if (!this.feeCache.has(propertyId)) {
+            this.feeCache.set(propertyId, 0); // Initialize if not present
+        }
+        const currentFee = this.feeCache.get(propertyId);
+        this.feeCache.set(propertyId, currentFee + feeAmount);
+
+        // Optionally, persist fee cache changes to database if necessary
+        await this.saveFeeCacheToDB(); 
+    }
+
+    static async drawOnFeeCache(propertyId) {
+        await this.loadFeeCacheFromDB();
+
+        if (!this.feeCache.has(propertyId)) {
+            console.log(`No fee cache available for property ID ${propertyId}`);
+            return;
+        }
+
+        const feeAmount = this.feeCache.get(propertyId);
+        if (feeAmount <= 0) {
+            console.log(`Insufficient fee cache for property ID ${propertyId}`);
+            return;
+        }
+
+        // Logic to match with standing sell orders of property ID 1
+        // Adjust this logic based on how you handle order matching
+        // ...
+
+        // Deduct the matched amount from the fee cache
+        this.feeCache.set(propertyId, this.feeCache.get(propertyId) - matchedAmount);
+
+        // Insert the purchased property ID 1 units into the insurance fund
+        // Adjust this logic to match your insurance fund implementation
+        // ...
+
+        // Save the updated fee cache to the database
+        await this.saveFeeCacheToDB();
+    }
+
     // Function to record a delta
     async recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
         const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
         const delta = { address, propertyId, amountChange };
         return await dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(delta));
     }
+
+
 
 // Function to apply a delta to the TallyMap
     applyDeltaToTallyMap(delta) {

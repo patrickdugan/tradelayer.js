@@ -215,9 +215,16 @@ class Orderbook {
                 makerRebate = takerFee.div(2);
             }
 
+            // Update fee cache for sell order property
+            await TallyMap.updateFeeCache(match.sellOrder.offeredPropertyId, takerFee);
+
+            // Update fee cache for buy order property
+            await TallyMap.updateFeeCache(match.buyOrder.desiredPropertyId, takerFee);
+
+
             // Calculate changes in balances
-            const sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(makerRebate);
-            const buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee);
+            const sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(makerRebate).toNumber();
+            const buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee).toNumber();
 
             // Update balances for seller
             await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, sellOrderAmountChange, 0, 0, 0);
@@ -227,11 +234,11 @@ class Orderbook {
 
             // Handle reserved balance updates for partial fills
             if (match.sellOrder.amountOffered !== match.amountToTrade) {
-                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.amountToTrade);
+                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.amountToTrade).toNumber();
                 await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, sellOrderReservedChange, 0, 0);
             }
             if (match.buyOrder.amountExpected !== match.amountToTrade) {
-                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountExpected).minus(match.amountToTrade);
+                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountExpected).minus(match.amountToTrade).toNumber();
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, buyOrderReservedChange, 0, 0);
             }
         }
