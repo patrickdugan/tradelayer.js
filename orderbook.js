@@ -74,10 +74,15 @@ class Orderbook {
         console.log('Order Insertion Confirmation:', orderConfirmation);
 
         // Match orders in the orderbook
-        const matchResult = await orderbook.matchOrders(normalizedOrderBookKey);
+        const matchResult = await orderbook.matchTokenOrders(normalizedOrderBookKey);
         if (matchResult.matches && matchResult.matches.length > 0) {
             console.log('Match Result:', matchResult);
             await this.processTokenMatches(matchResult.matches, blockHeight);
+        }else{
+            const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
+            await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0);
+            console.log('No Match')
+
         }
         console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
@@ -130,7 +135,7 @@ class Orderbook {
         return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP);
     }
 
-    async matchOrders(orderBookKey) {
+    async matchTokenOrders(orderBookKey) {
 
             const orderBook = this.orderBooks[orderBookKey];
             if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
@@ -152,16 +157,18 @@ class Orderbook {
 
                 // Check for price match
                 if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
-                    // Determine the amount to trade (minimum of the two orders)
-                    let amountToTrade = BigNumber.min(sellOrder.amountOffered, buyOrder.amountExpected);
+                    // Calculate tradeable amounts based on offers and exchange rates
+                    let amountOfTokenA = BigNumber.min(sellOrder.amountOffered, buyOrder.amountExpected.times(sellOrder.price));
+                    let amountOfTokenB = amountOfTokenA.div(sellOrder.price);
 
                     // Update orders after the match
-                    sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountToTrade);
-                    buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountToTrade);
+                    sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountOfTokenA);
+                    buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountOfTokenB);
 
                     // Add to matches
-                    matches.push({ sellOrder, buyOrder, amountToTrade: amountToTrade.toString() });
+                    matches.push({ sellOrder, buyOrder, amountOfTokenA: amountOfTokenA.toString(), amountOfTokenB: amountOfTokenB.toString() });
                     matchOccurred = true;
+
 
                     // Remove filled orders from the order book
                     if (sellOrder.amountOffered.isZero()) orderBook.sell.shift();
@@ -171,13 +178,7 @@ class Orderbook {
                 }
             }
 
-            // Return matches or indicate no matches
-            if (matchOccurred) {
                 return { orderBook: this.orderBooks[orderBookKey], matches };
-            } else {
-
-                return 'No matches found';
-            }
         }
 
     async processTokenMatches(matches, blockHeight) {
@@ -281,9 +282,7 @@ class Orderbook {
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, -buyOrderReservedChange, 0, 0);
             }
         }
-    }
-
-    
+    }    
 
     processContractMatches(matches) {
         matches.forEach(match => {
