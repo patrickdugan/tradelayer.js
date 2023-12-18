@@ -75,7 +75,10 @@ class Orderbook {
 
         // Match orders in the orderbook
         const matchResult = await orderbook.matchOrders(normalizedOrderBookKey);
-        console.log('Match Result:', matchResult);
+        if (matchResult.matches && matchResult.matches.length > 0) {
+            console.log('Match Result:', matchResult);
+            await this.processTokenMatches(matchResult.matches);
+        }
         console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
         // Save the updated orderbook back to the database
@@ -128,9 +131,10 @@ class Orderbook {
     }
 
     async matchOrders(orderBookKey) {
+
             const orderBook = this.orderBooks[orderBookKey];
             if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-                return 'No matches found due to empty book'; // No orders to match
+                return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches
             }
 
             let matches = [];
@@ -174,27 +178,63 @@ class Orderbook {
             }
         }
 
-    processTokenMatches(matches) {
-        matches.forEach(match => {
-            const sellOrder = this.getAddressBalances(match.sellOrderId);
-            const buyOrder = this.getAddressBalances(match.buyOrderId);
+    async processTokenMatches(matches, blockHeight) {
+        const TallyMap = require('./tally.js');
 
-            // Debit the reserve balances from the seller and buyer
-            sellOrder.reserveAmount = sellOrder.reserveAmount.minus(match.amountToTrade);
-            buyOrder.reserveAmount = buyOrder.reserveAmount.minus(match.amountToTrade);
+        // Check if matches is an array and not empty
+        if (!Array.isArray(matches) || matches.length === 0) {
+            console.log('No valid matches to process');
+            return;
+        }
 
-            // Credit the available balances to the buyer and seller
-            sellOrder.available = sellOrder.available.plus(match.amountToTrade);
-            buyOrder.available = buyOrder.available.plus(match.amountToTrade);
+        for (const match of matches) {
+            // Skip invalid match objects
+            if (!match.sellOrder || !match.buyOrder) {
+                console.error('Invalid match object:', match);
+                continue;
+            }
 
-            // Apply fees and rebates
-            buyOrder.available = buyOrder.available.minus(match.takerFee);
-            sellOrder.available = sellOrder.available.plus(match.makerRebate);
+            // Retrieve order details
+            const sellOrderAddress = match.sellOrder.senderAddress;
+            const buyOrderAddress = match.buyOrder.senderAddress;
+            const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
+            const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
 
-            // Save the updated balances back to the TallyMap
-            this.updateBalance(match.sellOrderId, sellOrder);
-            this.updateBalance(match.buyOrderId, buyOrder);
-        });
+            // Determine order roles and calculate fees
+            let orderRole, takerFee, makerRebate;
+            if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
+                orderRole = 'maker';
+                takerFee = new BigNumber(match.amountToTrade).times(0.0002);
+                makerRebate = takerFee.div(2);
+            } else if (match.sellOrder.blockTime > match.buyOrder.blockTime) {
+                orderRole = 'taker';
+                takerFee = new BigNumber(match.amountToTrade).times(0.0002);
+                makerRebate = new BigNumber(0);
+            } else { // split
+                takerFee = new BigNumber(match.amountToTrade).times(0.0001);
+                makerRebate = takerFee.div(2);
+            }
+
+            // Calculate changes in balances
+            const sellOrderAmountChange = new BigNumber(match.amountToTrade).minus(makerRebate);
+            const buyOrderAmountChange = new BigNumber(match.amountToTrade).minus(takerFee);
+
+            // Update balances for seller
+            await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, sellOrderAmountChange, 0, 0, 0);
+
+            // Update balances for buyer
+            await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, buyOrderAmountChange, 0, 0, 0);
+
+            // Handle reserved balance updates for partial fills
+            if (match.sellOrder.amountOffered !== match.amountToTrade) {
+                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.amountToTrade);
+                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, sellOrderReservedChange, 0, 0);
+            }
+            if (match.buyOrder.amountExpected !== match.amountToTrade) {
+                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountExpected).minus(match.amountToTrade);
+                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, buyOrderReservedChange, 0, 0);
+            }
+        }
     }
 
     processContractMatches(matches) {
