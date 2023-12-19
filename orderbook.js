@@ -276,16 +276,16 @@ class Orderbook {
             //buyer gerts paid, not sure if propertyId is correct see above
 
             // Handle reserved balance updates for partial fills and new orders
-            if (match.sellOrder.isNew&&match.sellOrder.amountOffered == match.amountToTradeA) {
+            if (match.sellOrder.isNew&&match.amountOfTokenB == match.amountOfTokenA) {
                 // Debit from available balance for new orders
                 if(isNaN(sellOrderAmountChange)){
                 console.log('identified NaN for new Order full fill '+txid)
                 
                 }
                 await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -sellOrderAmountChange, 0, 0, 0, true, false,false,txid);
-            } else if (match.sellOrder.isNew &&match.sellOrder.amountOffered !== match.amountToTradeB) {
+            } else if (match.sellOrder.isNew &&match.amountOfTokenA !== match.amountOfTokenB) {
                 // Move remaining amount to reserve for partial fills, debit from avail. for new order
-                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.buyOrder.amountExpected).toNumber();
+                const sellOrderReservedChange = new BigNumber(match.amountOfTokenA).minus(match.amountOfTokenB).toNumber();
                 if(isNaN(sellOrderAmountChange)){
                 console.log('identified NaN for new Order partial fill '+txid)
                 
@@ -294,10 +294,10 @@ class Orderbook {
                 await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -match.amountToTradeB, sellOrderReservedChange, 0, 0,true,false,false,txid);
             } else if(!match.sellOrder.isNew){
                 //partial fill or not, the order is already all in reserve so we debit from that alone
-                const sellOrderReservedChange = new BigNumber(match.sellOrder.amountOffered).minus(match.buyOrder.amountExpected).toNumber();
+                const sellOrderReservedChange = new BigNumber(match.amountOfTokenA).minus(match.amountOfTokenB).toNumber();
                 if(isNaN(sellOrderReservedChange)){
                 console.log('identified NaN for older sell order from margin '+txid)
-                console.log('sellOrderReservedChange '+match.sellOrder.amountOffered + ' '+ match.buyOrder.amountExpected)
+                console.log('sellOrderReservedChange '+match.amountOfTokenA + ' '+ match.amountOfTokenB)
                 }
                 await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, -sellOrderReservedChange, 0, 0, true,false,false,txid);
             }
@@ -310,17 +310,18 @@ class Orderbook {
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, -buyOrderAmountChange, 0, 0, 0, true, false,false,txid);
             } else if (match.buyOrder.isNew&& match.buyOrder.amountExpected !== match.sellOrder.amountOffered) {
                 // Move remaining amount to reserve for partial fills, debit from avail. for new order
-                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountExpected).minus(match.sellOrder.amountOffered).toNumber();
+                const buyOrderReservedChange = new BigNumber(match.amountOfTokenB).minus(match.amountOfTokenA).toNumber();
                 if(isNaN(buyOrderReservedChange)){
                 console.log('identified NaN for new  partial fill buy order to margin '+txid)
                 }
+                console.log('looking into the negative reserve '+buyOrderPropertyId+ ' reserve change ' +buyOrderReservedChange + ' buy order expected '+match.buyOrder.amountExpected+' sell order expected ' )
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, buyOrderReservedChange, 0, 0, true, false,false,txid);
             }  else if(!match.buyOrder.isNew){
                 //partial fill or not, the order is already all in reserve so we debit from that alone
                 if(isNaN(buyOrderReservedChange)){
                 console.log('identified NaN for older buy order from margin '+txid)
                 }
-                const buyOrderReservedChange = new BigNumber(match.buyOrder.amountOffered).minus(match.sellOrder.amountExpected).toNumber();
+                const buyOrderReservedChange = new BigNumber(match.amountOfTokenB).minus(match.amountOfTokenA).toNumber();
                 await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, -buyOrderReservedChange, 0, 0, true, false,false,txid);
             }
         }
