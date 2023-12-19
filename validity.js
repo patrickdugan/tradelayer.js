@@ -462,7 +462,7 @@ const Validity = {
             return params;
         },
 
-        // 16: Exercise Derivative
+        // 17: Exercise Derivative
         validateExerciseDerivative: async (params, derivativeRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
@@ -488,7 +488,7 @@ const Validity = {
             return params;
         },
 
-        // 17: Trade Contract On-chain
+        // 18: Trade Contract On-chain
         validateTradeContractOnchain: async (params, marginMap, whitelistRegistry, contractRegistry) => {
             params.reason = '';
             params.valid = true;
@@ -515,7 +515,7 @@ const Validity = {
             return params;
         },
 
-        // 18: Trade Contract Channel
+        // 19: Trade Contract Channel
         validateTradeContractChannel: async (params, channelRegistry, whitelistRegistry, contractRegistry) => {
             params.reason = '';
             params.valid = true;
