@@ -138,12 +138,7 @@ class PropertyManager {
             id,
             ticker: property.ticker,
             totalInCirculation: property.totalInCirculation,
-            type: property.type,
-            feeAmount: property.feeAmount,
-            insuranceAmount: property.insuranceAmount,
-            reserveAmount: property.reserveAmount,
-            marginAmount: property.marginAmount,
-            vestingAmount: property.vestingAmount
+            type: property.type
         }));
     }
     // ... other methods like verifyIfManaged, updateAdmin ...

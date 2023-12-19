@@ -1,5 +1,6 @@
 var dbInstance = require('./db.js')
 var TxIndex = require('./txindex.js')
+var PropertyList = require('./property.js')
 
 class TallyMap {
     static instance;
@@ -7,6 +8,7 @@ class TallyMap {
     constructor(path) {
         if (!TallyMap.instance) {
             this.addresses = new Map();
+            this.feeCache = new Map(); // Map for storing fees for each propertyId
             TallyMap.instance = this;
         }
         return TallyMap.instance;
@@ -26,7 +28,9 @@ class TallyMap {
         return TallyMap.instance;
     }
 
-    verifyPropertyIds() {
+    async verifyPropertyIds() {
+        let propertyIndex = await PropertyList.getPropertyIndex()    
+
         for (const [address, properties] of this.addresses.entries()) {
             for (const propertyId in properties) {
                 if (!this.propertyIndex.has(propertyId)) {
@@ -37,8 +41,14 @@ class TallyMap {
         }
     }
 
-    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange) {
-            console.log(propertyId, availableChange, reservedChange)
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
+            if(tradeSettlement=true){
+                console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange)
+            }
+            if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
+                throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
+            }
+
             if (!Number.isInteger(propertyId)) {
                 return Error(`Invalid propertyId: ${propertyId}`);
             }
@@ -61,7 +71,7 @@ class TallyMap {
 
             // Check and update reserved balance
             if (addressObj[propertyId].reserved + reservedChange < 0) {
-                console.log(JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
+                console.log('propertyId, reserved, reservedChange '+JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
                 throw new Error("Reserved balance cannot go negative "+propertyId + ' '+availableChange+' '+ reservedChange);
             }
             addressObj[propertyId].reserved += reservedChange;
@@ -82,7 +92,7 @@ class TallyMap {
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
-            console.log('Updated balance for address:', address, 'with propertyId:', propertyId);
+            console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
         }
 
@@ -195,7 +205,6 @@ class TallyMap {
         }
     }
 
-
     async loadFromDB() {
         try {
             const query = { _id: 'tallyMap' };
@@ -216,6 +225,45 @@ class TallyMap {
         }
     }
 
+     // Method to save fee cache to the database
+     static async saveFeeCacheToDB() {
+        try {
+            const db = dbInstance.getDatabase('feeCache');
+            for (let [propertyId, feeAmount] of this.feeCache.entries()) {
+                const serializedFeeAmount = JSON.stringify(feeAmount);
+                await db.updateAsync(
+                    { _id: 'feeCache-' + propertyId },
+                    { _id: 'feeCache-' + propertyId, value: serializedFeeAmount },
+                    { upsert: true }
+                );
+            }
+            console.log('FeeCache saved successfully.');
+        } catch (error) {
+            console.error('Error saving FeeCache:', error);
+        }
+    }
+
+    
+    static async loadFeeCacheFromDB() {
+        let propertyIndex = await PropertyList.getPropertyIndex()    
+        try {
+            const db = dbInstance.getDatabase('feeCache');
+            this.feeCache = new Map();
+
+            // Assuming you have a list of property IDs, iterate through them
+            for (let id of propertyIndex) {
+                const query = { _id: 'feeCache-' + propertyIndex.id };
+                const result = await db.findOneAsync(query);
+                if (result && result.value) {
+                    const feeAmount = JSON.parse(result.value);
+                    this.feeCache.set(propertyId, feeAmount);
+                }
+            }
+            console.log('FeeCache loaded successfully.');
+        } catch (error) {
+            console.error('Error loading fee cache from dbInstance:', error);
+        }
+    }
 
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height
@@ -228,12 +276,58 @@ class TallyMap {
         }
     }
 
+     // Method to update fee cache for a property
+    static async updateFeeCache(propertyId, feeAmount) {
+        await this.loadFeeCacheFromDB();
+
+
+        if (!this.feeCache.has(propertyId)) {
+            this.feeCache.set(propertyId, 0); // Initialize if not present
+        }
+        const currentFee = this.feeCache.get(propertyId);
+        this.feeCache.set(propertyId, currentFee + feeAmount);
+
+        // Optionally, persist fee cache changes to database if necessary
+        await this.saveFeeCacheToDB(); 
+    }
+
+    static async drawOnFeeCache(propertyId) {
+        await this.loadFeeCacheFromDB();
+
+        if (!this.feeCache.has(propertyId)) {
+            console.log(`No fee cache available for property ID ${propertyId}`);
+            return;
+        }
+
+        const feeAmount = this.feeCache.get(propertyId);
+        if (feeAmount <= 0) {
+            console.log(`Insufficient fee cache for property ID ${propertyId}`);
+            return;
+        }
+
+        // Logic to match with standing sell orders of property ID 1
+        // Adjust this logic based on how you handle order matching
+        // ...
+
+        // Deduct the matched amount from the fee cache
+        this.feeCache.set(propertyId, this.feeCache.get(propertyId) - matchedAmount);
+
+        // Insert the purchased property ID 1 units into the insurance fund
+        // Adjust this logic to match your insurance fund implementation
+        // ...
+
+        // Save the updated fee cache to the database
+        await this.saveFeeCacheToDB();
+    }
+
     // Function to record a delta
     async recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
         const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
         const delta = { address, propertyId, amountChange };
         return await dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(delta));
     }
+
+
 
 // Function to apply a delta to the TallyMap
     applyDeltaToTallyMap(delta) {
