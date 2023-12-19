@@ -111,7 +111,7 @@ class Orderbook {
         await this.insertOrder(contractOrder, orderBookKey, sell);
 
         // Match orders in the derivative contract order book
-        var matchResult = await this.matchOrders(orderBookKey);
+        var matchResult = await this.matchContractOrders(orderBookKey);
 
         await this.processContractMatches()
 
@@ -306,6 +306,54 @@ class Orderbook {
         }
     }    
 
+    async matchContractOrders(orderBookKey) {
+        const orderBook = this.orderBooks[orderBookKey];
+        if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+            return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches if no orders
+        }
+
+        let matches = [];
+
+        // Sort buy and sell orders by price and time
+        orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
+        orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
+
+        // Match orders
+        while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
+            let sellOrder = orderBook.sell[0];
+            let buyOrder = orderBook.buy[0];
+
+            // Check for price match
+            if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                // Calculate the amount to be traded
+                let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
+                
+                // Update orders after the match
+                sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
+                buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
+                // Add match to the list
+                matches.push({ 
+                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber() }, 
+                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber() } 
+                });
+
+                // Remove filled orders from the order book
+                if (sellOrder.amount === 0) {
+                    orderBook.sell.shift();
+                }
+                if (buyOrder.amount === 0) {
+                    orderBook.buy.shift();
+                }
+            } else {
+                break; // No more matches possible
+            }
+        }
+
+        return { orderBook: this.orderBooks[orderBookKey], matches };
+    }
+
+
     processContractMatches(matches) {
         matches.forEach(match => {
             // Logic for identifying and updating the marginMap for contracts
@@ -337,15 +385,30 @@ class Orderbook {
                 // Load the margin map for the given series ID and block height
                 const marginMap = await MarginMap.loadMarginMap(match.contractSeriesId, currentBlockHeight);
 
+                // Get the existing position sizes for buyer and seller
+                const buyerPositionSize = marginMap.getPositionSize(match.buyerAddress);
+                const sellerPositionSize = marginMap.getPositionSize(match.sellerAddress);
+
                 // Update contract balances for the buyer and seller
                 marginMap.updateContractBalances(match.buyerAddress, match.amount, match.price, true);
                 marginMap.updateContractBalances(match.sellerAddress, match.amount, match.price, false);
+
+                // Determine if the trade reduces the position size for buyer or seller
+                const isBuyerReducingPosition = buyerPositionSize > 0 && match.amount < 0;
+                const isSellerReducingPosition = sellerPositionSize < 0 && match.amount > 0;
+
+                // Realize PnL if the trade reduces the position size
+                let buyerPnl = 0, sellerPnl = 0;
+                if (isBuyerReducingPosition) {
+                    buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
+                }
+                if (isSellerReducingPosition) {
+                    sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
+                }
+
+                // Update margin based on the new positions
                 marginMap.updateMargin(match.buyerAddress, match.amount, match.price);
                 marginMap.updateMargin(match.sellerAddress, -match.amount, match.price);
-
-                // Realize PnL for the buyer and seller
-                const buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
-                const sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
 
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);
