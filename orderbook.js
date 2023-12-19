@@ -97,23 +97,27 @@ class Orderbook {
         return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
     }
 
-    addContractOrder({ contractId, amount, price, time, sell }) {
+    addContractOrder({ contractId, amount, price, block, sell }) {
         const ContractRegistry = require('./contractRegistry.js')
-        await ContractRegistry.moveCollateralToMargin()
-        const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
-        TallyMap.move
+        await ContractRegistry.moveCollateralToMargin() //first we line up the capital
 
         // Create a contract order object with the sell parameter
-        const contractOrder = { contractId, amount, price, time, sell };
+        const contractOrder = { contractId, amount, price, block, sell };
 
         // The orderBookKey is based on the contractId since it's a derivative contract
         const orderBookKey = `contract-${contractId}`;
 
         // Insert the contract order into the order book
-        this.insertOrder(contractOrder, orderBookKey, true);
+        await this.insertOrder(contractOrder, orderBookKey, sell);
 
         // Match orders in the derivative contract order book
-        this.matchOrders(orderBookKey);
+        var matchResult = await this.matchOrders(orderBookKey);
+
+        await this.processContractMatches()
+
+        await orderbook.saveOrderBook(normalizedOrderBookKey);
+        return matchResult
+
     }
 
     async insertOrder(order, orderBookKey, isSellOrder) {
