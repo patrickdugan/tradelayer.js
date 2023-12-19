@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js')
 const dbInstance = require('./db.js'); // Import your database instance
 
+
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
             this.tickSize = tickSize;
@@ -97,10 +98,11 @@ class Orderbook {
     }
 
     addContractOrder({ contractId, amount, price, time, sell }) {
+        const ContractRegistry = require('./contractRegistry.js')
+        await ContractRegistry.moveCollateralToMargin()
         const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
-        await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0, false,false,false,txid);
-        
-        
+        TallyMap.move
+
         // Create a contract order object with the sell parameter
         const contractOrder = { contractId, amount, price, time, sell };
 

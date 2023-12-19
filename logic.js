@@ -88,7 +88,7 @@ const Logic = {
                 Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
                 break;
             case 18:
-                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid);
+                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid, params.sender);
                 break;
             case 19:
                 Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
@@ -647,7 +647,8 @@ const Logic = {
 
     async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid) {
 	    // Trade the contract on-chain
-	    await contractsRegistry.tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid);
+        const orderbook = await Orderbook.getOrderbookInstance(contractId);
+	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
 	},
 

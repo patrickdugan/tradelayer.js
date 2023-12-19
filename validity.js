@@ -559,7 +559,7 @@ const Validity = {
         },
 
         // 18: Trade Contract On-chain
-        validateTradeContractOnchain: async (params, marginMap, whitelistRegistry, contractRegistry) => {
+        validateTradeContractOnchain: async (params, sender, block) => {
             params.reason = '';
             params.valid = true;
 
@@ -652,7 +652,7 @@ const Validity = {
         },
 
         // 21: Withdrawal
-        validateWithdrawal: async (params, channelRegistry, tallyMap) => {
+        validateWithdrawal: async (params, sender, block) => {
             params.reason = '';
             params.valid = true;
 
