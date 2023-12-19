@@ -22,6 +22,8 @@ class Clearing {
         // 3. Calculate and update UPNL (Unrealized Profit and Loss)
         await this.calculateAndUpdateUPNL(blockHeight);
 
+        await this.processLiquidationsAndMarginAdjustments(blockHeight)
+
         // 4. Create channels for new trades
         await this.createChannelsForNewTrades(blockHeight);
 
@@ -72,20 +74,46 @@ class Clearing {
 
 
     async calculateAndUpdateUPNL(blockHeight) {
-        console.log('Calculating and updating UPNL');
+        console.log('Calculating and updating UPNL for all contracts at block:', blockHeight);
+        
+        const contracts = await getAllContracts(); // Fetch all contracts
+        for (const contract of contracts) {
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
+            const marketPrice = await marginMap.getMarketPrice(contract);
 
-        // Fetch trade data relevant to UPNL calculations
-        let trades = await this.fetchTradesForUPNL();
+            marginMap.clear(marketPrice, contract.seriesId); // Update UPnL for each position in the margin map
 
-        // Calculate UPNL for each trade
-        trades.forEach(trade => {
-            let upnl = this.calculateUPNL(trade, blockHeight);
-            trade.upnl = upnl;
-        });
-
-        // Save the updated trade data
-        await this.saveTrades(trades);
+            await marginMap.saveMarginMap(blockHeight); // Save the updated margin map
+        }
     }
+
+    async processLiquidationsAndMarginAdjustments(blockHeight) {
+    console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
+
+    const contracts = await getAllContracts(); // Fetch all contracts
+    for (const contract of contracts) {
+        const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
+        
+        // Check for and process liquidations
+        if (marginMap.needsLiquidation(contract)) {
+            const liquidationOrders = await MarginMap.triggerLiquidations(contract);
+            // Process liquidation orders as needed
+        }
+
+        // Adjust margins based on the updated UPnL
+        const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
+        for (const position of positions) {
+            const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
+            if (pnlChange !== 0) {
+                await adjustBalance(position.holderAddress, pnlChange);
+            }
+        }
+
+        await marginMap.saveMarginMap(blockHeight);
+    }
+}
+
+
 
     async createChannelsForNewTrades(blockHeight) {
         //console.log('Creating channels for new trades');

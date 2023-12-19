@@ -67,13 +67,19 @@ class MarginMap {
         return notional * 0.1; // Example: 10% of the notional value
     }
 
-
-    realizePnl(address, contracts, price, avgPrice) {
+    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
         const pos = this.margins.get(address);
 
         if (!pos) return 0;
 
-        const pnl = (avgPrice - price) * contracts;
+        let pnl;
+        if (isInverse) {
+            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+            pnl = (1 / avgPrice - 1 / price) * contracts * notionalValue;
+        } else {
+            // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
+            pnl = (price - avgPrice) * contracts * notionalValue;
+        }
 
         pos.margin -= Math.abs(pnl);
         pos.unrealizedPl += pnl;
@@ -81,13 +87,23 @@ class MarginMap {
         return pnl;
     }
 
-    clear(price) {
+    clear(price, contractId) {
         for (let [address, pos] of this.margins) {
-            const upnl = (price - pos.avgPrice) * pos.contracts;
+            if (pos.contractId === contractId) {
+                let upnl;
+                if (pos.isInverse) {
+                    // For inverse contracts: UPnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+                    upnl = (1 / pos.avgPrice - 1 / price) * pos.contracts * pos.notionalValue;
+                } else {
+                    // For linear contracts: UPnL = (exitPrice - entryPrice) * contracts * notional
+                    upnl = (price - pos.avgPrice) * pos.contracts * pos.notionalValue;
+                }
 
-            pos.unrealizedPl = upnl;
+                pos.unrealizedPl = upnl;
+            }
         }
     }
+
 
 
 
