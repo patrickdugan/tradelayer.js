@@ -232,7 +232,7 @@ class Main {
                //console.log('decoded params with validity' +JSON.stringify(decodedParams))
                if(decodedParams.valid==true){
                   await Consensus.markTxAsProcessed(txId);
-                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams))
+                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId)
                   await Logic.typeSwitch(type, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
                 }else{

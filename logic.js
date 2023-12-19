@@ -34,7 +34,6 @@ const Logic = {
         console.log('tx number and params ' +txNumber, params)
         switch (txNumber) {
            case 0:
-                console.log('in the typeSwitch for logic '+JSON.stringify(params))
                 return await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
@@ -50,7 +49,7 @@ const Logic = {
                 Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
                 break;
             case 5:
-                Logic.onChainTokenToToken(params.fromAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid);
+                Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
                 break;
             case 6:
                 Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
@@ -415,11 +414,11 @@ const Logic = {
 	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
 	},
 
-    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid) {
+    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight) {
         // Construct the pair key for the Orderbook instance
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
         // Retrieve or create the Orderbook instance for this pair
-         console.log('loading orderbook for pair key '+pairKey)
+        console.log('loading orderbook for pair key '+pairKey)
         const orderbook = await Orderbook.getOrderbookInstance(pairKey);
         console.log('load orderbook for pair key '+JSON.stringify(orderbook))
 
@@ -428,18 +427,18 @@ const Logic = {
 
         // Construct the order object
         const order = {
-            fromAddress:fromAddress,
             offeredPropertyId:offeredPropertyId,
             desiredPropertyId:desiredPropertyId,
             amountOffered:amountOffered,
             amountExpected:amountExpected,
-            blockTime: confirmedBlock 
+            blockTime: confirmedBlock,
+            senderAddress: fromAddress 
         };
 
-        console.log('entering order into book '+JSON.stringify(order))
+        console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
-        await orderbook.addTokenOrder(order);
+        await orderbook.addTokenOrder(order, blockHeight, txid);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);
