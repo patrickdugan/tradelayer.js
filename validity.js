@@ -2,6 +2,8 @@ const TxUtils = require('./txUtils.js')
 const db = require('./db')
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance();
+const PropertyList = require('./property.js')
+const OracleList = reuqire('./oracle.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -461,6 +463,66 @@ const Validity = {
 
             return params;
         },
+
+       validateCreateContractSeries: async ({ underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse = false, fee = false }) => {
+            const validCollateralProperty = (await PropertyList.getPropertyData(collateralPropertyId)!=null)
+            const validNotionalProperty = (await PropertyList.getPropertyData(notionalPropertyId)!=null)
+            const validOracle = (await OracleList.getOracleData(underlyingOracleId)!=null)
+            const validNatives = (await PropertyList.getPropertyData(onChainData[0])!=null&&await PropertyList.getPropertyData(onChainData[1])!=null)
+
+            // Check if the underlyingOracleId exists or is null
+            if (params.underlyingOracleId !== null && !this.oracleSeriesIndex.has(params.underlyingOracleId)) {
+                params.valid = false;
+                params.reason += "Invalid or missing underlying oracle ID. ";
+            }
+
+            // Check if onChainData is an array of two existing propertyIds or 0
+            if (onChainData!=null||!Array.isArray(params.onChainData) || params.onChainData.length !== 2 || validNative!=true) {
+                params.valid = false;
+                params.reason += "Invalid on-chain data format or property IDs. ";
+            }
+
+            // Check if notionalPropertyId exists or is null (for oracle contracts)
+            if (params.notionalPropertyId !== null && validNotionalProperty==true) {
+                params.valid = false;
+                params.reason += "Invalid notional property ID. ";
+            }
+
+            // Check if notionalValue is a number
+            if (typeof params.notionalValue !== 'number') {
+                params.valid = false;
+                params.reason += "Notional value must be a number. ";
+            }
+
+            // Check if collateralPropertyId is a valid existing propertyId
+            if (validCollateralProperty==true) {
+                params.valid = false;
+                params.reason += "Invalid collateral property ID. ";
+            }
+
+            // Check if expiryPeriod is an integer
+            if (!Number.isInteger(params.expiryPeriod)) {
+                params.valid = false;
+                params.reason += "Expiry period must be an integer. ";
+            }
+
+            // Check if series is a valid integer
+            if (!Number.isInteger(params.series)) {
+                params.valid = false;
+                params.reason += "Series must be an integer. ";
+            }
+
+            // Validate inverse and fee as booleans
+            params.inverse = typeof params.inverse === 'boolean' ? params.inverse : false;
+            params.fee = typeof params.fee === 'boolean' ? params.fee : false;
+
+            if (!params.valid) {
+                console.log(`Contract series validation failed: ${params.reason}`);
+            }
+
+            return params
+        }
+
 
         // 17: Exercise Derivative
         validateExerciseDerivative: async (params, derivativeRegistry, marginMap) => {

@@ -127,8 +127,8 @@ class PropertyManager {
         });
     }
 
-    getPropertyData(propertyId) {
-        return this.propertyIndex.get(propertyId) || null;
+    static async getPropertyData(propertyId) {
+        return await this.propertyIndex.get(propertyId) || null;
     }
 
     static async getPropertyIndex() {

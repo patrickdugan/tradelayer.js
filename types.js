@@ -204,6 +204,11 @@ const Types = {
                 break;
             case 16:
                 params = Decode.decodeCreateFutureContractSeries(encodedPayload.substr(index));
+                console.log('validating contract creaiton '+JSON.stringify(params))
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateCreateContractSeries(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 17:
                 params = Decode.decodeUpdateOracleAdmin(encodedPayload.substr(index));
