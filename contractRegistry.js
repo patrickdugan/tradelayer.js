@@ -1,7 +1,4 @@
 const db = require('./db')
-
-
-
 const path = require('path');
 const util = require('util');
 
@@ -35,6 +32,7 @@ class ContractsRegistry {
             notionalPropertyId: params.notionalPropertyId,
             notionalValue: params.notionalValue,
             collateralPropertyId: params.collateralPropertyId,
+            leverage: params.leverage,
             inverse: params.inverse,
             fee: params.fee,
             contracts: {
@@ -197,6 +195,55 @@ class ContractsRegistry {
         console.log(`Contract information not found for contract ID: ${contractId}`);
         return null;
     }
+
+     // Function to get initial margin requirement for a contract
+    async getInitialMargin(contractId) {
+        const contractInfo = this.getContractInfo(contractId);
+        if (!contractInfo) {
+            throw new Error(`Contract info not found for contract ID: ${contractId}`);
+        }
+
+        const { inverse, notionalValue, leverage } = contractInfo;
+        if (inverse) {
+            // For inverse contracts, margin is calculated based on notional value
+            return BigNumber(notionalValue).div(leverage);
+        } else {
+            // For linear contracts, check collateral and calculate based on oracle price or property value
+            const collateralValue = await this.getCollateralValue(contractInfo);
+            return BigNumber(collateralValue).div(leverage);
+        }
+    }
+
+    // Helper function to get collateral value for linear contracts
+    async getCollateralValue(contractInfo) {
+        const PropertyManager = require('./property.js')
+        const OracleList = require('./oracle.js')
+        const { collateralPropertyId, oracleId } = contractInfo;
+        if (collateralPropertyId) {
+            // If collateral is a property, use its value
+            const propertyData = await PropertyManager.getPropertyData(collateralPropertyId);
+            return propertyData ? propertyData.value : 0; // Example value fetching logic
+        } else if (oracleId) {
+            // If collateral is based on an oracle, use the latest price
+            const latestPrice = await OracleRegistry.getOracleData(oracleId);
+            return latestPrice || 0; // Example oracle price fetching logic
+        }
+        return 0; // Default to 0 if no valid collateral source
+    }
+
+        // In the contract order addition process
+    async moveCollateralToMargin(senderAddress, contractId, amount, contractsRegistry) {
+        const TallyMap = require('./tally.js')
+        const MarginMap = require('./marginMap.js')
+        const initialMarginPerContract = await contractsRegistry.getInitialMargin(contractId);
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount);
+
+        // Move collateral to margin position
+        await TallyMap.updateBalance(senderAddress, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0);
+
+        // Update MarginMap for the contract series
+        await MarginMap.updateMargin(contractSeriesId, senderAddress, amount, totalInitialMargin);
+    }
 }
 
 // Usage:
@@ -205,4 +252,4 @@ class ContractsRegistry {
 
 const propertyContracts = registry.getContractsByProperties(1, 2);*/
 
-module.exports = new ContractsRegistry();
+module.exports = new ContractRegistry();

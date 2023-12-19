@@ -97,6 +97,10 @@ class Orderbook {
     }
 
     addContractOrder({ contractId, amount, price, time, sell }) {
+        const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
+        await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0, false,false,false,txid);
+        
+        
         // Create a contract order object with the sell parameter
         const contractOrder = { contractId, amount, price, time, sell };
 

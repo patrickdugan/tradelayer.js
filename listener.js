@@ -89,6 +89,32 @@ app.post('/getOrderBook', async (req, res) => {
     }
 });
 
+// Endpoint to list all contract series
+app.post('/listContractSeries', async (req, res) => {
+    try {
+        console.log('Fetching contract series list');
+        const contractsRegistry = new ContractsRegistry(); // Ensure ContractsRegistry is instantiated
+        const contractSeriesArray = contractsRegistry.getAllContracts();
+        res.json(contractSeriesArray);
+    } catch (error) {
+        console.error('Error fetching contract series:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+// Endpoint to list all oracles
+app.post('/listOracles', async (req, res) => {
+    try {
+        console.log('Fetching oracle list');
+        const oracleArray = await OracleRegistry.getAllOracles(); // Implement this in OracleRegistry
+        res.json(oracleArray);
+    } catch (error) {
+        console.error('Error fetching oracle list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
 
 // ... Add other endpoints ...
 

@@ -82,13 +82,13 @@ const Logic = {
                 Logic.closeOracle(params.oracleId, params.oracleRegistry);
                 break;
             case 16:
-                Logic.createContractSeries(params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.expiryPeriod, params.series, params.inverse, params.fee, params.contractsRegistry, params.block, params.txid);
+                Logic.createContractSeries(params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
                 Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
                 break;
             case 18:
-                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry);
+                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid);
                 break;
             case 19:
                 Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
@@ -626,10 +626,10 @@ const Logic = {
 	    console.log(`Oracle ${oracleId} has been closed`);
 	},
 
-    async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee, contractsRegistry) {
+    async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await contractsRegistry.createContractSeries({
-	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee
+	    const futureContractSeriesId = await ContractsRegistry.createContractSeries({
+	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;
@@ -645,13 +645,9 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry) {
-	    if (!contractId || !price || !amount || !contractsRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
-
+    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid) {
 	    // Trade the contract on-chain
-	    await contractsRegistry.tradeContractOnchain(contractId, price, amount, side, insurance);
+	    await contractsRegistry.tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
 	},
 

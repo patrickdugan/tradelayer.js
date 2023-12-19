@@ -49,6 +49,26 @@ const expressInterface = {
             console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);
             throw error;
         }
+    },
+
+    async listContractSeries() {
+        try {
+            const response = await axios.post(`${serverUrl}/listContractSeries`);
+            return response.data;
+        } catch (error) {
+            console.error('Error in listContractSeries:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    },
+
+    async listOracles() {
+        try {
+            const response = await axios.post(`${serverUrl}/listOracles`);
+            return response.data;
+        } catch (error) {
+            console.error('Error in listOracles:', error.response ? error.response.data : error.message);
+            throw error;
+        }
     }
 
 };

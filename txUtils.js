@@ -703,6 +703,218 @@ const TxUtils = {
     },
 
 
+    async createContractSeriesTransaction(thisAddress, contractParams) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var txNumber = 16
+            var payload = 'tl' + txNumber.toString(36);
+            activationPayload += Encode.encodeCreateFutureContractSeries(contractParams);
+
+            // Step 2: Create a new transaction
+            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos)
+            if (!utxos || utxos.length === 0) {
+                throw new Error('No UTXOs available for the admin address');
+            }
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(activationPayload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendActivationTransaction:', error);
+            throw error;
+        }
+    },
+
+
+    async createGeneralTransaction(thisAddress, contractParams,txNumber) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var payload = 'tl' + txNumber.toString(36);
+            activationPayload += Encode.encodeCreateFutureContractSeries(contractParams);
+
+            // Step 2: Create a new transaction
+            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos)
+            if (!utxos || utxos.length === 0) {
+                throw new Error('No UTXOs available for the admin address');
+            }
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(activationPayload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendActivationTransaction:', error);
+            throw error;
+        }
+    },
+    
+    async createOracleTransaction(thisAddress, contractParams,txNumber) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var txNumber = 13
+            var payload = 'tl' + txNumber.toString(36);
+            activationPayload += Encode.encodeCreateOracle(contractParams);
+
+            // Step 2: Create a new transaction
+            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos)
+            if (!utxos || utxos.length === 0) {
+                throw new Error('No UTXOs available for the admin address');
+            }
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(activationPayload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendActivationTransaction:', error);
+            throw error;
+        }
+    },
+
+
+    async publishDataTransaction(thisAddress, contractParams,txNumber) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var txNumber = 14
+            var payload = 'tl' + txNumber.toString(36);
+            activationPayload += Encode.encodePublishOracleData(contractParams);
+
+            // Step 2: Create a new transaction
+            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos)
+            if (!utxos || utxos.length === 0) {
+                throw new Error('No UTXOs available for the admin address');
+            }
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(activationPayload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendActivationTransaction:', error);
+            throw error;
+        }
+    },
+
+
+    async createContractOnChainTradeTransaction(thisAddress, contractParams,txNumber) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var txNumber = 18
+            var payload = 'tl' + txNumber.toString(36);
+            activationPayload += Encode.encodeTradeContractOnChain(contractParams);
+
+            // Step 2: Create a new transaction
+            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos)
+            if (!utxos || utxos.length === 0) {
+                throw new Error('No UTXOs available for the admin address');
+            }
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(activationPayload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendActivationTransaction:', error);
+            throw error;
+        }
+    },
+
     async findSuitableUTXO(address, minAmount) {
         
         const utxos = await listUnspentAsync(0, 9999999, [address]);
