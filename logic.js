@@ -82,7 +82,7 @@ const Logic = {
                 Logic.closeOracle(params.oracleId, params.oracleRegistry);
                 break;
             case 16:
-                Logic.createFutureContractSeries(params.contractId, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.expiryPeriod, params.series, params.inverse, params.fee, params.contractsRegistry);
+                Logic.createContractSeries(params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.expiryPeriod, params.series, params.inverse, params.fee, params.contractsRegistry, params.block, params.txid);
                 break;
             case 17:
                 Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
@@ -626,13 +626,9 @@ const Logic = {
 	    console.log(`Oracle ${oracleId} has been closed`);
 	},
 
-    async createFutureContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee, contractsRegistry) {
-	    if (!contractId || !underlyingOracleId || !notionalPropertyId || !notionalValue || !collateralPropertyId || !contractsRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
-
+    async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee, contractsRegistry) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await contractsRegistry.createFutureContractSeries({
+	    const futureContractSeriesId = await contractsRegistry.createContractSeries({
 	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);

@@ -22,9 +22,51 @@ class ContractsRegistry {
         }
     }
 
-    createContractSeries(contractId, type, properties) {
-        // ... Same logic ...
-        this.saveContractSeries(); 
+    
+    async createContractSeries(params) {
+        // Generate a unique ID for the new contract series
+        const seriesId = await this.getNextId();
+
+        // Create the contract series object
+        const contractSeries = {
+            id: seriesId,
+            underlyingOracleId: params.underlyingOracleId,
+            onChainData: params.onChainData,
+            notionalPropertyId: params.notionalPropertyId,
+            notionalValue: params.notionalValue,
+            collateralPropertyId: params.collateralPropertyId,
+            inverse: params.inverse,
+            fee: params.fee,
+            contracts: {
+                expired: [],
+                unexpired: this.generateContracts(params, seriesId)
+            }
+        };
+
+        // Save the new contract series to the in-memory map and the database
+        this.contractSeries.set(seriesId, contractSeries);
+        await this.saveContractSeries();
+
+        console.log(`New contract series created: ID ${seriesId}`);
+        return seriesId; // Return the new series ID
+    }
+
+    // Generate contracts within the series
+    generateContracts(params, seriesId) {
+        let contracts = [];
+        const currentBlockHeight = this.getCurrentBlockHeight(); // Implement this method to get the current block height
+        let expirationBlock = currentBlockHeight + params.expiryPeriod;
+
+        for (let i = 0; i < params.series; i++) {
+            contracts.push({
+                id: `${seriesId}-${expirationBlock}`,
+                expirationBlock: expirationBlock,
+                ...params
+            });
+            expirationBlock += params.expiryPeriod;
+        }
+
+        return contracts;
     }
 
     loadContractsFromDb() {
