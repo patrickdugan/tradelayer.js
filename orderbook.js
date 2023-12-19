@@ -53,6 +53,9 @@ class Orderbook {
 
     // Adds a token order to the order book
     async addTokenOrder(order, blockHeight, txid) {
+        const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
+        await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0, false,false,false,txid);
+        
         // Determine the correct orderbook key
         const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
         console.log('Normalized Order Book Key:', normalizedOrderBookKey);
@@ -78,12 +81,7 @@ class Orderbook {
         if (matchResult.matches && matchResult.matches.length > 0) {
             console.log('Match Result:', matchResult);
             await this.processTokenMatches(matchResult.matches, blockHeight, txid);
-        }else{
-            const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
-            await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0, false,false,false,txid);
-            console.log('No Match')
-
-        }
+        }else{console.log('No Matches for ' +txid)}
         console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
         // Save the updated orderbook back to the database
@@ -259,71 +257,42 @@ class Orderbook {
                 buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
             }
 
-            // Update balances for seller
-            if(isNaN(sellOrderAmountChange)){
-                console.log('identified NaN for sellOrderAmountChange '+txid)
+            // Debit the traded amount from the seller's reserve 
+            await TallyMap.updateBalance(
+                match.sellOrder.senderAddress,
+                match.sellOrder.offeredPropertyId,
+                0,  // Credit traded amount of Token B to available
+                -match.amountOfTokenA, // Debit the same amount from reserve
+                0, 0, true, false, false, txid
+            );
+            //and credit the opposite consideration to available
 
-            }
-            await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, sellOrderAmountChange, 0, 0, 0,true,false,false,txid);
-            //seller gets paid, not sure if propertyId is correct or should be converse
+            await TallyMap.updateBalance(
+                match.sellOrder.senderAddress,
+                match.sellOrder.desiredPropertyId,
+                match.amountOfTokenB,  // Credit traded amount of Token B to available
+                0, // Debit the same amount from reserve
+                0, 0, true, false, false, txid
+            );
 
-            // Update balances for buyer
-            if(isNaN(buyOrderAmountChange)){
-                console.log('identified NaN for buyOrderAmountChange '+txid)
-                
-            }
-            await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, buyOrderAmountChange, 0, 0, 0,true,false,false,txid);
-            //buyer gerts paid, not sure if propertyId is correct see above
+            // Update balance for the buyer
+            // Debit the traded amount from the buyer's reserve and credit it to available
+            await TallyMap.updateBalance(
+                match.buyOrder.senderAddress,
+                match.buyOrder.offeredPropertyId,
+                0,  // Credit traded amount of Token B to available
+                -match.amountOfTokenB, // Debit the same amount from reserve
+                0, 0, true, false, false, txid
+            );
 
-            // Handle reserved balance updates for partial fills and new orders
-            if (match.sellOrder.isNew&&match.amountOfTokenB == match.amountOfTokenA) {
-                // Debit from available balance for new orders
-                if(isNaN(sellOrderAmountChange)){
-                console.log('identified NaN for new Order full fill '+txid)
-                
-                }
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -sellOrderAmountChange, 0, 0, 0, true, false,false,txid);
-            } else if (match.sellOrder.isNew &&match.amountOfTokenA !== match.amountOfTokenB) {
-                // Move remaining amount to reserve for partial fills, debit from avail. for new order
-                const sellOrderReservedChange = new BigNumber(match.amountOfTokenA).minus(match.amountOfTokenB).toNumber();
-                if(isNaN(sellOrderAmountChange)){
-                console.log('identified NaN for new Order partial fill '+txid)
-                
-                }
+            await TallyMap.updateBalance(
+                match.buyOrder.senderAddress,
+                match.buyOrder.desiredPropertyId,
+                match.amountOfTokenA,  // Credit traded amount of Token B to available
+                0, // Debit the same amount from reserve
+                0, 0, true, false, false, txid
+            );
 
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, -match.amountToTradeB, sellOrderReservedChange, 0, 0,true,false,false,txid);
-            } else if(!match.sellOrder.isNew){
-                //partial fill or not, the order is already all in reserve so we debit from that alone
-                const sellOrderReservedChange = new BigNumber(match.amountOfTokenA).minus(match.amountOfTokenB).toNumber();
-                if(isNaN(sellOrderReservedChange)){
-                console.log('identified NaN for older sell order from margin '+txid)
-                console.log('sellOrderReservedChange '+match.amountOfTokenA + ' '+ match.amountOfTokenB)
-                }
-                await TallyMap.updateBalance(sellOrderAddress, sellOrderPropertyId, 0, -sellOrderReservedChange, 0, 0, true,false,false,txid);
-            }
-
-            if (match.buyOrder.isNew&&match.buyOrder.amountOffered == match.amountToTrade){
-                // Debit from available balance for new orders
-                if(isNaN(buyOrderReservedChange)){
-                console.log('identified NaN for older buy order from margin '+txid)
-                }
-                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, -buyOrderAmountChange, 0, 0, 0, true, false,false,txid);
-            } else if (match.buyOrder.isNew&& match.buyOrder.amountExpected !== match.sellOrder.amountOffered) {
-                // Move remaining amount to reserve for partial fills, debit from avail. for new order
-                const buyOrderReservedChange = new BigNumber(match.amountOfTokenB).minus(match.amountOfTokenA).toNumber();
-                if(isNaN(buyOrderReservedChange)){
-                console.log('identified NaN for new  partial fill buy order to margin '+txid)
-                }
-                console.log('looking into the negative reserve '+buyOrderPropertyId+ ' reserve change ' +buyOrderReservedChange + ' buy order expected '+match.buyOrder.amountExpected+' sell order expected ' )
-                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, buyOrderReservedChange, 0, 0, true, false,false,txid);
-            }  else if(!match.buyOrder.isNew){
-                //partial fill or not, the order is already all in reserve so we debit from that alone
-                if(isNaN(buyOrderReservedChange)){
-                console.log('identified NaN for older buy order from margin '+txid)
-                }
-                const buyOrderReservedChange = new BigNumber(match.amountOfTokenB).minus(match.amountOfTokenA).toNumber();
-                await TallyMap.updateBalance(buyOrderAddress, buyOrderPropertyId, 0, -buyOrderReservedChange, 0, 0, true, false,false,txid);
-            }
         }
     }    
 
