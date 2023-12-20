@@ -329,15 +329,48 @@ class Clearing {
         }
     }
 
-    async updateBalanceInDatabase(holderAddress, newBalance) {
-        // Replace this with actual data updating logic for your system
+    async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
+        const clearingDB = dbInstance.getDatabase('clearing');
+        const recordKey = `clearing-${contractId}-${blockHeight}`;
+
+        const clearingRecord = {
+            _id: recordKey,
+            contractId,
+            settlementDetails,
+            blockHeight
+        };
+
         try {
-            await database.updateBalance(holderAddress, newBalance);
+            await clearingDB.updateAsync(
+                { _id: recordKey },
+                clearingRecord,
+                { upsert: true }
+            );
+            console.log(`Clearing settlement event record saved successfully: ${recordKey}`);
         } catch (error) {
-            console.error('Error updating balance for address:', holderAddress, error);
+            console.error(`Error saving clearing settlement event record: ${recordKey}`, error);
             throw error;
         }
     }
+
+    async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
+        const clearingDB = dbInstance.getDatabase('clearing');
+        try {
+            const query = {
+                contractId: contractId,
+                blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
+            };
+            const clearingRecords = await clearingDB.findAsync(query);
+            return clearingRecords.map(record => ({
+                blockHeight: record.blockHeight,
+                settlementDetails: record.settlementDetails
+            }));
+        } catch (error) {
+            console.error(`Error loading clearing settlement events for contractId ${contractId}:`, error);
+            throw error;
+        }
+    }
+
 
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system

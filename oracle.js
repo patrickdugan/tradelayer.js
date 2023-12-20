@@ -82,6 +82,50 @@ class OracleRegistry {
         return maxId + 1;
     }
 
+    async saveOracleData(oracleId, data, blockHeight) {
+        const oracleDataDB = dbInstance.getDatabase('oracleData');
+        const recordKey = `oracle-${oracleId}-${blockHeight}`;
+
+        const oracleDataRecord = {
+            _id: recordKey,
+            oracleId,
+            data,
+            blockHeight
+        };
+
+        try {
+            await oracleDataDB.updateAsync(
+                { _id: recordKey },
+                oracleDataRecord,
+                { upsert: true }
+            );
+            console.log(`Oracle data record saved successfully: ${recordKey}`);
+        } catch (error) {
+            console.error(`Error saving oracle data record: ${recordKey}`, error);
+            throw error;
+        }
+    }
+
+    async loadOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
+        const oracleDataDB = dbInstance.getDatabase('oracleData');
+        try {
+            const query = {
+                oracleId: oracleId,
+                blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
+            };
+            const oracleDataRecords = await oracleDataDB.findAsync(query);
+            return oracleDataRecords.map(record => ({
+                blockHeight: record.blockHeight,
+                data: record.data
+            }));
+        } catch (error) {
+            console.error(`Error loading oracle data for oracleId ${oracleId}:`, error);
+            throw error;
+        }
+    }
+
+
+
     static async getTwap(contractId) {
         // Logic to fetch TWAP data for the given contractId
         // Example:
