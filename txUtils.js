@@ -745,6 +745,29 @@ const TxUtils = {
         }
     },
 
+    async commitTransaction(fromAddress, toAddress, propertyId, amount, privateKey) {
+    try {
+        // Create the transaction
+        let transaction = new litecore.Transaction();
+
+        // Add input UTXOs, fees, and change address
+        const utxo = await findSuitableUTXO(fromAddress);
+        transaction.from(utxo).fee(STANDARD_FEE).change(fromAddress);
+
+        // Add the trade commitment as OP_RETURN data
+        const payload = 'tl4' + + Encode.encodeTradeCommitment({ toAddress, propertyId, amount });
+        transaction.addData(payload);
+
+        // Sign the transaction
+        transaction.sign(privateKey);
+
+        return transaction; // Return the unsigned transaction
+    } catch (error) {
+        console.error('Error in commitTransaction:', error);
+        throw error;
+    }
+}
+
 
     async createGeneralTransaction(thisAddress, contractParams,txNumber) {
         try {
@@ -914,6 +937,16 @@ const TxUtils = {
             throw error;
         }
     },
+
+    createLitecoinMultisigAddress(pubKey1, pubKey2) {
+        const publicKeys = [
+            new litecore.PublicKey(pubKey1),
+            new litecore.PublicKey(pubKey2)
+        ];
+
+        const multisig = new litecore.Address(publicKeys, 2); // 2-of-2 multisig
+        return multisig.toString();
+    }
 
     async findSuitableUTXO(address, minAmount) {
         

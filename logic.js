@@ -22,6 +22,7 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 //const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
@@ -393,30 +394,23 @@ const Logic = {
 		    return txId; // Return the transaction ID of the broadcasted transaction
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(tallyMap, tradeChannelManager, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
-    // Validate sender address
-	    if (!TallyMap.isAddressValid(senderAddress)) {
-	        throw new Error('Invalid sender address');
-	    }
+	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
+      
+        // Deduct tokens from sender's available balance
+        TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
 
-	    // Check if the sender has sufficient balance
-	    if (!TallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
-	        throw new Error('Insufficient token balance for commitment');
-	    }
+        // Add tokens to the channel's balance
+        TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0);
 
-	    // Deduct tokens from available balance and add to reserved balance
-	    TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
-	    TallyMap.updateBalance(senderAddress, propertyId, 0, tokenAmount, 0, 0);
+        // Determine which column (A or B) to assign the tokens in the channel registry
+        await tradeChannelManager.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
 
-	    // Determine which column (A or B) to assign the tokens in the channel registry
-	    const channelColumn = tradeChannelManager.determineCommitColumn(senderAddress, transactionTime);
-	    
-	    // Update the channel registry with the committed tokens
-	    await tradeChannelManager.commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
+        // Update the channel registry with the committed tokens
+        await tradeChannelManager.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
 
-	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
-        return
-	},
+        console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress} for ${commitPurpose}`);
+        return;
+    },
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight) {
         // Construct the pair key for the Orderbook instance
@@ -488,7 +482,7 @@ const Logic = {
 
 		    // Return the details of the cancelled orders
 		    return cancelledOrders;
-		},
+	},
 
 		    /**
 		     * Creates a new whitelist.

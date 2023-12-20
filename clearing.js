@@ -88,30 +88,30 @@ class Clearing {
     }
 
     async processLiquidationsAndMarginAdjustments(blockHeight) {
-    console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
+        console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
 
-    const contracts = await getAllContracts(); // Fetch all contracts
-    for (const contract of contracts) {
-        const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
-        
-        // Check for and process liquidations
-        if (marginMap.needsLiquidation(contract)) {
-            const liquidationOrders = await MarginMap.triggerLiquidations(contract);
-            // Process liquidation orders as needed
-        }
-
-        // Adjust margins based on the updated UPnL
-        const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
-        for (const position of positions) {
-            const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
-            if (pnlChange !== 0) {
-                await adjustBalance(position.holderAddress, pnlChange);
+        const contracts = await getAllContracts(); // Fetch all contracts
+        for (const contract of contracts) {
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
+            
+            // Check for and process liquidations
+            if (marginMap.needsLiquidation(contract)) {
+                const liquidationOrders = await MarginMap.triggerLiquidations(contract);
+                // Process liquidation orders as needed
             }
-        }
 
-        await marginMap.saveMarginMap(blockHeight);
+            // Adjust margins based on the updated UPnL
+            const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
+            for (const position of positions) {
+                const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
+                if (pnlChange !== 0) {
+                    await adjustBalance(position.holderAddress, pnlChange);
+                }
+            }
+
+            await marginMap.saveMarginMap(blockHeight);
+        }
     }
-}
 
 
 

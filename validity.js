@@ -5,6 +5,7 @@ const activationInstance = Activation.getInstance();
 const PropertyList = require('./property.js')
 const OracleList = require('./oracle.js')
 const ContractRegistry = require('./contractRegistry.js')
+const TallyMap = require('./tallyMap.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -160,9 +161,20 @@ const Validity = {
     },
 
     // 4: Commit Token
-    validateCommitToken: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
+    validateCommitToken: async (params, block, txid) => {
         params.reason = '';
         params.valid = true;
+
+        if (!TallyMap.isAddressValid(params.sender)) {
+            params.valid = false
+            params.reason += 'Invalid sender address';
+        }
+
+        // Check if the sender has sufficient balance
+        if (!TallyMap.hasSufficientBalance(params.sender, params.propertyId, params.amount)) {
+            params.valid = false
+            params.reason += 'Insufficient token balance for commitment';
+        }
 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(4);
         if(isAlreadyActivated==false){
@@ -347,10 +359,8 @@ const Validity = {
             params.reason += 'Invalid target address; ';
         }
 
-        // Additional logic can be added here if needed
-
-        return params;
-            },
+           return params;
+    },
         // 11: Grant Managed Token
         validateGrantManagedToken: async (params, propertyRegistry, tallyMap) => {
             params.reason = '';
