@@ -6,68 +6,68 @@ class TradeChannel {
     }
 
     async addToRegistry(channelAddress, commiterA, commiterB) {
-      // Add logic to register a new trade channel
-      this.channelsRegistry.set(channelAddress, commiterA, commiterB);
-      await this.saveChannelsRegistry();
+        // Add logic to register a new trade channel
+        this.channelsRegistry.set(channelAddress, commiterA, commiterB);
+        await this.saveChannelsRegistry();
     }
 
     async removeFromRegistry(channelAddress) {
-      // Add logic to remove a trade channel
-      this.channelsRegistry.delete(channelAddress);
-      await this.saveChannelsRegistry();
+        // Add logic to remove a trade channel
+        this.channelsRegistry.delete(channelAddress);
+        await this.saveChannelsRegistry();
     }
 
     async saveChannelsRegistry() {
-      // Persist the channels registry to LevelDB
-      const value = JSON.stringify([...this.channelsRegistry]);
-      await db.put('channelsRegistry', value);
+        // Persist the channels registry to LevelDB
+        const value = JSON.stringify([...this.channelsRegistry]);
+        await db.put('channelsRegistry', value);
     }
 
     async loadChannelsRegistry() {
-      // Load the channels registry from LevelDB
-      try {
-        const value = await db.get('channelsRegistry');
-        this.channelsRegistry = new Map(JSON.parse(value));
-      } catch (error) {
-        if (error.type === 'NotFoundError') {
-          this.channelsRegistry = new Map();
-        } else {
-          throw error;
+        // Load the channels registry from LevelDB
+        try {
+          const value = await db.get('channelsRegistry');
+          this.channelsRegistry = new Map(JSON.parse(value));
+        } catch (error) {
+          if (error.type === 'NotFoundError') {
+            this.channelsRegistry = new Map();
+          } else {
+            throw error;
+          }
         }
-      }
     }
 
     compareCharacters(charA, charB) {
-          if (charA === charB) {
-              return 0; // Characters are equal
-          } else {
-              const isNumA = !isNaN(charA);
-              const isNumB = !isNaN(charB);
-              
-              if (isNumA && !isNumB) {
-                  return -1; // Numbers come first
-              } else if (!isNumA && isNumB) {
-                  return 1;
-              } else {
-                  return charA < charB ? -1 : 1; // Compare ASCII values
-              }
-          }
+            if (charA === charB) {
+                return 0; // Characters are equal
+            } else {
+                const isNumA = !isNaN(charA);
+                const isNumB = !isNaN(charB);
+                
+                if (isNumA && !isNumB) {
+                    return -1; // Numbers come first
+                } else if (!isNumA && isNumB) {
+                    return 1;
+                } else {
+                    return charA < charB ? -1 : 1; // Compare ASCII values
+                }
+            }
     }
 
     assignColumns(addressA, addressB) {
-        // Compare characters starting from the end of the address strings
-        for (let i = 1; i <= Math.min(addressA.length, addressB.length); i++) {
-            const charA = addressA[addressA.length - i];
-            const charB = addressB[addressB.length - i];
+          // Compare characters starting from the end of the address strings
+          for (let i = 1; i <= Math.min(addressA.length, addressB.length); i++) {
+              const charA = addressA[addressA.length - i];
+              const charB = addressB[addressB.length - i];
 
-            const comparison = compareCharacters(charA, charB);
-            if (comparison !== 0) {
-                return comparison < 0 ? { columnA: addressA, columnB: addressB } : { columnA: addressB, columnB: addressA };
-            }
-        }
+              const comparison = compareCharacters(charA, charB);
+              if (comparison !== 0) {
+                  return comparison < 0 ? { columnA: addressA, columnB: addressB } : { columnA: addressB, columnB: addressA };
+              }
+          }
 
-        // If all characters are the same (which is extremely unlikely), default to original order
-        return { columnA: addressA, columnB: addressB };
+          // If all characters are the same (which is extremely unlikely), default to original order
+          return { columnA: addressA, columnB: addressB };
     }
 
 
@@ -99,76 +99,83 @@ class TradeChannel {
         const channel = this.channels.get(channelAddress);
         channel.participants.add(senderAddress);
         channel.commits.push(commitRecord);
-    }
+  }
 
     areBothPartiesCommitted(channelAddress) {
-        const channel = this.channels.get(channelAddress);
-        if (!channel) return false; // Channel does not exist
-        return channel.participants.size === 2; // True if two unique participants have committed
+          const channel = this.channels.get(channelAddress);
+          if (!channel) return false; // Channel does not exist
+          return channel.participants.size === 2; // True if two unique participants have committed
+     }
+
+    adjustChannelBalances(channelAddress, propertyId, amount) {
+          // Logic to adjust the token balances within a channel
+          // This could involve debiting or crediting the committed columns based on the PNL amount
+          const channel = this.channelsRegistry.get(channelAddress);
+          if (!channel) {
+              throw new Error('Trade channel not found');
+          }
+
+          // Example logic to adjust balances
+          // Update the channel's token balances as needed
     }
 
-  adjustChannelBalances(channelAddress, propertyId, amount) {
-        // Logic to adjust the token balances within a channel
-        // This could involve debiting or crediting the committed columns based on the PNL amount
-        const channel = this.channelsRegistry.get(channelAddress);
-        if (!channel) {
-            throw new Error('Trade channel not found');
-        }
+    // Transaction processing functions
+    processWithdrawal(transaction) {
+      // Process a withdrawal from a trade channel
+      const { channelAddress, amount, propertyId } = transaction;
+      const channel = this.channelsRegistry.get(channelAddress);
+      if (!channel) {
+        throw new Error('Channel not found');
+      }
 
-        // Example logic to adjust balances
-        // Update the channel's token balances as needed
-  }
-
-  // Transaction processing functions
-  processWithdrawal(transaction) {
-    // Process a withdrawal from a trade channel
-    const { channelAddress, amount, propertyId } = transaction;
-    const channel = this.channelsRegistry.get(channelAddress);
-    if (!channel) {
-      throw new Error('Channel not found');
+      // Update balances and logic for withdrawal
+      // Example logic, replace with actual business logic
+      channel.balances[propertyId] -= amount;
+      this.channelsRegistry.set(channelAddress, channel);
     }
 
-    // Update balances and logic for withdrawal
-    // Example logic, replace with actual business logic
-    channel.balances[propertyId] -= amount;
-    this.channelsRegistry.set(channelAddress, channel);
-  }
+    processTransfer(transaction) {
+      // Process a transfer within a trade channel
+      const { fromChannel, toChannel, amount, propertyId } = transaction;
+      const sourceChannel = this.channelsRegistry.get(fromChannel);
+      const destinationChannel = this.channelsRegistry.get(toChannel);
 
-  processTransfer(transaction) {
-    // Process a transfer within a trade channel
-    const { fromChannel, toChannel, amount, propertyId } = transaction;
-    const sourceChannel = this.channelsRegistry.get(fromChannel);
-    const destinationChannel = this.channelsRegistry.get(toChannel);
+      if (!sourceChannel || !destinationChannel) {
+        throw new Error('Channel(s) not found');
+      }
 
-    if (!sourceChannel || !destinationChannel) {
-      throw new Error('Channel(s) not found');
+      // Update balances and logic for transfer
+      // Example logic, replace with actual business logic
+      sourceChannel.balances[propertyId] -= amount;
+      destinationChannel.balances[propertyId] += amount;
+
+      this.channelsRegistry.set(fromChannel, sourceChannel);
+      this.channelsRegistry.set(toChannel, destinationChannel);
     }
-
-    // Update balances and logic for transfer
-    // Example logic, replace with actual business logic
-    sourceChannel.balances[propertyId] -= amount;
-    destinationChannel.balances[propertyId] += amount;
-
-    this.channelsRegistry.set(fromChannel, sourceChannel);
-    this.channelsRegistry.set(toChannel, destinationChannel);
-  }
 
   channelTokenTrade(transaction) {
-    // Process a token trade within a trade channel
-    const { channelAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected } = transaction;
-    const channel = this.channelsRegistry.get(channelAddress);
-    
-    if (!channel) {
-      throw new Error('Channel not found');
-    }
+      const { channelAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, columnAAddress, columnBAddress } = transaction;
+      const channel = this.channelsRegistry.get(channelAddress);
 
-    // Update balances and logic for token trade
-    // Example logic, replace with actual business logic
-    channel.balances[offeredPropertyId] -= amountOffered;
-    channel.balances[desiredPropertyId] += amountExpected;
+      if (!channel) {
+          throw new Error('Channel not found');
+      }
 
-    this.channelsRegistry.set(channelAddress, channel);
+      // Logic to process token trade and update balances
+      if (channel.columnA === columnAAddress) {
+          // Column A is the offerer
+          TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, -amountOffered, 0,0);
+          TallyMap.updateBalance(columnBAddress, desiredPropertyId, 0, amountExpected, 0,0);
+      } else {
+          // Column B is the offerer
+          TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, -amountOffered, 0, 0);
+          TallyMap.updateBalance(columnAAddress, desiredPropertyId, 0, amountExpected, 0, 0);
+      }
+
+      // Update channel information
+      this.channelsRegistry.set(channelAddress, channel);
   }
+
 
   channelContractTrade(transaction) {
     const { channelAddress, contractId, amount, price, side } = transaction;
@@ -187,6 +194,10 @@ class TradeChannel {
       }
       channel.committedAmountA -= buyerMargin;
       MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'buy');
+      MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
+      TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
+      TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, buyerMargin, 0);
+      TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, buyerMargin, 0);
     } else {
       // Seller's margin is debited from column B
       const sellerMargin = amount * price; // Calculate margin required for the sell side
@@ -194,7 +205,11 @@ class TradeChannel {
         throw new Error('Insufficient margin in channel for seller');
       }
       channel.committedAmountB -= sellerMargin;
-      MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
+      MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'buy');
+      MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'sell');
+      TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
+      TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, sellerMargin, 0);
+      TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, sellerMargin, 0);
     }
 
     // Update the channel's contract balances
