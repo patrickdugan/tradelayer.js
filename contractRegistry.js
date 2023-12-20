@@ -244,6 +244,62 @@ class ContractsRegistry {
         // Update MarginMap for the contract series
         await MarginMap.updateMargin(contractSeriesId, senderAddress, amount, totalInitialMargin);
     }
+
+     // Determine if a contract is an oracle contract
+    static async isOracleContract(contractId) {
+        const contractInfo = await this.getContractInfo(contractId);
+        return contractInfo && contractInfo.type === 'oracle';
+    }
+
+    // Calculate the 1-hour funding rate for an oracle contract
+    static async calculateFundingRate(contractId) {
+        const isOracle = await this.isOracleContract(contractId);
+        if (!isOracle) {
+            return 0; // Return zero for non-oracle contracts
+        }
+
+        // Get oracle data for the last 24 blocks
+        const Oracles = require('./Oracles');
+        const oracleData = await Oracles.getLast24BlocksData(contractId);
+        const avgOraclePrice = this.calculateAveragePrice(oracleData);
+
+        // Placeholder for the logic to get the average trade price for the contract
+        // const avgTradePrice = ...;
+
+        // Calculate the funding rate based on the difference between oracle price and trade price
+        const priceDifference = avgTradePrice / avgOraclePrice;
+        let fundingRate = 0;
+
+        if (priceDifference > 1.0005) {
+            fundingRate = (priceDifference - 1.0005) * oracleData.length; // Example calculation
+        } else if (priceDifference < 0.9995) {
+            fundingRate = (0.9995 - priceDifference) * oracleData.length; // Example calculation
+        }
+
+        return fundingRate;
+    }
+
+    // Calculate the average price from oracle data
+    static calculateAveragePrice(oracleData) {
+        if (!oracleData || oracleData.length === 0) return 0;
+
+        const total = oracleData.reduce((acc, data) => acc + data.price, 0);
+        return total / oracleData.length;
+    }
+
+    // Save funding event for a contract
+    static async saveFundingEvent(contractId, fundingRate, blockHeight) {
+        const dbInstance = require('./db.js');
+        const fundingEvent = { contractId, fundingRate, blockHeight };
+        await dbInstance.getDatabase('fundingEvents').insertAsync(fundingEvent);
+    }
+
+    // Load funding events for a contract
+    static async loadFundingEvents(contractId) {
+        const dbInstance = require('./db.js');
+        const fundingEvents = await dbInstance.getDatabase('fundingEvents').findAsync({ contractId: contractId });
+        return fundingEvents.map(doc => doc);
+    }
 }
 
 // Usage:

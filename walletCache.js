@@ -72,6 +72,65 @@ class WalletCache {
         // Example:
         return JSON.stringify(balanceData1) !== JSON.stringify(balanceData2);
     }
+
+    
+    /**
+     * Retrieves contract positions for all addresses in the wallet.
+     */
+    async getPositions() {
+        try {
+            // Get all TradeLayer addresses with the specified label from the wallet
+            const label = 'TL'; // Replace with your actual label used for TradeLayer addresses
+            const addresses = await rpcClient.getAddressesByLabel(label);
+            const allPositions = [];
+
+            // For each TradeLayer address, get contract positions
+            for (const address of addresses) {
+                const contractPositions = await this.getContractPositionsForAddress(address);
+                if (contractPositions.length > 0) {
+                    allPositions.push({ address, contractPositions });
+                }
+            }
+
+            return allPositions;
+        } catch (error) {
+            console.error('Error getting contract positions for TradeLayer addresses:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Retrieves contract positions for a specific address from MarginMaps.
+     */
+    async getContractPositionsForAddress(address) {
+        const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
+        const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+        const positions = [];
+
+        // Fetch margin map for the address
+        const marginMap = await MarginMap.getMarginMapForAddress(address);
+
+        // Check for valid margin map
+        if (!marginMap) {
+            console.log(`No margin map found for address: ${address}`);
+            return positions;
+        }
+
+        // Iterate over contracts in the margin map
+        for (const [contractId, positionData] of Object.entries(marginMap.contracts)) {
+            const contractInfo = await ContractsRegistry.getContractInfo(contractId);
+            if (contractInfo) {
+                positions.push({
+                    contractId: contractId,
+                    positionSize: positionData.size,
+                    avgEntryPrice: positionData.avgEntryPrice,
+                    // Include other relevant contract position details
+                });
+            }
+        }
+
+        return positions;
+    }
 }
 
 module.exports = WalletCache;
