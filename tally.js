@@ -400,7 +400,7 @@ class TallyMap {
      * @param {number} propertyId - The property ID to check balances for.
      * @return {Array} - An array of addresses that have a balance for the specified property.
      */
-    getAddressesWithBalanceForProperty(propertyId) {
+    static getAddressesWithBalanceForProperty(propertyId) {
         const addressesWithBalances = [];
 
             for (const [address, balances] of this.addresses.entries()) {

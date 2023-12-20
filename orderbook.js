@@ -83,6 +83,7 @@ class Orderbook {
                 throw error; // Rethrow the error for handling upstream
             }
         }
+
                 // Retrieve token trading history by propertyId pair
         async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');

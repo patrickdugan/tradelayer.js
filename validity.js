@@ -149,11 +149,11 @@ const Validity = {
             params.reason += 'Invalid property ID; ';
         }
         if (!(Number.isInteger(params.amount) && params.amount > 0)) {
-            params.valid = false;
+            params.valid = false
             params.reason += 'Invalid amount; ';
         }
         if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
-            params.valid = false;
+            params.valid = true; //if we invalidate for things being off we will lose people's UTXO spends but we log the reason
             params.reason += 'Invalid sats expected; ';
         }
 
@@ -182,23 +182,11 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const hasSufficientTokens = await tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
-        if (!hasSufficientTokens) {
-            params.valid = false;
-            params.reason += 'Insufficient tokens to commit; ';
-        }
-
-        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
+        /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
         if (!isSenderWhitelisted) {
             params.valid = false;
             params.reason += 'Sender address not whitelisted; ';
-        }
-
-        const senderKYCCleared = await kycRegistry.isAddressKYCCleared(params.senderAddress);
-        if (!senderKYCCleared) {
-            params.valid = false;
-            params.reason += 'Sender KYC not cleared; ';
-        }
+        }*/
 
         return params;
     },
@@ -372,19 +360,19 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = propertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';
             }
 
-            const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+            const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
             if (!hasSufficientBalance) {
                 params.valid = false;
                 params.reason += 'Insufficient balance to grant tokens; ';
@@ -404,19 +392,19 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = propertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';
             }
 
-            const canRedeemTokens = tallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
+            const canRedeemTokens = TallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
             if (!canRedeemTokens) {
                 params.valid = false;
                 params.reason += 'Cannot redeem tokens; insufficient balance or other criteria not met; ';
@@ -428,10 +416,6 @@ const Validity = {
         // 13: Create Oracle
         validateCreateOracle: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.canCreateOracle(params.senderAddress);
-            if (!params.valid) {
-                params.reason = 'Sender address not authorized to create an oracle; ';
-            }
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(13);
             if(isAlreadyActivated==false){
@@ -445,7 +429,7 @@ const Validity = {
         // 14: Publish Oracle Data
         validatePublishOracleData: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
@@ -462,7 +446,7 @@ const Validity = {
         // 15: Close Oracle
         validateCloseOracle: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
@@ -759,22 +743,52 @@ const Validity = {
 
 
     // 24: Mint Synthetic
-    validateMintSynthetic: (params, synthRegistry, tallyMap) => {
+    validateMintSynthetic: (params) => {
+        params.reason = '';
+        params.valid = true;
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
-        const canMint = synthRegistry.canMintSynthetic(params.propertyIdUsed, params.contractIdUsed, params.amount);
+        const contractInfo = ContractRegistry.getContractInfo(params.contractId);
+        const collateralPropertyId = contractInfo.collateralPropertyId
+        const notional = contractInfo.notionalValue
+        if(contractInfo.inverse==false){
+                params.valid=false
+                params.reason += 'Cannot mint synthetics with linear contracts'
+        }
+        if(contractInfo.native==false){
+                params.valid=false
+                params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
+        }
+        const contractsBalance = WalletCache.getContractPositionForAddressAndContractId(param.sender,params.contractId)
+        if(contractsBalance*notional>=params.amount){
+                params.valid=false
+                params.reason += 'insufficient contracts to hedge the amount requested'
+        }
         // Ensure the sender has sufficient balance of the underlying property
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
+        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, collateralPropertyId, params.amount*notional);
+        if(hasSufficientBalance==false){
+                params.valid=false
+                params.reason += 'insufficient collateral to create a 1x hedge position'
+        }
 
-        return canMint && hasSufficientBalance;
+        return params
     },
 
     // 25: Redeem Synthetic
-    validateRedeemSynthetic: (params, synthRegistry, tallyMap) => {
+    validateRedeemSynthetic: (params) => {
+        params.reason = '';
+        params.valid = true;
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
-        const canRedeem = synthRegistry.canRedeemSynthetic(params.propertyIdUsed, params.contractIdUsed, params.amount);
+        const canRedeem = TallyMap.isSynthetic(params.propertyId);
+        if(canRedeem==false){
+                params.valid=false
+                params.reason += 'Token is not of a synthetic nature'
+        }
         // Ensure the sender has sufficient balance of the synthetic property
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.syntheticPropertyId, params.amount);
-
+        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+        if(hasSufficientBalance==false){
+                params.valid=false
+                params.reason += 'insufficient tokens to redeem in this amount'
+        }
         return canRedeem && hasSufficientBalance;
     },
 

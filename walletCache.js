@@ -73,7 +73,7 @@ class WalletCache {
         return JSON.stringify(balanceData1) !== JSON.stringify(balanceData2);
     }
 
-    
+
     /**
      * Retrieves contract positions for all addresses in the wallet.
      */
@@ -131,6 +131,42 @@ class WalletCache {
 
         return positions;
     }
+
+    async getContractPositionForAddressAndContractId(address, contractId) {
+    const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
+    const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+    
+    // Fetch margin map for the address
+    const marginMap = await MarginMap.getMarginMapForAddress(address);
+
+    // Check for valid margin map
+    if (!marginMap) {
+        console.log(`No margin map found for address: ${address}`);
+        return null;
+    }
+
+    // Check if the address has a position for the specified contract
+    const positionData = marginMap.contracts[contractId];
+    if (!positionData) {
+        console.log(`No position data found for contract ID: ${contractId} at address: ${address}`);
+        return null;
+    }
+
+    const contractInfo = await ContractsRegistry.getContractInfo(contractId);
+    if (!contractInfo) {
+        console.log(`No contract info found for contract ID: ${contractId}`);
+        return null;
+    }
+
+    // Return contract position details
+    return {
+        contractId: contractId,
+        positionSize: positionData.size,
+        avgEntryPrice: positionData.avgEntryPrice,
+        // Include other relevant contract position details
+    };
+}
+
 }
 
 module.exports = WalletCache;
