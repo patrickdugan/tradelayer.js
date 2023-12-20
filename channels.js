@@ -18,23 +18,111 @@ class TradeChannel {
     }
 
     async saveChannelsRegistry() {
-        // Persist the channels registry to LevelDB
-        const value = JSON.stringify([...this.channelsRegistry]);
-        await db.put('channelsRegistry', value);
+        // Persist the channels registry to NeDB
+        const channelsDB = dbInstance.getDatabase('channels');
+        const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
+            return {
+                _id: `channel-${channelId}`, // Unique identifier for each channel
+                data: channelData
+            };
+        });
+
+        for (const entry of entries) {
+            await channelsDB.updateAsync(
+                { _id: entry._id },
+                { $set: { data: entry.data } },
+                { upsert: true }
+            );
+        }
     }
 
     async loadChannelsRegistry() {
         // Load the channels registry from LevelDB
         try {
-          const value = await db.get('channelsRegistry');
-          this.channelsRegistry = new Map(JSON.parse(value));
+            const value = await db.get('channelsRegistry');
+            this.channelsRegistry = new Map(JSON.parse(value));
         } catch (error) {
-          if (error.type === 'NotFoundError') {
-            this.channelsRegistry = new Map();
-          } else {
-            throw error;
-          }
+            if (error.type === 'NotFoundError') {
+                this.channelsRegistry = new Map();
+            } else {
+                throw error;
+            }
         }
+    }
+
+    // Record a token trade with specific key identifiers
+    async recordTokenTrade(trade, blockHeight, txid) {
+        const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
+        const tradeRecord = {
+            key: tradeRecordKey,
+            type: 'token',
+            trade,
+            blockHeight,
+            txid
+        };
+        await this.saveTrade(tradeRecord);
+    }
+
+    // Record a contract trade with specific key identifiers
+    async recordContractTrade(trade, blockHeight, txid) {
+        const tradeRecordKey = `contract-${trade.contractId}`;
+        const tradeRecord = {
+            key: tradeRecordKey,
+            type: 'contract',
+            trade,
+            blockHeight,
+            txid
+        };
+        await this.saveTrade(tradeRecord);
+    }
+
+    async saveTrade(tradeRecord) {
+        const tradeDB = dbInstance.getDatabase('tradeHistory');
+
+        // Use the key provided in the trade record for storage
+        const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
+
+        // Construct the document to be saved
+        const tradeDoc = {
+            _id: tradeId,
+            ...tradeRecord
+        };
+
+        // Save or update the trade record in the database
+        try {
+            await tradeDB.updateAsync(
+                { _id: tradeId },
+                tradeDoc,
+                { upsert: true }
+            );
+            console.log(`Trade record saved successfully: ${tradeId}`);
+        } catch (error) {
+            console.error(`Error saving trade record: ${tradeId}`, error);
+            throw error; // Rethrow the error for handling upstream
+        }
+    }
+
+
+    async getChannel(channelId) {
+        // Ensure the channels registry is loaded
+        if (!this.channelsRegistry) {
+            await this.loadChannelsRegistry();
+        }
+
+        return this.channelsRegistry.get(channelId);
+    }
+
+    async addCommitment(channelId, commitment) {
+        await this.db.updateAsync(
+            { channelId: channelId },
+            { $push: { commitments: commitment } },
+            { upsert: true }
+        );
+    }
+
+    async getCommitments(channelId) {
+        const channel = await this.db.findOneAsync({ channelId: channelId });
+        return channel ? channel.commitments : [];
     }
 
     compareCharacters(charA, charB) {
@@ -193,6 +281,7 @@ class TradeChannel {
         throw new Error('Insufficient margin in channel for buyer');
       }
       channel.committedAmountA -= buyerMargin;
+      channel.committedAmountB -= buyerMargin;
       MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'buy');
       MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
       TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
@@ -205,6 +294,7 @@ class TradeChannel {
         throw new Error('Insufficient margin in channel for seller');
       }
       channel.committedAmountB -= sellerMargin;
+      channel.committedAmountA -= sellerMargin;
       MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'buy');
       MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'sell');
       TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);

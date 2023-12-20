@@ -32,6 +32,84 @@ class Orderbook {
             }
         }
 
+                // Record a token trade with specific key identifiers
+        async recordTokenTrade(trade, blockHeight, txid) {
+            const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
+            const tradeRecord = {
+                key: tradeRecordKey,
+                type: 'token',
+                trade,
+                blockHeight,
+                txid
+            };
+            await this.saveTrade(tradeRecord);
+        }
+
+        // Record a contract trade with specific key identifiers
+        async recordContractTrade(trade, blockHeight, txid) {
+            const tradeRecordKey = `contract-${trade.contractId}`;
+            const tradeRecord = {
+                key: tradeRecordKey,
+                type: 'contract',
+                trade,
+                blockHeight,
+                txid
+            };
+            await this.saveTrade(tradeRecord);
+        }
+
+        async saveTrade(tradeRecord) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+
+            // Use the key provided in the trade record for storage
+            const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
+
+            // Construct the document to be saved
+            const tradeDoc = {
+                _id: tradeId,
+                ...tradeRecord
+            };
+
+            // Save or update the trade record in the database
+            try {
+                await tradeDB.updateAsync(
+                    { _id: tradeId },
+                    tradeDoc,
+                    { upsert: true }
+                );
+                console.log(`Trade record saved successfully: ${tradeId}`);
+            } catch (error) {
+                console.error(`Error saving trade record: ${tradeId}`, error);
+                throw error; // Rethrow the error for handling upstream
+            }
+        }
+                // Retrieve token trading history by propertyId pair
+        async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
+            const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+            return trades.map(doc => doc.trade);
+        }
+
+        // Retrieve contract trading history by contractId
+        async getContractTradeHistoryByContractId(contractId) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeRecordKey = `contract-${contractId}`;
+            const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+            return trades.map(doc => doc.trade);
+        }
+
+        // Retrieve trade history by address for both token and contract trades
+        async getTradeHistoryByAddress(address) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const trades = await tradeDB.findAsync({ 
+                $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
+            });
+            return trades.map(doc => doc.trade);
+        }
+
+
+
     // Function to divide two numbers with an option to round up or down to the nearest Satoshi
     divideAndRound(number1, number2, roundUp = false) {
         const result = new BigNumber(number1).dividedBy(new BigNumber(number2));
@@ -352,7 +430,6 @@ class Orderbook {
 
         return { orderBook: this.orderBooks[orderBookKey], matches };
     }
-
 
     processContractMatches(matches) {
         matches.forEach(match => {
