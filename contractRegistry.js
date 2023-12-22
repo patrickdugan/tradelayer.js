@@ -2,7 +2,7 @@ const db = require('./db')
 const path = require('path');
 const util = require('util');
 
-class ContractsRegistry {
+class ContractRegistry {
     constructor() {
         // ... Other initializations ...
         this.contractsList = new Map()
@@ -278,6 +278,37 @@ class ContractsRegistry {
 
         return fundingRate;
     }
+
+    async applyFundingRateToSystem(contractId) {
+        const fundingRate = await ContractsRegistry.calculateFundingRate(contractId);
+        
+        // Apply funding rate to marginMap+tallyMap
+        for (const [address, position] of marginMap.entries()) {
+            if (position.contractId === contractId) {
+                const fundingAmount = calculateFundingAmount(position.size, fundingRate);
+                TallyMap.updateBalance(address, contractId, fundingAmount);
+                marginMap.updatePosition(address, contractId, fundingAmount);
+            }
+        }
+
+        // Apply funding rate to vaulted contracts
+        for (const [vaultId, vault] of SynthRegistry.vaults.entries()) {
+            if (vault.contractId === contractId) {
+                const fundingAmount = calculateFundingAmount(vault.contractBalance, fundingRate);
+                SynthRegistry.applyPerpetualSwapFunding(vaultId, contractId, fundingAmount);
+            }
+        }
+
+        // Save changes
+        await TallyMap.save();
+        await marginMap.save();
+        await SynthRegistry.saveVaults();
+    }
+
+    calculateFundingAmount(contractSize, fundingRate) {
+        return contractSize * fundingRate;
+    }
+
 
     // Calculate the average price from oracle data
     static calculateAveragePrice(oracleData) {

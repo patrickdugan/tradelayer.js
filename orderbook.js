@@ -176,7 +176,7 @@ class Orderbook {
         return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
     }
 
-    addContractOrder({ contractId, amount, price, block, sell }) {
+    async addContractOrder({ contractId, amount, price, block, sell }) {
         const ContractRegistry = require('./contractRegistry.js')
         await ContractRegistry.moveCollateralToMargin() //first we line up the capital
 

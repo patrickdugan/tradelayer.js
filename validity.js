@@ -5,7 +5,7 @@ const activationInstance = Activation.getInstance();
 const PropertyList = require('./property.js')
 const OracleList = require('./oracle.js')
 const ContractRegistry = require('./contractRegistry.js')
-const TallyMap = require('./tallyMap.js')
+const TallyMap = require('./tally.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -523,7 +523,7 @@ const Validity = {
             }
 
             return params
-        }
+        },
 
 
         // 17: Exercise Derivative

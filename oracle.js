@@ -1,6 +1,6 @@
 var db = require('./db')
 
-class OracleRegistry {
+class OracleList {
     constructor() {
         this.oracles = new Map(); // Stores all oracles
     }
