@@ -2,6 +2,10 @@ const TxUtils = require('./txUtils.js')
 const db = require('./db')
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance();
+const PropertyList = require('./property.js')
+const OracleList = require('./oracle.js')
+const ContractRegistry = require('./contractRegistry.js')
+const TallyMap = require('./tally.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -145,11 +149,11 @@ const Validity = {
             params.reason += 'Invalid property ID; ';
         }
         if (!(Number.isInteger(params.amount) && params.amount > 0)) {
-            params.valid = false;
+            params.valid = false
             params.reason += 'Invalid amount; ';
         }
         if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
-            params.valid = false;
+            params.valid = true; //if we invalidate for things being off we will lose people's UTXO spends but we log the reason
             params.reason += 'Invalid sats expected; ';
         }
 
@@ -157,9 +161,20 @@ const Validity = {
     },
 
     // 4: Commit Token
-    validateCommitToken: async (params, tallyMap, whitelistRegistry, kycRegistry) => {
+    validateCommitToken: async (params, block, txid) => {
         params.reason = '';
         params.valid = true;
+
+        if (!TallyMap.isAddressValid(params.sender)) {
+            params.valid = false
+            params.reason += 'Invalid sender address';
+        }
+
+        // Check if the sender has sufficient balance
+        if (!TallyMap.hasSufficientBalance(params.sender, params.propertyId, params.amount)) {
+            params.valid = false
+            params.reason += 'Insufficient token balance for commitment';
+        }
 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(4);
         if(isAlreadyActivated==false){
@@ -167,23 +182,11 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const hasSufficientTokens = await tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
-        if (!hasSufficientTokens) {
-            params.valid = false;
-            params.reason += 'Insufficient tokens to commit; ';
-        }
-
-        const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
+        /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
         if (!isSenderWhitelisted) {
             params.valid = false;
             params.reason += 'Sender address not whitelisted; ';
-        }
-
-        const senderKYCCleared = await kycRegistry.isAddressKYCCleared(params.senderAddress);
-        if (!senderKYCCleared) {
-            params.valid = false;
-            params.reason += 'Sender KYC not cleared; ';
-        }
+        }*/
 
         return params;
     },
@@ -344,10 +347,8 @@ const Validity = {
             params.reason += 'Invalid target address; ';
         }
 
-        // Additional logic can be added here if needed
-
-        return params;
-            },
+           return params;
+    },
         // 11: Grant Managed Token
         validateGrantManagedToken: async (params, propertyRegistry, tallyMap) => {
             params.reason = '';
@@ -359,19 +360,19 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = propertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';
             }
 
-            const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+            const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
             if (!hasSufficientBalance) {
                 params.valid = false;
                 params.reason += 'Insufficient balance to grant tokens; ';
@@ -391,19 +392,19 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isPropertyAdmin = propertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = propertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';
             }
 
-            const canRedeemTokens = tallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
+            const canRedeemTokens = TallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
             if (!canRedeemTokens) {
                 params.valid = false;
                 params.reason += 'Cannot redeem tokens; insufficient balance or other criteria not met; ';
@@ -415,10 +416,6 @@ const Validity = {
         // 13: Create Oracle
         validateCreateOracle: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.canCreateOracle(params.senderAddress);
-            if (!params.valid) {
-                params.reason = 'Sender address not authorized to create an oracle; ';
-            }
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(13);
             if(isAlreadyActivated==false){
@@ -432,7 +429,7 @@ const Validity = {
         // 14: Publish Oracle Data
         validatePublishOracleData: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
@@ -449,7 +446,7 @@ const Validity = {
         // 15: Close Oracle
         validateCloseOracle: async (params, oracleRegistry) => {
             params.reason = '';
-            params.valid = oracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
@@ -462,12 +459,79 @@ const Validity = {
             return params;
         },
 
+        //16: createContracts
+       validateCreateContractSeries: async ({ underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse = false, fee = false }) => {
+            const validCollateralProperty = (await PropertyList.getPropertyData(collateralPropertyId)!=null)
+            const validNotionalProperty = (await PropertyList.getPropertyData(notionalPropertyId)!=null)
+            const validOracle = (await OracleList.getOracleData(underlyingOracleId)!=null)
+            const validNatives = (await PropertyList.getPropertyData(onChainData[0])!=null&&await PropertyList.getPropertyData(onChainData[1])!=null)
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(16);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
+            // Check if the underlyingOracleId exists or is null
+            if (params.underlyingOracleId !== null && !this.oracleSeriesIndex.has(params.underlyingOracleId)) {
+                params.valid = false;
+                params.reason += "Invalid or missing underlying oracle ID. ";
+            }
+
+            // Check if onChainData is an array of two existing propertyIds or 0
+            if (onChainData!=null||!Array.isArray(params.onChainData) || params.onChainData.length !== 2 || validNative!=true) {
+                params.valid = false;
+                params.reason += "Invalid on-chain data format or property IDs. ";
+            }
+
+            // Check if notionalPropertyId exists or is null (for oracle contracts)
+            if (params.notionalPropertyId !== null && validNotionalProperty==true) {
+                params.valid = false;
+                params.reason += "Invalid notional property ID. ";
+            }
+
+            // Check if notionalValue is a number
+            if (typeof params.notionalValue !== 'number') {
+                params.valid = false;
+                params.reason += "Notional value must be a number. ";
+            }
+
+            // Check if collateralPropertyId is a valid existing propertyId
+            if (validCollateralProperty==true) {
+                params.valid = false;
+                params.reason += "Invalid collateral property ID. ";
+            }
+
+            // Check if expiryPeriod is an integer
+            if (!Number.isInteger(params.expiryPeriod)) {
+                params.valid = false;
+                params.reason += "Expiry period must be an integer. ";
+            }
+
+            // Check if series is a valid integer
+            if (!Number.isInteger(params.series)) {
+                params.valid = false;
+                params.reason += "Series must be an integer. ";
+            }
+
+            // Validate inverse and fee as booleans
+            params.inverse = typeof params.inverse === 'boolean' ? params.inverse : false;
+            params.fee = typeof params.fee === 'boolean' ? params.fee : false;
+
+            if (!params.valid) {
+                console.log(`Contract series validation failed: ${params.reason}`);
+            }
+
+            return params
+        },
+
+
         // 17: Exercise Derivative
         validateExerciseDerivative: async (params, derivativeRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(16);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(17);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -489,28 +553,38 @@ const Validity = {
         },
 
         // 18: Trade Contract On-chain
-        validateTradeContractOnchain: async (params, marginMap, whitelistRegistry, contractRegistry) => {
+        validateTradeContractOnchain: async (params, sender, block) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(17);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(18);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+            const initialMarginPerContract = await contractsRegistry.getInitialMargin(contractId);
+            const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
 
-            const hasSufficientMargin = marginMap.hasSufficientMargin(params.senderAddress, params.contractId, params.amount);
-            if (!hasSufficientMargin) {
-                params.valid = false;
-                params.reason += 'Insufficient margin or contract balance; ';
+            // Check if the sender has enough balance for the initial margin
+            const hasSufficientBalance = await TallyMap.hasSufficientBalance(senderAddress, collateralPropertyId, totalInitialMargin);
+            if (!hasSufficientBalance) {
+                throw new Error('Insufficient balance for initial margin');
             }
 
             const contractDetails = await contractRegistry.getContractDetails(params.contractId);
-            const isSenderWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(params.senderAddress, contractDetails.oracleId) : true;
+            if(contractDetails==null){
+                params.valid=false
+                params.reason+= "contractId not found"
+            }
+            if(params.leverage>50){
+                params.valid=false
+                params.reason+= "Stop encouraging gambling!"
+            }
+            /*const isSenderWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(params.senderAddress, contractDetails.oracleId) : true;
             if (!isSenderWhitelisted) {
                 params.valid = false;
                 params.reason += 'Sender address not whitelisted for the contract\'s oracle; ';
-            }
+            }*/
 
             return params;
         },
@@ -520,7 +594,7 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(18);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(19);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -544,12 +618,12 @@ const Validity = {
             return params;
         },
 
-        // 19: Trade Tokens Channel
+        // 20: Trade Tokens Channel
         validateTradeTokensChannel: async (params, channelRegistry, whitelistRegistry) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(19);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(20);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -571,12 +645,12 @@ const Validity = {
             return params;
         },
 
-        // 20: Withdrawal
-        validateWithdrawal: async (params, channelRegistry, tallyMap) => {
+        // 21: Withdrawal
+        validateWithdrawal: async (params, sender, block) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(20);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(21);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -603,12 +677,12 @@ const Validity = {
             return params;
         },
 
-        // 21: Transfer
+        // 22: Transfer
         validateTransfer: async (params, channelRegistry, tallyMap) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(21);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(22);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -635,12 +709,12 @@ const Validity = {
             return params;
         },
 
-        // 22: Settle Channel PNL
+        // 23: Settle Channel PNL
         validateSettleChannelPNL: async (params, channelRegistry, marginMap) => {
             params.reason = '';
             params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(22);
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(23);
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
@@ -668,27 +742,57 @@ const Validity = {
         },
 
 
-    // 23: Mint Synthetic
-    validateMintSynthetic: (params, synthRegistry, tallyMap) => {
+    // 24: Mint Synthetic
+    validateMintSynthetic: (params) => {
+        params.reason = '';
+        params.valid = true;
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
-        const canMint = synthRegistry.canMintSynthetic(params.propertyIdUsed, params.contractIdUsed, params.amount);
+        const contractInfo = ContractRegistry.getContractInfo(params.contractId);
+        const collateralPropertyId = contractInfo.collateralPropertyId
+        const notional = contractInfo.notionalValue
+        if(contractInfo.inverse==false){
+                params.valid=false
+                params.reason += 'Cannot mint synthetics with linear contracts'
+        }
+        if(contractInfo.native==false){
+                params.valid=false
+                params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
+        }
+        const contractsBalance = WalletCache.getContractPositionForAddressAndContractId(param.sender,params.contractId)
+        if(contractsBalance*notional>=params.amount){
+                params.valid=false
+                params.reason += 'insufficient contracts to hedge the amount requested'
+        }
         // Ensure the sender has sufficient balance of the underlying property
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
+        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, collateralPropertyId, params.amount*notional);
+        if(hasSufficientBalance==false){
+                params.valid=false
+                params.reason += 'insufficient collateral to create a 1x hedge position'
+        }
 
-        return canMint && hasSufficientBalance;
+        return params
     },
 
-    // 24: Redeem Synthetic
-    validateRedeemSynthetic: (params, synthRegistry, tallyMap) => {
+    // 25: Redeem Synthetic
+    validateRedeemSynthetic: (params) => {
+        params.reason = '';
+        params.valid = true;
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
-        const canRedeem = synthRegistry.canRedeemSynthetic(params.propertyIdUsed, params.contractIdUsed, params.amount);
+        const canRedeem = TallyMap.isSynthetic(params.propertyId);
+        if(canRedeem==false){
+                params.valid=false
+                params.reason += 'Token is not of a synthetic nature'
+        }
         // Ensure the sender has sufficient balance of the synthetic property
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.syntheticPropertyId, params.amount);
-
+        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+        if(hasSufficientBalance==false){
+                params.valid=false
+                params.reason += 'insufficient tokens to redeem in this amount'
+        }
         return canRedeem && hasSufficientBalance;
     },
 
-    // 25: Pay to Tokens
+    // 26: Pay to Tokens
     validatePayToTokens: (params, tallyMap) => {
         // Ensure the sender has sufficient balance of the property used for payment
         const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
@@ -697,7 +801,7 @@ const Validity = {
         return hasSufficientBalance;
     },
 
-        // 26: Create Option Chain
+        // 27: Create Option Chain
     validateCreateOptionChain: (params, contractRegistry) => {
         // Check if the series ID is valid
         const isValidSeriesId = contractRegistry.isValidSeriesId(params.contractSeriesId);
@@ -707,7 +811,7 @@ const Validity = {
         return isValidSeriesId && isValidParams;
     },
 
-    // 27: Trade Bai Urbun
+    // 28: Trade Bai Urbun
     validateTradeBaiUrbun: (params, channelRegistry, baiUrbunRegistry) => {
         // Verify that the trade channel exists and is valid
         const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
@@ -717,7 +821,7 @@ const Validity = {
         return isValidChannel && isValidContractTerms;
     },
 
-    // 28: Trade Murabaha
+    // 29: Trade Murabaha
     validateTradeMurabaha: (params, channelRegistry, murabahaRegistry) => {
         // Verify that the trade channel exists and is valid
         const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
@@ -727,7 +831,7 @@ const Validity = {
         return isValidChannel && isValidContractTerms;
     },
 
-    // 29: Issue Invoice
+    // 30: Issue Invoice
     validateIssueInvoice: (params, invoiceRegistry, tallyMap) => {
         // Check if the issuer has sufficient balance of the property to receive payment
         const hasSufficientBalance = tallyMap.hasSufficientBalance(params.issuerAddress, params.propertyIdToReceivePayment, params.amount);
@@ -737,7 +841,7 @@ const Validity = {
         return hasSufficientBalance && isValidInvoiceTerms;
     },
 
-    // 30: Batch Move Zk Rollup
+    // 31: Batch Move Zk Rollup
     validateBatchMoveZkRollup: (params, zkVerifier, tallyMap) => {
         // Verify the zk proof with the zkVerifier
         const isZkProofValid = zkVerifier.verifyProof(params.zkProof);

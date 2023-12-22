@@ -22,6 +22,8 @@ class Clearing {
         // 3. Calculate and update UPNL (Unrealized Profit and Loss)
         await this.calculateAndUpdateUPNL(blockHeight);
 
+        await this.processLiquidationsAndMarginAdjustments(blockHeight)
+
         // 4. Create channels for new trades
         await this.createChannelsForNewTrades(blockHeight);
 
@@ -72,20 +74,46 @@ class Clearing {
 
 
     async calculateAndUpdateUPNL(blockHeight) {
-        console.log('Calculating and updating UPNL');
+        console.log('Calculating and updating UPNL for all contracts at block:', blockHeight);
+        
+        const contracts = await getAllContracts(); // Fetch all contracts
+        for (const contract of contracts) {
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
+            const marketPrice = await marginMap.getMarketPrice(contract);
 
-        // Fetch trade data relevant to UPNL calculations
-        let trades = await this.fetchTradesForUPNL();
+            marginMap.clear(marketPrice, contract.seriesId); // Update UPnL for each position in the margin map
 
-        // Calculate UPNL for each trade
-        trades.forEach(trade => {
-            let upnl = this.calculateUPNL(trade, blockHeight);
-            trade.upnl = upnl;
-        });
-
-        // Save the updated trade data
-        await this.saveTrades(trades);
+            await marginMap.saveMarginMap(blockHeight); // Save the updated margin map
+        }
     }
+
+    async processLiquidationsAndMarginAdjustments(blockHeight) {
+        console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
+
+        const contracts = await getAllContracts(); // Fetch all contracts
+        for (const contract of contracts) {
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
+            
+            // Check for and process liquidations
+            if (marginMap.needsLiquidation(contract)) {
+                const liquidationOrders = await MarginMap.triggerLiquidations(contract);
+                // Process liquidation orders as needed
+            }
+
+            // Adjust margins based on the updated UPnL
+            const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
+            for (const position of positions) {
+                const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
+                if (pnlChange !== 0) {
+                    await adjustBalance(position.holderAddress, pnlChange);
+                }
+            }
+
+            await marginMap.saveMarginMap(blockHeight);
+        }
+    }
+
+
 
     async createChannelsForNewTrades(blockHeight) {
         //console.log('Creating channels for new trades');
@@ -301,15 +329,48 @@ class Clearing {
         }
     }
 
-    async updateBalanceInDatabase(holderAddress, newBalance) {
-        // Replace this with actual data updating logic for your system
+    async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
+        const clearingDB = dbInstance.getDatabase('clearing');
+        const recordKey = `clearing-${contractId}-${blockHeight}`;
+
+        const clearingRecord = {
+            _id: recordKey,
+            contractId,
+            settlementDetails,
+            blockHeight
+        };
+
         try {
-            await database.updateBalance(holderAddress, newBalance);
+            await clearingDB.updateAsync(
+                { _id: recordKey },
+                clearingRecord,
+                { upsert: true }
+            );
+            console.log(`Clearing settlement event record saved successfully: ${recordKey}`);
         } catch (error) {
-            console.error('Error updating balance for address:', holderAddress, error);
+            console.error(`Error saving clearing settlement event record: ${recordKey}`, error);
             throw error;
         }
     }
+
+    async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
+        const clearingDB = dbInstance.getDatabase('clearing');
+        try {
+            const query = {
+                contractId: contractId,
+                blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
+            };
+            const clearingRecords = await clearingDB.findAsync(query);
+            return clearingRecords.map(record => ({
+                blockHeight: record.blockHeight,
+                settlementDetails: record.settlementDetails
+            }));
+        } catch (error) {
+            console.error(`Error loading clearing settlement events for contractId ${contractId}:`, error);
+            throw error;
+        }
+    }
+
 
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system

@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js')
 const dbInstance = require('./db.js'); // Import your database instance
 
+
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
             this.tickSize = tickSize;
@@ -30,6 +31,85 @@ class Orderbook {
                 await this.saveOrderBook(this.orderBookKey);
             }
         }
+
+                // Record a token trade with specific key identifiers
+        async recordTokenTrade(trade, blockHeight, txid) {
+            const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
+            const tradeRecord = {
+                key: tradeRecordKey,
+                type: 'token',
+                trade,
+                blockHeight,
+                txid
+            };
+            await this.saveTrade(tradeRecord);
+        }
+
+        // Record a contract trade with specific key identifiers
+        async recordContractTrade(trade, blockHeight, txid) {
+            const tradeRecordKey = `contract-${trade.contractId}`;
+            const tradeRecord = {
+                key: tradeRecordKey,
+                type: 'contract',
+                trade,
+                blockHeight,
+                txid
+            };
+            await this.saveTrade(tradeRecord);
+        }
+
+        async saveTrade(tradeRecord) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+
+            // Use the key provided in the trade record for storage
+            const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
+
+            // Construct the document to be saved
+            const tradeDoc = {
+                _id: tradeId,
+                ...tradeRecord
+            };
+
+            // Save or update the trade record in the database
+            try {
+                await tradeDB.updateAsync(
+                    { _id: tradeId },
+                    tradeDoc,
+                    { upsert: true }
+                );
+                console.log(`Trade record saved successfully: ${tradeId}`);
+            } catch (error) {
+                console.error(`Error saving trade record: ${tradeId}`, error);
+                throw error; // Rethrow the error for handling upstream
+            }
+        }
+
+                // Retrieve token trading history by propertyId pair
+        async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
+            const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+            return trades.map(doc => doc.trade);
+        }
+
+        // Retrieve contract trading history by contractId
+        async getContractTradeHistoryByContractId(contractId) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeRecordKey = `contract-${contractId}`;
+            const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+            return trades.map(doc => doc.trade);
+        }
+
+        // Retrieve trade history by address for both token and contract trades
+        async getTradeHistoryByAddress(address) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const trades = await tradeDB.findAsync({ 
+                $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
+            });
+            return trades.map(doc => doc.trade);
+        }
+
+
 
     // Function to divide two numbers with an option to round up or down to the nearest Satoshi
     divideAndRound(number1, number2, roundUp = false) {
@@ -96,18 +176,27 @@ class Orderbook {
         return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
     }
 
-    addContractOrder({ contractId, amount, price, time, sell }) {
+    async addContractOrder({ contractId, amount, price, block, sell }) {
+        const ContractRegistry = require('./contractRegistry.js')
+        await ContractRegistry.moveCollateralToMargin() //first we line up the capital
+
         // Create a contract order object with the sell parameter
-        const contractOrder = { contractId, amount, price, time, sell };
+        const contractOrder = { contractId, amount, price, block, sell };
 
         // The orderBookKey is based on the contractId since it's a derivative contract
         const orderBookKey = `contract-${contractId}`;
 
         // Insert the contract order into the order book
-        this.insertOrder(contractOrder, orderBookKey, true);
+        await this.insertOrder(contractOrder, orderBookKey, sell);
 
         // Match orders in the derivative contract order book
-        this.matchOrders(orderBookKey);
+        var matchResult = await this.matchContractOrders(orderBookKey);
+
+        await this.processContractMatches()
+
+        await orderbook.saveOrderBook(normalizedOrderBookKey);
+        return matchResult
+
     }
 
     async insertOrder(order, orderBookKey, isSellOrder) {
@@ -296,6 +385,53 @@ class Orderbook {
         }
     }    
 
+    async matchContractOrders(orderBookKey) {
+        const orderBook = this.orderBooks[orderBookKey];
+        if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+            return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches if no orders
+        }
+
+        let matches = [];
+
+        // Sort buy and sell orders by price and time
+        orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
+        orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
+
+        // Match orders
+        while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
+            let sellOrder = orderBook.sell[0];
+            let buyOrder = orderBook.buy[0];
+
+            // Check for price match
+            if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                // Calculate the amount to be traded
+                let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
+                
+                // Update orders after the match
+                sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
+                buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
+                // Add match to the list
+                matches.push({ 
+                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber() }, 
+                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber() } 
+                });
+
+                // Remove filled orders from the order book
+                if (sellOrder.amount === 0) {
+                    orderBook.sell.shift();
+                }
+                if (buyOrder.amount === 0) {
+                    orderBook.buy.shift();
+                }
+            } else {
+                break; // No more matches possible
+            }
+        }
+
+        return { orderBook: this.orderBooks[orderBookKey], matches };
+    }
+
     processContractMatches(matches) {
         matches.forEach(match => {
             // Logic for identifying and updating the marginMap for contracts
@@ -327,15 +463,30 @@ class Orderbook {
                 // Load the margin map for the given series ID and block height
                 const marginMap = await MarginMap.loadMarginMap(match.contractSeriesId, currentBlockHeight);
 
+                // Get the existing position sizes for buyer and seller
+                const buyerPositionSize = marginMap.getPositionSize(match.buyerAddress);
+                const sellerPositionSize = marginMap.getPositionSize(match.sellerAddress);
+
                 // Update contract balances for the buyer and seller
                 marginMap.updateContractBalances(match.buyerAddress, match.amount, match.price, true);
                 marginMap.updateContractBalances(match.sellerAddress, match.amount, match.price, false);
+
+                // Determine if the trade reduces the position size for buyer or seller
+                const isBuyerReducingPosition = buyerPositionSize > 0 && match.amount < 0;
+                const isSellerReducingPosition = sellerPositionSize < 0 && match.amount > 0;
+
+                // Realize PnL if the trade reduces the position size
+                let buyerPnl = 0, sellerPnl = 0;
+                if (isBuyerReducingPosition) {
+                    buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
+                }
+                if (isSellerReducingPosition) {
+                    sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
+                }
+
+                // Update margin based on the new positions
                 marginMap.updateMargin(match.buyerAddress, match.amount, match.price);
                 marginMap.updateMargin(match.sellerAddress, -match.amount, match.price);
-
-                // Realize PnL for the buyer and seller
-                const buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
-                const sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
 
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);

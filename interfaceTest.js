@@ -24,6 +24,13 @@ async function runTest() {
     const orderBook43 = await expressInterface.getOrderBook(4, 3);
     console.log('Order Book for Property IDs 4 and 3:', orderBook43);
 
+    
+    // New calls
+    const contractSeries = await expressInterface.listContractSeries();
+    console.log('Contract Series:', contractSeries);
+
+    const oracles = await expressInterface.listOracles();
+    console.log('Oracles:', oracles);
 
 }
 

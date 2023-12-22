@@ -5,7 +5,7 @@ const config = {host: '127.0.0.1',
                       user: 'user',
                       pass: 'pass',
                       timeout: 10000}
-const walletInterface = new Litecoin(config) // Replace with your actual wallet interface module
+const rpcClient = new Litecoin(config) // Replace with your actual wallet interface module
 const { isMyAddressAllWallets, getTallyForAddress } = require('./interface.js'); // Helper functions, to be implemented
 const tallyMap = require('tally3.js')
 class WalletCache {
@@ -16,89 +16,43 @@ class WalletCache {
     /**
      * Updates the cache with the latest state and returns the number of changes made to wallet addresses.
      */
-    async updateWalletCache() {
-        console.log("WalletCache: Update requested");
+    
+    async updateWalletCache(label) {
         let numChanges = 0;
-        let changedAddresses = new Set();
+        const addresses = await rpcClient.getAddressesByLabel(label);
 
-        const allAddresses = await this.getAllAddresses(); // Replace with actual method to get all addresses
+        for (const address of addresses) {
+            const balance = await TallyMap.getAddressBalances(address);
 
-        for (const address of allAddresses) {
-            const addressIsMine = await isMyAddressAllWallets(address);
-            if (!addressIsMine) {
-                console.log(`WalletCache: Ignoring non-wallet address ${address}`);
-                continue;
-            }
-
-            const tally = await getTallyForAddress(address); // Implement this to obtain the tally for an address
-
-            if (!this.walletBalancesCache.has(address)) {
+            if (!this.walletBalancesCache.has(address) || this.isBalanceDifferent(this.walletBalancesCache.get(address), balance)) {
                 numChanges++;
-                changedAddresses.add(address);
-                this.walletBalancesCache.set(address, tally);
-                console.log(`WalletCache: *CACHE MISS* - ${address} not in cache`);
-                continue;
+                this.walletBalancesCache.set(address, balance);
             }
+        }
 
-            const cacheTally = this.walletBalancesCache.get(address);
-            for (const [propertyId, balanceData] of Object.entries(tally)) {
-                if (this.isBalanceDifferent(balanceData, cacheTally[propertyId])) {
-                    numChanges++;
-                    changedAddresses.add(address);
-                    this.walletBalancesCache.set(address, tally);
-                    console.log(`WalletCache: *CACHE MISS* - ${address} balance for property ${propertyId} differs`);
-                    break;
+        return numChanges;
+    }
+
+
+    async getAllWalletBalances(label) {
+            try {
+                // Get all TradeLayer addresses with the specified label from the wallet
+                const addresses = await rpcClient.getAddressesByLabel(label);
+                const allBalances = [];
+
+                // For each TradeLayer address, get all balances
+                for (const address of addresses) {
+                    const balances = await TallyMap.getAddressBalances(address);
+                    allBalances.push({ address, balances });
                 }
+
+                return allBalances;
+            } catch (error) {
+                console.error('Error getting all wallet balances for TradeLayer addresses:', error);
+                throw error;
             }
         }
 
-        console.log(`WalletCache: Update finished - there were ${numChanges} changes`);
-        return numChanges;
-    }
-
-    async getAllWalletBalances() {
-        try {
-            // Get all addresses in the wallet
-            const { stdout, stderr } = await execAsync('bitcoin-cli listreceivedbyaddress 0 true');
-            if (stderr) {
-                console.error('Error fetching addresses:', stderr);
-                return;
-            }
-
-            const addresses = JSON.parse(stdout);
-            const allBalances = [];
-
-            // For each address, get all balances
-            for (const addressObj of addresses) {
-                const address = addressObj.address;
-                const balances = this.tallyMap.getAddressBalances(address);
-                allBalances.push({ address, balances });
-            }
-
-            return allBalances;
-        } catch (error) {
-            console.error('Error getting all wallet balances:', error);
-            throw error;
-        }
-    }
-
-     // Updates the cache with the latest state and returns the number of changes made to wallet addresses.
-    async updateWalletCache() {
-        let numChanges = 0;
-        const allAddresses = await walletInterface.getAllAddresses(); // Get all addresses from the wallet
-
-        for (const address of allAddresses) {
-            const balance = await walletInterface.getAddressBalance(address); // Get balance for each address
-            const cachedBalance = this.walletBalancesCache.get(address);
-
-            if (balance !== cachedBalance) {
-                numChanges++;
-                this.walletBalancesCache.set(address, balance); // Update cache
-            }
-        }
-
-        return numChanges;
-    }
 
     // Gets the balance for a specific address from the cache
     getBalance(address) {
@@ -118,6 +72,101 @@ class WalletCache {
         // Example:
         return JSON.stringify(balanceData1) !== JSON.stringify(balanceData2);
     }
+
+
+    /**
+     * Retrieves contract positions for all addresses in the wallet.
+     */
+    async getPositions() {
+        try {
+            // Get all TradeLayer addresses with the specified label from the wallet
+            const label = 'TL'; // Replace with your actual label used for TradeLayer addresses
+            const addresses = await rpcClient.getAddressesByLabel(label);
+            const allPositions = [];
+
+            // For each TradeLayer address, get contract positions
+            for (const address of addresses) {
+                const contractPositions = await this.getContractPositionsForAddress(address);
+                if (contractPositions.length > 0) {
+                    allPositions.push({ address, contractPositions });
+                }
+            }
+
+            return allPositions;
+        } catch (error) {
+            console.error('Error getting contract positions for TradeLayer addresses:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Retrieves contract positions for a specific address from MarginMaps.
+     */
+    async getContractPositionsForAddress(address) {
+        const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
+        const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+        const positions = [];
+
+        // Fetch margin map for the address
+        const marginMap = await MarginMap.getMarginMapForAddress(address);
+
+        // Check for valid margin map
+        if (!marginMap) {
+            console.log(`No margin map found for address: ${address}`);
+            return positions;
+        }
+
+        // Iterate over contracts in the margin map
+        for (const [contractId, positionData] of Object.entries(marginMap.contracts)) {
+            const contractInfo = await ContractsRegistry.getContractInfo(contractId);
+            if (contractInfo) {
+                positions.push({
+                    contractId: contractId,
+                    positionSize: positionData.size,
+                    avgEntryPrice: positionData.avgEntryPrice,
+                    // Include other relevant contract position details
+                });
+            }
+        }
+
+        return positions;
+    }
+
+    async getContractPositionForAddressAndContractId(address, contractId) {
+    const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
+    const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+    
+    // Fetch margin map for the address
+    const marginMap = await MarginMap.getMarginMapForAddress(address);
+
+    // Check for valid margin map
+    if (!marginMap) {
+        console.log(`No margin map found for address: ${address}`);
+        return null;
+    }
+
+    // Check if the address has a position for the specified contract
+    const positionData = marginMap.contracts[contractId];
+    if (!positionData) {
+        console.log(`No position data found for contract ID: ${contractId} at address: ${address}`);
+        return null;
+    }
+
+    const contractInfo = await ContractsRegistry.getContractInfo(contractId);
+    if (!contractInfo) {
+        console.log(`No contract info found for contract ID: ${contractId}`);
+        return null;
+    }
+
+    // Return contract position details
+    return {
+        contractId: contractId,
+        positionSize: positionData.size,
+        avgEntryPrice: positionData.avgEntryPrice,
+        // Include other relevant contract position details
+    };
+}
+
 }
 
 module.exports = WalletCache;

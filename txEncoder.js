@@ -209,6 +209,7 @@ const Encode = {
             params.notionalPropertyId.toString(36),
             params.notionalValue.toString(36),
             params.collateralPropertyId.toString(36),
+            params.leverage,
             params.expiryPeriod !== undefined ? params.expiryPeriod.toString(36) : '0',
             params.series.toString(36),
             params.inverse ? '1' : '0',

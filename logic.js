@@ -22,6 +22,7 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 //const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
@@ -34,100 +35,100 @@ const Logic = {
         console.log('tx number and params ' +txNumber, params)
         switch (txNumber) {
            case 0:
-                return await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
+                await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
-                Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
+                await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
                 break;
             case 2:
-                Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
+                await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
                 break;
             case 3:
-                Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
                 break;
             case 4:
-                Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
+                await Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
                 break;
             case 5:
-                Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
+                await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
                 break;
             case 6:
-                Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
+                await Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
                 break;
            case 7:
-                Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
+                await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
                 break;
             case 8:
-                Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries);
+                await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries);
                 break;
             case 9:
-                Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                await Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
                 break;
             case 10:
-                Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                await Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
                 break;
             case 11:
-                Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager);
+                await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager);
                 break;
             case 12:
-                Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager);
+                await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager);
                 break;
             case 13:
-                Logic.createOracle(params.adminAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
+                await Logic.createOracle(params.adminAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
                 break;
             case 14:
-                Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
+                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
                 break;
             case 15:
-                Logic.closeOracle(params.oracleId, params.oracleRegistry);
+                await Logic.closeOracle(params.oracleId, params.oracleRegistry);
                 break;
             case 16:
-                Logic.createFutureContractSeries(params.contractId, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.expiryPeriod, params.series, params.inverse, params.fee, params.contractsRegistry);
+                await Logic.createContractSeries(params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
-                Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
+                await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
                 break;
             case 18:
-                Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid, params.sender);
                 break;
             case 19:
-                Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
+                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
                 break;
             case 20:
-                Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.channelAddress, params.TradeChannel, params.TallyMap);
+                await Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.channelAddress, params.TradeChannel, params.TallyMap);
                 break;
             case 21:
-                Logic.withdrawal(params.channelAddress, params.propertyId, params.amount);
+                await Logic.withdrawal(params.channelAddress, params.propertyId, params.amount);
                 break;
             case 22:
-                Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
+                await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
                 break;
             case 23:
-                Logic.settleChannelPNL(params.channelAddress, params.txParams);
+                await Logic.settleChannelPNL(params.channelAddress, params.txParams);
                 break;
             case 24:
-                Logic.mintSynthetic(params.propertyId, params.contractId, params.amount);
+                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount);
                 break;
             case 25:
-                Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount);
+                await Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount);
                 break;
             case 26:
-                Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount);
+                await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount);
                 break;
             case 27:
-                Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle);
+                await Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle);
                 break;
             case 28:
-                Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock);
+                await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock);
                 break;
             case 29:
-                Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight);
+                await Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight);
                 break;
             case 30:
-                Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce);
+                await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce);
                 break;
             case 31:
-                Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof);
+                await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof);
                 break;
             case 32:
                 Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
@@ -144,6 +145,7 @@ const Logic = {
             default:
                 console.log(`Unhandled transaction type: ${txNumber}`);
         }
+        return 
     },
 
     async activateTradeLayer(txType, block) { 
@@ -266,6 +268,7 @@ const Logic = {
 
         await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
         await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+        return
     },
 
     calculateVestingMovement(amount, tlVestTally, tlTally) {
@@ -353,9 +356,10 @@ const Logic = {
 	        throw new Error('Insufficient available balance for transaction.');
 	    }
 
-	    TallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
-	    TallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
+	    await TallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
+	    await TallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
 	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
+        return
 	},
 
 
@@ -390,29 +394,23 @@ const Logic = {
 		    return txId; // Return the transaction ID of the broadcasted transaction
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(tallyMap, tradeChannelManager, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
-    // Validate sender address
-	    if (!TallyMap.isAddressValid(senderAddress)) {
-	        throw new Error('Invalid sender address');
-	    }
+	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
+      
+        // Deduct tokens from sender's available balance
+        TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
 
-	    // Check if the sender has sufficient balance
-	    if (!TallyMap.hasSufficientBalance(senderAddress, propertyId, tokenAmount)) {
-	        throw new Error('Insufficient token balance for commitment');
-	    }
+        // Add tokens to the channel's balance
+        TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0);
 
-	    // Deduct tokens from available balance and add to reserved balance
-	    TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
-	    TallyMap.updateBalance(senderAddress, propertyId, 0, tokenAmount, 0, 0);
+        // Determine which column (A or B) to assign the tokens in the channel registry
+        await tradeChannelManager.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
 
-	    // Determine which column (A or B) to assign the tokens in the channel registry
-	    const channelColumn = tradeChannelManager.determineCommitColumn(senderAddress, transactionTime);
-	    
-	    // Update the channel registry with the committed tokens
-	    await tradeChannelManager.commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
+        // Update the channel registry with the committed tokens
+        await tradeChannelManager.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
 
-	    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} for ${commitPurpose}`);
-	},
+        console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress} for ${commitPurpose}`);
+        return;
+    },
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight) {
         // Construct the pair key for the Orderbook instance
@@ -484,7 +482,7 @@ const Logic = {
 
 		    // Return the details of the cancelled orders
 		    return cancelledOrders;
-		},
+	},
 
 		    /**
 		     * Creates a new whitelist.
@@ -542,6 +540,7 @@ const Logic = {
 	    }
 
 	    console.log(`Admin updated for ${entityType} ${entityId}`);
+        return
 	},
 
 
@@ -552,6 +551,7 @@ const Logic = {
 
 	    await whitelistRegistry.addAddressToWhitelist(whitelistId, targetAddress);
 	    console.log(`Address ${targetAddress} added to whitelist ${whitelistId}`);
+        return
 	},
 
     async revokeAttestation(whitelistId, targetAddress, whitelistRegistry) {
@@ -561,6 +561,7 @@ const Logic = {
 
         await whitelistRegistry.removeAddressFromWhitelist(whitelistId, targetAddress);
         console.log(`Address ${targetAddress} removed from whitelist ${whitelistId}`);
+        return
 	},
 
     async grantManagedToken(propertyId, amount, recipientAddress, propertyManager) {
@@ -577,6 +578,7 @@ const Logic = {
 	    // Logic to grant tokens to the recipient
 	    await propertyManager.grantTokens(propertyId, recipientAddress, amount);
 	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
+        return
 	},
 
 	async redeemManagedToken(propertyId, amount, propertyManager) {
@@ -593,6 +595,7 @@ const Logic = {
 	    // Logic to redeem tokens from the admin's balance
 	    await propertyManager.redeemTokens(propertyId, amount);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
+        return
 	},
 
     async createOracle(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry) {
@@ -614,6 +617,7 @@ const Logic = {
 	    // Publish data to the oracle
 	    await oracleRegistry.publishData(oracleId, { price, high, low, close });
 	    console.log(`Data published to oracle ${oracleId}`);
+        return
 	},
 
 	async closeOracle(oracleId, oracleRegistry) {
@@ -624,16 +628,13 @@ const Logic = {
 	    // Close the specified oracle
 	    await oracleRegistry.closeOracle(oracleId);
 	    console.log(`Oracle ${oracleId} has been closed`);
+        return
 	},
 
-    async createFutureContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee, contractsRegistry) {
-	    if (!contractId || !underlyingOracleId || !notionalPropertyId || !notionalValue || !collateralPropertyId || !contractsRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
-
+    async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await contractsRegistry.createFutureContractSeries({
-	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, expiryPeriod, series, inverse, fee
+	    const futureContractSeriesId = await ContractsRegistry.createContractSeries({
+	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;
@@ -649,14 +650,12 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry) {
-	    if (!contractId || !price || !amount || !contractsRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
-
+    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid) {
 	    // Trade the contract on-chain
-	    await contractsRegistry.tradeContractOnchain(contractId, price, amount, side, insurance);
+        const orderbook = await Orderbook.getOrderbookInstance(contractId);
+	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
+        return
 	},
 
     async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, tradeChannelManager) {

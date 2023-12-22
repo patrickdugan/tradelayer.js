@@ -1,11 +1,8 @@
 const db = require('./db')
-
-
-
 const path = require('path');
 const util = require('util');
 
-class ContractsRegistry {
+class ContractRegistry {
     constructor() {
         // ... Other initializations ...
         this.contractsList = new Map()
@@ -22,9 +19,52 @@ class ContractsRegistry {
         }
     }
 
-    createContractSeries(contractId, type, properties) {
-        // ... Same logic ...
-        this.saveContractSeries(); 
+    
+    async createContractSeries(params) {
+        // Generate a unique ID for the new contract series
+        const seriesId = await this.getNextId();
+
+        // Create the contract series object
+        const contractSeries = {
+            id: seriesId,
+            underlyingOracleId: params.underlyingOracleId,
+            onChainData: params.onChainData,
+            notionalPropertyId: params.notionalPropertyId,
+            notionalValue: params.notionalValue,
+            collateralPropertyId: params.collateralPropertyId,
+            leverage: params.leverage,
+            inverse: params.inverse,
+            fee: params.fee,
+            contracts: {
+                expired: [],
+                unexpired: this.generateContracts(params, seriesId)
+            }
+        };
+
+        // Save the new contract series to the in-memory map and the database
+        this.contractSeries.set(seriesId, contractSeries);
+        await this.saveContractSeries();
+
+        console.log(`New contract series created: ID ${seriesId}`);
+        return seriesId; // Return the new series ID
+    }
+
+    // Generate contracts within the series
+    generateContracts(params, seriesId) {
+        let contracts = [];
+        const currentBlockHeight = this.getCurrentBlockHeight(); // Implement this method to get the current block height
+        let expirationBlock = currentBlockHeight + params.expiryPeriod;
+
+        for (let i = 0; i < params.series; i++) {
+            contracts.push({
+                id: `${seriesId}-${expirationBlock}`,
+                expirationBlock: expirationBlock,
+                ...params
+            });
+            expirationBlock += params.expiryPeriod;
+        }
+
+        return contracts;
     }
 
     loadContractsFromDb() {
@@ -155,6 +195,142 @@ class ContractsRegistry {
         console.log(`Contract information not found for contract ID: ${contractId}`);
         return null;
     }
+
+     // Function to get initial margin requirement for a contract
+    async getInitialMargin(contractId) {
+        const contractInfo = this.getContractInfo(contractId);
+        if (!contractInfo) {
+            throw new Error(`Contract info not found for contract ID: ${contractId}`);
+        }
+
+        const { inverse, notionalValue, leverage } = contractInfo;
+        if (inverse) {
+            // For inverse contracts, margin is calculated based on notional value
+            return BigNumber(notionalValue).div(leverage);
+        } else {
+            // For linear contracts, check collateral and calculate based on oracle price or property value
+            const collateralValue = await this.getCollateralValue(contractInfo);
+            return BigNumber(collateralValue).div(leverage);
+        }
+    }
+
+    // Helper function to get collateral value for linear contracts
+    async getCollateralValue(contractInfo) {
+        const PropertyManager = require('./property.js')
+        const OracleList = require('./oracle.js')
+        const { collateralPropertyId, oracleId } = contractInfo;
+        if (collateralPropertyId) {
+            // If collateral is a property, use its value
+            const propertyData = await PropertyManager.getPropertyData(collateralPropertyId);
+            return propertyData ? propertyData.value : 0; // Example value fetching logic
+        } else if (oracleId) {
+            // If collateral is based on an oracle, use the latest price
+            const latestPrice = await OracleRegistry.getOracleData(oracleId);
+            return latestPrice || 0; // Example oracle price fetching logic
+        }
+        return 0; // Default to 0 if no valid collateral source
+    }
+
+        // In the contract order addition process
+    async moveCollateralToMargin(senderAddress, contractId, amount, contractsRegistry) {
+        const TallyMap = require('./tally.js')
+        const MarginMap = require('./marginMap.js')
+        const initialMarginPerContract = await contractsRegistry.getInitialMargin(contractId);
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount);
+
+        // Move collateral to margin position
+        await TallyMap.updateBalance(senderAddress, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0);
+
+        // Update MarginMap for the contract series
+        await MarginMap.updateMargin(contractSeriesId, senderAddress, amount, totalInitialMargin);
+    }
+
+     // Determine if a contract is an oracle contract
+    static async isOracleContract(contractId) {
+        const contractInfo = await this.getContractInfo(contractId);
+        return contractInfo && contractInfo.type === 'oracle';
+    }
+
+    // Calculate the 1-hour funding rate for an oracle contract
+    static async calculateFundingRate(contractId) {
+        const isOracle = await this.isOracleContract(contractId);
+        if (!isOracle) {
+            return 0; // Return zero for non-oracle contracts
+        }
+
+        // Get oracle data for the last 24 blocks
+        const Oracles = require('./Oracles');
+        const oracleData = await Oracles.getLast24BlocksData(contractId);
+        const avgOraclePrice = this.calculateAveragePrice(oracleData);
+
+        // Placeholder for the logic to get the average trade price for the contract
+        // const avgTradePrice = ...;
+
+        // Calculate the funding rate based on the difference between oracle price and trade price
+        const priceDifference = avgTradePrice / avgOraclePrice;
+        let fundingRate = 0;
+
+        if (priceDifference > 1.0005) {
+            fundingRate = (priceDifference - 1.0005) * oracleData.length; // Example calculation
+        } else if (priceDifference < 0.9995) {
+            fundingRate = (0.9995 - priceDifference) * oracleData.length; // Example calculation
+        }
+
+        return fundingRate;
+    }
+
+    async applyFundingRateToSystem(contractId) {
+        const fundingRate = await ContractsRegistry.calculateFundingRate(contractId);
+        
+        // Apply funding rate to marginMap+tallyMap
+        for (const [address, position] of marginMap.entries()) {
+            if (position.contractId === contractId) {
+                const fundingAmount = calculateFundingAmount(position.size, fundingRate);
+                TallyMap.updateBalance(address, contractId, fundingAmount);
+                marginMap.updatePosition(address, contractId, fundingAmount);
+            }
+        }
+
+        // Apply funding rate to vaulted contracts
+        for (const [vaultId, vault] of SynthRegistry.vaults.entries()) {
+            if (vault.contractId === contractId) {
+                const fundingAmount = calculateFundingAmount(vault.contractBalance, fundingRate);
+                SynthRegistry.applyPerpetualSwapFunding(vaultId, contractId, fundingAmount);
+            }
+        }
+
+        // Save changes
+        await TallyMap.save();
+        await marginMap.save();
+        await SynthRegistry.saveVaults();
+    }
+
+    calculateFundingAmount(contractSize, fundingRate) {
+        return contractSize * fundingRate;
+    }
+
+
+    // Calculate the average price from oracle data
+    static calculateAveragePrice(oracleData) {
+        if (!oracleData || oracleData.length === 0) return 0;
+
+        const total = oracleData.reduce((acc, data) => acc + data.price, 0);
+        return total / oracleData.length;
+    }
+
+    // Save funding event for a contract
+    static async saveFundingEvent(contractId, fundingRate, blockHeight) {
+        const dbInstance = require('./db.js');
+        const fundingEvent = { contractId, fundingRate, blockHeight };
+        await dbInstance.getDatabase('fundingEvents').insertAsync(fundingEvent);
+    }
+
+    // Load funding events for a contract
+    static async loadFundingEvents(contractId) {
+        const dbInstance = require('./db.js');
+        const fundingEvents = await dbInstance.getDatabase('fundingEvents').findAsync({ contractId: contractId });
+        return fundingEvents.map(doc => doc);
+    }
 }
 
 // Usage:
@@ -163,4 +339,4 @@ class ContractsRegistry {
 
 const propertyContracts = registry.getContractsByProperties(1, 2);*/
 
-module.exports = new ContractsRegistry();
+module.exports = new ContractRegistry();

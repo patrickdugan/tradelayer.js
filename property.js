@@ -127,8 +127,8 @@ class PropertyManager {
         });
     }
 
-    getPropertyData(propertyId) {
-        return this.propertyIndex.get(propertyId) || null;
+    static async getPropertyData(propertyId) {
+        return await this.propertyIndex.get(propertyId) || null;
     }
 
     static async getPropertyIndex() {
@@ -141,6 +141,19 @@ class PropertyManager {
             type: property.type
         }));
     }
+
+     /**
+     * Checks if the given propertyId is a synthetic token.
+     * @param {number} propertyId - The ID of the property to check.
+     * @returns {boolean} - True if the property is a synthetic token, false otherwise.
+     */
+    static async isSyntheticToken(propertyId) {
+        if(!this.propertyIndex){await this.load();}  // Make sure the property list is loaded
+        const propertyInfo = this.propertyIndex.get(propertyId);
+        // Check if the propertyInfo is valid and the type is 5 (synthetic)
+        return propertyInfo && propertyInfo.type === 5;
+    }
+
     // ... other methods like verifyIfManaged, updateAdmin ...
 }
 

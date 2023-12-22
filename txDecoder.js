@@ -198,10 +198,11 @@ const Decode = {
             notionalPropertyId: parseInt(parts[3], 36),
             notionalValue: parseInt(parts[4], 36),
             collateralPropertyId: parseInt(parts[5], 36),
-            expiryPeriod: parts[6] ? parseInt(parts[6], 36) : null,
-            series: parts[7] ? parseInt(parts[7], 36) : null,
-            inverse: parts[8] === '1',
-            fee: parts[9] === '1'
+            leverage: parts[6],
+            expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
+            series: parts[8] ? parseInt(parts[8], 36) : null,
+            inverse: parts[9] === '1',
+            fee: parts[10] === '1'
         };
     },
 

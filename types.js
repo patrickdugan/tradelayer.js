@@ -125,7 +125,7 @@ const Types = {
   },
 
   // Function to decode a payload based on the transaction ID and encoded payload
-   decodePayload: async (txId, type, marker, encodedPayload,sender,reference, senderAmount,referenceAmount) => {
+   decodePayload: async (txId, type, marker, encodedPayload,sender,reference, senderAmount,referenceAmount, block) => {
     let index = 0;
     let params = {};
 
@@ -204,48 +204,59 @@ const Types = {
                 break;
             case 16:
                 params = Decode.decodeCreateFutureContractSeries(encodedPayload.substr(index));
+                console.log('validating contract creaiton '+JSON.stringify(params))
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateCreateContractSeries(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 17:
-                params = Decode.decodeUpdateOracleAdmin(encodedPayload.substr(index));
-                break;
-            case 18:
-                params = Decode.decodeCloseOracle(encodedPayload.substr(index));
-                break;
-            case 19:
-                params = Decode.decodeCreateOracleFutureContract(encodedPayload.substr(index));
-                break;
-            case 20:
                 params = Decode.decodeExerciseDerivative(encodedPayload.substr(index));
                 break;
-            case 21:
-                params = Decode.decodeNativeContractWithOnChainData(encodedPayload.substr(index));
-                break;
-            case 22:
+            case 18:
                 params = Decode.decodeTradeContractOnchain(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateTradeContractOnchain(params, sender, block)
                 break;
-            case 23:
+            case 19:
                 params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
                 break;
-            case 24:
+            case 20:
                 params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
                 break;
-            case 25:
+            case 21:
                 params = Decode.decodeWithdrawal(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateWithdrawal(params, sender, block)
                 break;
-            case 26:
+            case 22:
                 params = Decode.decodeTransfer(encodedPayload.substr(index));
                 break;
-            case 27:
+            case 23:
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
                 break;
-            case 28:
+            case 24:
                 params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
                 break;
-            case 29:
+            case 25:
                 params = Decode.decodeRedeemSynthetic(encodedPayload.substr(index));
                 break;
-            case 30:
+            case 26:
                 params = Decode.decodePayToTokens(encodedPayload.substr(index));
+                break;
+            case 27:
+                params = Decode.decodeCreateOptionChain(encodedPayload.substr(index));
+                break;
+            case 28:
+                params = Decode.decodeTradeBaiUrbun(encodedPayload.substr(index));
+                break;
+            case 29:
+                params = Decode.decodeTradeMurabaha(encodedPayload.substr(index));
+                break;
+            case 30:
+                params = Decode.decodeIssueInvoice(encodedPayload.substr(index));
                 break;    
             case 31:
                 params = Decode.decodeBatchMoveZkRollup(encodedPayload.substr(index));

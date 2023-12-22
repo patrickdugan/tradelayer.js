@@ -10,6 +10,26 @@ const client = new Litecoin(config)
  
 class WalletUtils {
 
+
+    /**
+     * Creates a new TradeLayer address and labels it 'TL'.
+     */
+    static async createTLAddress(wallet) {
+        try {
+            // Create a new address
+            const newAddress = await client.getNewAddress();
+            
+            // Label the new address as 'TL'
+            await client.setLabel(newAddress, "TL");
+            
+            console.log(`New TradeLayer address created and labeled: ${newAddress}`);
+            return newAddress;
+        } catch (error) {
+            console.error('Error creating TradeLayer address:', error);
+            return null;
+        }
+    }
+
     /**
      * Retrieves a public key from the wallet, or converts a hex-string to a public key.
      */
