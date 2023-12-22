@@ -103,7 +103,7 @@ app.post('/getOrderBook', async (req, res) => {
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = new ContractsRegistry(); // Ensure ContractsRegistry is instantiated
+        const contractsRegistry = new ContractRegistry(); // Ensure ContractsRegistry is instantiated
         const contractSeriesArray = contractsRegistry.getAllContracts();
         res.json(contractSeriesArray);
     } catch (error) {
@@ -138,7 +138,7 @@ app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
 
 app.get('/fundingHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
-    const fundingHistory = await ContractsRegistry.loadFundingEvents(contractId);
+    const fundingHistory = await ContractRegistry.loadFundingEvents(contractId);
     res.json(fundingHistory);
 });
 
