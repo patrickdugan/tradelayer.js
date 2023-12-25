@@ -186,25 +186,34 @@ const Decode = {
   decodeCloseOracle() {
     return {}; // No parameters
   },
-  // Decode Create Future Contract Series Transaction
+
   decodeCreateFutureContractSeries: (payload) => {
-        const parts = payload.split(',');
-        const onChainDataParts = parts[2].split(';').map(data => data.split(':').map(val => parseInt(val, 36)));
-        return {
-            native: parts[0] === '1',
-            underlyingOracleId: parseInt(parts[1], 36),
-            dataIndex: parseInt(parts[1], 36), // Assuming the same part is used for either oracle ID or data index
-            onChainData: onChainDataParts,
-            notionalPropertyId: parseInt(parts[3], 36),
-            notionalValue: parseInt(parts[4], 36),
-            collateralPropertyId: parseInt(parts[5], 36),
-            leverage: parts[6],
-            expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
-            series: parts[8] ? parseInt(parts[8], 36) : null,
-            inverse: parts[9] === '1',
-            fee: parts[10] === '1'
-        };
-    },
+      const parts = payload.split(',');
+      let onChainDataParts = [];
+
+      // Check if the contract is native or not
+      const isNative = parts[0] === '1';
+
+      // Parse onChainData only if the contract is not native
+      if (!isNative) {
+          onChainDataParts = parts[2].split(':').map(val => val ? parseInt(val, 36) : null);
+      }
+
+      return {
+          native: isNative,
+          underlyingOracleId: parseInt(parts[1], 36),
+          dataIndex: parseInt(parts[1], 36), // Assuming the same part is used for either oracle ID or data index
+          onChainData: onChainDataParts,
+          notionalPropertyId: parseInt(parts[3], 36),
+          notionalValue: parseInt(parts[4], 36),
+          collateralPropertyId: parseInt(parts[5], 36),
+          leverage: parts[6],
+          expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
+          series: parts[8] ? parseInt(parts[8], 36) : null,
+          inverse: parts[9] === '1',
+          fee: parts[10] === '1'
+      };
+  },
 
   // Decode Exercise Derivative Transaction
   decodeExerciseDerivative(payload) {

@@ -1,8 +1,42 @@
 var db = require('./db')
 
 class OracleList {
+    static instance = null;
+
     constructor() {
-        this.oracles = new Map(); // Stores all oracles
+        if (!OracleList.instance) {
+            this.oracles = new Map(); // Initialize the oracles map only once
+            OracleList.instance = this;
+        }
+
+        return OracleList.instance;
+    }
+
+    // Method to add an oracle to the list
+    addOracle(oracleId, oracleData) {
+        this.oracles.set(oracleId, oracleData);
+    }
+
+    // Static method to get oracle data
+    static async getOracleData(oracleId) {
+        const instance = OracleList.getInstance();
+
+        for (const oracle of instance.oracles.values()) {
+            if (oracle[oracleId]) {
+                return oracle[oracleId];
+            }
+        }
+
+        console.log(`Oracle data not found for oracle ID: ${oracleId}`);
+        return null;
+    }
+
+    // Static method to get the singleton instance
+    static getInstance() {
+        if (!OracleList.instance) {
+            OracleList.instance = new OracleList();
+        }
+        return OracleList.instance;
     }
 
     async load() {
@@ -57,18 +91,6 @@ class OracleList {
 
         console.log(`New oracle created: ID ${oracleId}, Name: ${name}`);
         return oracleId; // Return the new oracle ID
-    }
-
-     static async getOracleData(propertyId) {
-        // Assuming each oracle contains data for various properties
-        // and that data is stored in a format like: oracle[propertyId]
-        for (const oracle of this.oracles.values()) {
-            if (oracle[propertyId]) {
-                return oracle[propertyId]; // Return the data for the specified propertyId
-            }
-        }
-        console.log(`Property data not found for property ID: ${propertyId}`);
-        return null; // Return null if the property data is not found
     }
 
     getNextId() {

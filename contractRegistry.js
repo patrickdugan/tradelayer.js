@@ -339,4 +339,4 @@ class ContractRegistry {
 
 const propertyContracts = registry.getContractsByProperties(1, 2);*/
 
-module.exports = new ContractRegistry();
+module.exports = ContractRegistry();
