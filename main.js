@@ -205,7 +205,7 @@ class Main {
                 var payload = txData.value.payload;
                 //console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
-                const type = Number(payload.slice(0,1).toString(36))
+                const type = parseInt(payload.slice(0,1).toString(36),36)
                 payload=payload.slice(1,payload.length).toString(36)
 
                   // Assuming 'sender' and 'reference' are objects with an 'address' property

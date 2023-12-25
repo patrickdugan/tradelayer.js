@@ -7,6 +7,7 @@ const interfaceInstance = new Interface();
 const Main = require('./main.js');
 const Activations = require('./activation.js')
 const Orderbook = require('./orderbook.js')
+const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
 
 let isInitialized = false; // A flag to track the initialization status
@@ -103,7 +104,8 @@ app.post('/getOrderBook', async (req, res) => {
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = new ContractsRegistry(); // Ensure ContractsRegistry is instantiated
+        const contractsRegistry = new ContractRegistry(); // Ensure ContractsRegistry is instantiated
+        await contractsRegistry.loadContractsFromDB()
         const contractSeriesArray = contractsRegistry.getAllContracts();
         res.json(contractSeriesArray);
     } catch (error) {

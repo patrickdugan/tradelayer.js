@@ -67,7 +67,7 @@ class ContractRegistry {
         return contracts;
     }
 
-    loadContractsFromDb() {
+    loadContractsFromDB() {
         return new Promise((resolve, reject) => {
           db.getDatabase('contractList').findAsync()
             .on('data', ({ key, value }) => {
