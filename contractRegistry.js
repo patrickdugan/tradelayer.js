@@ -68,21 +68,23 @@ class ContractRegistry {
     }
 
     loadContractsFromDB() {
-        return new Promise((resolve, reject) => {
-          db.getDatabase('contractList').findAsync()
-            .on('data', ({ key, value }) => {
-               const { type, seriesId } = JSON.parse(key);
-
-               if (type === 'oracle') {
-                 this.oracleSeriesIndex[seriesId] = JSON.parse(value);
-               } else {
-                 this.nativeSeriesIndex[seriesId] = JSON.parse(value);
-               }
+        return db.getDatabase('contractList').findAsync()
+            .then(docs => {
+                docs.forEach(doc => {
+                    const { type, seriesId } = doc;
+                    if (type === 'oracle') {
+                        this.oracleSeriesIndex.set(seriesId, doc.data);
+                    } else {
+                        this.nativeSeriesIndex.set(seriesId, doc.data);
+                    }
+                });
             })
-            .on('error', reject)
-            .on('end', resolve);
-      });
+            .catch(error => {
+                console.error('Error loading contracts from DB:', error);
+                throw error;
+            });
     }
+
 
     async saveContractSeries() {
         // Convert Map to array of objects for storage
@@ -339,4 +341,4 @@ class ContractRegistry {
 
 const propertyContracts = registry.getContractsByProperties(1, 2);*/
 
-module.exports = ContractRegistry();
+module.exports = ContractRegistry;

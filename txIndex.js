@@ -149,7 +149,7 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                //console.log('payload '+payload)
+                console.log('payload '+payload)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
@@ -172,7 +172,9 @@ class TxIndex {
     static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await decoderawtransactionAsync(rawTx);
-            //console.log(decodedTx)
+            if(decodedTx.txid == 'ee3197682cf64ba8a1c6ce1dbe6545746eaa294979b77b860417ee4aafd9ed5f'){
+                console.log(decodedTx)
+            }
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
             if (opReturnOutput) {
                 const opReturnData = opReturnOutput.scriptPubKey.hex;

@@ -197,6 +197,7 @@ const Types = {
                 params = Decode.decodeCreateOracle(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
+                console.log('validating create Oracle '+params)
                 params = await Validity.validateCreateOracle(sender, params, txId)
                 break;
             case 14:
