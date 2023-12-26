@@ -238,7 +238,7 @@ const Validity = {
         },
 
         // 6: Cancel Order
-        validateCancelOrder: async (params, orderBook) => {
+        validateCancelOrder: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -269,7 +269,7 @@ const Validity = {
         },
 
         // 7: Create Whitelist
-        validateCreateWhitelist: async (params) => {
+        validateCreateWhitelist: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -292,7 +292,7 @@ const Validity = {
         },
 
         // 8: Update Admin
-        validateUpdateAdmin: async (params, registry) => {
+        validateUpdateAdmin: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -313,7 +313,7 @@ const Validity = {
         },
 
         // 9: Issue Attestation
-        validateIssueAttestation: async (params, whitelistRegistry) => {
+        validateIssueAttestation: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -334,7 +334,7 @@ const Validity = {
         },
 
         // 10: Revoke Attestation
-        validateRevokeAttestation: async (params) => {
+        validateRevokeAttestation: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -353,7 +353,7 @@ const Validity = {
         },
 
         // 11: Grant Managed Token
-        validateGrantManagedToken: async (params, propertyRegistry, tallyMap) => {
+        validateGrantManagedToken: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -385,7 +385,7 @@ const Validity = {
         },
 
         // 12: Redeem Managed Token
-        validateRedeemManagedToken: async (params, propertyRegistry, tallyMap) => {
+        validateRedeemManagedToken: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -417,8 +417,9 @@ const Validity = {
         },
 
         // 13: Create Oracle
-        validateCreateOracle: async (params) => {
+        validateCreateOracle: async (sender, params, txid) => {
             params.reason = '';
+            params.valid = true
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(13);
             if(isAlreadyActivated==false){

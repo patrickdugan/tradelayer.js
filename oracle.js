@@ -12,9 +12,21 @@ class OracleList {
         return OracleList.instance;
     }
 
-    // Method to add an oracle to the list
-    addOracle(oracleId, oracleData) {
-        this.oracles.set(oracleId, oracleData);
+    async addOracle(oracleId, oracleData) {
+        try {
+            // Add to in-memory map
+            this.oracles.set(oracleId, oracleData);
+
+            // Add to NeDB database (if applicable)
+            const oracleDB = db.getDatabase('oracleList');
+            await oracleDB.insertAsync({ _id: oracleId, ...oracleData });
+
+            console.log(`Oracle added: ID ${oracleId}`);
+            return true; // Indicate success
+        } catch (error) {
+            console.error(`Error adding oracle: ID ${oracleId}`, error);
+            throw error; // Re-throw the error for the caller to handle
+        }
     }
 
     // Static method to get oracle data
@@ -39,63 +51,103 @@ class OracleList {
         return OracleList.instance;
     }
 
-    async load() {
+    static async load() {
         try {
-            for await (const [key, value] of this.db.iterator({ gt: 'oracle-', lt: 'oracle-\xFF' })) {
-                this.oracles.set(key, JSON.parse(value));
+            const oracleDB = db.getDatabase('oracleList');
+            const oracles = await oracleDB.findAsync({});
+
+            const instance = OracleList.getInstance();
+            for (const oracle of oracles) {
+                instance.oracles.set(oracle._id, oracle);
             }
+
+            console.log('Oracles loaded from the database');
         } catch (error) {
             console.error('Error loading oracles from the database:', error);
         }
     }
 
-    async close() {
-        await this.db.close()
-    }
 
-    verifyAdmin(oracleId, adminAddress) {
+
+    static async verifyAdmin(oracleId, adminAddress) {
         const oracleKey = `oracle-${oracleId}`;
-        const oracle = this.oracles.get(oracleKey);
+
+        // Check in-memory map first
+        const instance = OracleList.getInstance();
+        let oracle = instance.oracles.get(oracleKey);
+
+        // If not found in-memory, check the database
+        if (!oracle) {
+            const oracleDB = db.getDatabase('oracleList');
+            oracle = await oracleDB.findOneAsync({ _id: oracleKey });
+        }
+
+        // Verify admin address
         return oracle && oracle.adminAddress === adminAddress;
     }
 
-    async updateAdmin(oracleId, newAdminAddress) {
+
+    static async updateAdmin(oracleId, newAdminAddress) {
         const oracleKey = `oracle-${oracleId}`;
-        const oracle = this.oracles.get(oracleKey);
+        const instance = OracleList.getInstance();
+            
+        // Get the NeDB datastore for oracles
+        const oracleDB = db.getDatabase('oracleList');
+
+        // Fetch the current oracle data
+        const oracle = await oracleDB.findOneAsync({ _id: oracleKey });
 
         if (!oracle) {
             throw new Error('Oracle not found');
         }
 
+        // Update the admin address
         oracle.adminAddress = newAdminAddress;
-        await this.db.put(oracleKey, JSON.stringify(oracle));
+
+        // Update the oracle in the database
+        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});
+
+        // Optionally, update the in-memory map if you are maintaining one
         this.oracles.set(oracleKey, oracle);
 
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`);
     }
 
-    async createOracle(name, adminAddress) {
-        const oracleId = this.getNextId();
+    static async createOracle(name, adminAddress) {
+        const instance = OracleList.getInstance(); // Get the singleton instance
+        const oracleId = OracleList.getNextId();
         const oracleKey = `oracle-${oracleId}`;
 
         const newOracle = {
+            _id: oracleKey, // NeDB uses _id as the primary key
             id: oracleId,
             name: name,
             adminAddress: adminAddress,
             data: {} // Initial data, can be empty or preset values
         };
 
-        // Save the new oracle to the in-memory map and the database
-        this.oracles.set(oracleKey, newOracle);
-        await this.db.put(oracleKey, JSON.stringify(newOracle));
+        // Get the NeDB datastore for oracles
+        const oracleDB = db.getDatabase('oracleList');
 
-        console.log(`New oracle created: ID ${oracleId}, Name: ${name}`);
-        return oracleId; // Return the new oracle ID
+        try {
+            // Save the new oracle to the database
+            await oracleDB.insertAsync(newOracle);
+
+            // Also save the new oracle to the in-memory map
+            instance.oracles.set(oracleKey, newOracle);
+
+            console.log(`New oracle created: ID ${oracleId}, Name: ${name}`);
+            return oracleId; // Return the new oracle ID
+        } catch (error) {
+            console.error('Error creating new oracle:', error);
+            throw error; // Re-throw the error for the caller to handle
+        }
     }
 
-    getNextId() {
+    static getNextId() {
+        const instance = OracleList.getInstance(); // Get the singleton instance
         let maxId = 0;
-        for (const key of this.oracles.keys()) {
+        for (const key of instance.oracles.keys()) {
             const currentId = parseInt(key.split('-')[1]);
             if (currentId > maxId) {
                 maxId = currentId;
@@ -105,7 +157,7 @@ class OracleList {
     }
 
     async saveOracleData(oracleId, data, blockHeight) {
-        const oracleDataDB = dbInstance.getDatabase('oracleData');
+        const oracleDataDB = db.getDatabase('oracleData');
         const recordKey = `oracle-${oracleId}-${blockHeight}`;
 
         const oracleDataRecord = {
@@ -129,7 +181,7 @@ class OracleList {
     }
 
     async loadOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const oracleDataDB = dbInstance.getDatabase('oracleData');
+        const oracleDataDB = db.getDatabase('oracleData');
         try {
             const query = {
                 oracleId: oracleId,
