@@ -149,7 +149,7 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                console.log('payload '+payload)
+                //console.log('payload '+payload)
                 await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
             }
         }
@@ -169,24 +169,66 @@ class TxIndex {
         });
     }
 
+    /*static async DecodeRawTransaction(rawTx) {
+        try {
+            const decodedTx = await decoderawtransactionAsync(rawTx);
+            const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
+
+            if (opReturnOutput) {
+                const opReturnData = opReturnOutput.scriptPubKey.hex;
+                // Decode the entire hex string
+                const decodedData = Buffer.from(opReturnData, 'hex').toString();
+
+                // Search for "tl" in the decoded string
+                const markerIndex = decodedData.indexOf('tl');
+                if (markerIndex !== -1) {
+                console.log('decoded total payload '+decodedData)
+                    // Extract everything after "tl" as the payload
+                    const payload = decodedData.substring(markerIndex + 2);
+                    console.log('Decoded Payload:', payload);
+                    return { marker: 'tl', payload, decodedTx };
+                } else {
+                    //console.error('No "tl" marker found.');
+                    return null;
+                }
+            } else {
+                //console.error('No OP_RETURN output found.');
+                return null;
+            }
+        } catch (error) {
+            console.error('Error decoding raw transaction:', error);
+        }
+    }*/
+
     static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await decoderawtransactionAsync(rawTx);
-            if(decodedTx.txid == 'ee3197682cf64ba8a1c6ce1dbe6545746eaa294979b77b860417ee4aafd9ed5f'){
-                console.log(decodedTx)
-            }
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
             if (opReturnOutput) {
                 const opReturnData = opReturnOutput.scriptPubKey.hex;
                 //console.log('OP_RETURN Data:', opReturnData);
                 // Extract and log the "tl" marker
-                const markerHex = opReturnData.substring(4, 8); // '746c' for 'tl'
-                const marker = Buffer.from(markerHex, 'hex').toString();
-                //if(marker=='tl'){console.log('Marker:', marker);}
+                let markerHex = opReturnData.substring(4, 8); // '746c' for 'tl'
+                let marker = Buffer.from(markerHex, 'hex').toString();
+                let payloadStart= 8
+        
+                if (marker == ']t') {
+                    console.log('Entering weird OP_Return pacing block');
+                    console.log('Current marker:', marker);
+                    try {
+                        console.log('weird OP_Return pacing', opReturnData.substring(6, 10));
+                        markerHex = opReturnData.substring(6, 10);
+                        marker = Buffer.from(markerHex, 'hex').toString();
+                        payloadStart = 10;
+                        console.log('fixed?', marker);
+                    } catch (error) {
+                        console.error('Error in processing:', error);
+                    }
+                }
                 // Extract and log the actual payload
-                const payloadHex = opReturnData.substring(8);
+                const payloadHex = opReturnData.substring(payloadStart);
                 const payload = Buffer.from(payloadHex, 'hex').toString();
-                if(marker=='tl'){console.log('Decoded Payload:', payload)};
+                if(marker=='tl'){console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload+ ' decoding the whole thing '+Buffer.from(opReturnData, 'hex').toString())};
                 return { marker, payload , decodedTx};
             } else {
                 //console.log('No OP_RETURN output found.');
