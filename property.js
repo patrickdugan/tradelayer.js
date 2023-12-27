@@ -128,8 +128,17 @@ class PropertyManager {
     }
 
     static async getPropertyData(propertyId) {
-        return await this.propertyIndex.get(propertyId) || null;
+        const instance = PropertyManager.getInstance();
+
+        // If the propertyIndex is empty, load it first
+        if (instance.propertyIndex.size === 0) {
+            await instance.loadPropertyIndex();
+        }
+
+        // Try to get the property data again after loading
+        return instance.propertyIndex.get(propertyId) || null;
     }
+
 
     static async getPropertyIndex() {
         await this.load(); // Ensure the property list is loaded

@@ -113,6 +113,20 @@ class Clearing {
         }
     }
 
+    static async fetchLiquidationVolume(contractId, blockHeight) {
+        // Assuming you have a database method to fetch liquidation data
+        try {
+            const liquidationData = await db.getDatabase('clearing').findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` });
+            return liquidationData ? liquidationData.volume : null; // Assuming 'volume' is the field you're interested in
+        } catch (error) {
+            if (error.name === 'NotFoundError') {
+                console.log(`No liquidation data found for contract ID ${contractId} at block ${blockHeight}`);
+                return null; // Handle case where data is not found
+            }
+            throw error; // Rethrow other types of errors
+        }
+    }
+
 
 
     async createChannelsForNewTrades(blockHeight) {

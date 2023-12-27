@@ -181,48 +181,51 @@ const Decode = {
         return data;
     },
 
+    // Decode Close Oracle Transaction
+    decodeCloseOracle() {
+      return {}; // No parameters
+    },
 
-  // Decode Close Oracle Transaction
-  decodeCloseOracle() {
-    return {}; // No parameters
-  },
+    decodeCreateFutureContractSeries: (payload) => {
+        const parts = payload.split(',');
 
-  decodeCreateFutureContractSeries: (payload) => {
-      const parts = payload.split(',');
-      let onChainDataParts = [];
+        // Check if the contract is native or not
+        const isNative = parts[0] === '1';
 
-      // Check if the contract is native or not
-      const isNative = parts[0] === '1';
+        // Initialize onChainDataParts
+        let onChainDataParts = [];
 
-      // Parse onChainData only if the contract is not native
-      if (!isNative) {
-          onChainDataParts = parts[2].split(':').map(val => val ? parseInt(val, 36) : null);
-      }
+        // Parse onChainData only if the contract is not native
+        if (!isNative) {
+            onChainDataParts = parts[2].split(';').map(pair => 
+                pair.split(':').map(val => val ? parseInt(val, 36) : null)
+            );
+        }
 
+        return {
+            native: isNative,
+            underlyingOracleId: parseInt(parts[1], 36),
+            onChainData: onChainDataParts,
+            notionalPropertyId: parseInt(parts[3], 36),
+            notionalValue: parseFloat(parts[4]), // Assuming notionalValue should be a float
+            collateralPropertyId: parseInt(parts[5], 36),
+            leverage: parseFloat(parts[6]), // Assuming leverage should be a float
+            expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
+            series: parts[8] ? parseInt(parts[8], 36) : null,
+            inverse: parts[9] === '1',
+            fee: parts[10] === '1'
+        };
+    },
+
+
+    // Decode Exercise Derivative Transaction
+    decodeExerciseDerivative(payload) {
+      const [derivativeContractId, amount] = payload.split(',');
       return {
-          native: isNative,
-          underlyingOracleId: parseInt(parts[1], 36),
-          dataIndex: parseInt(parts[1], 36), // Assuming the same part is used for either oracle ID or data index
-          onChainData: onChainDataParts,
-          notionalPropertyId: parseInt(parts[3], 36),
-          notionalValue: parseInt(parts[4], 36),
-          collateralPropertyId: parseInt(parts[5], 36),
-          leverage: parts[6],
-          expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
-          series: parts[8] ? parseInt(parts[8], 36) : null,
-          inverse: parts[9] === '1',
-          fee: parts[10] === '1'
+        derivativeContractId: parseInt(derivativeContractId, 36),
+        amount: parseInt(amount, 36),
       };
-  },
-
-  // Decode Exercise Derivative Transaction
-  decodeExerciseDerivative(payload) {
-    const [derivativeContractId, amount] = payload.split(',');
-    return {
-      derivativeContractId: parseInt(derivativeContractId, 36),
-      amount: parseInt(amount, 36),
-    };
-  },
+    },
 
    // Decode Trade Contract On-chain Transaction
   decodeTradeContractOnchain: (payload) => {

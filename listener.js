@@ -100,13 +100,16 @@ app.post('/getOrderBook', async (req, res) => {
     }
 });
 
-// Endpoint to list all contract series
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = new ContractRegistry(); // Ensure ContractsRegistry is instantiated
-        await contractsRegistry.loadContractsFromDB()
-        const contractSeriesArray = contractsRegistry.getAllContracts();
+        const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
+
+        // Assuming loadContractsFromDB is a static method
+        await ContractRegistry.loadContractsFromDB(); // Load contracts from the database
+
+        // Assuming getAllContracts is a static method
+        const contractSeriesArray = ContractRegistry.getAllContracts(); // Get all contract series
         res.json(contractSeriesArray);
     } catch (error) {
         console.error('Error fetching contract series:', error);

@@ -29,19 +29,34 @@ class OracleList {
         }
     }
 
-    // Static method to get oracle data
-    static async getOracleData(oracleId) {
+       static async getOracleData(oracleId) {
         const instance = OracleList.getInstance();
 
-        for (const oracle of instance.oracles.values()) {
-            if (oracle[oracleId]) {
-                return oracle[oracleId];
-            }
+        // Check if in-memory map is empty and load if necessary
+        if (instance.oracles.size === 0) {
+            await OracleList.load();
+        }
+
+        // Oracle key to search for
+        const oracleKey = `oracle-${oracleId}`;
+
+        // Check in the in-memory map
+        const oracle = instance.oracles.get(oracleKey);
+        if (oracle) {
+            return oracle;
+        }
+
+        // If not found in-memory, optionally check the database
+        const oracleDB = dbInstance.getDatabase('oracleList');
+        const dbOracle = await oracleDB.findOneAsync({ _id: oracleKey });
+        if (dbOracle) {
+            return dbOracle;
         }
 
         console.log(`Oracle data not found for oracle ID: ${oracleId}`);
         return null;
     }
+
 
     // Static method to get the singleton instance
     static getInstance() {

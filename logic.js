@@ -18,9 +18,9 @@ const Validity = require('./validity.js'); // Module for checking transaction va
 const TxUtils = require('./txUtils.js'); // Utility functions for transactions
 const TxIndex = require('./txIndex.js') // Indexes TradeLayer transactions
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
-//const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
+const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
-//const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
+const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -609,7 +609,7 @@ const Logic = {
 
     async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await ContractsRegistry.createContractSeries({
+	    const futureContractSeriesId = await ContractRegistry.createContractSeries({
 	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);

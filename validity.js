@@ -506,8 +506,15 @@ const Validity = {
                     params.reason += "Invalid on-chain data format or property IDs. ";
                 }
             }
+
+            const isVEST= (parseInt(params.collateralPropertyId)==2&&parseInt(params.notionalPropertyId)==2)
+            if(isVEST){
+                params.valid =false
+                params.reason += "Vesting tokens cannot be used as collateral or hedged"
+            }
+
             // Check if notionalPropertyId exists or is null (for oracle contracts)
-            if (params.notionalPropertyId !== null) {
+            if (params.notionalPropertyId !== null&&params.native==true) {
                 const validNotionalProperty = await PropertyList.getPropertyData(params.notionalPropertyId) !== null;
                 if (!validNotionalProperty) {
                     params.valid = false;
@@ -667,6 +674,12 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
+            if(isVEST){
+                params.valid =false
+                params.reason += "Vesting tokens cannot be traded"
             }
 
             const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);

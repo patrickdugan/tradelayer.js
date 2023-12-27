@@ -1,28 +1,42 @@
 const db = require('./db')
 const path = require('path');
 const util = require('util');
+//const TxUtils = require('./txUtils.js')
+const TxIndex = require('./txIndex.js')
 
 class ContractRegistry {
     constructor() {
         // ... Other initializations ...
-        this.contractsList = new Map()
-
-        this.loadContractSeries();
+        this.contractList = new Map()
+        this.oracleSeriesIndex = new Map(); // Initialize if needed
+        this.nativeSeriesIndex = new Map(); // Initialize if needed
+   
     }
 
-    async loadContractSeries() {
+    static async loadContractSeries() {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
         try {
             const docs = await db.getDatabase('contractList').findAsync({ type: 'contractSeries' });
-            this.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
+            instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
         } catch (error) {
             console.error('Error loading contract series data:', error);
         }
     }
 
-    
-    async createContractSeries(params) {
+     // Singleton instance getter
+    static getInstance() {
+        console.log('contract List instance? '+ Boolean(this.instance)+ ' what is it '+JSON.stringify(this.instance))
+        if (!this.instance) {
+            this.instance = new ContractRegistry();
+        }
+        return this.instance;
+    }
+
+      static async createContractSeries(params) {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
+
         // Generate a unique ID for the new contract series
-        const seriesId = await this.getNextId();
+        const seriesId = await ContractRegistry.getNextId();
 
         // Create the contract series object
         const contractSeries = {
@@ -37,22 +51,23 @@ class ContractRegistry {
             fee: params.fee,
             contracts: {
                 expired: [],
-                unexpired: this.generateContracts(params, seriesId)
+                unexpired: ContractRegistry.generateContracts(params, seriesId)
             }
         };
 
         // Save the new contract series to the in-memory map and the database
-        this.contractSeries.set(seriesId, contractSeries);
-        await this.saveContractSeries();
+        instance.contractList.set(seriesId, contractSeries); // Use instance to access contractList
+        await ContractRegistry.saveContractSeries(); // Assuming saveContractSeries is also static
 
         console.log(`New contract series created: ID ${seriesId}`);
         return seriesId; // Return the new series ID
     }
 
+
     // Generate contracts within the series
-    generateContracts(params, seriesId) {
+    static generateContracts(params, seriesId) {
         let contracts = [];
-        const currentBlockHeight = this.getCurrentBlockHeight(); // Implement this method to get the current block height
+        const currentBlockHeight = TxIndex.fetchChainTip(); // Implement this method to get the current block height
         let expirationBlock = currentBlockHeight + params.expiryPeriod;
 
         for (let i = 0; i < params.series; i++) {
@@ -67,7 +82,7 @@ class ContractRegistry {
         return contracts;
     }
 
-    loadContractsFromDB() {
+    static loadContractsFromDB() {
         return db.getDatabase('contractList').findAsync()
             .then(docs => {
                 docs.forEach(doc => {
@@ -85,16 +100,16 @@ class ContractRegistry {
             });
     }
 
-
-    async saveContractSeries() {
+    static async saveContractSeries() {
+        const instance = ContractRegistry.getInstance();
         // Convert Map to array of objects for storage
-        const seriesArray = [...this.contractSeries].map(([id, data]) => ({ id, data, type: 'contractSeries' }));
+        const seriesArray = [...instance.contractList].map(([id, data]) => ({ id, data, type: 'contractSeries' }));
         await Promise.all(seriesArray.map(series => db.getDatabase('contractList').updateAsync({ id: series.id }, series, { upsert: true })));
     }
 
     // ... Other methods ...
 
-    async saveIndexesToDb() {
+    static async saveIndexesToDb() {
         // Convert indexes to a storable format
         const oracleIndex = Object.entries(this.oracleSeriesIndex).map(([id, data]) => ({ id, data, type: 'oracleContracts' }));
         const nativeIndex = Object.entries(this.nativeSeriesIndex).map(([id, data]) => ({ id, data, type: 'nativeContracts' }));
@@ -103,37 +118,41 @@ class ContractRegistry {
     }
 
 
-    async getNextId() {
-      let maxId = 0;
-      for (const [key, value] of this.registry) {
-          const currentId = parseInt(key);
-          if (currentId > maxId) {
-              maxId = currentId;
-          }
-      }
-      return maxId + 1;
+     static async getNextId() {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
+        let maxId = 0;
+        for (const [key] of instance.contractList.entries()) {
+            const currentId = parseInt(key);
+            if (currentId > maxId) {
+                maxId = currentId;
+            }
+        }
+        return maxId + 1;
     }
 
-    isValidSeriesId(seriesId) {
+    static isValidSeriesId(seriesId) {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
         // Check if the seriesId exists in the contract series registry
         // The registry could be a database, a map, or any other data structure
         // that stores information about the contract series in your system
-        if (this.contractSeriesRegistry.has(seriesId)) {
+        if (instance.contractList.has(seriesId)) {
             return true; // The seriesId is valid
         } else {
             return false; // The seriesId is not valid
         }
     }
 
-    getAllContracts() {
+    static getAllContracts() {
+
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
         let allContracts = [];
         // Add all oracle contracts
-        for (const seriesId in this.oracleSeriesIndex) {
-            allContracts.push(...this.oracleSeriesIndex[seriesId]);
+        for (const seriesId in instance.oracleSeriesIndex) {
+            allContracts.push(...instance.oracleSeriesIndex[seriesId]);
         }
         // Add all native contracts
-        for (const seriesId in this.nativeSeriesIndex) {
-            allContracts.push(...this.nativeSeriesIndex[seriesId]);
+        for (const seriesId in instance.nativeSeriesIndex) {
+            allContracts.push(...instance.nativeSeriesIndex[seriesId]);
         }
         return allContracts;
     }
@@ -156,51 +175,42 @@ class ContractRegistry {
     }
 
     static async getContractType(contractId) {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
         // Logic to determine the contract type
         // This could involve checking your database or in-memory data structure
         // Example:
-        if (this.oracleSeriesIndex[contractId]) {
+        if (instance.oracleSeriesIndex[contractId]) {
             return 'oracle';
-        } else if (this.nativeSeriesIndex[contractId]) {
+        } else if (instance.nativeSeriesIndex[contractId]) {
             return 'native';
         } else {
             throw new Error("Contract type not found for contract ID: " + contractId);
         }
     }
 
-    static async fetchLiquidationVolume(contractId, blockHeight) {
-        // Assuming you have a database method to fetch liquidation data
-        try {
-            const liquidationData = await db.get(`liquidation-${contractId}-${blockHeight}`);
-            return JSON.parse(liquidationData);
-        } catch (error) {
-            if (error.type === 'NotFoundError') {
-                console.log(`No liquidation data found for contract ID ${contractId} at block ${blockHeight}`);
-                return null; // Handle case where data is not found
-            }
-            throw error; // Rethrow other types of errors
-        }
-    }
-
     static isNativeContract(contractId) {
+                const instance = ContractRegistry.getInstance(); // Access singleton instance
+
         // Check if the contractId exists in the nativeSeriesIndex
-        return Boolean(this.nativeSeriesIndex && this.nativeSeriesIndex[contractId]);
+        return Boolean(instance.nativeSeriesIndex && instance.nativeSeriesIndex[contractId]);
     }
 
     static getContractInfo(contractId) {
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
+
         // Fetch contract information from the nativeSeriesIndex or oracleSeriesIndex
-        if (this.isNativeContract(contractId)) {
-            return this.nativeSeriesIndex[contractId];
-        } else if (this.oracleSeriesIndex && this.oracleSeriesIndex[contractId]) {
-            return this.oracleSeriesIndex[contractId];
+        if (instance.isNativeContract(contractId)) {
+            return instance.nativeSeriesIndex[contractId];
+        } else if (instance.oracleSeriesIndex && instance.oracleSeriesIndex[contractId]) {
+            return instance.oracleSeriesIndex[contractId];
         }
         console.log(`Contract information not found for contract ID: ${contractId}`);
         return null;
     }
 
      // Function to get initial margin requirement for a contract
-    async getInitialMargin(contractId) {
-        const contractInfo = this.getContractInfo(contractId);
+    static async getInitialMargin(contractId) {
+        const contractInfo = ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
@@ -211,13 +221,13 @@ class ContractRegistry {
             return BigNumber(notionalValue).div(leverage);
         } else {
             // For linear contracts, check collateral and calculate based on oracle price or property value
-            const collateralValue = await this.getCollateralValue(contractInfo);
+            const collateralValue = await ContractRegistry.getCollateralValue(contractInfo);
             return BigNumber(collateralValue).div(leverage);
         }
     }
 
     // Helper function to get collateral value for linear contracts
-    async getCollateralValue(contractInfo) {
+    static async getCollateralValue(contractInfo) {
         const PropertyManager = require('./property.js')
         const OracleList = require('./oracle.js')
         const { collateralPropertyId, oracleId } = contractInfo;
@@ -237,25 +247,26 @@ class ContractRegistry {
     async moveCollateralToMargin(senderAddress, contractId, amount, contractsRegistry) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
-        const initialMarginPerContract = await contractsRegistry.getInitialMargin(contractId);
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount);
 
         // Move collateral to margin position
         await TallyMap.updateBalance(senderAddress, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0);
 
         // Update MarginMap for the contract series
-        await MarginMap.updateMargin(contractSeriesId, senderAddress, amount, totalInitialMargin);
+        await MarginMap.updateMargin(contractId, senderAddress, amount, totalInitialMargin);
     }
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        const instance = ContractRegistry.getInstance(); // Access singleton instance
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         return contractInfo && contractInfo.type === 'oracle';
     }
 
     // Calculate the 1-hour funding rate for an oracle contract
     static async calculateFundingRate(contractId) {
-        const isOracle = await this.isOracleContract(contractId);
+        const isOracle = await ContractRegistry.isOracleContract(contractId);
         if (!isOracle) {
             return 0; // Return zero for non-oracle contracts
         }
@@ -263,7 +274,7 @@ class ContractRegistry {
         // Get oracle data for the last 24 blocks
         const Oracles = require('./Oracles');
         const oracleData = await Oracles.getLast24BlocksData(contractId);
-        const avgOraclePrice = this.calculateAveragePrice(oracleData);
+        const avgOraclePrice = ContractRegistry.calculateAveragePrice(oracleData);
 
         // Placeholder for the logic to get the average trade price for the contract
         // const avgTradePrice = ...;
@@ -296,7 +307,7 @@ class ContractRegistry {
         // Apply funding rate to vaulted contracts
         for (const [vaultId, vault] of SynthRegistry.vaults.entries()) {
             if (vault.contractId === contractId) {
-                const fundingAmount = calculateFundingAmount(vault.contractBalance, fundingRate);
+                const fundingAmount = ContractRegistry.calculateFundingAmount(vault.contractBalance, fundingRate);
                 SynthRegistry.applyPerpetualSwapFunding(vaultId, contractId, fundingAmount);
             }
         }
@@ -307,7 +318,7 @@ class ContractRegistry {
         await SynthRegistry.saveVaults();
     }
 
-    calculateFundingAmount(contractSize, fundingRate) {
+    static calculateFundingAmount(contractSize, fundingRate) {
         return contractSize * fundingRate;
     }
 

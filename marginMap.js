@@ -1,5 +1,5 @@
 // Assuming the LevelDB database is stored at './path_to_margin_db'
-const {marginMapDB, contractListDB} = require('./db.js');
+const db = require('./db.js');
 
 class MarginMap {
     constructor(seriesId) {
