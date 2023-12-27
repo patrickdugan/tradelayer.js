@@ -630,7 +630,6 @@ const TxUtils = {
             const privateKey = await dumpprivkeyAsync(fromAddress);
             if(sendAll==null){sendAll=0}
 
-
             // Find a suitable UTXO
             const minAmountSatoshis = STANDARD_FEE;
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
@@ -654,6 +653,8 @@ const TxUtils = {
             // Serialize and send the transaction
             const serializedTx = transaction.serialize();
             const txid = await sendrawtransactionAsync(serializedTx);
+            console.log(txid)
+
             return txid;
         } catch (error) {
             console.error('Error in sendTransaction:', error);
@@ -903,7 +904,7 @@ const TxUtils = {
             // Assuming activation payload format: 'activation:<txTypeToActivate>'
             var txNumber = 18
             var payload = 'tl' + txNumber.toString(36);
-            activationPayload += Encode.encodeTradeContractOnChain(contractParams);
+            payload += Encode.encodeTradeContractOnchain(contractParams);
 
             // Step 2: Create a new transaction
             const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
@@ -919,7 +920,7 @@ const TxUtils = {
             const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
-                .addData(activationPayload)
+                .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
