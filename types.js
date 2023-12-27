@@ -195,16 +195,24 @@ const Types = {
                 break;
             case 13:
                 params = Decode.decodeCreateOracle(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                console.log('validating create Oracle '+JSON.stringify(params))
+                params = await Validity.validateCreateOracle(sender, params, txId)
+                console.log('validated oracle params '+JSON.stringify(params))
                 break;
             case 14:
                 params = Decode.decodePublishOracleData(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validatePublishOracleData(sender, params, txId)
                 break;
             case 15:
                 params = Decode.decodeCloseOracle(encodedPayload.substr(index));
                 break;
             case 16:
                 params = Decode.decodeCreateFutureContractSeries(encodedPayload.substr(index));
-                console.log('validating contract creaiton '+JSON.stringify(params))
+                console.log('validating contract creation '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid=txId
                 params = await Validity.validateCreateContractSeries(sender, params, txId)

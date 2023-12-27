@@ -10,7 +10,7 @@ const Orderbook = require('./orderbook.js'); // Manages the order book
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
 const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
-const Oracles = require('./oracle.js')
+const OracleList = require('./oracle.js')
 // Additional modules
 const fs = require('fs'); // File system module
 
@@ -18,9 +18,9 @@ const Validity = require('./validity.js'); // Module for checking transaction va
 const TxUtils = require('./txUtils.js'); // Utility functions for transactions
 const TxIndex = require('./txIndex.js') // Indexes TradeLayer transactions
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
-//const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
+const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
-//const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
+const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -74,7 +74,7 @@ const Logic = {
                 await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager);
                 break;
             case 13:
-                await Logic.createOracle(params.adminAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
+                await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
                 break;
             case 14:
                 await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
@@ -347,9 +347,6 @@ const Logic = {
 
     // Helper function to process a single send operation
 	async processSend(senderAddress, recipientAddress, propertyId, amount) {
-	    if (!propertyManager.isPropertyIdValid(propertyId)) {
-	        throw new Error('Invalid property ID.');
-	    }
 
 	    const availableBalance = tallyMap.getAvailableBalance(senderAddress, propertyId);
 	    if (availableBalance < amount) {
@@ -521,9 +518,7 @@ const Logic = {
 		},
 
     async updateAdmin(entityType, entityId, newAdminAddress, registries) {
-	    if (!entityType || !entityId || !newAdminAddress || !registries) {
-	        throw new Error('Missing required parameters');
-	    }
+
 
 	    switch (entityType) {
 	        case 'property':
@@ -545,9 +540,7 @@ const Logic = {
 
 
     async issueAttestation(whitelistId, targetAddress, whitelistRegistry) {
-	    if (!whitelistId || !targetAddress || !whitelistRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
+
 
 	    await whitelistRegistry.addAddressToWhitelist(whitelistId, targetAddress);
 	    console.log(`Address ${targetAddress} added to whitelist ${whitelistId}`);
@@ -555,9 +548,7 @@ const Logic = {
 	},
 
     async revokeAttestation(whitelistId, targetAddress, whitelistRegistry) {
-        if (!whitelistId || !targetAddress || !whitelistRegistry) {
-            throw new Error('Missing required parameters');
-        }
+
 
         await whitelistRegistry.removeAddressFromWhitelist(whitelistId, targetAddress);
         console.log(`Address ${targetAddress} removed from whitelist ${whitelistId}`);
@@ -565,9 +556,6 @@ const Logic = {
 	},
 
     async grantManagedToken(propertyId, amount, recipientAddress, propertyManager) {
-	    if (!propertyId || !amount || !recipientAddress || !propertyManager) {
-	        throw new Error('Missing required parameters');
-	    }
 
 	    // Verify if the property is a managed type
 	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
@@ -582,9 +570,6 @@ const Logic = {
 	},
 
 	async redeemManagedToken(propertyId, amount, propertyManager) {
-	    if (!propertyId || !amount || !propertyManager) {
-	        throw new Error('Missing required parameters');
-	    }
 
 	    // Verify if the property is a managed type
 	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
@@ -599,20 +584,14 @@ const Logic = {
 	},
 
     async createOracle(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry) {
-	    if (!adminAddress || !ticker || !url || !oracleRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
 
 	    // Create a new oracle
-	    const oracleId = await oracleRegistry.createOracle({adminAddress, ticker, url, backupAddress, whitelists, lag});
+	    const oracleId = await OracleList.createOracle({adminAddress, ticker, url, backupAddress, whitelists, lag});
 	    console.log(`Oracle created with ID: ${oracleId}`);
 	    return oracleId;
 	},
 
     async publishOracleData(oracleId, price, high, low, close, oracleRegistry) {
-	    if (!oracleId || !price || !oracleRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
 
 	    // Publish data to the oracle
 	    await oracleRegistry.publishData(oracleId, { price, high, low, close });
@@ -621,9 +600,6 @@ const Logic = {
 	},
 
 	async closeOracle(oracleId, oracleRegistry) {
-	    if (!oracleId || !oracleRegistry) {
-	        throw new Error('Missing required parameters');
-	    }
 
 	    // Close the specified oracle
 	    await oracleRegistry.closeOracle(oracleId);
@@ -633,7 +609,7 @@ const Logic = {
 
     async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await ContractsRegistry.createContractSeries({
+	    const futureContractSeriesId = await ContractRegistry.createContractSeries({
 	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);

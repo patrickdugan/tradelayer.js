@@ -7,6 +7,7 @@ const interfaceInstance = new Interface();
 const Main = require('./main.js');
 const Activations = require('./activation.js')
 const Orderbook = require('./orderbook.js')
+const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
 
 let isInitialized = false; // A flag to track the initialization status
@@ -99,12 +100,16 @@ app.post('/getOrderBook', async (req, res) => {
     }
 });
 
-// Endpoint to list all contract series
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = new ContractRegistry(); // Ensure ContractsRegistry is instantiated
-        const contractSeriesArray = contractsRegistry.getAllContracts();
+        const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
+
+        // Assuming loadContractsFromDB is a static method
+        await ContractRegistry.loadContractsFromDB(); // Load contracts from the database
+
+        // Assuming getAllContracts is a static method
+        const contractSeriesArray = ContractRegistry.getAllContracts(); // Get all contract series
         res.json(contractSeriesArray);
     } catch (error) {
         console.error('Error fetching contract series:', error);
@@ -138,7 +143,7 @@ app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
 
 app.get('/fundingHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
-    const fundingHistory = await ContractRegistry.loadFundingEvents(contractId);
+    const fundingHistory = await ContractsRegistry.loadFundingEvents(contractId);
     res.json(fundingHistory);
 });
 

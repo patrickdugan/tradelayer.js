@@ -12,7 +12,6 @@ async function issueContractSeries(adminAddress, underlyingOracleId, collateralP
         const contractTxId = await TxUtils.createContractSeriesTransaction(adminAddress, {
             native: false,
             underlyingOracleId: underlyingOracleId,
-            dataIndex: 0,
             onChainData: [],
             notionalPropertyId: 0,
             notionalValue: 0.01,
@@ -31,11 +30,11 @@ async function issueContractSeries(adminAddress, underlyingOracleId, collateralP
 }
 
 // Example usage:
-const adminAddress = "YourAdminAddress"; // Replace with your admin address
+const adminAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"; // Replace with your admin address
 const underlyingOracleId = 1; // Replace with your underlying oracle ID
-const collateralPropertyId = 2; // Replace with your collateral property ID
+const collateralPropertyId = 3; // Replace with your collateral property ID
 const leverage = 10; // Example leverage
-const expiryPeriod = 100; // Example expiry period
+const expiryPeriod = 4032; // Example expiry period
 const series = 5; // Example series number
 
 issueContractSeries(adminAddress, underlyingOracleId, collateralPropertyId, leverage, expiryPeriod, series);

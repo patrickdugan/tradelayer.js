@@ -204,7 +204,6 @@ const Encode = {
         const payload = [
             params.native ? '1' : '0',
             params.underlyingOracleId.toString(36),
-            params.dataIndex.toString(36),
             params.onChainData.map(data => `${data[0].toString(36)}:${data[1].toString(36)}`).join(';'),
             params.notionalPropertyId.toString(36),
             params.notionalValue.toString(36),

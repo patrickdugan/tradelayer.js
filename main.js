@@ -205,7 +205,7 @@ class Main {
                 var payload = txData.value.payload;
                 //console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
-                const type = Number(payload.slice(0,1).toString(36))
+                const type = parseInt(payload.slice(0,1).toString(36),36)
                 payload=payload.slice(1,payload.length).toString(36)
 
                   // Assuming 'sender' and 'reference' are objects with an 'address' property
@@ -213,7 +213,7 @@ class Main {
                 const referenceAddress = txData.value.reference.address;
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                //console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
+                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
                 //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))

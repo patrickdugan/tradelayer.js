@@ -23,7 +23,7 @@ async function createOracleAndIssueContract() {
 
     // Create Oracle Parameters
     const oracleTicker = "BTC/USD";
-    const oracleUrl = "bravenewcoin.com/data-and-charts/indices/blx";
+    const oracleUrl = "bravenewcoin.com";
 
     // Create Contract Series Parameters
     const contractSeriesTicker = "BTC/USD-BLX";

@@ -19,7 +19,6 @@ function clearDatastore(dbPath, dbName) {
 }
 
 // Define paths to your NeDB database files
-const txIndexDbPath = path.join(__dirname, 'nedb-data', 'txIndex.db');
 const propertyListDbPath = path.join(__dirname, 'nedb-data', 'propertyList.db');
 const tallyMapDbPath = path.join(__dirname, 'nedb-data', 'tallyMap.db');
 const activationsDbPath = path.join(__dirname, 'nedb-data', 'activations.db');
@@ -29,7 +28,6 @@ const insuranceDbPath = path.join(__dirname, 'nedb-data', 'insurance.db');
 const oracleListDbPath = path.join(__dirname, 'nedb-data', 'oracleList.db'); // Path to oracleList.db
 
 // Clear entries from each database
-clearDatastore(txIndexDbPath, 'txIndex');
 clearDatastore(propertyListDbPath, 'propertyList');
 clearDatastore(tallyMapDbPath, 'tallyMap');
 clearDatastore(activationsDbPath, 'activations');
