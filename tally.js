@@ -41,8 +41,8 @@ class TallyMap {
     }
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
-            if(tradeSettlement=true){
-                console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange)
+            if(tradeSettlement==true){
+                console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange, marginChange)
             }
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
@@ -57,14 +57,14 @@ class TallyMap {
                 instance.addresses.set(address, {});
             }
             const addressObj = instance.addresses.get(address);
-
+            console.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
             if (!addressObj[propertyId]) {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }
 
             // Check and update available balance
             if (addressObj[propertyId].available + availableChange < 0) {
-                throw new Error("Available balance cannot go negative");
+                throw new Error("Available balance cannot go negative "+ addressObj[propertyId].available + ' change '+availableChange);
             }
             addressObj[propertyId].available += availableChange;
 

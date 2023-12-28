@@ -610,7 +610,16 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
-            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId);
+
+            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+            console.log('checking contract details validity ' + JSON.stringify(contractDetails))
+            if(contractDetails==null||contractDetails=={}){
+                params.valid=false
+                params.reason+= "contractId not found"
+                return params
+            }
+
+            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, contractDetails);
             const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
             // Check if the sender has enough balance for the initial margin
@@ -619,11 +628,6 @@ const Validity = {
                 throw new Error('Insufficient balance for initial margin');
             }
 
-            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
-            if(contractDetails==null){
-                params.valid=false
-                params.reason+= "contractId not found"
-            }
             if(params.leverage>50){
                 params.valid=false
                 params.reason+= "Stop encouraging gambling!"

@@ -18,7 +18,7 @@ async function generateTrades(adminAddress) {
             propertyId: propertyId,
             amount: amount,
             price: tradePrice,
-            side: true // Assuming all trades are 'Buy' orders
+            side: false // Assuming all trades are 'Buy' orders
         };
 
         // Create trade transaction
@@ -27,7 +27,7 @@ async function generateTrades(adminAddress) {
 }
 
 // Address for the trades
-const adminAddress = "tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk";
+const adminAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
 
 // Execute the function to generate trades
 generateTrades(adminAddress).then(() => {

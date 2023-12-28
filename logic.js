@@ -89,7 +89,7 @@ const Logic = {
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
                 break;
             case 18:
-                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid, params.sender);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid, params.senderAddress);
                 break;
             case 19:
                 await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
