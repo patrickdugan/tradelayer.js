@@ -1,0 +1,36 @@
+{
+  "name": "tradelayer",
+  "version": "1.0.0",
+  "description": ".js rebuild of TradeLayer protocol",
+  "main": "main.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "mocha tests/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrickdugan/tradelayer.js.git"
+  },
+  "author": "Patrick Dugan",
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/patrickdugan/tradelayer.js/issues"
+  },
+  "resolutions": {
+    "underscore": "^1.13.1",
+    "binary-search-tree": "latest"
+  },
+  "homepage": "https://github.com/patrickdugan/tradelayer.js#readme",
+  "dependencies": {
+    "abstract-level": "^1.0.3",
+    "axios": "^1.6.2",
+    "child_process": "^1.0.2",
+    "express": "^4.18.2",
+    "level": "^8.0.0",
+    "level-sublevel": "^6.1.1",
+    "nedb": "^1.8.0",
+    "redis": "^4.6.11"
+  }
+}
