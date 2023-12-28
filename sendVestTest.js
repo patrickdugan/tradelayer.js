@@ -23,4 +23,4 @@ function randomNumber(min, max) {
 
 var random = randomNumber(10,11000)
 
-    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','mj4iTwbHiQX6objWNXHjerF2KQDFcPCdUx',3,random,null)
+    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',3,random,null)

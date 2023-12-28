@@ -100,6 +100,25 @@ app.post('/getOrderBook', async (req, res) => {
     }
 });
 
+app.post('/getContractOrderBook', async (req, res) => {
+    try {
+        const { contractId } = req.body;
+        const orderBookKey = `${contractId}`;
+
+        // Instantiate your ContractOrderbook class with the specific contractId
+        const orderbook = new Orderbook(orderBookKey);
+        await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
+
+        // Retrieve the specific order book data
+        const orderBookData = orderbook.getOrderBookData();
+        res.json(orderBookData);
+    } catch (error) {
+        console.error('Error fetching contract order book:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');

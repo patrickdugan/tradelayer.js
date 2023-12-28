@@ -83,7 +83,7 @@ const Logic = {
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry);
                 break;
             case 16:
-                await Logic.createContractSeries(params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
+                await Logic.createContractSeries(params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
@@ -607,10 +607,10 @@ const Logic = {
         return
 	},
 
-    async createContractSeries(contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee) {
+    async createContractSeries(native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
 	    // Create a new future contract series
 	    const futureContractSeriesId = await ContractRegistry.createContractSeries({
-	        contractId, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee
+	        native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;
@@ -626,7 +626,7 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid) {
+    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid,sender) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);

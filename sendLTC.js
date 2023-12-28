@@ -53,7 +53,7 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 
 // Replace with actual values
 const senderAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
-const recipientAddress = "LNmiS6p8z3KuHHx3q6Jf6x6TfcyptE68oP";
+const recipientAddress = "tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk";
 const amountToSend = 0.1; // Amount of LTC to send
 
 // Execute the function to send Litecoin

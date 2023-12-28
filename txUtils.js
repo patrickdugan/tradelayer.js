@@ -906,12 +906,6 @@ const TxUtils = {
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeTradeContractOnchain(contractParams);
 
-            // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
 
 
             const minAmountSatoshis = STANDARD_FEE;
@@ -935,7 +929,7 @@ const TxUtils = {
             console.log(`Activation transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendActivationTransaction:', error);
+            console.error('Error in sendContractTradeTransaction:', error);
             throw error;
         }
     },
@@ -951,8 +945,9 @@ const TxUtils = {
     },
 
     async findSuitableUTXO(address, minAmount) {
-        
+        console.log(address)
         const utxos = await listUnspentAsync(0, 9999999, [address]);
+        console.log(utxos)
         const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
         console.log(suitableUtxo)
         if (!suitableUtxo) {

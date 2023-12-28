@@ -51,6 +51,16 @@ const expressInterface = {
         }
     },
 
+    async getContractOrderBook(contractId) {
+        try {
+            const response = await axios.post(`${serverUrl}/getContractOrderBook`, { contractId1 });
+            return response.data;
+        } catch (error) {
+            console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    },
+
     async listContractSeries() {
         try {
             const response = await axios.post(`${serverUrl}/listContractSeries`);

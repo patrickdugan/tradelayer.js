@@ -26,6 +26,7 @@ const consensusDbPath = path.join(__dirname, 'nedb-data', 'consensus.db');
 const orderBooksDbPath = path.join(__dirname, 'nedb-data', 'orderBooks.db');
 const insuranceDbPath = path.join(__dirname, 'nedb-data', 'insurance.db');
 const oracleListDbPath = path.join(__dirname, 'nedb-data', 'oracleList.db'); // Path to oracleList.db
+const contractListDbPath = path.join(__dirname, 'nedb-data', 'contractList.db')
 
 // Clear entries from each database
 clearDatastore(propertyListDbPath, 'propertyList');
@@ -35,3 +36,4 @@ clearDatastore(consensusDbPath, 'consensus');
 clearDatastore(orderBooksDbPath, 'orderBooks');
 clearDatastore(insuranceDbPath, 'insurance');
 clearDatastore(oracleListDbPath, 'oracleList'); // Clear the oracleList database
+clearDatastore(contractListDbPath, 'contractList')

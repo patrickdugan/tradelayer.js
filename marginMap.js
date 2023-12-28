@@ -20,7 +20,31 @@ class MarginMap {
         return margin;
     }
 
-    updateMargin(address, newContracts, price) {
+// Set initial margin for a new position in the MarginMap
+    async setInitialMargin(sender, contractId, totalInitialMargin) {
+        // Check if there is an existing position for the sender
+        let position = this.margins.get(sender);
+
+        if (!position) {
+            // If no existing position, initialize a new one
+            position = {
+                contracts: 0,  // Number of contracts the sender has
+                margin: 0      // Total margin amount the sender has posted
+            };
+        }
+
+        // Update the margin for the existing or new position
+        position.margin += totalInitialMargin;
+
+        // Update the MarginMap with the modified position
+        this.margins.set(sender, position);
+
+        // Save changes to the database or your storage solution
+        await this.saveMarginMap();
+    }
+
+
+    updateMargin(contractId, sender, contractAmount, totalInitialMargin) {
         const pos = this.margins.get(address);
 
         if (!pos) {
@@ -37,6 +61,39 @@ class MarginMap {
 
         return addedMargin;
     }
+
+    // Update the margin for a specific address and contract
+    async updateMargin(contractId, address, amount, price, isBuyOrder) {
+            const position = this.margins.get(address) || this.initMargin(address, 0, price);
+
+            // Calculate the required margin for the new amount
+            const requiredMargin = this.calculateMarginRequirement(amount, price);
+
+            if (isBuyOrder) {
+                // For buy orders, increase contracts and adjust margin
+                position.contracts += amount;
+                position.margin += requiredMargin;
+
+                // Check for margin maintenance and realize PnL if needed
+                this.checkMarginMaintenance(address, contractId);
+            } else {
+                // For sell orders, decrease contracts and adjust margin
+                position.contracts -= amount;
+                position.margin -= requiredMargin;
+
+                // Realize PnL if the position is being reduced
+                this.realizePnL(address, contractId, amount, price);
+            }
+
+            // Ensure the margin doesn't go below zero
+            position.margin = Math.max(0, position.margin);
+
+            // Update the margin map
+            this.margins.set(address, position);
+
+            // Additional logic to handle margin calls or other adjustments if required
+    }
+
 
     updateContractBalances(address, amount, price, isBuyOrder) {
         const position = this.margins.get(address) || this.initMargin(address, 0, price);
@@ -103,9 +160,6 @@ class MarginMap {
             }
         }
     }
-
-
-
 
     // add save/load methods
     saveMarginMap(currentBlockHeight) {

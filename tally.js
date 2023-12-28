@@ -14,7 +14,6 @@ class TallyMap {
         return TallyMap.instance;
     }
 
-
     /**
      * Ensures that only one instance of TallyMap exists and attempts to load it from dbInstance.
      * @param {number} blockHeight - The block height for which to load the tally map.

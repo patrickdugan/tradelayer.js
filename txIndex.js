@@ -2,7 +2,7 @@ const litecoin = require('litecoin');
 const json = require('big-json');
 const util = require('util');
 const TxUtils = require('./txUtils');
-const Types = require('./types.js');
+//const Types = require('./types.js');
 const db = require('./db.js');
 
 const clientConfig = /*test ?*/ {
@@ -242,6 +242,7 @@ class TxIndex {
     }
 
     static async processTransaction(payload, txId, marker) {
+        const Types = require('./Types.js'); // Lazy load Types
         // Process the transaction...
         const sender = await TxUtils.getSender(txId);
         const reference = await TxUtils.getReference(txId);
