@@ -18,7 +18,7 @@ async function generateTrades(adminAddress) {
             propertyId: propertyId,
             amount: amount,
             price: tradePrice,
-            type: 'Buy' // Assuming all trades are 'Buy' orders
+            side: true // Assuming all trades are 'Buy' orders
         };
 
         // Create trade transaction

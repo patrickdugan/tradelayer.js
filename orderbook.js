@@ -178,6 +178,7 @@ class Orderbook {
 
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
         const ContractRegistry = require('./contractRegistry.js')
+        console.log('about to call moveCollateralToMargin '+contractId, amount)
         await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
 
         // Create a contract order object with the sell parameter

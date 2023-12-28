@@ -629,6 +629,7 @@ const Logic = {
     async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid,sender) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
+        console.log('checking contract orderbook ' +JSON.stringify(orderbook))
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
         return

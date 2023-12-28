@@ -228,7 +228,6 @@ class ContractRegistry {
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-
         const { inverse, notionalValue, leverage } = contractInfo;
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
@@ -266,9 +265,10 @@ class ContractRegistry {
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-
+        //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.native.collateralPropertyId))
         // Return the collateral property ID from the contract information
-        return contractInfo.collateralPropertyId;
+        //console.log('returning collateral id '+contractInfo.native.collateralPropertyId+ ' type of '+typeof contractInfo.native.collateralPropertyId)
+        return contractInfo.native.collateralPropertyId;
     }
 
         // In the contract order addition process
@@ -276,9 +276,11 @@ class ContractRegistry {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
+        console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount);
-
+        console.log('collateralPropertyId '+collateralPropertyId)
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+        console.log(totalInitialMargin)
         // Move collateral to margin position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0);
 

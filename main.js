@@ -210,7 +210,7 @@ class Main {
 
                   // Assuming 'sender' and 'reference' are objects with an 'address' property
                 const senderAddress = txData.value.sender.senderAddress;
-                const referenceAddress = txData.value.reference.address;
+                const referenceAddress = txData.value.reference.address; //a bit different from the older protocol, not always in the tx, sometimes in OP_Return
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)

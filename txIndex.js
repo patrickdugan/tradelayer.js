@@ -149,8 +149,12 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                //console.log('payload '+payload)
-                await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
+                console.log('payload '+payload+JSON.stringify(txDetails))
+               try {
+                    await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });
+                } catch (dbError) {
+                    console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
+                }      
             }
         }
     }

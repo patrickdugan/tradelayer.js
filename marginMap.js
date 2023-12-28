@@ -22,8 +22,11 @@ class MarginMap {
 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin) {
+        console.log('setting initial margin '+sender, contractId, totalInitialMargin)
         // Check if there is an existing position for the sender
         let position = this.margins.get(sender);
+
+        console.log('position '+JSON.stringify(position))
 
         if (!position) {
             // If no existing position, initialize a new one
@@ -38,6 +41,7 @@ class MarginMap {
 
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
+        console.log('margin should be topped up '+JSON.stringify(this.margins))
 
         // Save changes to the database or your storage solution
         await this.saveMarginMap();

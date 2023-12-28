@@ -531,9 +531,9 @@ const Validity = {
             }
 
             // Check if notionalValue is a number
-            if (typeof params.notionalValue !== 'number') {
+            if (typeof params.notionalValue !== 'number'||params.notionalValue ==0) {
                 params.valid = false;
-                params.reason += "Notional value must be a number. ";
+                params.reason += "Notional value must be a non-zero number. ";
             }
 
             // Check if expiryPeriod is an integer
