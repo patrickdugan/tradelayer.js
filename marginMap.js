@@ -54,7 +54,6 @@ class MarginMap {
         await this.saveMarginMap();
     }
 
-
     updateMargin(contractId, sender, contractAmount, totalInitialMargin) {
         const pos = this.margins.get(address);
 
@@ -104,7 +103,6 @@ class MarginMap {
 
             // Additional logic to handle margin calls or other adjustments if required
     }
-
 
     updateContractBalances(address, amount, price, isBuyOrder) {
         const position = this.margins.get(address) || this.initMargin(address, 0, price);
@@ -172,7 +170,7 @@ class MarginMap {
         }
     }
 
-    // add save/load methods
+  // add save/load methods
     saveMarginMap() {
         const key = JSON.stringify({
             seriesId: this.seriesId
@@ -181,20 +179,26 @@ class MarginMap {
         const value = JSON.stringify([...this.margins]);
 
         // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = dbInstance.getDatabase('marginMaps');
+        const marginMapsDB = db.getDatabase('marginMaps');
 
         return new Promise((resolve, reject) => {
-            marginMapsDB.insertAsync({ _id: key, value: value })
-                .then(() => resolve())
-                .catch(err => reject(err));
+            // Perform an upsert operation
+            marginMapsDB.updateAsync(
+                { _id: key }, // Query: Match document with the specified _id
+                { _id: key, value: value }, // Update: Document to be inserted or updated
+                { upsert: true } // Options: Perform an insert if document doesn't exist
+            )
+            .then(() => resolve())
+            .catch(err => reject(err));
         });
     }
+
 
     static async loadMarginMap(seriesId) {
         const key = JSON.stringify({ seriesId});
 
         // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = dbInstance.getDatabase('marginMaps');
+        const marginMapsDB = db.getDatabase('marginMaps');
 
         try {
             const doc = await marginMapsDB.findOneAsync({ _id: key });
@@ -257,7 +261,7 @@ class MarginMap {
     static async saveLiquidationOrders(contract, orders, blockHeight) {
         try {
             // Access the marginMaps database
-            const marginMapsDB = dbInstance.getDatabase('marginMaps');
+            const marginMapsDB = db.getDatabase('marginMaps');
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contract.id}-${blockHeight}`;
@@ -271,7 +275,7 @@ class MarginMap {
         }
     }
 
-    static needsLiquidation(contract) {
+    needsLiquidation(contract) {
         const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value
 
         for (const [address, position] of Object.entries(this.margins[contract.id])) {
@@ -285,7 +289,7 @@ class MarginMap {
         return false; // No positions require liquidation
     }
 
-    static getMarginLevel(contract) {
+    getMarginLevel(contract) {
         // Assuming margins are stored per position in the contract
         // Example: Return the margin level for the contract
         let totalMargin = 0;
@@ -295,7 +299,7 @@ class MarginMap {
         return totalMargin;
     }
 
-    static async getMarketPrice(contract) {
+    async getMarketPrice(contract) {
         let marketPrice;
 
         if (ContractsRegistry.isOracleContract(contract.id)) {

@@ -58,7 +58,7 @@ class Orderbook {
             await this.saveTrade(tradeRecord);
         }
 
-        async saveTrade(tradeRecord) {
+    async saveTrade(tradeRecord) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
 
             // Use the key provided in the trade record for storage
@@ -82,34 +82,32 @@ class Orderbook {
                 console.error(`Error saving trade record: ${tradeId}`, error);
                 throw error; // Rethrow the error for handling upstream
             }
-        }
+    }
 
-                // Retrieve token trading history by propertyId pair
-        async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
+    // Retrieve token trading history by propertyId pair
+    async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
             const trades = await tradeDB.findAsync({ key: tradeRecordKey });
             return trades.map(doc => doc.trade);
-        }
+    }
 
-        // Retrieve contract trading history by contractId
-        async getContractTradeHistoryByContractId(contractId) {
+    // Retrieve contract trading history by contractId
+    async getContractTradeHistoryByContractId(contractId) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const tradeRecordKey = `contract-${contractId}`;
             const trades = await tradeDB.findAsync({ key: tradeRecordKey });
             return trades.map(doc => doc.trade);
-        }
+    }
 
-        // Retrieve trade history by address for both token and contract trades
-        async getTradeHistoryByAddress(address) {
+    // Retrieve trade history by address for both token and contract trades
+    async getTradeHistoryByAddress(address) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const trades = await tradeDB.findAsync({ 
                 $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
             });
             return trades.map(doc => doc.trade);
-        }
-
-
+    }
 
     // Function to divide two numbers with an option to round up or down to the nearest Satoshi
     divideAndRound(number1, number2, roundUp = false) {
@@ -129,7 +127,6 @@ class Orderbook {
           { upsert: true }
         );
       }
-
 
     // Adds a token order to the order book
     async addTokenOrder(order, blockHeight, txid) {
@@ -176,36 +173,12 @@ class Orderbook {
         return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
     }
 
-    async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
-        const ContractRegistry = require('./contractRegistry.js')
-        console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
-        await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
-
-        // Create a contract order object with the sell parameter
-        const contractOrder = { contractId, amount, price, block, sell };
-
-        // The orderBookKey is based on the contractId since it's a derivative contract
-        const orderBookKey = `contract-${contractId}`;
-
-        // Insert the contract order into the order book
-        await this.insertOrder(contractOrder, orderBookKey, sell);
-
-        // Match orders in the derivative contract order book
-        var matchResult = await this.matchContractOrders(orderBookKey);
-
-        await this.processContractMatches()
-
-        await orderbook.saveOrderBook(normalizedOrderBookKey);
-        return matchResult
-
-    }
-
-    async insertOrder(order, orderBookKey, isSellOrder) {
+    async insertOrder(order, orderBookKey, isBuyOrder) {
         if (!this.orderBooks[orderBookKey]) {
             this.orderBooks[orderBookKey] = { buy: [], sell: [] };
         }
 
-        const side = isSellOrder ? 'sell' : 'buy';
+        const side = isBuyOrder ? 'buy' : 'sell';
         const bookSide = this.orderBooks[orderBookKey][side];
 
         const index = bookSide.findIndex((o) => o.time > order.time);
@@ -340,7 +313,7 @@ class Orderbook {
                 match.buyOrder.orderRole = 'split';
                 match.sellOrder.orderRole = 'split';
                 var takerFeeA = amountToTradeA.times(0.0001);
-                var takerFeeB = amountToTradeB.time(0.0001);
+                var takerFeeB = amountToTradeB.times(0.0001);
                 await TallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber());
                 await TallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber());
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber();
@@ -385,6 +358,30 @@ class Orderbook {
 
         }
     }    
+
+    async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
+        const ContractRegistry = require('./contractRegistry.js')
+        console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
+        await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
+
+        // Create a contract order object with the sell parameter
+        const contractOrder = { contractId, amount, price, blockTime, side };
+
+        // The orderBookKey is based on the contractId since it's a derivative contract
+        const orderBookKey = `contract-${contractId}`;
+
+        // Insert the contract order into the order book
+        await this.insertOrder(contractOrder, orderBookKey, side);
+
+        // Match orders in the derivative contract order book
+        var matchResult = await this.matchContractOrders(orderBookKey);
+
+        await this.processContractMatches(matchResult.matches)
+
+        await this.saveOrderBook(orderBookKey);
+        return matchResult
+
+    }
 
     async matchContractOrders(orderBookKey) {
         const orderBook = this.orderBooks[orderBookKey];
@@ -433,32 +430,13 @@ class Orderbook {
         return { orderBook: this.orderBooks[orderBookKey], matches };
     }
 
-    processContractMatches(matches) {
-        matches.forEach(match => {
-            // Logic for identifying and updating the marginMap for contracts
-            // You can go to negative balances for contracts, so the logic here
-            // will need to be different than for tokens.
-
-            // Example logic (you'll need to replace this with your actual logic):
-            const contract = this.marginMap.get(match.contractId);
-            if (match.sell) {
-                // Update seller's margin balance
-                contract.sellerMargin = contract.sellerMargin.minus(match.amountToTrade);
-                // Update buyer's balance (can go negative)
-                contract.buyerMargin = contract.buyerMargin.plus(match.amountToTrade.minus(match.takerFee));
-            } else {
-                // Update buyer's margin balance
-                contract.buyerMargin = contract.buyerMargin.minus(match.amountToTrade);
-                // Update seller's balance (can go negative)
-                contract.sellerMargin = contract.sellerMargin.plus(match.amountToTrade.plus(match.makerRebate));
-            }
-
-            // Save the updated contract margins back to the marginMap
-            this.marginMap.set(match.contractId, contract);
-        });
-    }
-
     async processContractMatches(matches, currentBlockHeight) {
+        if (!Array.isArray(matches)) {
+            // Handle the non-iterable case, e.g., log an error, initialize as an empty array, etc.
+            console.error('Matches is not an array:', matches);
+            matches = []; // Initialize as an empty array if that's appropriate
+        }
+
         for (const match of matches) {
             try {
                 // Load the margin map for the given series ID and block height
