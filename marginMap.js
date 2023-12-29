@@ -7,6 +7,13 @@ class MarginMap {
         this.margins = new Map();
     }
 
+    static async getInstance(contractId) {
+        // Load the margin map for the given contractId from the database
+        // If it doesn't exist, create a new instance
+        const marginMap = await MarginMap.loadMarginMap(contractId);
+        return marginMap;
+    }
+
     initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
@@ -166,43 +173,49 @@ class MarginMap {
     }
 
     // add save/load methods
-    saveMarginMap(currentBlockHeight) {
+    saveMarginMap() {
         const key = JSON.stringify({
-            seriesId: this.seriesId,
-            block: currentBlockHeight
+            seriesId: this.seriesId
         });
 
         const value = JSON.stringify([...this.margins]);
 
+        // Retrieve the marginMaps database from your Database instance
+        const marginMapsDB = dbInstance.getDatabase('marginMaps');
+
         return new Promise((resolve, reject) => {
-            db.put(key, value, err => {
-                if (err) return reject(err);
-                resolve();
-            });
+            marginMapsDB.insertAsync({ _id: key, value: value })
+                .then(() => resolve())
+                .catch(err => reject(err));
         });
     }
 
-    static loadMarginMap(seriesId, block) {
-        const key = JSON.stringify({ seriesId, block });
+    static async loadMarginMap(seriesId) {
+        const key = JSON.stringify({ seriesId});
 
-        return new Promise((resolve, reject) => {
-            db.get(key, (err, value) => {
-                if (err) {
-                    if (err.type === 'NotFoundError') {
-                        resolve(new MarginMap(seriesId)); // Return a new instance if not found
-                    } else {
-                        return reject(err);
-                    }
-                }
+        // Retrieve the marginMaps database from your Database instance
+        const marginMapsDB = dbInstance.getDatabase('marginMaps');
 
-                const map = new MarginMap(seriesId);
-                map.margins = new Map(JSON.parse(value));
-                resolve(map);
-            });
-        });
+        try {
+            const doc = await marginMapsDB.findOneAsync({ _id: key });
+            if (!doc) {
+                // Return a new instance if not found
+                return new MarginMap(seriesId);
+            }
+
+            const map = new MarginMap(seriesId);
+            map.margins = new Map(JSON.parse(doc.value));
+            return map;
+        } catch (err) {
+            if (err.type === 'NotFoundError') {
+                return new MarginMap(seriesId); // Return a new instance if not found
+            }
+            throw err;
+        }
     }
 
-    static async triggerLiquidations(contract) {
+
+    async triggerLiquidations(contract) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
@@ -217,7 +230,7 @@ class MarginMap {
         return liquidationOrders;
     }
 
-    static generateLiquidationOrders(contract) {
+    generateLiquidationOrders(contract) {
         const liquidationOrders = [];
         const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
 
@@ -241,12 +254,19 @@ class MarginMap {
         return liquidationOrders;
     }
 
-    static async saveLiquidationOrders(contract, orders) {
+    static async saveLiquidationOrders(contract, orders, blockHeight) {
         try {
-            // Save liquidation orders to the database
-            await db.put(`liquidationOrders-${contract.id}`, JSON.stringify(orders));
+            // Access the marginMaps database
+            const marginMapsDB = dbInstance.getDatabase('marginMaps');
+
+            // Construct the key and value for storing the liquidation orders
+            const key = `liquidationOrders-${contract.id}-${blockHeight}`;
+            const value = { _id: key, orders: orders, blockHeight: blockHeight };
+
+            // Save the liquidation orders in the marginMaps database
+            await marginMapsDB.insertAsync(value);
         } catch (error) {
-            console.error(`Error saving liquidation orders for contract ${contract.id}:`, error);
+            console.error(`Error saving liquidation orders for contract ${contract.id} at block height ${blockHeight}:`, error);
             throw error;
         }
     }

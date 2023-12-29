@@ -295,7 +295,10 @@ class ContractRegistry {
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true);
 
         // Update MarginMap for the contract series
-        await MarginMap.setInitialMargin(contractId, sender, totalInitialMargin);
+        const marginMap = await MarginMap.getInstance(contractId);
+
+        // Use the instance method to set the initial margin
+        await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
     }
 
      // Determine if a contract is an oracle contract
