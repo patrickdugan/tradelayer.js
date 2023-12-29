@@ -14,10 +14,12 @@ class ContractRegistry {
     }
 
     static async loadContractSeries() {
+        console.log('loading contract list for this instance '+JSON.stringify(instance))
         const instance = ContractRegistry.getInstance(); // Access singleton instance
+        console.log('loading contract list for this instance '+JSON.stringify(instance))
         try {
             const docs = await db.getDatabase('contractList').findAsync({ type: 'contractSeries' });
-            instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
+            return instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
         } catch (error) {
             console.error('Error loading contract series data:', error);
         }
@@ -26,7 +28,7 @@ class ContractRegistry {
      // Singleton instance getter
     static getInstance() {
         if (!this.instance) {
-            console.log('no instance detected creating new obj')
+            console.log('no instance detected creating new contract List obj')
             this.instance = new ContractRegistry();
         }
         return this.instance;

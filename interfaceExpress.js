@@ -53,7 +53,7 @@ const expressInterface = {
 
     async getContractOrderBook(contractId) {
         try {
-            const response = await axios.post(`${serverUrl}/getContractOrderBook`, { contractId1 });
+            const response = await axios.post(`${serverUrl}/getContractOrderBook`, { contractId });
             return response.data;
         } catch (error) {
             console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);

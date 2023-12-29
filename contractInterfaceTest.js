@@ -8,7 +8,7 @@ const expressInterface = require('./interfaceExpress.js');
 
 async function runTest() {
     await expressInterface.initMain();
-           await delay(5000)
+           await delay(1000)
     const balance2 = await expressInterface.getAllBalancesForAddress('tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk');
      console.log(`Balance for tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk:`, balance2);
     

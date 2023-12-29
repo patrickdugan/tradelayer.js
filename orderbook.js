@@ -85,7 +85,7 @@ class Orderbook {
     }
 
     // Retrieve token trading history by propertyId pair
-    async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
+    static async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
             const trades = await tradeDB.findAsync({ key: tradeRecordKey });
@@ -93,7 +93,7 @@ class Orderbook {
     }
 
     // Retrieve contract trading history by contractId
-    async getContractTradeHistoryByContractId(contractId) {
+    static async getContractTradeHistoryByContractId(contractId) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const tradeRecordKey = `contract-${contractId}`;
             const trades = await tradeDB.findAsync({ key: tradeRecordKey });
@@ -101,7 +101,7 @@ class Orderbook {
     }
 
     // Retrieve trade history by address for both token and contract trades
-    async getTradeHistoryByAddress(address) {
+    static async getTradeHistoryByAddress(address) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const trades = await tradeDB.findAsync({ 
                 $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
@@ -478,6 +478,11 @@ class Orderbook {
                 // Handle error, potentially rolling back any partial updates or retrying
             }
         }
+    }
+
+    // Function to return the current state of the order book for the given key
+    getOrderBookData() {
+        return this.orderBooks[this.orderBookKey];
     }
 }
 

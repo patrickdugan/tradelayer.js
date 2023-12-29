@@ -9,6 +9,7 @@ const Activations = require('./activation.js')
 const Orderbook = require('./orderbook.js')
 const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
+const OracleList = require('./oracle.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -103,9 +104,9 @@ app.post('/getOrderBook', async (req, res) => {
 app.post('/getContractOrderBook', async (req, res) => {
     try {
         const { contractId } = req.body;
-        const orderBookKey = `${contractId}`;
+        const orderBookKey = `contract-${contractId}`;
 
-        // Instantiate your ContractOrderbook class with the specific contractId
+        // Instantiate your Orderbook class with the specific contractId
         const orderbook = new Orderbook(orderBookKey);
         await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
 
@@ -122,13 +123,14 @@ app.post('/getContractOrderBook', async (req, res) => {
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
-
+        //const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
+        //console.log(JSON.stringify(contractsRegistry))
         // Assuming loadContractsFromDB is a static method
-        await ContractRegistry.loadContractsFromDB(); // Load contracts from the database
-
+        //ContractRegistry.loadContractsFromDB(); // Load contracts from the database
+        //console.log('contract series array '+contractSeriesArray)
         // Assuming getAllContracts is a static method
-        const contractSeriesArray = ContractRegistry.getAllContracts(); // Get all contract series
+        const contractSeriesArray = await ContractRegistry.getAllContracts(); // Get all contract series
+        console.log('contract series array '+JSON.stringify(contractSeriesArray))
         res.json(contractSeriesArray);
     } catch (error) {
         console.error('Error fetching contract series:', error);
@@ -140,7 +142,7 @@ app.post('/listContractSeries', async (req, res) => {
 app.post('/listOracles', async (req, res) => {
     try {
         console.log('Fetching oracle list');
-        const oracleArray = await OracleRegistry.getAllOracles(); // Implement this in OracleRegistry
+        const oracleArray = await OracleList.getAllOracles(); // Implement this in OracleRegistry
         res.json(oracleArray);
     } catch (error) {
         console.error('Error fetching oracle list:', error);
