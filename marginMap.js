@@ -299,6 +299,29 @@ class MarginMap {
         return totalMargin;
     }
 
+     // Get the position for a specific address
+      async getPositionForAddress(address, contractId) {
+        let position = this.margins.get(address);
+
+        // If the position is not found or margins map is empty, try loading from the database
+        if (!position || this.margins.size === 0) {
+            await MarginMap.loadMarginMap(contractId);
+            position = this.margins.get(address);
+        }
+
+        // If still not found, return a default position
+        if (!position) {
+            return {
+                contracts: 0,
+                margin: 0,
+                unrealizedPl: 0,
+                // Add other relevant fields if necessary
+            };
+        }
+
+        return position;
+    }
+
     async getMarketPrice(contract) {
         let marketPrice;
 

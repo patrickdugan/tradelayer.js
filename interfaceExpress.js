@@ -81,6 +81,15 @@ const expressInterface = {
         }
     },
 
+    async getContractPositionForAddressAndContractId(address, contractId) {
+        try {
+            const response = await axios.get(`${serverUrl}/contractPosition/${address}/${contractId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error in getContractPositionForAddressAndContractId:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    },
 
     async getTradeHistory(propertyId1, propertyId2) {
         try {

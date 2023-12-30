@@ -10,6 +10,7 @@ const Orderbook = require('./orderbook.js')
 const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
 const OracleList = require('./oracle.js')
+const MarginMap = require('./marginMap.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -173,6 +174,18 @@ app.get('/oracleHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
     const oracleHistory = await Oracles.getHistory(contractId);
     res.json(oracleHistory);
+});
+
+
+app.get('/contractPosition/:address/:contractId', async (req, res) => {
+    const { address, contractId } = req.params;
+    try {
+        const marginMap = await MarginMap.getInstance(contractId);
+        const position = marginMap.getPositionForAddress(address);
+        res.json(position);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
 });
 
 app.get('/clearingHistory/:contractId', async (req, res) => {
