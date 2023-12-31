@@ -54,24 +54,6 @@ class MarginMap {
         await this.saveMarginMap();
     }
 
-    updateMargin(contractId, sender, contractAmount, totalInitialMargin) {
-        const pos = this.margins.get(address);
-
-        if (!pos) {
-            return this.initMargin(address, newContracts, price);
-        }
-
-        const newNotional = newContracts * price;
-        const oldNotional = pos.contracts * price;
-
-        const addedMargin = Math.abs(newNotional - oldNotional) * 0.1;
-
-        pos.contracts = newContracts;
-        pos.margin += addedMargin;
-
-        return addedMargin;
-    }
-
     // Update the margin for a specific address and contract
     async updateMargin(contractId, address, amount, price, isBuyOrder) {
             const position = this.margins.get(address) || this.initMargin(address, 0, price);
@@ -104,7 +86,7 @@ class MarginMap {
             // Additional logic to handle margin calls or other adjustments if required
     }
 
-    updateContractBalances(address, amount, price, isBuyOrder) {
+    updateContractBalances(address, amount, price, isBuyOrder,position) {
         const position = this.margins.get(address) || this.initMargin(address, 0, price);
         console.log('updating the above position for amount '+position + ' '+amount)
         // For buy orders, increase contracts and adjust margin
@@ -202,7 +184,7 @@ class MarginMap {
 
     static async loadMarginMap(seriesId) {
         const key = JSON.stringify({ seriesId});
-
+        console.log('loading margin map for '+seriesId)
         // Retrieve the marginMaps database from your Database instance
         const marginMapsDB = db.getDatabase('marginMaps');
 
@@ -210,17 +192,19 @@ class MarginMap {
             const doc = await marginMapsDB.findOneAsync({ _id: key });
             if (!doc) {
                 // Return a new instance if not found
+                console.log('no MarginMap found, spinning up a fresh one')
                 return new MarginMap(seriesId);
             }
 
             const map = new MarginMap(seriesId);
             map.margins = new Map(JSON.parse(doc.value));
+            console.log('returning a map from the file '+JSON.stringify(map.margins))
             return map;
         } catch (err) {
+            console.log('error loading mMap '+err)
             if (err.type === 'NotFoundError') {
                 return new MarginMap(seriesId); // Return a new instance if not found
             }
-            throw err;
         }
     }
 
