@@ -55,6 +55,7 @@ class Orderbook {
                 blockHeight,
                 txid
             };
+            console.log('saving contract trade ' +JSON.stringify(trade))
             await this.saveTrade(tradeRecord);
         }
 
@@ -94,6 +95,7 @@ class Orderbook {
 
     // Retrieve contract trading history by contractId
     static async getContractTradeHistoryByContractId(contractId) {
+            console.log('loading trade history for '+contractId)
             const tradeDB = dbInstance.getDatabase('tradeHistory');
             const tradeRecordKey = `contract-${contractId}`;
             const trades = await tradeDB.findAsync({ key: tradeRecordKey });
@@ -356,6 +358,18 @@ class Orderbook {
                 0, 0, true, false, false, txid
             );
 
+              // Construct a trade object for recording
+            const trade = {
+                offeredPropertyId: match.sellOrder.offeredPropertyId,
+                desiredPropertyId: match.buyOrder.desiredPropertyId,
+                amountOffered: match.amountOfTokenA, // or appropriate amount
+                amountExpected: match.amountOfTokenB, // or appropriate amount
+                // other relevant trade details...
+            };
+
+            // Record the token trade
+            await this.recordTokenTrade(trade, blockHeight, txid);
+
         }
     }    
 
@@ -375,7 +389,7 @@ class Orderbook {
 
         // Match orders in the derivative contract order book
         var matchResult = await this.matchContractOrders(orderBookKey);
-
+        console.log('contract match result '+JSON.stringify(matchResult))
         await this.processContractMatches(matchResult.matches)
 
         await this.saveOrderBook(orderBookKey);
@@ -445,7 +459,7 @@ class Orderbook {
                 // Get the existing position sizes for buyer and seller
                 const buyerPositionSize = marginMap.getPositionSize(match.buyerAddress);
                 const sellerPositionSize = marginMap.getPositionSize(match.sellerAddress);
-
+                console.log('checking position for trade processing '+buyerPositionSize +' buyer size '+' seller size '+sellerPositionSize)
                 // Update contract balances for the buyer and seller
                 marginMap.updateContractBalances(match.buyerAddress, match.amount, match.price, true);
                 marginMap.updateContractBalances(match.sellerAddress, match.amount, match.price, false);
@@ -470,7 +484,21 @@ class Orderbook {
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);
 
-                // Optionally handle the PnL if needed, e.g., logging or further processing
+                // Construct a trade object for recording
+                const trade = {
+                    contractId: match.contractId,
+                    amount: match.amount,
+                    price: match.price,
+                    buyerAddress: match.buyOrder.senderAddress,
+                    sellerAddress: match.sellOrder.senderAddress,
+                    // other relevant trade details...
+                };
+
+                // Record the contract trade
+                await this.recordContractTrade(trade, currentBlockHeight, match.txid);
+
+
+                    // Optionally handle the PnL if needed, e.g., logging or further processing
                 // ...
 
             } catch (error) {

@@ -160,6 +160,7 @@ app.get('/contractTradeHistory/:contractId', async (req, res) => {
 app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
     const { propertyId1, propertyId2 } = req.params;
     const tradeHistory = await Orderbook.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2);
+    console.log('returning trade history '+JSON.stringify(tradeHistory))
     res.json(tradeHistory);
 });
 
@@ -207,7 +208,7 @@ app.get('/walletBalances/:address', async (req, res) => {
     res.json(balances);
 });
 
-app.get('/contractPosition/:address/:contractId', async (req, res) => {
+app.get('/walletPosition/:address/:contractId', async (req, res) => {
     const { address, contractId } = req.params;
     try {
         const position = await WalletCache.getContractPositionForAddressAndContractId(address, contractId);

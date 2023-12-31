@@ -106,22 +106,28 @@ class MarginMap {
 
     updateContractBalances(address, amount, price, isBuyOrder) {
         const position = this.margins.get(address) || this.initMargin(address, 0, price);
-
+        console.log('updating the above position for amount '+position + ' '+amount)
         // For buy orders, increase contracts and adjust margin
         if (isBuyOrder) {
             position.contracts += amount;
             const additionalMargin = this.calculateMarginRequirement(amount, price);
+            console.log('calculated additional margin '+additionalMargin)
             position.margin += additionalMargin;
         }
         // For sell orders, decrease contracts and adjust margin
         else {
             position.contracts -= amount;
             const reducedMargin = this.calculateMarginRequirement(amount, price);
+            console.log('calculated reduced margin '+reducedMargin)
             position.margin -= reducedMargin;
         }
 
-        // Ensure the margin doesn't go below zero
+        if(position.margin<0){
+            console.log('warning, negative margin '+position.margin)
+        }
+        // Ensure the margin doesn't go below zero 
         position.margin = Math.max(0, position.margin);
+
 
         // Update the margin map
         this.margins.set(address, position);
