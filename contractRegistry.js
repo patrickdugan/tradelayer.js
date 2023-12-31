@@ -235,17 +235,17 @@ class ContractRegistry {
         let inverse = contractInfo.native.inverse;
         let notionalValue = contractInfo.native.notionalValue
         let leverage = contractInfo.native.leverage
-        console.log('inside getInitialMargin '+inverse, notionalValue, leverage)
+        console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
-            return BigNumber(notionalValue).div(leverage);
+            return BigNumber(notionalValue).div(leverage).toNumber();
         } else {
             /*
             // For linear contracts, check collateral and calculate based on oracle price or property value
             const collateralValue = await ContractRegistry.getCollateralValue(contractInfo);
             return BigNumber(collateralValue).div(leverage);
             */
-            return BigNumber(notionalValue).div(leverage); //assuming property is like a dollarcoin just to get things moving, you know
+            return BigNumber(notionalValue).div(leverage).toNumber(); //assuming property is like a dollarcoin just to get things moving, you know
         }
     }
 
@@ -285,8 +285,6 @@ class ContractRegistry {
     static async moveCollateralToMargin(sender, contractId, amount) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
-        const contractInfo = ContractRegistry.getContractInfo(contractId)
-        console.log('inside moveCollateral ' +JSON.stringify(contractInfo))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
         //console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)

@@ -16,20 +16,31 @@ class Orderbook {
             return orderbook;
         }
 
-        async loadOrCreateOrderBook() {
+         async loadOrCreateOrderBook(key) {
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
-            const orderBookData = await orderBooksDB.findOneAsync({ _id: this.orderBookKey });
-            
+            const orderBookData = await orderBooksDB.findOneAsync({ _id: key });
+
             if (orderBookData) {
-                this.orderBooks[this.orderBookKey] = JSON.parse(orderBookData.value);
-                console.log('loading the orderbook for ' +this.orderBookKey + ' in the form of ' + JSON.stringify(orderBookData))
+                this.orderBooks[key] = JSON.parse(orderBookData.value);
+                console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
             } else {
                 // If no data found, create a new order book
-                this.orderBooks[this.orderBookKey] = { buy: [], sell: [] };
-                console.log('loading fresh orderbook '+this.orderBooks[this.orderBookKey])
+                this.orderBooks[key] = { buy: [], sell: [] };
+                console.log('loading fresh orderbook ' + this.orderBooks[key])
 
-                await this.saveOrderBook(this.orderBookKey);
+                await this.saveOrderBook(key);
             }
+        }
+
+        async saveOrderBook(key) {
+            // Save order book to your database
+            console.log('saving pair ' + JSON.stringify(key) /*, + ' ' + JSON.stringify(this.orderbooks[key])*/)
+            const orderBooksDB = dbInstance.getDatabase('orderBooks');
+            await orderBooksDB.updateAsync(
+                { _id: key },
+                { _id: key, value: JSON.stringify(this.orderBooks[key]) },
+                { upsert: true }
+            );
         }
 
                 // Record a token trade with specific key identifiers
@@ -119,17 +130,6 @@ class Orderbook {
             : result.decimalPlaces(8, BigNumber.ROUND_DOWN).toString();
     }
 
-    async saveOrderBook(pair) {
-        // Save order book to your database
-        console.log('saving pair '+JSON.stringify(pair)/*, + ' '+ JSON.stringify(this.orderbooks[pair])*/)
-        const orderBooksDB = dbInstance.getDatabase('orderBooks');
-        await orderBooksDB.updateAsync(
-          { _id: pair },
-          { _id: pair, value: JSON.stringify(this.orderBooks[pair]) },
-          { upsert: true }
-        );
-      }
-
     // Adds a token order to the order book
     async addTokenOrder(order, blockHeight, txid) {
         const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
@@ -141,7 +141,7 @@ class Orderbook {
 
         // Create an instance of Orderbook for the pair and load its data
         const orderbook = new Orderbook(normalizedOrderBookKey);
-        await orderbook.loadOrCreateOrderBook();
+        await orderbook.loadOrCreateOrderBook(this.orderBookKey);
 
         // Calculate the price for the order and round to the nearest tick interval
         const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
@@ -382,7 +382,10 @@ class Orderbook {
         const contractOrder = { contractId, amount, price, blockTime, side };
 
         // The orderBookKey is based on the contractId since it's a derivative contract
-        const orderBookKey = `contract-${contractId}`;
+        const orderBookKey = `${contractId}`;
+
+        // Load the order book for the given contract
+        await this.loadOrCreateOrderBook(orderBookKey);
 
         // Insert the contract order into the order book
         await this.insertOrder(contractOrder, orderBookKey, side);
