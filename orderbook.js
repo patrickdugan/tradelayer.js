@@ -376,6 +376,7 @@ class Orderbook {
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
         const ContractRegistry = require('./contractRegistry.js')
         console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
+        const inverse = ContractRegistry.isInverse(contractId)
         await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
 
         // Create a contract order object with the sell parameter
@@ -394,7 +395,7 @@ class Orderbook {
         var matchResult = await this.matchContractOrders(orderBookKey);
         if(matchResult !=[]){
             console.log('contract match result '+JSON.stringify(matchResult))
-            await this.processContractMatches(matchResult.matches, blockTime, contractId)
+            await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
         }
        
 
@@ -450,7 +451,7 @@ class Orderbook {
         return { orderBook: this.orderBooks[orderBookKey], matches };
     }
 
-    async processContractMatches(matches, currentBlockHeight) {
+    async processContractMatches(matches, currentBlockHeight, inverse) {
         if (!Array.isArray(matches)) {
             // Handle the non-iterable case, e.g., log an error, initialize as an empty array, etc.
             console.error('Matches is not an array:', matches);
@@ -462,20 +463,20 @@ class Orderbook {
 
         for (const match of matches) {
                 // Load the margin map for the given series ID and block height
-                const marginMap = await MarginMap.loadMarginMap(match.contractId);
-
+                const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
+                console.log('checking the marginMap for contractId '+ marginMap )
                 // Get the existing position sizes for buyer and seller
-                const buyerPositionSize = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress);
-                const sellerPositionSize = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress);
-                console.log('checking position for trade processing '+JSON.stringify(buyerPositionSize) +' buyer size '+' seller size '+JSON.stringify(sellerPositionSize))
+                const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress);
+                const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress);
+                console.log('checking position for trade processing '+JSON.stringify(buyerPosition) +' buyer size '+' seller size '+JSON.stringify(sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
-                marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.amount, match.price, true,buyerPositionSize);
-                marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.amount, match.price, false, sellerPositionSize);
+                marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, true,buyerPosition, inverse);
+                marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, false, sellerPosition, inverse);
 
                 // Determine if the trade reduces the position size for buyer or seller
-                const isBuyerReducingPosition = buyerPositionSize > 0 && match.amount < 0;
-                const isSellerReducingPosition = sellerPositionSize < 0 && match.amount > 0;
+                const isBuyerReducingPosition = buyerPosition > 0 && match.amount < 0;
+                const isSellerReducingPosition = sellerPosition < 0 && match.amount > 0;
 
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
@@ -485,10 +486,10 @@ class Orderbook {
                 if (isSellerReducingPosition) {
                     sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
                 }
-
+                console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
                 // Update margin based on the new positions
-                marginMap.updateMargin(match.buyerAddress, match.amount, match.price);
-                marginMap.updateMargin(match.sellerAddress, -match.amount, match.price);
+                marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse);
+                marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
 
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);

@@ -1,5 +1,6 @@
 // Assuming the LevelDB database is stored at './path_to_margin_db'
 const db = require('./db.js');
+const BigNumber = require('bignumber.js')
 
 class MarginMap {
     constructor(seriesId) {
@@ -55,11 +56,12 @@ class MarginMap {
     }
 
     // Update the margin for a specific address and contract
-    async updateMargin(contractId, address, amount, price, isBuyOrder) {
+    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
             const position = this.margins.get(address) || this.initMargin(address, 0, price);
 
             // Calculate the required margin for the new amount
-            const requiredMargin = this.calculateMarginRequirement(amount, price);
+            console.log('checking requiredMargin in updateMargin '+JSON.stringify(position)+' amount '+amount +' price '+ price + ' inverse '+inverse)
+            const requiredMargin = this.calculateMarginRequirement(amount, price, inverse);
 
             if (isBuyOrder) {
                 // For buy orders, increase contracts and adjust margin
@@ -86,22 +88,23 @@ class MarginMap {
             // Additional logic to handle margin calls or other adjustments if required
     }
 
-    updateContractBalances(address, amount, price, isBuyOrder,position) {
+    updateContractBalances(address, amount, price, isBuyOrder,position, inverse) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
-        console.log('updating the above position for amount '+position + ' '+amount + ' address '+address+' is buy '+isBuyOrder)
+        console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         // For buy orders, increase contracts and adjust margin
-        if (isBuyOrder) {
-            position.contracts += amount;
-            const additionalMargin = this.calculateMarginRequirement(amount, price);
-            console.log('calculated additional margin '+additionalMargin)
-            position.margin += additionalMargin;
-        }
-        // For sell orders, decrease contracts and adjust margin
-        else {
-            position.contracts -= amount;
-            const reducedMargin = this.calculateMarginRequirement(amount, price);
-            console.log('calculated reduced margin '+reducedMargin)
-            position.margin -= reducedMargin;
+        // Calculate the new position size and margin adjustment
+        let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
+        let marginAdjustment = this.calculateMarginRequirement(Math.abs(amount), price, inverse);
+
+        // Compare the absolute values of the old and new position sizes
+        if (Math.abs(newPositionSize) > Math.abs(position.contracts)) {
+            // Absolute value of position size has increased
+            console.log('Increasing margin by ' + marginAdjustment);
+            position.margin += marginAdjustment;
+        } else if (Math.abs(newPositionSize) < Math.abs(position.contracts)) {
+            // Absolute value of position size has decreased
+            console.log('Reducing margin by ' + marginAdjustment);
+            position.margin -= marginAdjustment;
         }
 
         if(position.margin<0){
@@ -115,10 +118,53 @@ class MarginMap {
         this.margins.set(address, position);
     }
 
-    calculateMarginRequirement(contracts, price) {
-        // Calculate the margin requirement for a given number of contracts at a specific price
-        const notional = contracts * price;
-        return notional * 0.1; // Example: 10% of the notional value
+    
+    calculateMarginRequirement(contracts, price, inverse) {
+        
+        // Ensure that the input values are BigNumber instances
+        let bnContracts = new BigNumber(contracts);
+        let bnPrice = new BigNumber(price);
+
+        let notional
+
+        // Calculate the notional value
+         if (inverse === true) {
+            // For inverse contracts, the notional value is typically the number of contracts divided by the price
+            notional = bnContracts.dividedBy(bnPrice);
+        } else {
+            // For regular contracts, the notional value is the number of contracts multiplied by the price
+            notional = bnContracts.multipliedBy(bnPrice);
+        }
+
+        // Return 10% of the notional value as the margin requirement
+        return notional.multipliedBy(0.1).toNumber();
+    }
+
+     /**
+     * Checks whether the margin of a given position is below the maintenance margin.
+     * If so, it could trigger liquidations or other necessary actions.
+     * @param {string} address - The address of the position holder.
+     * @param {string} contractId - The ID of the contract.
+     */
+    checkMarginMaintenance(address, contractId) {
+        let position = this.margins.get(address);
+
+        if (!position) {
+            console.error(`No position found for address ${address}`);
+            return;
+        }
+
+        // Calculate the maintenance margin, which is half of the initial margin
+        let initialMargin = this.initMargin(position.contracts, position.initialPrice);
+        let maintenanceMargin = initialMargin / 2;
+
+        if (position.margin < maintenanceMargin) {
+            console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
+            // Trigger liquidation or other necessary actions here
+            // Example: this.triggerLiquidation(address, contractId);
+        } else {
+            console.log(`Margin level is adequate for address ${address}.`);
+        }
     }
 
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
@@ -196,15 +242,12 @@ class MarginMap {
                 return new MarginMap(seriesId);
             }
 
-            const map = new MarginMap(seriesId);
+            var map = new MarginMap(seriesId);
             map.margins = new Map(JSON.parse(doc.value));
-            console.log('returning a map from the file '+JSON.stringify(map.margins))
+            console.log('returning a map from the file '+JSON.stringify(map))
             return map;
         } catch (err) {
-            console.log('error loading mMap '+err)
-            if (err.type === 'NotFoundError') {
-                return new MarginMap(seriesId); // Return a new instance if not found
-            }
+            console.log('err loading margin Map '+err)
         }
     }
 

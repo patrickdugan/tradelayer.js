@@ -215,6 +215,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
+        console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -222,6 +223,19 @@ class ContractRegistry {
             return null;
         }
         return doc.data;
+    }
+
+    static async isInverse(contractId) {
+        // Call the existing getContractInfo function
+        const contractInfo = await this.getContractInfo(contractId);
+        
+        // Check if contractInfo exists and has the 'inverse' property
+        if (contractInfo && typeof contractInfo.inverse !== 'undefined') {
+            return contractInfo.inverse;
+        }
+
+        // Return false by default if the contract is not found or doesn't have the 'inverse' property
+        return false;
     }
 
      // Function to get initial margin requirement for a contract
