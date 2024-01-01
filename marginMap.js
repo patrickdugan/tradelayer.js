@@ -33,7 +33,7 @@ class MarginMap {
         // Check if there is an existing position for the sender
         let position = this.margins.get(sender);
 
-        console.log('position '+JSON.stringify(position))
+        console.log('setting initial margin position '+JSON.stringify(position))
 
         if (!position) {
             // If no existing position, initialize a new one
@@ -87,8 +87,8 @@ class MarginMap {
     }
 
     updateContractBalances(address, amount, price, isBuyOrder,position) {
-        const position = this.margins.get(address) || this.initMargin(address, 0, price);
-        console.log('updating the above position for amount '+position + ' '+amount)
+        //const position = this.margins.get(address) || this.initMargin(address, 0, price);
+        console.log('updating the above position for amount '+position + ' '+amount + ' address '+address+' is buy '+isBuyOrder)
         // For buy orders, increase contracts and adjust margin
         if (isBuyOrder) {
             position.contracts += amount;
