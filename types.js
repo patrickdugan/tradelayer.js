@@ -223,6 +223,7 @@ const Types = {
                 break;
             case 18:
                 params = Decode.decodeTradeContractOnchain(encodedPayload.substr(index));
+                console.log('initially decoded contract trade params '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid=txId
                 params = await Validity.validateTradeContractOnchain(params, sender, block)

@@ -2,7 +2,7 @@ const litecoin = require('litecoin');
 const json = require('big-json');
 const util = require('util');
 const TxUtils = require('./txUtils');
-const Types = require('./types.js');
+//const Types = require('./types.js');
 const db = require('./db.js');
 
 const clientConfig = /*test ?*/ {
@@ -149,8 +149,12 @@ class TxIndex {
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
-                //console.log('payload '+payload)
-                await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });            
+                console.log('payload '+payload+JSON.stringify(txDetails))
+               try {
+                    await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });
+                } catch (dbError) {
+                    console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
+                }      
             }
         }
     }
@@ -242,6 +246,7 @@ class TxIndex {
     }
 
     static async processTransaction(payload, txId, marker) {
+        const Types = require('./Types.js'); // Lazy load Types
         // Process the transaction...
         const sender = await TxUtils.getSender(txId);
         const reference = await TxUtils.getReference(txId);

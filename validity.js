@@ -6,6 +6,7 @@ const PropertyList = require('./property.js')
 const OracleList = require('./oracle.js')
 const ContractRegistry = require('./contractRegistry.js')
 const TallyMap = require('./tally.js')
+const BigNumber = require('bignumber.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -530,9 +531,9 @@ const Validity = {
             }
 
             // Check if notionalValue is a number
-            if (typeof params.notionalValue !== 'number') {
+            if (typeof params.notionalValue !== 'number'||params.notionalValue ==0) {
                 params.valid = false;
-                params.reason += "Notional value must be a number. ";
+                params.reason += "Notional value must be a non-zero number. ";
             }
 
             // Check if expiryPeriod is an integer
@@ -609,20 +610,24 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
-            const initialMarginPerContract = await contractsRegistry.getInitialMargin(contractId);
-            const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+
+            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+            console.log('checking contract details validity ' + JSON.stringify(contractDetails))
+            if(contractDetails==null||contractDetails=={}){
+                params.valid=false
+                params.reason+= "contractId not found"
+                return params
+            }
+
+            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, contractDetails);
+            const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
             // Check if the sender has enough balance for the initial margin
-            const hasSufficientBalance = await TallyMap.hasSufficientBalance(senderAddress, collateralPropertyId, totalInitialMargin);
+            const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.collateralPropertyId, params.totalInitialMargin);
             if (!hasSufficientBalance) {
                 throw new Error('Insufficient balance for initial margin');
             }
 
-            const contractDetails = await contractRegistry.getContractDetails(params.contractId);
-            if(contractDetails==null){
-                params.valid=false
-                params.reason+= "contractId not found"
-            }
             if(params.leverage>50){
                 params.valid=false
                 params.reason+= "Stop encouraging gambling!"

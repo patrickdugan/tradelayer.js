@@ -12,6 +12,14 @@ class OracleList {
         return OracleList.instance;
     }
 
+    static async getAllOracles() {
+        const instance = OracleList.getInstance();
+        await OracleList.load(); // Make sure the oracles are loaded
+
+        // Convert the Map of oracles to an array
+        return Array.from(instance.oracles.values());
+    }
+
     async addOracle(oracleId, oracleData) {
         try {
             // Add to in-memory map

@@ -14,7 +14,7 @@ async function issueContractSeries(adminAddress, underlyingOracleId, collateralP
             underlyingOracleId: underlyingOracleId,
             onChainData: [],
             notionalPropertyId: 0,
-            notionalValue: 0.01,
+            notionalValue: 1,
             collateralPropertyId: collateralPropertyId,
             leverage: leverage,
             expiryPeriod: expiryPeriod,

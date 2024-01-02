@@ -9,6 +9,8 @@ const Activations = require('./activation.js')
 const Orderbook = require('./orderbook.js')
 const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
+const OracleList = require('./oracle.js')
+const MarginMap = require('./marginMap.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -100,16 +102,36 @@ app.post('/getOrderBook', async (req, res) => {
     }
 });
 
+app.post('/getContractOrderBook', async (req, res) => {
+    try {
+        const { contractId } = req.body;
+        const orderBookKey = `contract-${contractId}`;
+
+        // Instantiate your Orderbook class with the specific contractId
+        const orderbook = new Orderbook(orderBookKey);
+        await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
+
+        // Retrieve the specific order book data
+        const orderBookData = orderbook.getOrderBookData();
+        res.json(orderBookData);
+    } catch (error) {
+        console.error('Error fetching contract order book:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
 app.post('/listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
-
+        //const contractsRegistry = ContractRegistry.getInstance(); // Access singleton instance
+        //console.log(JSON.stringify(contractsRegistry))
         // Assuming loadContractsFromDB is a static method
-        await ContractRegistry.loadContractsFromDB(); // Load contracts from the database
-
+        //ContractRegistry.loadContractsFromDB(); // Load contracts from the database
+        //console.log('contract series array '+contractSeriesArray)
         // Assuming getAllContracts is a static method
-        const contractSeriesArray = ContractRegistry.getAllContracts(); // Get all contract series
+        const contractSeriesArray = await ContractRegistry.getAllContracts(); // Get all contract series
+        console.log('contract series array '+JSON.stringify(contractSeriesArray))
         res.json(contractSeriesArray);
     } catch (error) {
         console.error('Error fetching contract series:', error);
@@ -121,7 +143,7 @@ app.post('/listContractSeries', async (req, res) => {
 app.post('/listOracles', async (req, res) => {
     try {
         console.log('Fetching oracle list');
-        const oracleArray = await OracleRegistry.getAllOracles(); // Implement this in OracleRegistry
+        const oracleArray = await OracleList.getAllOracles(); // Implement this in OracleRegistry
         res.json(oracleArray);
     } catch (error) {
         console.error('Error fetching oracle list:', error);
@@ -138,6 +160,7 @@ app.get('/contractTradeHistory/:contractId', async (req, res) => {
 app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
     const { propertyId1, propertyId2 } = req.params;
     const tradeHistory = await Orderbook.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2);
+    console.log('returning trade history '+JSON.stringify(tradeHistory))
     res.json(tradeHistory);
 });
 
@@ -152,6 +175,18 @@ app.get('/oracleHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
     const oracleHistory = await Oracles.getHistory(contractId);
     res.json(oracleHistory);
+});
+
+
+app.get('/contractPosition/:address/:contractId', async (req, res) => {
+    const { address, contractId } = req.params;
+    try {
+        const marginMap = await MarginMap.getInstance(contractId);
+        const position = marginMap.getPositionForAddress(address);
+        res.json(position);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
 });
 
 app.get('/clearingHistory/:contractId', async (req, res) => {
@@ -173,7 +208,7 @@ app.get('/walletBalances/:address', async (req, res) => {
     res.json(balances);
 });
 
-app.get('/contractPosition/:address/:contractId', async (req, res) => {
+app.get('/walletPosition/:address/:contractId', async (req, res) => {
     const { address, contractId } = req.params;
     try {
         const position = await WalletCache.getContractPositionForAddressAndContractId(address, contractId);
