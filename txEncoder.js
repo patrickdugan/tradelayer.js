@@ -427,6 +427,7 @@ const Encode = {
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
+            params.destinationAddr
         ];
         return payload.join(',');
     }

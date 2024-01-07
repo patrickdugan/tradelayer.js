@@ -163,7 +163,7 @@ class Activation {
             3: { name: "Trade Token for UTXO", active: false },
             4: { name: "Commit Token", active: false },
             5: { name: "On-chain Token for Token", active: false },
-            6: { name: "cancelOrder", active: false }
+            6: { name: "cancelOrder", active: false },
             7: { name: "Create Whitelist", active: false },
             8: { name: "Update Admin", active: false },
             9: { name: "Issue Attestation", active: false },
