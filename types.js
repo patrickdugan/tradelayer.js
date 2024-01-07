@@ -274,13 +274,13 @@ const Types = {
                 params = Decode.decodePublishNewTx(encodedPayload.substr(index));
                 break;
             case 33:
-                params = Decode.decodeCreateDerivativeOfLRC20OrRGB(encodedPayload.substr(index));
+                params = Decode.decodeColoredCoin(encodedPayload.substr(index));
                 break;
             case 34:
-                params = Decode.decodeRegisterOPCTVCovenant(encodedPayload.substr(index));
+                params = Decode.decodeCrossLayerBridge(encodedPayload.substr(index));
                 break;
             case 35:
-                params = Decode.decodeMintColoredCoin(encodedPayload.substr(index));
+                params = Decode.decodeOPCTVCovenant(encodedPayload.substr(index));
                 break;
           default:
             throw new Error('Unknown transaction type');
