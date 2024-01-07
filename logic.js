@@ -134,13 +134,13 @@ const Logic = {
                 Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
                 break;
             case 33:
-                Logic.createDerivativeOfLRC20OrRGB(params);
+                Logic.coloredCoin(params);
                 break;
             case 34:
-                Logic.registerOP_CTVCovenant(params);
+                Logic.crossLayerBridge(params);
                 break;
             case 35:
-                Logic.mintColoredCoin(params);
+                Logic.OP_CTVCovenant(params);
                 break;
             default:
                 console.log(`Unhandled transaction type: ${txNumber}`);

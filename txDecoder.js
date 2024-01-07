@@ -339,17 +339,17 @@ const Decode = {
     },
 
     // Decode Create Derivative of LRC20 or RGB
-    decodeCreateDerivativeOfLRC20OrRGB: (payload) => {
+    decodeColoredCoin: (payload) => {
         const parts = payload.split(',');
         return {
-            lrc20TokenSeriesId1: parseInt(parts[0], 36),
+            propertyId1: parseInt(parts[0], 36),
             lrc20TokenSeriesId2: parseInt(parts[1], 36),
             rgb: parts[2] === '1'
         };
     },
 
     // Decode Register OP_CTV Covenant
-    decodeRegisterOPCTVCovenant: (payload) => {
+    decodeOPCTVCovenant: (payload) => {
         const parts = payload.split(',');
         return {
             txid: parts[0],
@@ -362,7 +362,7 @@ const Decode = {
 
 
     // Decode Mint Colored Coin
-    decodeMintColoredCoin: (payload) => {
+    decodeCrossLayerBridge: (payload) => {
         const parts = payload.split(',');
         return {
             propertyId: parseInt(parts[0], 36),
