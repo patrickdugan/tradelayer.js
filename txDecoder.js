@@ -167,16 +167,17 @@ const Decode = {
     decodePublishOracleData: (payload) => {
         const parts = payload.split(',');
         const data = {
-            price: parseInt(parts[0], 36)
+            oracleId: parseInt(parts[0], 36), // Decode oracleId as the first part
+            price: parseInt(parts[1], 36)     // Adjust indices for other parts
         };
-        if (parts[1]) {
-            data.high = parseInt(parts[1], 36);
-        }
         if (parts[2]) {
-            data.low = parseInt(parts[2], 36);
+            data.high = parseInt(parts[2], 36);
         }
         if (parts[3]) {
-            data.close = parseInt(parts[3], 36);
+            data.low = parseInt(parts[3], 36);
+        }
+        if (parts[4]) {
+            data.close = parseInt(parts[4], 36);
         }
         return data;
     },

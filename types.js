@@ -203,7 +203,9 @@ const Types = {
                 break;
             case 14:
                 params = Decode.decodePublishOracleData(encodedPayload.substr(index));
+                console.log('publish oracle params '+ JSON.stringify(params))
                 params.senderAddress= sender
+                console.log('publish oracle sender '+sender)
                 params.txid=txId
                 params = await Validity.validatePublishOracleData(sender, params, txId)
                 break;

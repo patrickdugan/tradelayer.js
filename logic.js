@@ -77,7 +77,7 @@ const Logic = {
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
                 break;
             case 14:
-                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
+                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.block);
                 break;
             case 15:
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry);
@@ -591,10 +591,10 @@ const Logic = {
 	    return oracleId;
 	},
 
-    async publishOracleData(oracleId, price, high, low, close, oracleRegistry) {
-
+    async publishOracleData(oracleId, price, high, low, close, block) {
+        console.log('publishing Oracle Data '+oracleId + ' '+ price)
 	    // Publish data to the oracle
-	    await oracleRegistry.publishData(oracleId, { price, high, low, close });
+	    await OracleList.publishData(oracleId, price, high, low, close, block);
 	    console.log(`Data published to oracle ${oracleId}`);
         return
 	},

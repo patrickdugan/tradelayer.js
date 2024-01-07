@@ -37,7 +37,7 @@ class OracleList {
         }
     }
 
-       static async getOracleData(oracleId) {
+    static async getOracleData(oracleId) {
         const instance = OracleList.getInstance();
 
         // Check if in-memory map is empty and load if necessary
@@ -55,8 +55,10 @@ class OracleList {
         }
 
         // If not found in-memory, optionally check the database
-        const oracleDB = dbInstance.getDatabase('oracleList');
+        const oracleDB = db.getDatabase('oracleList');
+        console.log('oracle key '+oracleKey)
         const dbOracle = await oracleDB.findOneAsync({ _id: oracleKey });
+        console.log('db oracle '+ JSON.stringify(dbOracle))
         if (dbOracle) {
             return dbOracle;
         }
@@ -65,6 +67,27 @@ class OracleList {
         return null;
     }
 
+
+    static async publishData(oracleId, price, high, low, close, blockHeight) {
+        try {
+            const instance = OracleList.getInstance();
+
+            // Prepare oracle data
+            const oracleData = { price, high, low, close, blockHeight };
+
+            // Update in-memory oracle data (optional)
+            const oracleKey = `oracle-${oracleId}-${blockHeight}`;
+            instance.oracles.set(oracleKey, oracleData);
+
+            // Save oracle data to the database
+            await instance.saveOracleData(oracleId, oracleData, blockHeight);
+
+            console.log(`Data published to oracle ${oracleId} for block height ${blockHeight}`);
+        } catch (error) {
+            console.error(`Error publishing data to oracle ${oracleId} at block height ${blockHeight}:`, error);
+            throw error;
+        }
+    }
 
     // Static method to get the singleton instance
     static getInstance() {
@@ -90,7 +113,23 @@ class OracleList {
         }
     }
 
+     static async isAdmin(senderAddress, oracleId) {
+        try {
+            const oracleKey = `oracle-${oracleId}`;
+            console.log('checking admin for oracle key '+oracleKey)
+            const oracleDB = db.getDatabase('oracleList');
+            const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
 
+            if (oracleData && oracleData.name.adminAddress === senderAddress) {
+                return true; // The sender is the admin
+            } else {
+                return false; // The sender is not the admin
+            }
+        } catch (error) {
+            console.error(`Error verifying admin for oracle ${oracleId}:`, error);
+            throw error;
+        }
+    }
 
     static async verifyAdmin(oracleId, adminAddress) {
         const oracleKey = `oracle-${oracleId}`;
@@ -182,7 +221,7 @@ class OracleList {
     async saveOracleData(oracleId, data, blockHeight) {
         const oracleDataDB = db.getDatabase('oracleData');
         const recordKey = `oracle-${oracleId}-${blockHeight}`;
-
+        console.log('saving published oracle data to key '+recordKey)
         const oracleDataRecord = {
             _id: recordKey,
             oracleId,
