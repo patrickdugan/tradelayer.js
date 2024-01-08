@@ -1,66 +1,49 @@
-const db = require('./db.js');
-const path = require('path');
+const { dbFactory } = require('./db.js');
 
 class PropertyManager {
-    static instance = null;
 
-    constructor() {
-        if (PropertyManager.instance) {
-            return PropertyManager.instance;
-        }
-
-        this.propertyIndex = new Map();
-        PropertyManager.instance = this;
+    constructor(db) {
+        this.db = db;
+        this.properties = new Map();
     }
 
-    static getInstance() {
-        if (!PropertyManager.instance) {
-            PropertyManager.instance = new PropertyManager();
-        }
-        return PropertyManager.instance;
-    }
-
-    static async load() {
-        console.log('loading property list');
+    async load() {
         try {
-            const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
-            if (propertyIndexEntry && propertyIndexEntry.value) {
+            const entry = await this.db.findOneAsync({ _id: 'propertyIndex' });
+            if (entry && entry.value) {
                 // Check if the value is a string and parse it as JSON
-                const data = typeof propertyIndexEntry.value === 'string' ? JSON.parse(propertyIndexEntry.value) : propertyIndexEntry.value;
+                const data = typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value;
 
                 // Ensure the data is an array of arrays before converting it to a Map
                 if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
-                    this.propertyIndex = new Map(data);
+                    this.properties = new Map(data);
                 } else {
                     console.error('Invalid data format for propertyIndex:', data);
-                    this.propertyIndex = new Map();
+                    this.properties = new Map();
                 }
-            } else {
-                this.propertyIndex = new Map(); // Initialize with an empty Map if no data is found
-            }
+            } 
         } catch (error) {
             console.error('Error loading data from NeDB:', error);
-            this.propertyIndex = new Map(); // Use an empty Map in case of an error
+            //this.properties = new Map(); // Use an empty Map in case of an error
         }
+        console.log('Loaded property list');
     }
 
+    async save() {
+        const json = JSON.stringify([...this.properties.entries()]);
+        await this.db.updateAsync({ _id: 'propertyIndex' }, { _id: 'propertyIndex', value: json }, { upsert: true });
+        console.log('Updated propertties:' + this.properties);
+    }
 
-    async getNextPropertyId() {
-        await PropertyManager.load();
-        let maxId = 0;
-        for (let key of this.propertyIndex.keys()) {
-            maxId = Math.max(maxId, key);
-        }
-        return maxId + 1;
+    clear() {
     }
 
     async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
         // Check if the ticker already exists
-
-        if (this.propertyIndex.has(ticker)) {
+        if (this.properties.has(ticker)) {
             return new (`Error: Ticker "${ticker}" already exists.`);
         }
-        for (let [key, value] of this.propertyIndex.entries()) {
+        for (let [key, value] of this.properties.entries()) {
             if (value.ticker === ticker) {
                 return Error(`Ticker "${ticker}" already exists.`);
             }
@@ -70,11 +53,10 @@ class PropertyManager {
         await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
-      }
+    }
 
     async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress) {
-        
-        const propertyTypeIndexes = {
+        const cats = {
             'Fixed': 1,
             'Managed': 2,
             'Native': 3,
@@ -83,67 +65,36 @@ class PropertyManager {
             'Non-Fungible': 6,
         };
 
-        if (!propertyTypeIndexes[type]) {
+        if (!cats[type]) {
             throw new Error('Invalid property type.');
         }
 
-        this.propertyIndex.set(propertyId, {
+        this.properties.set(propertyId, {
             ticker,
             totalInCirculation,
-            type: propertyTypeIndexes[type],
+            type: cats[type],
             whitelistId: whitelistId,
             backupAddress: backupAddress
         });
+
         await this.save();
-        return console.log('updated Property Index '+this.propertyIndex)
     }
 
-    async inspectPropertyIndex() {
-        const propertyManager = PropertyManager.getInstance();
-
-        // Load the properties
-        await PropertyManager.load();
-
-        // Convert the Map into an array of key-value pairs
-        const propertiesArray = Array.from(propertyManager.propertyIndex.entries());
-
-        // Alternatively, convert the Map into an object for easier visualization
-        const propertiesObject = Object.fromEntries(propertyManager.propertyIndex);
-
-        console.log('Properties as Array:', propertiesArray);
-        console.log('Properties as Object:', propertiesObject);
+    dump() {
+        console.log('Properties:', this.getProperties());
     }
 
-    async save() {
-
-        const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
-        const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
-
-        await new Promise((resolve, reject) => {
-            db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+    getNextPropertyId() {
+        let maxId = Math.max(...this.properties.keys())
+        return maxId + 1;
     }
 
-    static async getPropertyData(propertyId) {
-        const instance = PropertyManager.getInstance();
-
-        // If the propertyIndex is empty, load it first
-        if (instance.propertyIndex.size === 0) {
-            await instance.loadPropertyIndex();
-        }
-
-        // Try to get the property data again after loading
-        return instance.propertyIndex.get(propertyId) || null;
+    getProperty(propertyId) {
+        return this.properties.get(propertyId);
     }
 
-
-    static async getPropertyIndex() {
-        await this.load(); // Ensure the property list is loaded
-        // Transform the Map into an array of objects, each representing a property
-        return Array.from(this.propertyIndex).map(([id, property]) => ({
+    getProperties() {
+        return Array.from(this.properties).map(([id, property]) => ({
             id,
             ticker: property.ticker,
             totalInCirculation: property.totalInCirculation,
@@ -151,19 +102,21 @@ class PropertyManager {
         }));
     }
 
-     /**
-     * Checks if the given propertyId is a synthetic token.
-     * @param {number} propertyId - The ID of the property to check.
-     * @returns {boolean} - True if the property is a synthetic token, false otherwise.
-     */
-    static async isSyntheticToken(propertyId) {
-        if(!this.propertyIndex){await this.load();}  // Make sure the property list is loaded
-        const propertyInfo = this.propertyIndex.get(propertyId);
-        // Check if the propertyInfo is valid and the type is 5 (synthetic)
+    /**
+    * Checks if the given propertyId is a synthetic token.
+    * @param {number} propertyId - The ID of the property to check.
+    * @returns {boolean} - True if the property is a synthetic token (5), false otherwise.
+    */
+    isSyntheticToken(propertyId) {
+        const propertyInfo = this.getProperty(propertyId);
         return propertyInfo && propertyInfo.type === 5;
     }
-
-    // ... other methods like verifyIfManaged, updateAdmin ...
 }
 
-module.exports = PropertyManager;
+let list
+(async() => {
+    list = new PropertyManager(dbFactory.getDatabase('propertyList'))
+    await list.load()
+})();
+
+exports.propertyList = list

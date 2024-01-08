@@ -11,7 +11,7 @@ const listen = require('./listener');
 //const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules

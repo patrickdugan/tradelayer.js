@@ -1,4 +1,4 @@
-const Tally = require('../tally')
+const Tally = require('../tally.js')
 
 describe('=== TALLY TESTS ===', () => {
     path = './dbTL'

@@ -1,4 +1,4 @@
-const TxUtils = require('./TxUtils'); // Import your TxUtils class
+const TxUtils = require('./txUtils.js'); // Import your TxUtils class
 
 async function runTestTokenTrades() {
     // Define some sample data for testing
