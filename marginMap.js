@@ -56,7 +56,7 @@ class MarginMap {
     }
 
     // Update the margin for a specific address and contract
-    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
+    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse, clearing) {
             const position = this.margins.get(address) || this.initMargin(address, 0, price);
 
             // Calculate the required margin for the new amount
@@ -76,7 +76,8 @@ class MarginMap {
                 position.margin -= requiredMargin;
 
                 // Realize PnL if the position is being reduced
-                this.realizePnL(address, contractId, amount, price);
+                let realizedPNL = this.realizePnL(address, contractId, amount, price);
+                //pass the rPNL into Available or deduct from margin TallyMap.updateBalance()
             }
 
             // Ensure the margin doesn't go below zero
@@ -162,8 +163,10 @@ class MarginMap {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
             // Example: this.triggerLiquidation(address, contractId);
+            return true
         } else {
             console.log(`Margin level is adequate for address ${address}.`);
+            return false
         }
     }
 

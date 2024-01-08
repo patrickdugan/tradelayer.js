@@ -596,6 +596,7 @@ const Logic = {
 	    // Publish data to the oracle
 	    await OracleList.publishData(oracleId, price, high, low, close, block);
 	    console.log(`Data published to oracle ${oracleId}`);
+        
         return
 	},
 

@@ -1,5 +1,5 @@
 const tallyMap = require('./tally.js')
-const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contractRegistry.js');
+const ContractList = require('./contractRegistry.js');
 
 class Clearing {
     // ... other methods ...
@@ -184,38 +184,117 @@ class Clearing {
         await this.saveChannels(channels);
     }
 
-    async makeSettlement(blockHeight) {
-        console.log('Making settlement for positions at block height:', blockHeight);
+    async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
+	    // Determine if the contract is an oracle contract
+	    const isOracle = await ContractRegistry.isOracleContract(contractId);
 
-        // Fetch positions that need adjustment
-        let positions = await this.fetchPositionsForAdjustment(blockHeight);
+	    let latestData;
 
-        // Update margin maps based on mark prices and current contract positions
-        await this.updateMarginMaps(blockHeight);
+	    if (isOracle) {
+	        // Access the database where oracle data is stored
+	        const oracleDataDB = db.getDatabase('oracleData');
+	        // Query the database for the latest oracle data for the given contract
+	        latestData = await oracleDataDB.findOneAsync({ contractId: contractId }).sort({ blockHeight: -1 }).limit(1);
+	    } else {
+	        // Access the database where volume index data is stored
+	        const volumeIndexDB = db.getDatabase('volumeIndex');
+	        // Query the database for the latest volume index data for the given contract
+	        latestData = await volumeIndexDB.findOneAsync({ contractId: contractId }).sort({ blockHeight: -1 }).limit(1);
+	    }
 
-        // Iterate through each position to adjust for profit or loss
-        for (let position of positions) {
-            // Calculate the unrealized profit or loss based on the new mark price
-            let pnlChange = this.calculatePnLChange(position, blockHeight);
+	    // Check if the latest data is for the current block height
+	    if (latestData && latestData.blockHeight === blockHeight) {
+	        return true; // Data is updated for this block height
+	    }
 
-            // Adjust the balance based on the P&L change
-            if (pnlChange !== 0) {
-                await this.adjustBalance(position.holderAddress, pnlChange);
-            }
-        }
+	    return false; // No updated data for this block height
+	}
 
-        // Perform additional tasks like loss socialization if needed
-        await this.performAdditionalSettlementTasks(blockHeight, positions);
 
-        // Save the updated position information
-        await this.savePositions(positions);
-        return [positions, this.balanceChanges];
+    static async makeSettlement(blockHeight) {
+	    	  const contracts = await ContractList.getAllContracts();
+	    for (const contract of contracts) {
+	        // Check if there is updated price information for the contract
+	        if (await isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
+	            // Proceed with processing for this contract
+	            console.log('Making settlement for positions at block height:', blockHeight);
+	            let collateralId = ContractList.getCollateralId(contract.id)
+	        // Fetch positions that need adjustment
+	        let positions = await Clearing.fetchPositionsForAdjustment(contractid, blockHeight);
+		        // Iterate through each position to adjust for profit or loss
+		        for (let position of positions) {
+		            // Calculate the unrealized profit or loss based on the new mark price
+		            let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
+
+
+		            
+
+
+		            if (pnlChange !== 0) {
+		            	// Update margin maps based on mark prices and current contract positions
+		       			await Clearing.updateMarginMaps(blockHeight, position, blockHeight, contract.id, collateralId);
+
+		            // Adjust the balance based on the P&L change
+		                await Clearing.adjustBalance(position.holderAddress, pnlChange);
+		            }
+		        }
+
+		        // Perform additional tasks like loss socialization if needed
+		        await Clearing.performAdditionalSettlementTasks(blockHeight, positions);
+
+		        // Save the updated position information
+		        await Clearing.savePositions(positions);
+		        return [positions, this.balanceChanges];
+	        } else {
+	            // Skip processing for this contract
+	            console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
+	            continue;
+	        }
+	    }
+    }
+
+    static async updateMarginMaps(blockHeight, position, block, contractId, collateralId, inverse) {
+	    let liquidationData = [];
+	    for (let position of positions) {
+	        // Load margin map for the specific contract series
+	        let marginMap = await marginMap.loadMarginMap(position.contractSeriesId);
+
+	        // Update margin based on PnL change
+	        let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
+	        marginMap.updateMargin(contractId, position.holderAddress, pnlChange, null, null, inverse, true);
+
+	        // Check if maintenance margin is breached
+	        if (marginMap.checkMarginMaintainence(position.holderAddress)) {
+	            // Move funds from available to margin in TallyMap
+	            if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
+			            await TallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
+	            }else{
+	            	let liquidationOrders = await marginMap.triggerLiquidations(position);
+	                liquidationData.push(...liquidationOrders);
+	            }
+	        }
+
+	        // Save the updated margin map
+	        await marginMap.saveMarginMap(blockHeight);
+	    }
+
+	    return liquidationData;
+	}
+
+	 static async getCurrentMarkPrice(blockHeight) {
+        // Logic to fetch the current market price for a contract at blockHeight
+        // Example: return await marketPriceDB.findOne({blockHeight: blockHeight});
+    }
+
+    static async getPreviousMarkPrice(blockHeight) {
+        // Logic to fetch the market price for a contract at the previous block height
+        // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
     }
 
     // Additional functions to be implemented
-    async fetchPositionsForAdjustment(blockHeight) {
+    static async fetchPositionsForAdjustment(contractid, blockHeight) {
         try {
-            let marginMap = await MarginMap.loadMarginMap(this.seriesId, blockHeight);
+            let marginMap = await MarginMap.loadMarginMap(contractid, blockHeight);
 
             let positions = Array.from(marginMap.margins.entries()).map(([address, positionData]) => ({
                 address,
@@ -230,10 +309,10 @@ class Clearing {
         }
     }
 
-    calculatePnLChange(position, blockHeight) {
+    static calculatePnLChange(position, blockHeight) {
         // Retrieve the current and previous mark prices for the block height
-        let currentMarkPrice = this.getCurrentMarkPrice(blockHeight);
-        let previousMarkPrice = this.getPreviousMarkPrice(blockHeight);
+        let currentMarkPrice = Clearing.getCurrentMarkPrice(blockHeight);
+        let previousMarkPrice = Clearing.getPreviousMarkPrice(blockHeight);
 
         // Calculate the price change per contract
         let priceChangePerContract = currentMarkPrice - previousMarkPrice;
@@ -248,13 +327,13 @@ class Clearing {
         return pnlChange;
     }
 
-    async adjustBalance(holderAddress, pnlChange) {
+    static async adjustBalance(holderAddress, pnlChange, contractId) {
         try {
             // Assuming you have a defined propertyId for the type of balance being adjusted
-            const propertyId = this.getPropertyIdForPnL(); 
+            const propertyId = ContractRegistry.getCollateralId(contractId); 
 
             // Fetch the current balance details
-            let balanceDetails = this.tallyMap.getAddressBalances(holderAddress);
+            let balanceDetails = TallyMap.getAddressBalances(holderAddress);
 
             // Assuming balanceDetails includes the fields 'available' and 'reserved'
             let available = balanceDetails.available || 0;
@@ -264,28 +343,17 @@ class Clearing {
             available += pnlChange;
 
             // Update the balance in TallyMap
-            this.tallyMap.updateBalance(holderAddress, propertyId, available, reserved);
-            this.balanceChanges.push({
+            TallyMap.updateBalance(holderAddress, propertyId, available, reserved);
+            /*this.balanceChanges.push({
                 blockHeight: this.currentBlockHeight, // Assuming this is set appropriately
                 holderAddress: holderAddress,
                 pnlChange: pnlChange
-            });
+            });*/
 
             // Optionally, you can save the TallyMap state to the database
-            await this.tallyMap.save(someBlockHeight); // Replace someBlockHeight with the appropriate block height
+            await TallyMap.save(); // Replace someBlockHeight with the appropriate block height
         } catch (error) {
             console.error('Error adjusting balance for address:', holderAddress, error);
-            throw error;
-        }
-    }
-
-    async getBalance(holderAddress) {
-        // Replace this with actual data fetching logic for your system
-        try {
-            let balance = await database.getBalance(holderAddress);
-            return balance;
-        } catch (error) {
-            console.error('Error fetching balance for address:', holderAddress, error);
             throw error;
         }
     }
@@ -384,19 +452,6 @@ class Clearing {
             throw error;
         }
     }
-
-
-    async getBalance(holderAddress) {
-        // Replace this with actual data fetching logic for your system
-        try {
-            let balance = await database.getBalance(holderAddress);
-            return balance;
-        } catch (error) {
-            console.error('Error fetching balance for address:', holderAddress, error);
-            throw error;
-        }
-    }
-
 
     // Implement or reference these helper methods as per your system's logic
     calculateTotalMargin(positions) {
