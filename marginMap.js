@@ -56,7 +56,7 @@ class MarginMap {
     }
 
     // Update the margin for a specific address and contract
-    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse, clearing) {
+    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
             const position = this.margins.get(address) || this.initMargin(address, 0, price);
 
             // Calculate the required margin for the new amount
@@ -76,7 +76,7 @@ class MarginMap {
                 position.margin -= requiredMargin;
 
                 // Realize PnL if the position is being reduced
-                let realizedPNL = this.realizePnL(address, contractId, amount, price);
+                let realizedPNL = this.realizePnL(address, contractId, amount, price, inverse);
                 //pass the rPNL into Available or deduct from margin TallyMap.updateBalance()
             }
 
@@ -119,6 +119,48 @@ class MarginMap {
         this.margins.set(address, position);
     }
 
+     /**
+     * Clears the margin for a specific address and contract based on PnL change.
+     * @param {string} contractId - The ID of the contract.
+     * @param {string} address - The address of the position holder.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     */
+    clearMargin(contractId, address, pnlChange, inverse) {
+        const position = this.margins.get(address);
+
+        if (!position) {
+            console.error(`No position found for address ${address}`);
+            return;
+        }
+
+        // Calculate the change in margin based on PnL
+        const marginChange = this.calculateMarginChange(pnlChange, inverse);
+
+        // Update the margin for the position
+        position.margin -= marginChange;
+
+        // Ensure the margin doesn't go below zero
+        position.margin = Math.max(0, position.margin);
+
+        // Update the margin map
+        this.margins.set(address, position);
+
+        // Additional logic if needed
+    }
+
+    /**
+     * Calculates the change in margin based on PnL change.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     * @returns {number} - The change in margin.
+     */
+    calculateMarginChange(pnlChange, inverse) {
+        // Example calculation, replace with your specific logic
+        const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
+
+        return marginChange;
+    }
     
     calculateMarginRequirement(contracts, price, inverse) {
         

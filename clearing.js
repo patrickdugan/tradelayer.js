@@ -1,5 +1,6 @@
 const tallyMap = require('./tally.js')
 const ContractList = require('./contractRegistry.js');
+const db = require('./db.js')
 
 class Clearing {
     // ... other methods ...
@@ -219,12 +220,13 @@ class Clearing {
 	            // Proceed with processing for this contract
 	            console.log('Making settlement for positions at block height:', blockHeight);
 	            let collateralId = ContractList.getCollateralId(contract.id)
+	            let inverse = ContractList.isInverse(contract.id)
 	        // Fetch positions that need adjustment
-	        let positions = await Clearing.fetchPositionsForAdjustment(contractid, blockHeight);
+	        let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
 		        // Iterate through each position to adjust for profit or loss
 		        for (let position of positions) {
 		            // Calculate the unrealized profit or loss based on the new mark price
-		            let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
+		            let pnlChange = Clearing.calculatePnLChange(position, blockHeight, inverse);
 
 
 		            
@@ -235,7 +237,7 @@ class Clearing {
 		       			await Clearing.updateMarginMaps(blockHeight, position, blockHeight, contract.id, collateralId);
 
 		            // Adjust the balance based on the P&L change
-		                await Clearing.adjustBalance(position.holderAddress, pnlChange);
+		                await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
 		            }
 		        }
 
@@ -261,7 +263,7 @@ class Clearing {
 
 	        // Update margin based on PnL change
 	        let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
-	        marginMap.updateMargin(contractId, position.holderAddress, pnlChange, null, null, inverse, true);
+	        marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
 
 	        // Check if maintenance margin is breached
 	        if (marginMap.checkMarginMaintainence(position.holderAddress)) {
@@ -281,14 +283,59 @@ class Clearing {
 	    return liquidationData;
 	}
 
-	 static async getCurrentMarkPrice(blockHeight) {
-        // Logic to fetch the current market price for a contract at blockHeight
-        // Example: return await marketPriceDB.findOne({blockHeight: blockHeight});
+	static async getCurrentMarkPrice(blockHeight) {
+        // Find the highest block height that is less than or equal to the target block height
+           const oracleDataDB = db.getDatabase('oracleData');
+        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+
+        let closestLowerBlockHeight = null;
+        for (const entry of indexArray) {
+            if (entry.blockHeight <= blockHeight) {
+                closestLowerBlockHeight = entry.blockHeight;
+                break;
+            }
+        }
+
+        // If a closest lower block height is found, retrieve the corresponding data
+        if (closestLowerBlockHeight !== null) {
+            const result = await oracleDataDB.findOneAsync({ blockHeight: closestLowerBlockHeight });
+            return result;
+        } else {
+            // No data found for the target block height or lower
+            return null;
+        }
     }
+
 
     static async getPreviousMarkPrice(blockHeight) {
         // Logic to fetch the market price for a contract at the previous block height
         // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
+        const oracleDataDB = db.getDatabase('oracleData');
+
+        	         // Find the 2nd highest block height that is less than the current block height
+        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+
+        let secondHighestBlockHeight = null;
+        let count = 0;
+        for (const entry of indexArray) {
+            if (entry.blockHeight < blockHeight) {
+                if (count === 1) {
+                    secondHighestBlockHeight = entry.blockHeight;
+                    break;
+                }
+                count++;
+            }
+        }
+
+        // If a 2nd highest block height is found, retrieve the corresponding data
+        if (secondHighestBlockHeight !== null) {
+            const result = await oracleDataDB.findOneAsync({ blockHeight: secondHighestBlockHeight });
+            return result;
+        } else {
+            // No data found for the 2nd latest block
+            return null;
+        }
+
     }
 
     // Additional functions to be implemented
