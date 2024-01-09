@@ -44,6 +44,7 @@ class ContractRegistry {
 
         // Create the contract series object
         const contractSeries = {
+            id: seriesId,
             native: native,
             underlyingOracleId: underlyingOracleId,
             onChainData: onChainData,
@@ -202,7 +203,7 @@ class ContractRegistry {
 
     
     static async getContractType(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error("Contract type not found for contract ID: " + contractId);
         }
@@ -210,7 +211,7 @@ class ContractRegistry {
     }
 
     static async isNativeContract(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
     }
 
@@ -227,7 +228,7 @@ class ContractRegistry {
 
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
-        const contractInfo = await this.getContractInfo(contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         
         // Check if contractInfo exists and has the 'inverse' property
         if (contractInfo && typeof contractInfo.inverse !== 'undefined') {

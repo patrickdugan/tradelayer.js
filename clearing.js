@@ -11,36 +11,36 @@ class Clearing {
 
     }
 
-    async clearingFunction(blockHeight) {
-        console.log(`Starting clearing operations for block ${blockHeight}`);
+    static async clearingSequence(blockHeight) {
+        //console.log(`Starting clearing operations for block ${blockHeight}`);
 
         // 1. Fee Cache Buy
-        await this.feeCacheBuy();
+        //await this.feeCacheBuy();
 
         // 2. Update last exchange block in channels
-        await this.updateLastExchangeBlock(blockHeight);
+        //await this.updateLastExchangeBlock(blockHeight);
 
         // 3. Calculate and update UPNL (Unrealized Profit and Loss)
-        await this.calculateAndUpdateUPNL(blockHeight);
+        //await this.calculateAndUpdateUPNL(blockHeight);
 
-        await this.processLiquidationsAndMarginAdjustments(blockHeight)
+        //await this.processLiquidationsAndMarginAdjustments(blockHeight)
 
         // 4. Create channels for new trades
-        await this.createChannelsForNewTrades(blockHeight);
+        //await this.createChannelsForNewTrades(blockHeight);
 
         // 5. Set channels as closed if needed
-        await this.closeChannelsIfNeeded();
+        //await this.closeChannelsIfNeeded();
 
         // 6. Settle trades at block level
-        await this.makeSettlement(blockHeight);
+        await Clearing.makeSettlement(blockHeight);
 
-        console.log(`Clearing operations completed for block ${blockHeight}`);
+        //console.log(`Clearing operations completed for block ${blockHeight}`);
     }
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...
 
-    async feeCacheBuy() {
+    static async feeCacheBuy() {
         console.log('Processing fee cache buy');
 
         // Fetch fees from your data source (e.g., database or in-memory store)
@@ -56,7 +56,7 @@ class Clearing {
         await this.saveFees(fees);
     }
 
-   async updateLastExchangeBlock(blockHeight) {
+   static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
 
         // Fetch the list of active channels
@@ -74,7 +74,7 @@ class Clearing {
     }
 
 
-    async calculateAndUpdateUPNL(blockHeight) {
+    /*static async calculateAndUpdateUPNL(blockHeight) {
         console.log('Calculating and updating UPNL for all contracts at block:', blockHeight);
         
         const contracts = await getAllContracts(); // Fetch all contracts
@@ -86,9 +86,9 @@ class Clearing {
 
             await marginMap.saveMarginMap(blockHeight); // Save the updated margin map
         }
-    }
+    }*/
 
-    async processLiquidationsAndMarginAdjustments(blockHeight) {
+    static async processLiquidationsAndMarginAdjustments(blockHeight) {
         console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
 
         const contracts = await getAllContracts(); // Fetch all contracts
@@ -130,7 +130,7 @@ class Clearing {
 
 
 
-    async createChannelsForNewTrades(blockHeight) {
+    static async createChannelsForNewTrades(blockHeight) {
         //console.log('Creating channels for new trades');
 
         // Fetch new trades from the block
@@ -149,7 +149,7 @@ class Clearing {
      * @param {number} blockHeight - The block height for which to load clearing deltas.
      * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
      */
-    async loadClearingDeltasForBlock(blockHeight) {
+	static async loadClearingDeltasForBlock(blockHeight) {
         try {
             const clearingDeltas = [];
             const query = { blockHeight: blockHeight }; // Query to match the block height
@@ -167,7 +167,7 @@ class Clearing {
         }
     }
 
-    async closeChannelsIfNeeded() {
+    static async closeChannelsIfNeeded() {
         console.log('Closing channels if needed');
 
         // Fetch all active channels
@@ -185,9 +185,9 @@ class Clearing {
         await this.saveChannels(channels);
     }
 
-    async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
+    static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
 	    // Determine if the contract is an oracle contract
-	    const isOracle = await ContractRegistry.isOracleContract(contractId);
+	    const isOracle = await ContractList.isOracleContract(contractId);
 
 	    let latestData;
 
@@ -195,12 +195,29 @@ class Clearing {
 	        // Access the database where oracle data is stored
 	        const oracleDataDB = db.getDatabase('oracleData');
 	        // Query the database for the latest oracle data for the given contract
-	        latestData = await oracleDataDB.findOneAsync({ contractId: contractId }).sort({ blockHeight: -1 }).limit(1);
+				       
+			const latestData = await oracleDataDB.findOneAsync({ contractId: contractId });
+			if (latestData) {
+			    const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+			    const latestBlockData = sortedData[0];
+			    // Now, latestBlockData contains the document with the highest blockHeight
+			    console.log('Latest Block Data:', latestBlockData);
+			} else {
+			    console.error('No data found for contractId:', contractId);
+			}
 	    } else {
 	        // Access the database where volume index data is stored
 	        const volumeIndexDB = db.getDatabase('volumeIndex');
-	        // Query the database for the latest volume index data for the given contract
-	        latestData = await volumeIndexDB.findOneAsync({ contractId: contractId }).sort({ blockHeight: -1 }).limit(1);
+				        // Query the database for the latest volume index data for the given contract
+			const latestData = await volumeIndexDB.findOneAsync({ contractId: contractId });
+			if (latestData) {
+			    const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+			    const latestBlockData = sortedData[0];
+			    // Now, latestBlockData contains the document with the highest blockHeight
+			    console.log('Latest Block Data:', latestBlockData);
+			} else {
+			    console.error('No data found for contractId:', contractId);
+			}
 	    }
 
 	    // Check if the latest data is for the current block height
@@ -211,12 +228,12 @@ class Clearing {
 	    return false; // No updated data for this block height
 	}
 
-
     static async makeSettlement(blockHeight) {
 	    	  const contracts = await ContractList.getAllContracts();
 	    for (const contract of contracts) {
+	    	console.log('looping contracts in settlement ' +JSON.stringify(contract))
 	        // Check if there is updated price information for the contract
-	        if (await isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
+	        if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
 	            // Proceed with processing for this contract
 	            console.log('Making settlement for positions at block height:', blockHeight);
 	            let collateralId = ContractList.getCollateralId(contract.id)
@@ -227,11 +244,7 @@ class Clearing {
 		        for (let position of positions) {
 		            // Calculate the unrealized profit or loss based on the new mark price
 		            let pnlChange = Clearing.calculatePnLChange(position, blockHeight, inverse);
-
-
-		            
-
-
+ 
 		            if (pnlChange !== 0) {
 		            	// Update margin maps based on mark prices and current contract positions
 		       			await Clearing.updateMarginMaps(blockHeight, position, blockHeight, contract.id, collateralId);
@@ -249,7 +262,7 @@ class Clearing {
 		        return [positions, this.balanceChanges];
 	        } else {
 	            // Skip processing for this contract
-	            console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
+	            //console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
 	            continue;
 	        }
 	    }
@@ -308,7 +321,6 @@ class Clearing {
             return null;
         }
     }
-
 
     static async getPreviousMarkPrice(blockHeight) {
         // Logic to fetch the market price for a contract at the previous block height
@@ -409,7 +421,7 @@ class Clearing {
         }
     }
 
-    async performAdditionalSettlementTasks(blockHeight, positions) {
+    static async performAdditionalSettlementTasks(blockHeight, positions) {
         try {
             // Step 1: Calculate total losses
             const totalLoss = this.getTotalLoss(positions);
@@ -432,7 +444,7 @@ class Clearing {
     }
 
 
-    async auditSettlementTasks(blockHeight, positions) {
+    static async auditSettlementTasks(blockHeight, positions) {
         try {
             // Check total margin consistency
             let totalMargin = this.calculateTotalMargin(positions);
@@ -462,7 +474,7 @@ class Clearing {
         }
     }
 
-    async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
+    static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
         const clearingDB = dbInstance.getDatabase('clearing');
         const recordKey = `clearing-${contractId}-${blockHeight}`;
 
@@ -486,7 +498,7 @@ class Clearing {
         }
     }
 
-    async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
+    static async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
         const clearingDB = dbInstance.getDatabase('clearing');
         try {
             const query = {
@@ -505,7 +517,7 @@ class Clearing {
     }
 
     // Implement or reference these helper methods as per your system's logic
-    calculateTotalMargin(positions) {
+    static calculateTotalMargin(positions) {
         let totalMargin = 0;
         positions.forEach(position => {
             totalMargin += position.margin;  // Assuming each position object has a 'margin' property
@@ -513,14 +525,14 @@ class Clearing {
         return totalMargin;
     }
 
-    isMarginConsistent(totalMargin) {
-        const expectedMargin = this.getExpectedTotalMargin(); // Implement this method based on your system
+    static isMarginConsistent(totalMargin) {
+        const expectedMargin = Clearing.getExpectedTotalMargin(); // Implement this method based on your system
         // You can also implement a range-based check instead of an exact value match
         return totalMargin === expectedMargin;
     }
 
-    async saveAuditIndex(blockHeight) {
-        const auditData = this.prepareAuditData(); // Implement this method to prepare data for saving
+    static async saveAuditIndex(blockHeight) {
+        const auditData = Clearing.prepareAuditData(); // Implement this method to prepare data for saving
         try {
             await database.saveAuditData(blockHeight, auditData);
         } catch (error) {
@@ -529,7 +541,7 @@ class Clearing {
         }
     }
 
-    prepareAuditData(blockHeight, positions, balanceChanges) {
+    static prepareAuditData(blockHeight, positions, balanceChanges) {
         // The data structure to hold the audit data
         let auditData = {};
 
@@ -555,7 +567,7 @@ class Clearing {
         return JSON.stringify(auditData);
     }
 
-    async lossSocialization(contractId, collateral, fullAmount) {
+    static async lossSocialization(contractId, collateral, fullAmount) {
             let count = 0;
             let zeroPositionAddresses = [];
 
@@ -593,7 +605,7 @@ class Clearing {
             await this.tallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
     }
 
-    async getTotalLoss(contractId, notionalSize) {
+    static async getTotalLoss(contractId, notionalSize) {
             let vwap = 0;
             let volume = 0;
             let bankruptcyVWAP = 0;
@@ -628,7 +640,7 @@ class Clearing {
             return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
     }
 
-    async fetchAuditData(auditDataKey) {
+    static async fetchAuditData(auditDataKey) {
         // Implement logic to fetch audit data from the database
         try {
             const auditData = await database.getAuditData(auditDataKey);

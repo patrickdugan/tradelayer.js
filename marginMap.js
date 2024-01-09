@@ -406,12 +406,14 @@ class MarginMap {
 
     async getMarketPrice(contract) {
         let marketPrice;
-
+        console.log('looking up market price '+JSON.stringify(contract))
         if (ContractsRegistry.isOracleContract(contract.id)) {
             // Fetch the 3-block TWAP for oracle-based contracts
+            console.log('getting TWAP for contract '+contract.id)
             marketPrice = await Oracles.getTwap(contract.id, 3); // Assuming the getTwap method accepts block count as an argument
         } else if (ContractsRegistry.isNativeContract(contract.id)) {
             // Fetch VWAP data for native contracts
+            console.log('getting native VWAP for contract '+contract.id)
             const contractInfo = ContractsRegistry.getContractInfo(contract.id);
             if (contractInfo && contractInfo.indexPair) {
                 const [propertyId1, propertyId2] = contractInfo.indexPair;

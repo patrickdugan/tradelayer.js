@@ -243,7 +243,7 @@ class Main {
                 // Additional processing for each transaction
             }
             //do clearing
-            Clearing.makeSettlement(blockHeight)
+            Clearing.clearingSequence(blockHeight)
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 

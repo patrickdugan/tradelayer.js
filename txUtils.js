@@ -875,7 +875,7 @@ const TxUtils = {
     },
 
 
-    async createContractOnChainTradeTransaction(thisAddress, contractParams,txNumber) {
+    async createContractOnChainTradeTransaction(thisAddress, contractParams) {
         try {
             // Step 1: Create the activation payload
             // Assuming activation payload format: 'activation:<txTypeToActivate>'
