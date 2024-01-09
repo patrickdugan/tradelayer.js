@@ -136,16 +136,20 @@ class MarginMap {
 
         // Calculate the change in margin based on PnL
         const marginChange = this.calculateMarginChange(pnlChange, inverse);
-
+        console.log('clearing margin for position in amount ' +JSON.stringify(position) + ' ' +marginChange)
         // Update the margin for the position
         position.margin -= marginChange;
 
         // Ensure the margin doesn't go below zero
+        if(position.margin >0){
+            console.log('liquidation wipeout! '+position.margin)
+            //need to do some emergency liquidation stuff here
+        }
         position.margin = Math.max(0, position.margin);
 
         // Update the margin map
         this.margins.set(address, position);
-
+        return position
         // Additional logic if needed
     }
 
@@ -158,7 +162,7 @@ class MarginMap {
     calculateMarginChange(pnlChange, inverse) {
         // Example calculation, replace with your specific logic
         const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
-
+        console.log('calculated marginChange with inverse? ' +inverse + 'marginChange')
         return marginChange;
     }
     

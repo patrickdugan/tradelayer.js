@@ -263,23 +263,26 @@ class Clearing {
 
 	        // Update margin based on PnL change
 	        let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
-	        marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
-
+	        console.log('updatingMarginMaps '+marginMap + ' '+ pnlChange)
+	        const newPosition = marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
+	        console.log('new Position '+ JSON.stringify(newPosition))
 	        // Check if maintenance margin is breached
 	        if (marginMap.checkMarginMaintainence(position.holderAddress)) {
+	            ''
 	            // Move funds from available to margin in TallyMap
 	            if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
 			            await TallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
 	            }else{
-	            	let liquidationOrders = await marginMap.triggerLiquidations(position);
+	            	console.log('insufficient maint. margin for '+JSON.stringify(newPosition))
+	            	let liquidationOrders = await marginMap.triggerLiquidations(newPosition);
 	                liquidationData.push(...liquidationOrders);
 	            }
 	        }
-
-	        // Save the updated margin map
-	        await marginMap.saveMarginMap(blockHeight);
 	    }
 
+	        // Save the updated margin map
+	    await marginMap.saveMarginMap(blockHeight);
+	    console.log('any liquidations '+liquidationData)
 	    return liquidationData;
 	}
 
@@ -348,6 +351,7 @@ class Clearing {
                 contracts: positionData.contracts, // Ensure this reflects the actual structure of positionData
                 ...positionData
             }));
+            console.log('fetching positions for adjustment '+positions)
 
             return positions;
         } catch (error) {
@@ -360,7 +364,7 @@ class Clearing {
         // Retrieve the current and previous mark prices for the block height
         let currentMarkPrice = Clearing.getCurrentMarkPrice(blockHeight);
         let previousMarkPrice = Clearing.getPreviousMarkPrice(blockHeight);
-
+        console.log('calculating price change '+currentMarkPrice, previousMarkPrice)
         // Calculate the price change per contract
         let priceChangePerContract = currentMarkPrice - previousMarkPrice;
 
@@ -385,7 +389,7 @@ class Clearing {
             // Assuming balanceDetails includes the fields 'available' and 'reserved'
             let available = balanceDetails.available || 0;
             let reserved = balanceDetails.reserved || 0;
-
+            console.log('adjusting balance in clearing '+propertyId, available, reserved)
             // Adjust available balance based on P&L change
             available += pnlChange;
 
