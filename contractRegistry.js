@@ -216,7 +216,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-        console.log('retrieving db info for contract '+contractId)
+        //console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -318,9 +318,14 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        const instance = ContractRegistry.getInstance(); // Access singleton instance
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        return contractInfo && contractInfo.type === 'oracle';
+        let isOracle
+        if(contractInfo.native.native==false){
+            isOracle = contractInfo.native.underlyingOracleId
+        }else if (contractInfo.native.native==true){
+            isOracle = false
+        }
+        return isOracle
     }
 
     // Calculate the 1-hour funding rate for an oracle contract

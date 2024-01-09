@@ -1,6 +1,8 @@
 const tallyMap = require('./tally.js')
 const ContractList = require('./contractRegistry.js');
+const MarginMap = require('./marginMap.js')
 const db = require('./db.js')
+const util = require('util');
 
 class Clearing {
     // ... other methods ...
@@ -187,21 +189,25 @@ class Clearing {
 
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
 	    // Determine if the contract is an oracle contract
-	    const isOracle = await ContractList.isOracleContract(contractId);
 
+	    const isOracle = await ContractList.isOracleContract(contractId);
 	    let latestData;
 
-	    if (isOracle) {
+	    if (isOracle!=false) {
 	        // Access the database where oracle data is stored
 	        const oracleDataDB = db.getDatabase('oracleData');
 	        // Query the database for the latest oracle data for the given contract
 				       
-			const latestData = await oracleDataDB.findOneAsync({ contractId: contractId });
+			const latestData = await oracleDataDB.findOneAsync({ oracleId: isOracle });
 			if (latestData) {
 			    const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
 			    const latestBlockData = sortedData[0];
 			    // Now, latestBlockData contains the document with the highest blockHeight
-			    console.log('Latest Block Data:', latestBlockData);
+			    //console.log('Latest Block Data:', latestBlockData);
+			    if(latestData.blockHeight==blockHeight){
+	   				//console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+	   				return true
+	   			}
 			} else {
 			    console.error('No data found for contractId:', contractId);
 			}
@@ -214,32 +220,32 @@ class Clearing {
 			    const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
 			    const latestBlockData = sortedData[0];
 			    // Now, latestBlockData contains the document with the highest blockHeight
+			    if(latestData.blockHeight==blockHeight){
+
 			    console.log('Latest Block Data:', latestBlockData);
+	   				//console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+	   				return true
+	   			}
 			} else {
 			    console.error('No data found for contractId:', contractId);
 			}
 	    }
-
-	    // Check if the latest data is for the current block height
-	    if (latestData && latestData.blockHeight === blockHeight) {
-	        return true; // Data is updated for this block height
-	    }
-
+	    //console.log('no new data')
 	    return false; // No updated data for this block height
 	}
 
     static async makeSettlement(blockHeight) {
 	    	  const contracts = await ContractList.getAllContracts();
 	    for (const contract of contracts) {
-	    	console.log('looping contracts in settlement ' +JSON.stringify(contract))
 	        // Check if there is updated price information for the contract
 	        if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
+	        	console.log('new price')
 	            // Proceed with processing for this contract
 	            console.log('Making settlement for positions at block height:', blockHeight);
 	            let collateralId = ContractList.getCollateralId(contract.id)
 	            let inverse = ContractList.isInverse(contract.id)
 	        // Fetch positions that need adjustment
-	        let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
+	        	let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
 		        // Iterate through each position to adjust for profit or loss
 		        for (let position of positions) {
 		            // Calculate the unrealized profit or loss based on the new mark price
@@ -299,30 +305,40 @@ class Clearing {
 	    return liquidationData;
 	}
 
-	static async getCurrentMarkPrice(blockHeight) {
-        // Find the highest block height that is less than or equal to the target block height
-           const oracleDataDB = db.getDatabase('oracleData');
-        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+		
+	
+	static async getCurrentMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
+	    // Find the highest block height that is less than or equal to the target block height
+	    const oracleDataDB = db.getDatabase('oracleData');
 
-        let closestLowerBlockHeight = null;
-        for (const entry of indexArray) {
-            if (entry.blockHeight <= blockHeight) {
-                closestLowerBlockHeight = entry.blockHeight;
-                break;
-            }
-        }
+	    try {
+	        // Fetch all entries sorted by blockHeight in descending order
+	        const entries = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
 
-        // If a closest lower block height is found, retrieve the corresponding data
-        if (closestLowerBlockHeight !== null) {
-            const result = await oracleDataDB.findOneAsync({ blockHeight: closestLowerBlockHeight });
-            return result;
-        } else {
-            // No data found for the target block height or lower
-            return null;
-        }
-    }
+	        let closestLowerBlockHeight = null;
+	        for (const entry of entries) {
+	            if (entry.blockHeight <= blockHeight) {
+	                closestLowerBlockHeight = entry.blockHeight;
+	                break;
+	            }
+	        }
 
-    static async getPreviousMarkPrice(blockHeight) {
+	        // If a closest lower block height is found, retrieve the corresponding data
+	        if (closestLowerBlockHeight !== null) {
+	            const result = await oracleDataDB.findOne({ blockHeight: closestLowerBlockHeight });
+	            return result;
+	        } else {
+	            // No data found for the target block height or lower
+	            return null;
+	        }
+	    } catch (error) {
+	        console.error('Error fetching data from Oracle DB:', error);
+	        throw error;
+	    }
+	}
+
+
+    static async getPreviousMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
         // Logic to fetch the market price for a contract at the previous block height
         // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
         const oracleDataDB = db.getDatabase('oracleData');
@@ -363,7 +379,7 @@ class Clearing {
                 contracts: positionData.contracts, // Ensure this reflects the actual structure of positionData
                 ...positionData
             }));
-            console.log('fetching positions for adjustment '+positions)
+            console.log('fetching positions for adjustment '+JSON.stringify(positions))
 
             return positions;
         } catch (error) {
@@ -372,10 +388,18 @@ class Clearing {
         }
     }
 
-    static calculatePnLChange(position, blockHeight) {
+    static async calculatePnLChange(position, blockHeight, oracleId, propertyId1, propertyId2) {
         // Retrieve the current and previous mark prices for the block height
-        let currentMarkPrice = Clearing.getCurrentMarkPrice(blockHeight);
-        let previousMarkPrice = Clearing.getPreviousMarkPrice(blockHeight);
+        let currentMarkPrice
+        let previousMarkPrice
+        if(oracleId!=null){
+
+	        currentMarkPrice = await Clearing.getCurrentMarkPrice(blockHeight, oracleId);
+	        previousMarkPrice = await Clearing.getPreviousMarkPrice(blockHeight, oracleId);
+    	}else{
+    		currentMarkPrice = await Clearing.getCurrentMarkPrice(blockHeight, propertyId1, propertyId2);
+        	previousMarkPrice = await Clearing.getPreviousMarkPrice(blockHeight, propertyId1, propertyId2);
+    	}
         console.log('calculating price change '+currentMarkPrice, previousMarkPrice)
         // Calculate the price change per contract
         let priceChangePerContract = currentMarkPrice - previousMarkPrice;
