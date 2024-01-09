@@ -247,18 +247,12 @@ class Clearing {
 	        // Fetch positions that need adjustment
 	        	let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
 		        // Iterate through each position to adjust for profit or loss
-		        for (let position of positions) {
-		            // Calculate the unrealized profit or loss based on the new mark price
-		            let pnlChange = Clearing.calculatePnLChange(position, blockHeight, inverse);
- 
-		            if (pnlChange !== 0) {
-		            	// Update margin maps based on mark prices and current contract positions
-		       			await Clearing.updateMarginMaps(blockHeight, position, blockHeight, contract.id, collateralId);
+	
+		        // Update margin maps based on mark prices and current contract positions
+		       	await Clearing.updateMarginMaps(blockHeight, positiond, blockHeight, contract.id, collateralId);
 
-		            // Adjust the balance based on the P&L change
-		                await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
-		            }
-		        }
+		        // Adjust the balance based on the P&L change
+		        await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
 
 		        // Perform additional tasks like loss socialization if needed
 		        await Clearing.performAdditionalSettlementTasks(blockHeight, positions);
@@ -274,7 +268,7 @@ class Clearing {
 	    }
     }
 
-    static async updateMarginMaps(blockHeight, position, block, contractId, collateralId, inverse) {
+    static async updateMarginMaps(blockHeight, positions, block, contractId, collateralId, inverse) {
 	    let liquidationData = [];
 	    for (let position of positions) {
 	        // Load margin map for the specific contract series
@@ -310,10 +304,27 @@ class Clearing {
 	static async getCurrentMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
 	    // Find the highest block height that is less than or equal to the target block height
 	    const oracleDataDB = db.getDatabase('oracleData');
+	    let entries
 
-	    try {
-	        // Fetch all entries sorted by blockHeight in descending order
-	        const entries = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+		  try {
+		        let query;
+
+		        if (oracleId) {
+		            query = { oracleId: oracleId };
+		        } else if (propertyId1 && propertyId2) {
+		            query = { 'propertyId1-propertyId2': `${propertyId1}-${propertyId2}` };
+		        } else {
+		            // No valid parameters provided
+		            return null;
+		        }
+
+		        // Query the database for the latest oracle data based on the specified parameters
+		        const entries = await oracleDataDB.findOneAsync(query);
+
+		    } catch (error) {
+		        console.error('Error fetching data from Oracle DB:', error);
+		        throw error;
+		    }
 
 	        let closestLowerBlockHeight = null;
 	        for (const entry of entries) {
@@ -331,10 +342,7 @@ class Clearing {
 	            // No data found for the target block height or lower
 	            return null;
 	        }
-	    } catch (error) {
-	        console.error('Error fetching data from Oracle DB:', error);
-	        throw error;
-	    }
+	    
 	}
 
 
@@ -343,8 +351,30 @@ class Clearing {
         // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
         const oracleDataDB = db.getDatabase('oracleData');
 
-        	         // Find the 2nd highest block height that is less than the current block height
-        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+         try {
+		        let query;
+
+		        if (oracleId) {
+		            query = { oracleId: oracleId };
+		        } else if (propertyId1 && propertyId2) {
+		            query = { 'propertyId1-propertyId2': `${propertyId1}-${propertyId2}` };
+		        } else {
+		            // No valid parameters provided
+		            return null;
+		        }
+
+		        // Find the 2nd highest block height that is less than the current block height
+		        const indexArray = await oracleDataDB.findOneAsync({
+		            $and: [
+		                { blockHeight: { $lt: blockHeight } },
+		                query
+		            ]
+		        }).sort({ blockHeight: -1 });
+
+		    } catch (error) {
+		        console.error('Error fetching data from Oracle DB:', error);
+		        throw error;
+		    }
 
         let secondHighestBlockHeight = null;
         let count = 0;
