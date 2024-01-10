@@ -52,7 +52,7 @@ class MarginMap {
         console.log('margin should be topped up '+JSON.stringify(this.margins))
 
         // Save changes to the database or your storage solution
-        await this.saveMarginMap();
+        //await this.saveMarginMap();
     }
 
     // Update the margin for a specific address and contract

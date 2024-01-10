@@ -241,7 +241,7 @@ class Clearing {
 	        if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
 	        	console.log('new price')
 	            // Proceed with processing for this contract
-	            console.log('Making settlement for positions at block height:', blockHeight);
+	            console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
 	            let collateralId = ContractList.getCollateralId(contract.id)
 	            let inverse = ContractList.isInverse(contract.id)
 	        // Fetch positions that need adjustment
@@ -298,8 +298,6 @@ class Clearing {
 	    console.log('any liquidations '+liquidationData)
 	    return liquidationData;
 	}
-
-		
 	
 	static async getCurrentMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
 	    // Find the highest block height that is less than or equal to the target block height

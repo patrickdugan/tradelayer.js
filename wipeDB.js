@@ -30,6 +30,7 @@ const oracleListDbPath = path.join(__dirname, 'nedb-data', 'oracleList.db'); // 
 const contractListDbPath = path.join(__dirname, 'nedb-data', 'contractList.db')
 const tradeHistoryDbPath = path.join(__dirname, 'nedb-data', 'tradeHistory.db')
 const marginMapDbPath = path.join(__dirname, 'nedb-data', 'marginMaps.db')
+const oracleDataDbPath = path.join(__dirname, 'nedb-data', 'oracleData.db')
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
@@ -43,3 +44,4 @@ clearDatastore(oracleListDbPath, 'oracleList'); // Clear the oracleList database
 clearDatastore(contractListDbPath, 'contractList')
 clearDatastore(tradeHistoryDbPath, 'tradeHistory')
 clearDatastore(marginMapDbPath, 'marginMaps')
+clearDatastore(oracleDataDbPath, 'oracleData.db')
