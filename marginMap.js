@@ -263,7 +263,7 @@ class MarginMap {
 
         // Retrieve the marginMaps database from your Database instance
         const marginMapsDB = db.getDatabase('marginMaps');
-
+        console.log('saving ' + value + ' to marginMap for '+key)
         return new Promise((resolve, reject) => {
             // Perform an upsert operation
             marginMapsDB.updateAsync(

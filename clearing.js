@@ -249,7 +249,7 @@ class Clearing {
 		        // Iterate through each position to adjust for profit or loss
 	
 		        // Update margin maps based on mark prices and current contract positions
-		       	await Clearing.updateMarginMaps(blockHeight, positiond, blockHeight, contract.id, collateralId);
+		       	await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId);
 
 		        // Adjust the balance based on the P&L change
 		        await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
@@ -270,18 +270,18 @@ class Clearing {
 
     static async updateMarginMaps(blockHeight, positions, block, contractId, collateralId, inverse) {
 	    let liquidationData = [];
+	    console.log('positions in updateMarginMaps '+JSON.stringify(positions))
 	    for (let position of positions) {
 	        // Load margin map for the specific contract series
-	        let marginMap = await marginMap.loadMarginMap(position.contractSeriesId);
+	        let marginMap = await MarginMap.getInstance(position.contractSeriesId);
 
 	        // Update margin based on PnL change
-	        let pnlChange = Clearing.calculatePnLChange(position, blockHeight);
+	        let pnlChange = await Clearing.calculatePnLChange(position, blockHeight);
 	        console.log('updatingMarginMaps '+marginMap + ' '+ pnlChange)
 	        const newPosition = marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
 	        console.log('new Position '+ JSON.stringify(newPosition))
 	        // Check if maintenance margin is breached
-	        if (marginMap.checkMarginMaintainence(position.holderAddress)) {
-	            ''
+	        if (marginMap.checkMarginMaintainence(position.holderAddress,contractId)) {
 	            // Move funds from available to margin in TallyMap
 	            if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
 			            await TallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
@@ -403,7 +403,7 @@ class Clearing {
     static async fetchPositionsForAdjustment(contractid, blockHeight) {
         try {
             let marginMap = await MarginMap.loadMarginMap(contractid, blockHeight);
-
+            console.log('loadingMarginMap the first time ' +JSON.stringify(marginMap))
             let positions = Array.from(marginMap.margins.entries()).map(([address, positionData]) => ({
                 address,
                 contracts: positionData.contracts, // Ensure this reflects the actual structure of positionData
