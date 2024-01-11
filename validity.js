@@ -95,7 +95,7 @@ const Validity = {
 
         const rawTxData = await TxUtils.getRawTransaction(txId)
         if (rawTxData?.blockhash){
-            confirmedBlock = await TxUtils.getBlockHeight(rawTxData?.blockhash)
+            confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
         }
         console.log('send comparing heights' + activationBlock + ' ' + confirmedBlock)
         if (isAlreadyActivated && confirmedBlock > activationBlock && activationBlock != null) { //come back and tighten this up when checkAct block returns null

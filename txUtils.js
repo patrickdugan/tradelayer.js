@@ -34,11 +34,11 @@ const TxUtils = {
 
     async getBlockAsync(height) {     
         const blockHash = await getBlockHashAsync(height);
-        console.log('Block Hash:', blockHash);
+        //console.log('Block Hash:', blockHash);
 
         // Get block details using the hash
         const blockDetails = await getBlockAsync(blockHash);
-        console.log('Block Details:', blockDetails);
+        //console.log('Block Details:', blockDetails);
         return blockDetails
     },
 
@@ -71,7 +71,7 @@ const TxUtils = {
     async getBlockHeight(blockhash){
         let block;
         try {
-            block = await getBlockDataAsync(blockhash, 1);
+            block = await getBlockAsync(blockhash, 1);
             //console.log(`Block data:`, block);
         } catch (error) {
             console.error(`Error fetching transaction for txid ${blockhash}:`, error);
@@ -208,7 +208,7 @@ const TxUtils = {
     async decoderawtransaction(hexString) {
         try {
             // Use the promisified version of decoderawtransaction
-            console.log('decoding')
+            //console.log('decoding')
             return await decoderawtransactionAsync(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
