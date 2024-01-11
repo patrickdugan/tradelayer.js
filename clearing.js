@@ -179,33 +179,221 @@ class Clearing {
         await this.saveChannels(channels)
     }
 
+
     async makeSettlement(blockHeight) {
-        console.log('Making settlement for positions at block height:', blockHeight)
+              const contracts = await ContractList.getAllContracts();
+        for (const contract of contracts) {
+            // Check if there is updated price information for the contract
+            if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
+                console.log('new price')
+                // Proceed with processing for this contract
+                console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
+                let collateralId = ContractList.getCollateralId(contract.id)
+                let inverse = ContractList.isInverse(contract.id)
+            // Fetch positions that need adjustment
+                let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
+                // Iterate through each position to adjust for profit or loss
+    
+                // Update margin maps based on mark prices and current contract positions
+                await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId); //problem child
 
-        // Fetch positions that need adjustment
-        let positions = await this.fetchPositionsForAdjustment(blockHeight)
+                // Adjust the balance based on the P&L change
+                await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
 
-        // Update margin maps based on mark prices and current contract positions
-        await this.updateMarginMaps(blockHeight)
+                // Perform additional tasks like loss socialization if needed
+                await Clearing.performAdditionalSettlementTasks(blockHeight, positions);
 
-        // Iterate through each position to adjust for profit or loss
-        for (let position of positions) {
-            // Calculate the unrealized profit or loss based on the new mark price
-            let pnlChange = this.calculatePnLChange(position, blockHeight)
+                // Save the updated position information
+                await Clearing.savePositions(positions);
+                return [positions, this.balanceChanges];
+            } else {
+                // Skip processing for this contract
+                //console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
+                continue;
+            }
+        }
+    }
+    
+    async getCurrentMarkPrice(blockHeight) {
+        // Find the highest block height that is less than or equal to the target block height
+           const oracleDataDB = db.getDatabase('oracleData');
+        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
 
-            // Adjust the balance based on the P&L change
-            if (pnlChange !== 0) {
-                await this.adjustBalance(position.holderAddress, pnlChange)
+        let closestLowerBlockHeight = null;
+        for (const entry of indexArray) {
+            if (entry.blockHeight <= blockHeight) {
+                closestLowerBlockHeight = entry.blockHeight;
+                break;
             }
         }
 
-        // Perform additional tasks like loss socialization if needed
-        await this.performAdditionalSettlementTasks(blockHeight, positions)
-
-        // Save the updated position information
-        await this.savePositions(positions)
-        return [positions, this.balanceChanges];
+        // If a closest lower block height is found, retrieve the corresponding data
+        if (closestLowerBlockHeight !== null) {
+            const result = await oracleDataDB.findOneAsync({ blockHeight: closestLowerBlockHeight });
+            return result;
+        } else {
+            // No data found for the target block height or lower
+            return null;
+        }
     }
+
+
+    async getPreviousMarkPrice(blockHeight) {
+        // Logic to fetch the market price for a contract at the previous block height
+        // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
+        const oracleDataDB = db.getDatabase('oracleData');
+
+                     // Find the 2nd highest block height that is less than the current block height
+        const indexArray = await oracleDataDB.find({}).sort({ blockHeight: -1 }).exec();
+
+        let secondHighestBlockHeight = null;
+        let count = 0;
+        for (const entry of indexArray) {
+            if (entry.blockHeight < blockHeight) {
+                if (count === 1) {
+                    secondHighestBlockHeight = entry.blockHeight;
+                    break;
+                }
+                count++;
+            }
+        }
+
+        // If a 2nd highest block height is found, retrieve the corresponding data
+        if (secondHighestBlockHeight !== null) {
+            const result = await oracleDataDB.findOneAsync({ blockHeight: secondHighestBlockHeight });
+            return result;
+        } else {
+            // No data found for the 2nd latest block
+            return null;
+        }
+
+    }
+
+
+      /**
+     * Clears the margin for a specific address and contract based on PnL change.
+     * @param {string} contractId - The ID of the contract.
+     * @param {string} address - The address of the position holder.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     */
+    clearMargin(contractId, address, pnlChange, inverse) {
+        const position = this.margins.get(address);
+
+        if (!position) {
+            console.error(`No position found for address ${address}`);
+            return;
+        }
+
+        // Calculate the change in margin based on PnL
+        const marginChange = this.calculateMarginChange(pnlChange, inverse);
+
+        // Update the margin for the position
+        position.margin -= marginChange;
+
+        // Ensure the margin doesn't go below zero
+        position.margin = Math.max(0, position.margin);
+
+        // Update the margin map
+        this.margins.set(address, position);
+
+        // Additional logic if needed
+    }
+
+    /**
+     * Calculates the change in margin based on PnL change.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     * @returns {number} - The change in margin.
+     */
+    calculateMarginChange(pnlChange, inverse) {
+        // Example calculation, replace with your specific logic
+        const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
+
+        return marginChange;
+    }
+
+
+       initMargin(address, contracts, price) {
+        const notional = contracts * price;
+        const margin = notional * 0.1;
+        // Convert contracts and price to BigNumber
+        const contractsBN = new BigNumber(contracts);
+        const priceBN = new BigNumber(price);
+
+        // Calculate notional and margin using BigNumber
+        const notional = contractsBN.times(priceBN);
+        const margin = notional.times(0.1);
+
+        // Create a BigNumber object for margin
+        const marginBN = new BigNumber(margin);
+
+        // Set values in the margins map
+        this.margins.set(address, {
+            contracts,
+            margin,
+            unrealizedPl: 0
+            contracts: contractsBN,
+            margin: marginBN,
+            unrealizedPl: new BigNumber(0)
+        });
+
+        return margin;
+        // Return values as regular numbers
+        return {
+            contracts: contractsBN.toNumber(),
+            margin: marginBN.toNumber(),
+            unrealizedPl: 0
+        };
+    }
+    
+    static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
+        // Determine if the contract is an oracle contract
+
+        const isOracle = await ContractList.isOracleContract(contractId);
+        let latestData;
+
+        if (isOracle!=false) {
+            // Access the database where oracle data is stored
+            const oracleDataDB = db.getDatabase('oracleData');
+            // Query the database for the latest oracle data for the given contract
+                       
+            const latestData = await oracleDataDB.findOneAsync({ oracleId: isOracle });
+            if (latestData) {
+                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+                const latestBlockData = sortedData[0];
+                // Now, latestBlockData contains the document with the highest blockHeight
+                //console.log('Latest Block Data:', latestBlockData);
+                if(latestData.blockHeight==blockHeight){
+                    //console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+                    return true
+                }
+            } else {
+                //console.error('No data found for contractId:', contractId);
+            }
+        } else {
+            // Access the database where volume index data is stored
+            const volumeIndexDB = db.getDatabase('volumeIndex');
+                        // Query the database for the latest volume index data for the given contract
+            const latestData = await volumeIndexDB.findOneAsync({ contractId: contractId });
+            if (latestData) {
+                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+                const latestBlockData = sortedData[0];
+                // Now, latestBlockData contains the document with the highest blockHeight
+                if(latestData.blockHeight==blockHeight){
+
+                console.log('Latest Block Data:', latestBlockData);
+                    //console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+                    return true
+                }
+            } else {
+                //console.error('No data found for contractId:', contractId);
+            }
+        }
+        //console.log('no new data')
+        return false; // No updated data for this block height
+    }
+
 
     // Additional functions to be implemented
     async fetchPositionsForAdjustment(blockHeight) {
