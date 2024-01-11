@@ -11,21 +11,21 @@ class Clearing {
         console.log(`Starting clearing operations for block ${blockHeight}`)
 
         // 1. Fee Cache Buy
-        await this.feeCacheBuy()
+        //await this.feeCacheBuy()
 
         // 2. Update last exchange block in channels
-        await this.updateLastExchangeBlock(blockHeight)
+        //await this.updateLastExchangeBlock(blockHeight)
 
         // 3. Calculate and update UPNL (Unrealized Profit and Loss)
-        await this.calculateAndUpdateUPNL(blockHeight)
+        //await this.calculateAndUpdateUPNL(blockHeight)
 
-        await this.processLiquidationsAndMarginAdjustments(blockHeight)
+        //await this.processLiquidationsAndMarginAdjustments(blockHeight)
 
         // 4. Create channels for new trades
-        await this.createChannelsForNewTrades(blockHeight)
+        //await this.createChannelsForNewTrades(blockHeight)
 
         // 5. Set channels as closed if needed
-        await this.closeChannelsIfNeeded()
+        //await this.closeChannelsIfNeeded()
 
         // 6. Settle trades at block level
         await this.makeSettlement(blockHeight)

@@ -177,6 +177,7 @@ class Main {
                 }
                 // Additional processing for each transaction
             }
+            
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 
