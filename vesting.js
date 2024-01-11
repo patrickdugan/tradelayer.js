@@ -1,29 +1,18 @@
-const InsuranceFund = require('./insurance.js');
-const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
-const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
+const InsuranceFund = require('./insurance.js')
+const { propertyList } = require('./property.js')
+const { tallyMap } = require('./tally.js')
+const { contractRegistry } = require('./contractRegistry')
 
-class TradeLayerManager {
-    static instance = null;
+const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
+
+class Vesting {
 
     constructor(adminAddress) {
-        if (!TradeLayerManager.instance) {
-            this.adminAddress = adminAddress;
-            TradeLayerManager.instance = this;
-        }
-    }
-
-    static async getInstance(adminAddress){
-        if (!TradeLayerManager.instance) {
-            TradeLayerManager.instance = new TradeLayerManager(adminAddress);
-            console.log('generating new TL manager')
-        }
-        console.log('returning TL Manager')
-        return TradeLayerManager.instance;
+        this.adminAddress = adminAddress
     }
 
     async initializeTokens() {
-        const TallyMap = require('./tally.js');
-         const alreadyInitialized = await TallyMap.checkInitializationFlag();
+        const alreadyInitialized = await tallyMap.checkInitializationFlag()
 
         if (!alreadyInitialized) {
             var TLTokenId = 1;
@@ -32,28 +21,28 @@ class TradeLayerManager {
             var TLVESTTokenId = 2;
             const TLVESTTotalAmount = 1500000;
             var amountToInsuranceFund = 250000;
-            const propertyManager = PropertyManager.getInstance()
-            TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
-            TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
+            TLTokenId = await propertyList.createToken('TL', TLTotalAmount, 'Fixed')
+            TLTokenId = await propertyList.createToken('TL', TLTotalAmount, 'Fixed')
+            TLVESTTokenId = await propertyList.createToken('TLVEST', TLVESTTotalAmount, 'Vesting')
 
-            console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
-            var insuranceFund = new InsuranceFund(1,0,0.5)
+            console.log('verifying that propertyid numbering is consistent ' + TLTokenId, TLVESTTokenId)
+            var insuranceFund = new InsuranceFund(1, 0, 0.5)
             // Distribute initial amount to insurance fund
-            insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
-            insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
-            
-            await TallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund);
-            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
-            
-            const balances = await TallyMap.getAddressBalances(this.adminAddress)
+            insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund)
+            insuranceFund.deposit(TLTokenId, amountToInsuranceFund, true)
+
+            await tallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund)
+            await tallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0)
+
+            const balances = await tallyMap.getAddressBalances(this.adminAddress)
 
             // After initializing tokens, set the flag
-            await TallyMap.setInitializationFlag();
+            await tallyMap.setInitializationFlag()
             return balances
         }
     }
 
-    static initializeContractSeries() {
+    async initializeContractSeries() {
         const LTC_TL_Future_ContractId = 1;
         const contractProperties = {
             // Define contract properties such as margin requirements, expiry, etc.
@@ -67,44 +56,44 @@ class TradeLayerManager {
         };
 
         // Create the contract series
-        ContractsRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties);
+        await contractRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties)
 
         // Additional setup if required, such as initializing order books, setting initial market conditions, etc.
     }
 
-    static updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {
+    updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {
         const logScaleMin = 1000;
         const logScaleMax = 100000000;
-        let vestingFactor = Math.log(cumulativeVolumeLTC) / Math.log(logScaleMax);
-        vestingFactor = Math.min(Math.max(vestingFactor, 0), 1);
+        let vestingFactor = Math.log(cumulativeVolumeLTC) / Math.log(logScaleMax)
+        vestingFactor = Math.min(Math.max(vestingFactor, 0), 1)
         const vestingAmount = vestingFactor * currentBlockVolumeLTC;
         // Update vesting balances per address
     }
 
     static calculateTradeRebates(cumulativeVolumeLTC) {
-	    const baseVolume = 1000; // The volume where rebate calculation starts
-	    const minRebate = 0.000003125; // The minimum rebate value
-	    const maxRebate = 0.0001; // The maximum rebate value
+        const baseVolume = 1000; // The volume where rebate calculation starts
+        const minRebate = 0.000003125; // The minimum rebate value
+        const maxRebate = 0.0001; // The maximum rebate value
 
-	    // Ensure cumulative volume is at least at the base volume
-	    if (cumulativeVolumeLTC < baseVolume) {
-	        return maxRebate; // Return max rebate if below base volume
-	    }
+        // Ensure cumulative volume is at least at the base volume
+        if (cumulativeVolumeLTC < baseVolume) {
+            return maxRebate; // Return max rebate if below base volume
+        }
 
-	    // Calculate the rebate using a logarithmic scale
-	    const scale = Math.log(cumulativeVolumeLTC / baseVolume) / Math.log(100000000 / baseVolume);
-	    const rebate = maxRebate - scale * (maxRebate - minRebate);
+        // Calculate the rebate using a logarithmic scale
+        const scale = Math.log(cumulativeVolumeLTC / baseVolume) / Math.log(100000000 / baseVolume)
+        const rebate = maxRebate - scale * (maxRebate - minRebate)
 
-	    // Ensure the rebate is not less than the minimum
-	    return Math.max(rebate, minRebate);
-	}
+        // Ensure the rebate is not less than the minimum
+        return Math.max(rebate, minRebate)
+    }
 
     static performBuyback(feeCaches) {
         feeCaches.forEach(cache => {
-            const orderbook = this.fetchOrderbookForToken(cache.tokenId);
-            const buybackAmount = this.calculateBuybackAmount(cache, orderbook);
+            const orderbook = this.fetchOrderbookForToken(cache.tokenId)
+            const buybackAmount = this.calculateBuybackAmount(cache, orderbook)
             // Execute buyback transaction
-        });
+        })
     }
 
     static fetchOrderbookForToken(tokenId) {
@@ -135,4 +124,4 @@ class TradeLayerManager {
     }
 }
 
-module.exports = TradeLayerManager;
+exports.tlVesting = new Vesting(testAdmin)

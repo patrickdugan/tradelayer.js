@@ -7,7 +7,10 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "mocha tests/*.js"
+    "test": "jest"
+  },
+  "jest": {
+    "testPathIgnorePatterns": ["oldTests1"]
   },
   "repository": {
     "type": "git",
@@ -26,11 +29,19 @@
   "dependencies": {
     "abstract-level": "^1.0.3",
     "axios": "^1.6.2",
+    "big-json": "^3.2.0",
+    "bignumber.js": "^9.1.2",
+    "bitcore-lib-ltc": "^10.0.21",
     "child_process": "^1.0.2",
     "express": "^4.18.2",
     "level": "^8.0.0",
     "level-sublevel": "^6.1.1",
+    "litecoin": "^2.0.5",
     "nedb": "^1.8.0",
+    "node-fetch": "^2.7.0",
     "redis": "^4.6.11"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }

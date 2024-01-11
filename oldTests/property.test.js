@@ -1,8 +1,6 @@
-const PM = require('../property')
+const {propertyList} = require('../property.js')
 
 describe('=== PM TEST ===', () => {
-    path = './dbPM'
-    pm = null
 
     beforeAll(async () => {
         //console.log('--beforeAll');
@@ -10,16 +8,15 @@ describe('=== PM TEST ===', () => {
 
     beforeEach(async () => {
         //console.log('--beforeEach');
-        pm = new PM(path)
-        await pm.load()
+        //await propertyList.load()
     });
 
     test('PUT1', async () => {
-        pm.addProperty(1, 'PROP1', 1000000, 'Fixed')
+        await propertyList.addProperty(1, 'PROP1', 1000000, 'Fixed')
     })
 
-    test('ID1', async () => {
-        let p = pm.getPropertyData(1)
+    test('ID1', () => {
+        let p = propertyList.getProperty(1)
         expect(p != null).toBe(true)
         expect(p.ticker).toBe('PROP1')
         expect(p.type).toBe(1)
@@ -27,11 +24,11 @@ describe('=== PM TEST ===', () => {
     })
 
     test('PUT2', async () => {
-        pm.addProperty(2, 'PROP2', 500000, 'Managed')
+        await propertyList.addProperty(2, 'PROP2', 500000, 'Managed')
     })
 
-    test('ID2', async () => {
-        let p = pm.getPropertyData(2)
+    test('ID2', () => {
+        let p = propertyList.getProperty(2)
         expect(p != null).toBe(true)
         expect(p.ticker).toBe('PROP2')
         expect(p.type).toBe(2)
@@ -40,14 +37,12 @@ describe('=== PM TEST ===', () => {
 
     afterEach(async () => {
         //console.log('--afterEach');
-        await pm.save()
-        await pm.close()
     })
 
     afterAll(async () => {
         //console.log('--afterAll');
-        pm = new PM(path)
-        await pm.save()
-        await pm.close()
+        //propertyList.dump()
+        propertyList.clear()
+        //await pm.save()
     })
 })

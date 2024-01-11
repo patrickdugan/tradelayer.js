@@ -1,32 +1,25 @@
-const assert = require('assert'); // Assertion library
-const sinon = require('sinon'); // Mocking library (if needed)
-const TradeLayerManager = require('./path/to/TradeLayerManager'); // The module under test
+const assert = require('assert')
+const { tlVesting } = require('../vesting.js')
 
-describe('TradeLayerManager', function() {
-    let tradeLayerManager;
-    let mockDependencies; // Mock any dependencies
+describe('TradeLayerManager', function () {
 
-    beforeEach(function() {
+    beforeEach(function () {
         // Set up for each test
-        tradeLayerManager = new TradeLayerManager();
-        mockDependencies = sinon.stub(/* ... */);
-    });
+    })
 
-    afterEach(function() {
+    afterEach(function () {
         // Clean up after each test
-        sinon.restore();
-    });
+    })
 
+    describe('calculateTradeRebates', function () {
+        it('should calculate trade rebates correctly based on cumulative volume', function () {
+            // Simulate different cumulative volume scenarios
+            const lowVolumeRebate = tlVesting.calculateTradeRebates(lowCumulativeVolume)
+            const highVolumeRebate = tlVesting.calculateTradeRebates(highCumulativeVolume)
 
-describe('calculateTradeRebates', function() {
-    it('should calculate trade rebates correctly based on cumulative volume', function() {
-        // Simulate different cumulative volume scenarios
-        const lowVolumeRebate = tradeLayerManager.calculateTradeRebates(lowCumulativeVolume);
-        const highVolumeRebate = tradeLayerManager.calculateTradeRebates(highCumulativeVolume);
-
-        // Assert that rebates are within expected limits
-        assert(lowVolumeRebate >= minRebate && lowVolumeRebate <= maxRebate);
-        assert(highVolumeRebate >= minRebate && highVolumeRebate <= maxRebate);
-    });
-});
-}
+            // Assert that rebates are within expected limits
+            assert(lowVolumeRebate >= minRebate && lowVolumeRebate <= maxRebate)
+            assert(highVolumeRebate >= minRebate && highVolumeRebate <= maxRebate)
+        })
+    })
+})

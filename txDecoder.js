@@ -1,13 +1,12 @@
-// txDecoder.js
 const Decode = {
-   // Decode Activate TradeLayer Transaction
+    // Decode Activate TradeLayer Transaction
     decodeActivateTradeLayer: (payload) => {
-    return { txTypeToActivate: payload };
+        return { txTypeToActivate: payload };
     },
 
     // Decode Token Issue Transaction
     decodeTokenIssue: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             initialAmount: parseInt(parts[0], 36),
             ticker: parts[1],
@@ -20,31 +19,30 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
-      //console.log('send payload to decode '+ payload)
-        const parts = payload.split(';');
+        //console.log('send payload to decode '+ payload)
+        const parts = payload.split(';')
         const sendAll = parts[0] === '1';
         const address = parts[1];
 
         if (sendAll) {
-            return { sendAll:sendAll, address:address };
+            return { sendAll: sendAll, address: address };
         } else if (parts.length === 4) {
             // Single send
-            const propertyId = parseInt(parts[2], 36); // Decode propertyId from base36
-            const amount = parseInt(parts[3], 36); // Decode amount from base36
-            console.log('decoding single send amount ' +amount + ' '+ parts[3])
-            return { sendAll: sendAll, address:address, propertyIds:propertyId, amounts:amount };
+            const propertyId = parseInt(parts[2], 36) // Decode propertyId from base36
+            const amount = parseInt(parts[3], 36) // Decode amount from base36
+            console.log('decoding single send amount ' + amount + ' ' + parts[3])
+            return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount };
         } else {
             // Multi-send
-            const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
-            const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
-            return { sendAll:sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
+            const propertyIds = parts[2].split(',').map(id => parseInt(id, 36))
+            const amounts = parts[3].split(',').map(amt => parseInt(amt, 36))
+            return { sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
     },
 
-
     // Decode Trade Token for UTXO Transaction
     decodeTradeTokenForUTXO: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             propertyIdNumber: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
@@ -54,7 +52,7 @@ const Decode = {
 
     // Decode Commit Token Transaction
     decodeCommitToken: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             propertyIdNumber: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
@@ -64,7 +62,7 @@ const Decode = {
 
     // Decode On-chain Token for Token Transaction
     decodeOnChainTokenForToken: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             propertyIdOffered: parseInt(parts[0], 36),
             propertyIdDesired: parseInt(parts[1], 36),
@@ -74,12 +72,12 @@ const Decode = {
     },
 
     decodeCancelOrder(encodedTx) {
-        const elements = encodedTx.split(',');
+        const elements = encodedTx.split(',')
 
         // Decode the elements
         const fromAddress = elements[0];
-        const offeredPropertyId = parseInt(elements[1], 36);
-        const desiredPropertyId = parseInt(elements[2], 36);
+        const offeredPropertyId = parseInt(elements[1], 36)
+        const desiredPropertyId = parseInt(elements[2], 36)
         const cancelAll = elements[3] === '1';
         const price = elements[4] ? parseInt(elements[4], 36) : undefined;
         const cancelParams = {};
@@ -100,7 +98,7 @@ const Decode = {
 
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             backupAddress: parts[0],
             whitelistId: parseInt(parts[1], 36)
@@ -109,7 +107,7 @@ const Decode = {
 
     // Decode Update Admin Transaction
     decodeUpdateAdmin: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             newAddress: parts[0],
             whitelist: parts[1] === '1',
@@ -121,7 +119,7 @@ const Decode = {
 
     // Decode Issue Attestation Transaction
     decodeIssueAttestation: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             targetAddress: parts[0]
         };
@@ -129,7 +127,7 @@ const Decode = {
 
     // Decode Revoke Attestation Transaction
     decodeRevokeAttestation: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             targetAddress: parts[0]
         };
@@ -137,7 +135,7 @@ const Decode = {
 
     // Decode Grant Managed Token Transaction
     decodeGrantManagedToken: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             amountGranted: parseInt(parts[0], 36),
             addressToGrantTo: parts[1]
@@ -153,7 +151,7 @@ const Decode = {
 
     // Decode Create Oracle Transaction
     decodeCreateOracle: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             ticker: parts[0],
             url: parts[1],
@@ -165,29 +163,29 @@ const Decode = {
 
     // Decode Publish Oracle Data Transaction
     decodePublishOracleData: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         const data = {
             price: parseInt(parts[0], 36)
         };
         if (parts[1]) {
-            data.high = parseInt(parts[1], 36);
+            data.high = parseInt(parts[1], 36)
         }
         if (parts[2]) {
-            data.low = parseInt(parts[2], 36);
+            data.low = parseInt(parts[2], 36)
         }
         if (parts[3]) {
-            data.close = parseInt(parts[3], 36);
+            data.close = parseInt(parts[3], 36)
         }
         return data;
     },
 
     // Decode Close Oracle Transaction
     decodeCloseOracle() {
-      return {}; // No parameters
+        return {}; // No parameters
     },
 
     decodeCreateFutureContractSeries: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
 
         // Check if the contract is native or not
         const isNative = parts[0] === '1';
@@ -197,9 +195,9 @@ const Decode = {
 
         // Parse onChainData only if the contract is not native
         if (!isNative) {
-            onChainDataParts = parts[2].split(';').map(pair => 
+            onChainDataParts = parts[2].split(';').map(pair =>
                 pair.split(':').map(val => val ? parseInt(val, 36) : null)
-            );
+            )
         }
 
         return {
@@ -217,120 +215,119 @@ const Decode = {
         };
     },
 
-
     // Decode Exercise Derivative Transaction
     decodeExerciseDerivative(payload) {
-      const [derivativeContractId, amount] = payload.split(',');
-      return {
-        derivativeContractId: parseInt(derivativeContractId, 36),
-        amount: parseInt(amount, 36),
-      };
+        const [derivativeContractId, amount] = payload.split(',')
+        return {
+            derivativeContractId: parseInt(derivativeContractId, 36),
+            amount: parseInt(amount, 36),
+        };
     },
 
-   // Decode Trade Contract On-chain Transaction
-  decodeTradeContractOnchain: (payload) => {
-    const parts = payload.split(',');
-    return {
-      contractId: parseInt(parts[0], 36),
-      price: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-      side: parts[3] === '1',
-      insurance: parts[4] === '1',
-    };
-  },
+    // Decode Trade Contract On-chain Transaction
+    decodeTradeContractOnchain: (payload) => {
+        const parts = payload.split(',')
+        return {
+            contractId: parseInt(parts[0], 36),
+            price: parseInt(parts[1], 36),
+            amount: parseInt(parts[2], 36),
+            side: parts[3] === '1',
+            insurance: parts[4] === '1',
+        };
+    },
 
-  // Decode Trade Contract in Channel Transaction
-  decodeTradeContractChannel: (payload) => {
-    const parts = payload.split(',');
-    return {
-      contractId: parseInt(parts[0], 36),
-      price: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-      columnAIsSeller: parts[3] === '1',
-      expiryBlock: parseInt(parts[4], 36),
-      insurance: parts[5] === '1',
-    };
-  },
+    // Decode Trade Contract in Channel Transaction
+    decodeTradeContractChannel: (payload) => {
+        const parts = payload.split(',')
+        return {
+            contractId: parseInt(parts[0], 36),
+            price: parseInt(parts[1], 36),
+            amount: parseInt(parts[2], 36),
+            columnAIsSeller: parts[3] === '1',
+            expiryBlock: parseInt(parts[4], 36),
+            insurance: parts[5] === '1',
+        };
+    },
 
-  // Decode Trade Tokens in Channel Transaction
-  decodeTradeTokensChannel: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyid1: parseInt(parts[0], 36),
-      propertyid2: parseInt(parts[1], 36),
-      amountOffered1: parseInt(parts[2], 36),
-      amountDesired2: parseInt(parts[3], 36),
-      expiryBlock: parseInt(parts[4], 36),
-    };
-  },
+    // Decode Trade Tokens in Channel Transaction
+    decodeTradeTokensChannel: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyid1: parseInt(parts[0], 36),
+            propertyid2: parseInt(parts[1], 36),
+            amountOffered1: parseInt(parts[2], 36),
+            amountDesired2: parseInt(parts[3], 36),
+            expiryBlock: parseInt(parts[4], 36),
+        };
+    },
 
-  // Decode Withdrawal Transaction
-  decodeWithdrawal: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
-      amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
-      channelAddress: parts[2],
-    };
-  },
+    // Decode Withdrawal Transaction
+    decodeWithdrawal: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
+            amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
+            channelAddress: parts[2],
+        };
+    },
 
-  // Decode Transfer Transaction
-  decodeTransfer: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
-      amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
-      channelAddress: parts[2],
-    };
-  },
+    // Decode Transfer Transaction
+    decodeTransfer: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
+            amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
+            channelAddress: parts[2],
+        };
+    },
 
-  // Decode Settle Channel PNL Transaction
-  decodeSettleChannelPNL: (payload) => {
-    const parts = payload.split(',');
-    return {
-      txidNeutralized: parts[0],
-      contractId: parseInt(parts[1], 36),
-      amountCancelled: parseInt(parts[2], 36),
-      propertyId: parseInt(parts[3], 36),
-      amountSettled: parseInt(parts[4], 36),
-      close: parts[5] === '1',
-      propertyId2: parts[6] ? parseInt(parts[6], 36) : null,
-      amountDelivered: parts[7] ? parseInt(parts[7], 36) : null,
-    };
-  },
+    // Decode Settle Channel PNL Transaction
+    decodeSettleChannelPNL: (payload) => {
+        const parts = payload.split(',')
+        return {
+            txidNeutralized: parts[0],
+            contractId: parseInt(parts[1], 36),
+            amountCancelled: parseInt(parts[2], 36),
+            propertyId: parseInt(parts[3], 36),
+            amountSettled: parseInt(parts[4], 36),
+            close: parts[5] === '1',
+            propertyId2: parts[6] ? parseInt(parts[6], 36) : null,
+            amountDelivered: parts[7] ? parseInt(parts[7], 36) : null,
+        };
+    },
 
-  // Decode Mint Synthetic Transaction
-  decodeMintSynthetic: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIdUsed: parseInt(parts[0], 36),
-      contractIdUsed: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-    };
-  },
+    // Decode Mint Synthetic Transaction
+    decodeMintSynthetic: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyIdUsed: parseInt(parts[0], 36),
+            contractIdUsed: parseInt(parts[1], 36),
+            amount: parseInt(parts[2], 36),
+        };
+    },
 
-  // Decode Redeem Synthetic Transaction
-  decodeRedeemSynthetic: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIdUsed: parseInt(parts[0], 36),
-      contractIdUsed: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-    };
-  },
+    // Decode Redeem Synthetic Transaction
+    decodeRedeemSynthetic: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyIdUsed: parseInt(parts[0], 36),
+            contractIdUsed: parseInt(parts[1], 36),
+            amount: parseInt(parts[2], 36),
+        };
+    },
 
-  // Decode Pay to Tokens Transaction
-  decodePayToTokens: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIdTarget: parseInt(parts[0], 36),
-      propertyIdUsed: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-    };
-  },
+    // Decode Pay to Tokens Transaction
+    decodePayToTokens: (payload) => {
+        const parts = payload.split(',')
+        return {
+            propertyIdTarget: parseInt(parts[0], 36),
+            propertyIdUsed: parseInt(parts[1], 36),
+            amount: parseInt(parts[2], 36),
+        };
+    },
 
-    decodeBatchMoveZkRollup: (payload) =>{
-       return { ordinalRevealJSON: payload };
+    decodeBatchMoveZkRollup: (payload) => {
+        return { ordinalRevealJSON: payload };
     },
 
     // Decode Publish New Transaction Type
@@ -340,7 +337,7 @@ const Decode = {
 
     // Decode Create Derivative of LRC20 or RGB
     decodeCreateDerivativeOfLRC20OrRGB: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             lrc20TokenSeriesId1: parseInt(parts[0], 36),
             lrc20TokenSeriesId2: parseInt(parts[1], 36),
@@ -350,7 +347,7 @@ const Decode = {
 
     // Decode Register OP_CTV Covenant
     decodeRegisterOPCTVCovenant: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             txid: parts[0],
             associatedPropertyId1: parts[1] ? parseInt(parts[1], 36) : null,
@@ -360,18 +357,14 @@ const Decode = {
         };
     },
 
-
     // Decode Mint Colored Coin
     decodeMintColoredCoin: (payload) => {
-        const parts = payload.split(',');
+        const parts = payload.split(',')
         return {
             propertyId: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36)
         };
     }
-
 }
-
-// ... continue decoding functions for the rest of the transactions ...
 
 module.exports = Decode

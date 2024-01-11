@@ -1,5 +1,4 @@
-const db = require('./db.js');
-const path = require('path');
+const { dbFactory } = require('./db.js')
 
 class InsuranceFund {
     constructor(contractSeriesId, balance, hedgeRatio) {
@@ -31,26 +30,26 @@ class InsuranceFund {
                 amountAvailable: vesting ? 0 : amount,
                 amountVesting: vesting ? amount : 0
             };
-            this.balances.push(newBalance);
+            this.balances.push(newBalance)
         }
 
-        await this.saveSnapshot();
+        await this.saveSnapshot()
         // Additional logic for hedging strategy (if any)
     }
 
     async withdraw(amount) {
         if (amount > this.balance) {
-            throw new Error("Insufficient balance in the insurance fund");
+            throw new Error("Insufficient balance in the insurance fund")
         }
         this.balance -= amount;
-        await this.saveSnapshot();
+        await this.saveSnapshot()
         // Adjust hedging strategy if needed
     }
 
     async handleDeficit(deficitAmount) {
         // Logic to manage the deficit
         // Record the deficit handling event
-        await this.recordEvent('deficit', { amount: deficitAmount });
+        await this.recordEvent('deficit', { amount: deficitAmount })
         // Adjust hedging strategy if needed
     }
 
@@ -62,25 +61,25 @@ class InsuranceFund {
             timestamp: new Date().toISOString()
         };
         await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+            dbFactory.getDatabase('insurance').insert({ key: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
+                if (err) reject(err)
+                resolve()
+            })
+        })
     }
 
 
     async getSnapshot(timestamp) {
         return new Promise((resolve, reject) => {
-            db.getDatabase('insurance').findOne({ key: `snapshot-${timestamp}` }, (err, doc) => {
+            dbFactory.getDatabase('insurance').findOne({ key: `snapshot-${timestamp}` }, (err, doc) => {
                 if (err) {
-                    console.error('Error retrieving snapshot:', err);
-                    reject(err);
+                    console.error('Error retrieving snapshot:', err)
+                    reject(err)
                 } else {
-                    resolve(doc ? doc.value : null);
+                    resolve(doc ? doc.value : null)
                 }
-            });
-        });
+            })
+        })
     }
 
     async recordEvent(eventType, eventData) {
@@ -90,11 +89,11 @@ class InsuranceFund {
             timestamp: new Date().toISOString()
         };
         await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `event-${eventRecord.timestamp}`, value: eventRecord }, (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+            dbFactory.getDatabase('insurance').insert({ key: `event-${eventRecord.timestamp}`, value: eventRecord }, (err) => {
+                if (err) reject(err)
+                resolve()
+            })
+        })
     }
 
     async getPayouts(contractId, startBlock, endBlock) {

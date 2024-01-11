@@ -2,10 +2,12 @@
 const Litecoin = require('litecoin'); // Replace with actual library import
 const async = require('async')
 const util = require('util');
-const litecore = require('bitcore-lib-ltc');
+const litecore = require('bitcore-lib-ltc')
 const Encode = require('./txEncoder.js')
+
 const COIN = 100000000
 const STANDARD_FEE = 10000; // Standard fee in LTC
+
 const client = new Litecoin.Client({
     host: '127.0.0.1',
     port: 18332,
@@ -16,16 +18,36 @@ const client = new Litecoin.Client({
 
 // Promisify the necessary client functions
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
-const getBlockDataAsync = util.promisify(client.getBlock.bind(client))
-const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
+//const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
 const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
 const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
-const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
+const getTransactionAsync = util.promisify(client.cmd.bind(client, 'gettransaction'));
+
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
+
+    async getBlockAsync(height) {
+        return await util.promisify(client.getBlock.bind(client))(height)
+    },
+
+    async getBlockCountAsync() {
+        return await util.promisify(client.cmd.bind(client, 'getblockcount'))()
+    },
+
+    async sendRawTransactionAsync(serializedTx) {
+        let txid;
+        try {
+            txid = await util.promisify(client.cmd.bind(client,'sendrawtransaction'))(serializedTx)
+            //console.log(`Transaction:`, transaction);
+        } catch (error) {
+            console.error(`Error sending raw transaction:`, error);
+        }
+        return txid;
+    },
+
     async getRawTransaction(txid) {
         let transaction;
         try {
