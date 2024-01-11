@@ -144,7 +144,7 @@ class TradeChannel {
 
     assignColumns(addressA, addressB) {
         // Compare characters starting from the end of the address strings
-        for (let i = 1; i <= Math.min(addressA.length, addressB.length) i++) {
+        for (let i = 1; i <= Math.min(addressA.length, addressB.length); i++) {
             const charA = addressA[addressA.length - i];
             const charB = addressB[addressB.length - i];
 
