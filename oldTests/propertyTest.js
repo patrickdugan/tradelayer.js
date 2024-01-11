@@ -1,4 +1,4 @@
-const PropertyManager = require('./property.js'); // Adjust the path to the PropertyManager class file
+const Properties = require('../property.js'); // Adjust the path to the PropertyManager class file
 
 async function addRandomTokensAndDisplay(count) {
     const propertyManager = PropertyManager.getInstance();

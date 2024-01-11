@@ -8,7 +8,7 @@ const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5
 const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const OracleList = require('./oracle.js')
 // Additional modules
