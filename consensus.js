@@ -1,50 +1,52 @@
-const db = require('./db.js');
-const path = require('path');
-const util = require('util');
+const { dbFactory } = require('./db.js')
 
-class ConsensusDatabase {
-    constructor() {
-        if (ConsensusDatabase.instance) {
-            return ConsensusDatabase.instance;
-        }
-
-        ConsensusDatabase.instance = this;
+class Consensus {
+    constructor(db) {
+        this.db = db;
     }
 
-    static async storeConsensusHash(blockHeight, consensusHash) {
-        const doc = { blockHeight, consensusHash };
+    async storeConsensusHash(blockHeight, consensusHash) {
         try {
-            await db.getDatabase('consensus').insertAsync(doc);
-            console.log(`Consensus hash for block ${blockHeight} stored.`);
+            await this.db.insertAsync({ blockHeight, consensusHash })
+            console.log(`Consensus hash for block ${blockHeight} stored.`)
         } catch (err) {
-            console.error('Error storing consensus hash:', err);
+            console.error('Error storing consensus hash:', err)
         }
     }
 
-    static async getConsensusHash(blockHeight) {
-            try {
-                const docs = await db.getDatabase('consensus').findAsync({ blockHeight });
-                if (docs.length > 0) {
-                    return docs[0].consensusHash;
-                } else {
-                    return null;
-                }
-            } catch (err) {
-                console.error('Error retrieving consensus hash:', err);
-                return null;
+    async getConsensusHash(blockHeight) {
+        try {
+            const docs = await this.db.findAsync({ blockHeight })
+            if (docs.length > 0) {
+                return docs[0].consensusHash;
             }
+        } catch (err) {
+            console.error('Error retrieving consensus hash:', err)
+        }
+        return null;
     }
 
-
-    static async checkIfTxProcessed(txId) {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
-        return !!result;
+    async checkIfTxProcessed(txId) {
+        const tx = await this.db.findOneAsync({ _id: txId })
+        return !!tx;
     }
 
-    static async markTxAsProcessed(txId) {
-        await db.getDatabase('consensus').insertAsync({ _id: txId, processed: true });
+    async markTxAsProcessed(txId) {
+        await this.db.insertAsync({ _id: txId, processed: true })
+    }
+
+    async getMaxProcessedHeight() {
+        const doc = await this.db.findOneAsync({ _id: 'MaxProcessedHeight' });
+        return (doc && doc.value) ? doc.value : 0
+    }
+
+    async updateMaxProcessedHeight(maxProcessedHeight) {
+        await this.db.updateAsync(
+            { _id: 'MaxProcessedHeight' },
+            { $set: { value: maxProcessedHeight } },
+            { upsert: true }
+        )
     }
 }
 
-module.exports = ConsensusDatabase;
-
+exports.tlConsensus = new Consensus(dbFactory.getDatabase('consensus'))

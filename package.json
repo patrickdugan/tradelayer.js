@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "jest": {
-    "testPathIgnorePatterns": ["oldTests"]
+    "testPathIgnorePatterns": ["oldTests1"]
   },
   "repository": {
     "type": "git",

@@ -39,9 +39,9 @@ describe('=== PM TEST ===', () => {
         //console.log('--afterEach');
     })
 
-    afterAll(() => {
+    afterAll(async () => {
         //console.log('--afterAll');
-        propertyList.dump()
+        //propertyList.dump()
         propertyList.clear()
         //await pm.save()
     })

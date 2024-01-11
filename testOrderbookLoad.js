@@ -1,7 +1,7 @@
-const dbInstance = require('./db.js');
+const { dbFactory } = require('./db.js')
 
 async function loadOrCreateOrderBook(orderBookKey) {
-    const orderBooksDB = dbInstance.getDatabase('orderBooks');
+    const orderBooksDB = dbFactory.getDatabase('orderBooks');
     const orderBookData = await orderBooksDB.findOneAsync({ _id: orderBookKey });
 
     let orderBooks = {};

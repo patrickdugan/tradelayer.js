@@ -1,8 +1,6 @@
-// txEncoder.js
-
 const Encode = {
     // Encode Simple Token Issue Transaction
-     encodeActivateTradeLayer(params) {
+    encodeActivateTradeLayer(params) {
         // Assuming params has a txid
         return params.code;
     },
@@ -17,7 +15,7 @@ const Encode = {
             params.backupAddress,
             params.nft ? '1' : '0'
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Send Transaction
@@ -33,17 +31,17 @@ const Encode = {
                 params.propertyId.map(id => id.toString(36)).join(','),
                 params.amount.map(amt => amt.toString(36)).join(',')
             ];
-            return payload.join(';');
+            return payload.join(';')
         } else {
             // Handle single send
-            console.log('encoding single send amount '+params.amount + 'encoded '+params.amount.toString(36))
+            console.log('encoding single send amount ' + params.amount + 'encoded ' + params.amount.toString(36))
             const payload = [
                 '0', // Not sendAll
                 params.address,
                 params.propertyId.toString(36),
                 params.amount.toString(36)
             ];
-            return payload.join(';');
+            return payload.join(';')
         }
     },
 
@@ -56,7 +54,7 @@ const Encode = {
             params.satsExpected.toString(36),
             params.payToAddress
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Commit Token Transaction
@@ -65,19 +63,19 @@ const Encode = {
             params.propertyId.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode On-chain Token for Token Transaction
     encodeOnChainTokenForToken: (params) => {
-        console.log('encoding token trade '+JSON.stringify(params))
+        console.log('encoding token trade ' + JSON.stringify(params))
         const payload = [
             params.propertyIdOffered.toString(36),
             params.propertyIdDesired.toString(36),
             params.amountOffered.toString(36),
             params.amountExpected.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     encodeCancelOrder: (params) => {
@@ -105,7 +103,7 @@ const Encode = {
         const payload = [
             params.backupAddress,
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Update Whitelist Admin Transaction
@@ -117,7 +115,7 @@ const Encode = {
             params.token ? '1' : '0',
             params.id.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
 
@@ -126,7 +124,7 @@ const Encode = {
         const payload = [
             params.targetAddress,
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Revoke Attestation Transaction
@@ -134,7 +132,7 @@ const Encode = {
         const payload = [
             params.targetAddress,
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // ... Continue with the rest of the transaction types ...
@@ -148,58 +146,58 @@ const Encode = {
             params.whitelists.map(whitelist => whitelist.toString(36)).join(','),
             params.lag.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Grant Managed Token Transaction
-    encodeGrantManagedToken:(params) => {
-      const payload = [
-        params.propertyid.toString(36),
-        params.amountGranted.toString(36),
-        params.addressToGrantTo,
-      ];
-      return payload.join(',');
+    encodeGrantManagedToken: (params) => {
+        const payload = [
+            params.propertyid.toString(36),
+            params.amountGranted.toString(36),
+            params.addressToGrantTo,
+        ];
+        return payload.join(',')
     },
 
     // Encode Redeem Managed Token Transaction
-    encodeRedeemManagedToken:(params) => {
-      const payload = [
-        params.propertyid.toString(36),
-        params.amountGranted.toString(36),
-        params.addressToGrantTo,
-      ];
-      return payload.join(',');
+    encodeRedeemManagedToken: (params) => {
+        const payload = [
+            params.propertyid.toString(36),
+            params.amountGranted.toString(36),
+            params.addressToGrantTo,
+        ];
+        return payload.join(',')
     },
 
     // Encode Publish Oracle Data Transaction
-    encodePublishOracleData:(params) => {
-      const payload = [
-        params.oracleid.toString(36),
-        params.price.toString(36),
-      ];
-      if (params.high !== undefined) {
-        payload.push(params.high.toString(36));
-      }
-      if (params.low !== undefined) {
-        payload.push(params.low.toString(36));
-      }
-      if (params.close !== undefined) {
-        payload.push(params.close.toString(36));
-      }
-      return payload.join(',');
+    encodePublishOracleData: (params) => {
+        const payload = [
+            params.oracleid.toString(36),
+            params.price.toString(36),
+        ];
+        if (params.high !== undefined) {
+            payload.push(params.high.toString(36))
+        }
+        if (params.low !== undefined) {
+            payload.push(params.low.toString(36))
+        }
+        if (params.close !== undefined) {
+            payload.push(params.close.toString(36))
+        }
+        return payload.join(',')
     },
 
     // Encode Update Oracle Admin Transaction
-    encodeUpdateOracleAdmin:(params) => {
-      return params.newAddress;
+    encodeUpdateOracleAdmin: (params) => {
+        return params.newAddress;
     },
 
     // Encode Close Oracle Transaction
     encodeCloseOracle() {
-      return ''; // No parameters
+        return ''; // No parameters
     },
 
-     // Encode Create Future Contract Series Transaction
+    // Encode Create Future Contract Series Transaction
     encodeCreateFutureContractSeries: (params) => {
         const payload = [
             params.native ? '1' : '0',
@@ -214,16 +212,16 @@ const Encode = {
             params.inverse ? '1' : '0',
             params.fee !== undefined ? params.fee ? '1' : '0' : '0'
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Exercise Derivative Transaction
-    encodeExerciseDerivative:(params) => {
-      const payload = [
-        params.derivativeContractId.toString(36),
-        params.amount.toString(36),
-      ];
-      return payload.join(',');
+    encodeExerciseDerivative: (params) => {
+        const payload = [
+            params.derivativeContractId.toString(36),
+            params.amount.toString(36),
+        ];
+        return payload.join(',')
     },
 
     // Encode Trade Contract On-chain Transaction
@@ -235,7 +233,7 @@ const Encode = {
             params.side ? '1' : '0',
             params.insurance ? '1' : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Trade Contract in Channel Transaction
@@ -248,7 +246,7 @@ const Encode = {
             params.expiryBlock.toString(36),
             params.insurance ? '1' : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Trade Tokens in Channel Transaction
@@ -260,21 +258,21 @@ const Encode = {
             params.amountDesired2.toString(36),
             params.expiryBlock.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Withdrawal Transaction
     encodeWithdrawal: (params) => {
-        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';');
-        const amounts = params.amounts.map(amount => amount.toString(36)).join(';');
-        return [propertyIds, amounts, params.channelAddress].join(',');
+        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';')
+        const amounts = params.amounts.map(amount => amount.toString(36)).join(';')
+        return [propertyIds, amounts, params.channelAddress].join(',')
     },
 
     // Encode Transfer Transaction
     encodeTransfer: (params) => {
-        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';');
-        const amounts = params.amounts.map(amount => amount.toString(36)).join(';');
-        return [propertyIds, amounts, params.channelAddress].join(',');
+        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';')
+        const amounts = params.amounts.map(amount => amount.toString(36)).join(';')
+        return [propertyIds, amounts, params.channelAddress].join(',')
     },
 
     // Encode Settle Channel PNL Transaction
@@ -289,7 +287,7 @@ const Encode = {
             params.propertyId2 ? params.propertyId2.toString(36) : '0',
             params.amountDelivered ? params.amountDelivered.toString(36) : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Mint Synthetic Transaction
@@ -299,7 +297,7 @@ const Encode = {
             params.contractIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Redeem Synthetic Transaction
@@ -309,7 +307,7 @@ const Encode = {
             params.contractIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Pay to Tokens Transaction
@@ -319,7 +317,7 @@ const Encode = {
             params.propertyIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Create Option Chain Transaction
@@ -329,7 +327,7 @@ const Encode = {
             params.strikePercentInterval.toString(36),
             params.europeanStyle ? '1' : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Trade Bai Urbun Transaction
@@ -342,7 +340,7 @@ const Encode = {
             params.expiryBlock.toString(36),
             params.tradeExpiryBlock.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Trade Murabaha Transaction
@@ -357,7 +355,7 @@ const Encode = {
             params.installmentInterval.toString(36),
             params.tradeExpiryBlock.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Issue Invoice Transaction
@@ -369,7 +367,7 @@ const Encode = {
             params.optionalPropertyIdCollateral ? params.optionalPropertyIdCollateral.toString(36) : '0',
             params.receivesPayToToken ? '1' : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Batch Move Zk Rollup Transaction
@@ -384,15 +382,15 @@ const Encode = {
                 payment.sentPropertyIds.map(id => id.toString(36)).join(':'),
                 payment.sentAmounts.map(amt => amt.toString(36)).join(':'),
             ];
-            return paymentDetails.join(',');
-        }).join(';');
+            return paymentDetails.join(',')
+        }).join(';')
         const payload = [
             params.proof,
             paymentsPayload,
             JSON.stringify(params.miscLogic),
             JSON.stringify(params.miscData),
         ];
-        return payload.join('|');
+        return payload.join('|')
     },
 
     // Encode Publish New Transaction Type
@@ -407,7 +405,7 @@ const Encode = {
             params.lrc20TokenSeriesId2.toString(36),
             params.rgb ? '1' : '0',
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Register OP_CTV Covenant
@@ -419,7 +417,7 @@ const Encode = {
             params.associatedPropertyId2 ? params.associatedPropertyId2.toString(36) : '0',
             params.covenantType.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     },
 
     // Encode Mint Colored Coin
@@ -428,9 +426,9 @@ const Encode = {
             params.propertyId.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        return payload.join(',')
     }
 
 }
 
-module.exports = Encode;
+module.exports = Encode

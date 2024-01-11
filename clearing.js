@@ -1,126 +1,121 @@
-const tallyMap = require('./tally.js')
-const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contractRegistry.js');
+const { tallyMap } = require('./tally.js')
+const { contractRegistry } = require('./contractRegistry.js')
+const { volumeIndex } = require('./volumeIndex.js')
 
 class Clearing {
-    // ... other methods ...
     constructor() {
-        // Access the singleton instance of TallyMap
-        this.tallyMap = TallyMap.getSingletonInstance();
         this.balanceChanges = []; // Initialize an array to track balance changes
-
     }
 
     async clearingFunction(blockHeight) {
-        console.log(`Starting clearing operations for block ${blockHeight}`);
+        console.log(`Starting clearing operations for block ${blockHeight}`)
 
         // 1. Fee Cache Buy
-        await this.feeCacheBuy();
+        await this.feeCacheBuy()
 
         // 2. Update last exchange block in channels
-        await this.updateLastExchangeBlock(blockHeight);
+        await this.updateLastExchangeBlock(blockHeight)
 
         // 3. Calculate and update UPNL (Unrealized Profit and Loss)
-        await this.calculateAndUpdateUPNL(blockHeight);
+        await this.calculateAndUpdateUPNL(blockHeight)
 
         await this.processLiquidationsAndMarginAdjustments(blockHeight)
 
         // 4. Create channels for new trades
-        await this.createChannelsForNewTrades(blockHeight);
+        await this.createChannelsForNewTrades(blockHeight)
 
         // 5. Set channels as closed if needed
-        await this.closeChannelsIfNeeded();
+        await this.closeChannelsIfNeeded()
 
         // 6. Settle trades at block level
-        await this.makeSettlement(blockHeight);
+        await this.makeSettlement(blockHeight)
 
-        console.log(`Clearing operations completed for block ${blockHeight}`);
+        console.log(`Clearing operations completed for block ${blockHeight}`)
     }
 
-    // Define each of the above methods with corresponding logic based on the C++ functions provided
-    // ...
-
     async feeCacheBuy() {
-        console.log('Processing fee cache buy');
+        console.log('Processing fee cache buy')
 
         // Fetch fees from your data source (e.g., database or in-memory store)
-        let fees = await this.fetchFees();
+        let fees = await this.fetchFees()
 
         // Process each fee category
         fees.forEach(fee => {
             // Implement logic to use these fees
             // For example, converting fees to another form, distributing them, etc.
-        });
+        })
 
         // Save any changes back to your data source
-        await this.saveFees(fees);
+        await this.saveFees(fees)
     }
 
-   async updateLastExchangeBlock(blockHeight) {
-        console.log('Updating last exchange block in channels');
+    async updateLastExchangeBlock(blockHeight) {
+        console.log('Updating last exchange block in channels')
 
         // Fetch the list of active channels
-        let channels = await this.getActiveChannels();
+        let channels = await this.getActiveChannels()
 
         // Update the last active block for each channel
         channels.forEach(channel => {
             if (channel.isActive) {
                 channel.lastExchangeBlock = blockHeight;
             }
-        });
+        })
 
         // Save the updated channel information
-        await this.saveChannels(channels);
+        await this.saveChannels(channels)
     }
 
 
     async calculateAndUpdateUPNL(blockHeight) {
-        console.log('Calculating and updating UPNL for all contracts at block:', blockHeight);
-        
-        const contracts = await getAllContracts(); // Fetch all contracts
+        console.log('Calculating and updating UPNL for all contracts at block:', blockHeight)
+
+        const contracts = await getAllContracts() // Fetch all contracts
         for (const contract of contracts) {
-            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
-            const marketPrice = await marginMap.getMarketPrice(contract);
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight)
+            const marketPrice = await marginMap.getMarketPrice(contract)
 
-            marginMap.clear(marketPrice, contract.seriesId); // Update UPnL for each position in the margin map
+            marginMap.clear(marketPrice, contract.seriesId) // Update UPnL for each position in the margin map
 
-            await marginMap.saveMarginMap(blockHeight); // Save the updated margin map
+            await marginMap.saveMarginMap(blockHeight) // Save the updated margin map
         }
     }
 
     async processLiquidationsAndMarginAdjustments(blockHeight) {
-        console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
+        console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`)
 
-        const contracts = await getAllContracts(); // Fetch all contracts
+        const contracts = await getAllContracts() // Fetch all contracts
         for (const contract of contracts) {
-            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
-            
+            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight)
+
             // Check for and process liquidations
             if (marginMap.needsLiquidation(contract)) {
-                const liquidationOrders = await MarginMap.triggerLiquidations(contract);
+                // TODO: factor out of MarginMap
+                //const liquidationOrders = await MarginMap.triggerLiquidations(contract)
                 // Process liquidation orders as needed
             }
 
             // Adjust margins based on the updated UPnL
-            const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
+            const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight)
             for (const position of positions) {
-                const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
+                const pnlChange = marginMap.calculatePnLChange(position, blockHeight)
                 if (pnlChange !== 0) {
-                    await adjustBalance(position.holderAddress, pnlChange);
+                    await adjustBalance(position.holderAddress, pnlChange)
                 }
             }
 
-            await marginMap.saveMarginMap(blockHeight);
+            await marginMap.saveMarginMap(blockHeight)
         }
     }
 
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
         try {
-            const liquidationData = await db.getDatabase('clearing').findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` });
+            const liquidationData = await db.getDatabase('clearing').findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` })
             return liquidationData ? liquidationData.volume : null; // Assuming 'volume' is the field you're interested in
         } catch (error) {
             if (error.name === 'NotFoundError') {
-                console.log(`No liquidation data found for contract ID ${contractId} at block ${blockHeight}`);
+                console.log(`No liquidation data found for contract ID ${contractId} at block ${blockHeight}`)
                 return null; // Handle case where data is not found
             }
             throw error; // Rethrow other types of errors
@@ -130,110 +125,110 @@ class Clearing {
 
 
     async createChannelsForNewTrades(blockHeight) {
-        //console.log('Creating channels for new trades');
+        //console.log('Creating channels for new trades')
 
         // Fetch new trades from the block
-        let newTrades = await this.fetchNewTrades(blockHeight);
+        let newTrades = await this.fetchNewTrades(blockHeight)
 
         // Create channels for each new trade
         newTrades.forEach(trade => {
-            let channel = this.createChannelForTrade(trade);
+            let channel = this.createChannelForTrade(trade)
             // Save the new channel
-            this.saveChannel(channel);
-        });
+            this.saveChannel(channel)
+        })
     }
 
-        /**
-     * Loads clearing deltas from the clearing database for a given block height.
-     * @param {number} blockHeight - The block height for which to load clearing deltas.
-     * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
-     */
+    /**
+ * Loads clearing deltas from the clearing database for a given block height.
+ * @param {number} blockHeight - The block height for which to load clearing deltas.
+ * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
+ */
     async loadClearingDeltasForBlock(blockHeight) {
         try {
             const clearingDeltas = [];
             const query = { blockHeight: blockHeight }; // Query to match the block height
 
             // Fetch the deltas from the database
-            const results = await db.getDatabase('clearing').findAsync(query);
+            const results = await db.getDatabase('clearing').findAsync(query)
             results.forEach(doc => {
-                clearingDeltas.push(doc.value); // Assuming each document has a 'value' field with the delta data
-            });
+                clearingDeltas.push(doc.value) // Assuming each document has a 'value' field with the delta data
+            })
 
             return clearingDeltas;
         } catch (error) {
-            console.error('Error loading clearing deltas:', error);
+            console.error('Error loading clearing deltas:', error)
             throw error;
         }
     }
 
     async closeChannelsIfNeeded() {
-        console.log('Closing channels if needed');
+        console.log('Closing channels if needed')
 
         // Fetch all active channels
-        let channels = await this.getActiveChannels();
+        let channels = await this.getActiveChannels()
 
         // Check each channel for closing conditions
         channels.forEach(channel => {
             if (this.shouldCloseChannel(channel)) {
-                channel.close();
+                channel.close()
                 // Perform any additional clean-up or notifications required
             }
-        });
+        })
 
         // Save the updated state of channels
-        await this.saveChannels(channels);
+        await this.saveChannels(channels)
     }
 
     async makeSettlement(blockHeight) {
-        console.log('Making settlement for positions at block height:', blockHeight);
+        console.log('Making settlement for positions at block height:', blockHeight)
 
         // Fetch positions that need adjustment
-        let positions = await this.fetchPositionsForAdjustment(blockHeight);
+        let positions = await this.fetchPositionsForAdjustment(blockHeight)
 
         // Update margin maps based on mark prices and current contract positions
-        await this.updateMarginMaps(blockHeight);
+        await this.updateMarginMaps(blockHeight)
 
         // Iterate through each position to adjust for profit or loss
         for (let position of positions) {
             // Calculate the unrealized profit or loss based on the new mark price
-            let pnlChange = this.calculatePnLChange(position, blockHeight);
+            let pnlChange = this.calculatePnLChange(position, blockHeight)
 
             // Adjust the balance based on the P&L change
             if (pnlChange !== 0) {
-                await this.adjustBalance(position.holderAddress, pnlChange);
+                await this.adjustBalance(position.holderAddress, pnlChange)
             }
         }
 
         // Perform additional tasks like loss socialization if needed
-        await this.performAdditionalSettlementTasks(blockHeight, positions);
+        await this.performAdditionalSettlementTasks(blockHeight, positions)
 
         // Save the updated position information
-        await this.savePositions(positions);
+        await this.savePositions(positions)
         return [positions, this.balanceChanges];
     }
 
     // Additional functions to be implemented
     async fetchPositionsForAdjustment(blockHeight) {
         try {
-            let marginMap = await MarginMap.loadMarginMap(this.seriesId, blockHeight);
+            let marginMap = await MarginMap.loadMarginMap(this.seriesId, blockHeight)
 
             let positions = Array.from(marginMap.margins.entries()).map(([address, positionData]) => ({
                 address,
                 contracts: positionData.contracts, // Ensure this reflects the actual structure of positionData
                 ...positionData
-            }));
+            }))
 
             return positions;
         } catch (error) {
-            console.error('Error fetching positions for adjustment:', error);
+            console.error('Error fetching positions for adjustment:', error)
             throw error;
         }
     }
 
     calculatePnLChange(position, blockHeight) {
         // Retrieve the current and previous mark prices for the block height
-        let currentMarkPrice = this.getCurrentMarkPrice(blockHeight);
-        let previousMarkPrice = this.getPreviousMarkPrice(blockHeight);
+        let currentMarkPrice = this.getCurrentMarkPrice(blockHeight)
+        let previousMarkPrice = this.getPreviousMarkPrice(blockHeight)
 
         // Calculate the price change per contract
         let priceChangePerContract = currentMarkPrice - previousMarkPrice;
@@ -251,10 +246,10 @@ class Clearing {
     async adjustBalance(holderAddress, pnlChange) {
         try {
             // Assuming you have a defined propertyId for the type of balance being adjusted
-            const propertyId = this.getPropertyIdForPnL(); 
+            const propertyId = this.getPropertyIdForPnL()
 
             // Fetch the current balance details
-            let balanceDetails = this.tallyMap.getAddressBalances(holderAddress);
+            let balanceDetails = tallyMap.getAddressBalances(holderAddress)
 
             // Assuming balanceDetails includes the fields 'available' and 'reserved'
             let available = balanceDetails.available || 0;
@@ -264,17 +259,17 @@ class Clearing {
             available += pnlChange;
 
             // Update the balance in TallyMap
-            this.tallyMap.updateBalance(holderAddress, propertyId, available, reserved);
+            tallyMap.updateBalance(holderAddress, propertyId, available, reserved)
             this.balanceChanges.push({
                 blockHeight: this.currentBlockHeight, // Assuming this is set appropriately
                 holderAddress: holderAddress,
                 pnlChange: pnlChange
-            });
+            })
 
             // Optionally, you can save the TallyMap state to the database
-            await this.tallyMap.save(someBlockHeight); // Replace someBlockHeight with the appropriate block height
+            await tallyMap.save(someBlockHeight) // Replace someBlockHeight with the appropriate block height
         } catch (error) {
-            console.error('Error adjusting balance for address:', holderAddress, error);
+            console.error('Error adjusting balance for address:', holderAddress, error)
             throw error;
         }
     }
@@ -282,10 +277,10 @@ class Clearing {
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
         try {
-            let balance = await database.getBalance(holderAddress);
+            let balance = await database.getBalance(holderAddress)
             return balance;
         } catch (error) {
-            console.error('Error fetching balance for address:', holderAddress, error);
+            console.error('Error fetching balance for address:', holderAddress, error)
             throw error;
         }
     }
@@ -293,21 +288,21 @@ class Clearing {
     async performAdditionalSettlementTasks(blockHeight, positions) {
         try {
             // Step 1: Calculate total losses
-            const totalLoss = this.getTotalLoss(positions);
+            const totalLoss = this.getTotalLoss(positions)
 
             // Step 2: Check if insurance fund payout is needed
             if (totalLoss > 0) {
                 // Step 3: Apply insurance fund payout
-                const payout = await this.insuranceFund.applyPayout(totalLoss);
+                const payout = await this.insuranceFund.applyPayout(totalLoss)
 
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
                 if (remainingLoss > 0) {
-                    await this.socializeLoss(remainingLoss, positions);
+                    await this.socializeLoss(remainingLoss, positions)
                 }
             }
         } catch (error) {
-            console.error('Error performing additional settlement tasks:', error);
+            console.error('Error performing additional settlement tasks:', error)
             throw error;
         }
     }
@@ -316,35 +311,35 @@ class Clearing {
     async auditSettlementTasks(blockHeight, positions) {
         try {
             // Check total margin consistency
-            let totalMargin = this.calculateTotalMargin(positions);
+            let totalMargin = this.calculateTotalMargin(positions)
             if (!this.isMarginConsistent(totalMargin)) {
-                throw new Error("Inconsistent total margin detected");
+                throw new Error("Inconsistent total margin detected")
             }
 
             // Verify insurance fund balance is not negative
             if (this.insuranceFund.getBalance() < 0) {
-                throw new Error("Negative balance in the insurance fund");
+                throw new Error("Negative balance in the insurance fund")
             }
 
             // Save index populated during balance adjustment
-            await this.saveAuditIndex(blockHeight);
+            await this.saveAuditIndex(blockHeight)
         } catch (error) {
-            console.error('Audit error at block height', blockHeight, ':', error);
+            console.error('Audit error at block height', blockHeight, ':', error)
 
-                 // Check for the consistency of balance updates
-            let balanceUpdates = this.fetchBalanceUpdatesForSettlement();
-                if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
-                    throw new Error("Inconsistent balance updates detected");
-                }
+            // Check for the consistency of balance updates
+            let balanceUpdates = this.fetchBalanceUpdatesForSettlement()
+            if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
+                throw new Error("Inconsistent balance updates detected")
+            }
 
-                    // Save audit data
-                    const auditData = this.prepareAuditData(); 
-                    await this.saveAuditData(blockHeight, auditData);
+            // Save audit data
+            const auditData = this.prepareAuditData()
+            await this.saveAuditData(blockHeight, auditData)
         }
     }
 
     async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = dbInstance.getDatabase('clearing')
         const recordKey = `clearing-${contractId}-${blockHeight}`;
 
         const clearingRecord = {
@@ -359,28 +354,28 @@ class Clearing {
                 { _id: recordKey },
                 clearingRecord,
                 { upsert: true }
-            );
-            console.log(`Clearing settlement event record saved successfully: ${recordKey}`);
+            )
+            console.log(`Clearing settlement event record saved successfully: ${recordKey}`)
         } catch (error) {
-            console.error(`Error saving clearing settlement event record: ${recordKey}`, error);
+            console.error(`Error saving clearing settlement event record: ${recordKey}`, error)
             throw error;
         }
     }
 
     async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = dbInstance.getDatabase('clearing')
         try {
             const query = {
                 contractId: contractId,
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
             };
-            const clearingRecords = await clearingDB.findAsync(query);
+            const clearingRecords = await clearingDB.findAsync(query)
             return clearingRecords.map(record => ({
                 blockHeight: record.blockHeight,
                 settlementDetails: record.settlementDetails
-            }));
+            }))
         } catch (error) {
-            console.error(`Error loading clearing settlement events for contractId ${contractId}:`, error);
+            console.error(`Error loading clearing settlement events for contractId ${contractId}:`, error)
             throw error;
         }
     }
@@ -389,10 +384,10 @@ class Clearing {
     async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
         try {
-            let balance = await database.getBalance(holderAddress);
+            let balance = await database.getBalance(holderAddress)
             return balance;
         } catch (error) {
-            console.error('Error fetching balance for address:', holderAddress, error);
+            console.error('Error fetching balance for address:', holderAddress, error)
             throw error;
         }
     }
@@ -403,22 +398,22 @@ class Clearing {
         let totalMargin = 0;
         positions.forEach(position => {
             totalMargin += position.margin;  // Assuming each position object has a 'margin' property
-        });
+        })
         return totalMargin;
     }
 
     isMarginConsistent(totalMargin) {
-        const expectedMargin = this.getExpectedTotalMargin(); // Implement this method based on your system
+        const expectedMargin = this.getExpectedTotalMargin() // Implement this method based on your system
         // You can also implement a range-based check instead of an exact value match
         return totalMargin === expectedMargin;
     }
 
     async saveAuditIndex(blockHeight) {
-        const auditData = this.prepareAuditData(); // Implement this method to prepare data for saving
+        const auditData = this.prepareAuditData() // Implement this method to prepare data for saving
         try {
-            await database.saveAuditData(blockHeight, auditData);
+            await database.saveAuditData(blockHeight, auditData)
         } catch (error) {
-            console.error('Error saving audit index for block height:', blockHeight, error);
+            console.error('Error saving audit index for block height:', blockHeight, error)
             throw error;
         }
     }
@@ -441,94 +436,94 @@ class Clearing {
                 holderAddress: update.holderAddress,
                 newBalance: update.newBalance,
                 // Include any other relevant fields from the update
-            });
-        });
+            })
+        })
         // Reset the balanceChanges array after the audit process
         this.balanceChanges = [];
 
-        return JSON.stringify(auditData);
+        return JSON.stringify(auditData)
     }
 
     async lossSocialization(contractId, collateral, fullAmount) {
-            let count = 0;
-            let zeroPositionAddresses = [];
+        let count = 0;
+        let zeroPositionAddresses = [];
 
-            // Fetch register data
-            let registerData = await this.fetchRegisterData();
+        // Fetch register data
+        let registerData = await this.fetchRegisterData()
 
-            // Count non-zero positions and identify zero position addresses
-            registerData.forEach(entry => {
-                let position = entry.getRecord(contractId, 'CONTRACT_POSITION');
-                if (position === 0) {
-                    zeroPositionAddresses.push(entry.address);
-                } else {
-                    count++;
-                }
-            });
+        // Count non-zero positions and identify zero position addresses
+        registerData.forEach(entry => {
+            let position = entry.getRecord(contractId, 'CONTRACT_POSITION')
+            if (position === 0) {
+                zeroPositionAddresses.push(entry.address)
+            } else {
+                count++;
+            }
+        })
 
-            if (count === 0) return;
+        if (count === 0) return;
 
-            let fraction = fullAmount / count;
+        let fraction = fullAmount / count;
 
-            // Socialize loss among non-zero positions
-            for (const entry of registerData) {
-                if (!zeroPositionAddresses.includes(entry.address)) {
-                    let balanceDetails = this.tallyMap.getAddressBalances(entry.address);
-                    let available = balanceDetails.find(b => b.propertyId === collateral)?.available || 0;
-                    let amount = Math.min(available, fraction);
+        // Socialize loss among non-zero positions
+        for (const entry of registerData) {
+            if (!zeroPositionAddresses.includes(entry.address)) {
+                let balanceDetails = tallyMap.getAddressBalances(entry.address)
+                let available = balanceDetails.find(b => b.propertyId === collateral)?.available || 0;
+                let amount = Math.min(available, fraction)
 
-                    if (amount > 0) {
-                        this.tallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0); // Assuming updateBalance deducts from available
-                    }
+                if (amount > 0) {
+                    tallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0) // Assuming updateBalance deducts from available
                 }
             }
+        }
 
-            // Optionally, save the TallyMap state to the database
-            await this.tallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
+        // Optionally, save the TallyMap state to the database
+        await tallyMap.save(blockHeight) // Replace blockHeight with the appropriate value
     }
 
     async getTotalLoss(contractId, notionalSize) {
-            let vwap = 0;
-            let volume = 0;
-            let bankruptcyVWAP = 0;
-            let oracleTwap = 0;
+        let vwap = 0;
+        let volume = 0;
+        let bankruptcyVWAP = 0;
+        let oracleTwap = 0;
 
-            let contractType = await ContractsRegistry.getContractType(contractId);
+        let contractType = contractRegistry.getContractType(contractId)
 
-            if (contractType === 'oracle') {
-                let liquidationData = await ContractsRegistry.fetchLiquidationVolume(contractId);
-                if (!liquidationData) {
-                    console.log('No liquidation volume data found for oracle-based contract.');
-                    return 0;
-                }
-                ({ volume, vwap, bankruptcyVWAP } = liquidationData);
-
-                // Fetch TWAP data from oracle
-                oracleTwap = await Oracles.getTwap(contractId); // Assuming Oracles module provides TWAP data
-            } else if (contractType === 'native') {
-                // Fetch VWAP data for native contracts
-                let vwapData = VolumeIndex.getVwapData(contractId); // Assuming VolumeIndex module provides VWAP data
-                if (!vwapData) {
-                    console.log('No VWAP data found for native contract.');
-                    return 0;
-                }
-                ({ volume, vwap, bankruptcyVWAP } = vwapData);
-                oracleTwap = vwap;
-            } else {
-                console.log('Unknown contract type.');
+        if (contractType === 'oracle') {
+            let liquidationData = await contractRegistry.fetchLiquidationVolume(contractId)
+            if (!liquidationData) {
+                console.log('No liquidation volume data found for oracle-based contract.')
                 return 0;
             }
+            ({ volume, vwap, bankruptcyVWAP } = liquidationData)
 
-            return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
+            // Fetch TWAP data from oracle
+            oracleTwap = await Oracles.getTwap(contractId) // Assuming Oracles module provides TWAP data
+        } else if (contractType === 'native') {
+            // Fetch VWAP data for native contracts
+            let vwapData = volumeIndex.getVwapData(contractId) // Assuming VolumeIndex module provides VWAP data
+            if (!vwapData) {
+                console.log('No VWAP data found for native contract.')
+                return 0;
+            }
+            ({ volume, vwap, bankruptcyVWAP } = vwapData)
+            oracleTwap = vwap;
+        } else {
+            console.log('Unknown contract type.')
+            return 0;
+        }
+
+        return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN))
     }
 
     async fetchAuditData(auditDataKey) {
         // Implement logic to fetch audit data from the database
         try {
-            const auditData = await database.getAuditData(auditDataKey);
+            const auditData = await database.getAuditData(auditDataKey)
             return auditData;
         } catch (error) {
-            console.error('Error fetching audit data:', error);
+            console.error('Error fetching audit data:', error)
             throw error;
         }
     }

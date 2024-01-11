@@ -1,57 +1,58 @@
-const { dbFactory } = require('./db.js');
+const { dbFactory } = require('./db.js')
 
 class PropertyManager {
 
     constructor(db) {
         this.db = db;
-        this.properties = new Map();
+        this.properties = new Map()
     }
 
     async load() {
         try {
-            const entry = await this.db.findOneAsync({ _id: 'propertyIndex' });
-            if (entry && entry.value) {
+            const entry = await this.db.findOneAsync({ _id: 'propertyIndex' })
+            if (entry?.value) {
                 // Check if the value is a string and parse it as JSON
                 const data = typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value;
 
                 // Ensure the data is an array of arrays before converting it to a Map
                 if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
-                    this.properties = new Map(data);
+                    this.properties = new Map(data)
                 } else {
-                    console.error('Invalid data format for propertyIndex:', data);
-                    this.properties = new Map();
+                    console.error('Invalid data format for propertyIndex:', data)
+                    this.properties = new Map()
                 }
             } 
         } catch (error) {
-            console.error('Error loading data from NeDB:', error);
-            //this.properties = new Map(); // Use an empty Map in case of an error
+            console.error('Error loading data from NeDB:', error)
+            //this.properties = new Map() // Use an empty Map in case of an error
         }
-        console.log('Loaded property list');
+        console.log('Loaded properties')
     }
 
     async save() {
-        const json = JSON.stringify([...this.properties.entries()]);
-        await this.db.updateAsync({ _id: 'propertyIndex' }, { _id: 'propertyIndex', value: json }, { upsert: true });
-        console.log('Updated propertties:' + this.properties);
+        const json = JSON.stringify([...this.properties.entries()])
+        await this.db.updateAsync({ _id: 'propertyIndex' }, { _id: 'propertyIndex', value: json }, { upsert: true })
+        console.log('Updated propertties:' + this.properties)
     }
 
     clear() {
+        this.db.remove({}, { multi: true })
     }
 
     async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
         // Check if the ticker already exists
         if (this.properties.has(ticker)) {
-            return new (`Error: Ticker "${ticker}" already exists.`);
+            return new (`Error: Ticker "${ticker}" already exists.`)
         }
         for (let [key, value] of this.properties.entries()) {
             if (value.ticker === ticker) {
-                return Error(`Ticker "${ticker}" already exists.`);
+                return Error(`Ticker "${ticker}" already exists.`)
             }
         }
 
-        const propertyId = await this.getNextPropertyId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
-        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
+        const propertyId = await this.getNextPropertyId()
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress)
+        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`)
         return propertyId;
     }
 
@@ -66,7 +67,7 @@ class PropertyManager {
         };
 
         if (!cats[type]) {
-            throw new Error('Invalid property type.');
+            throw new Error('Invalid property type.')
         }
 
         this.properties.set(propertyId, {
@@ -75,13 +76,13 @@ class PropertyManager {
             type: cats[type],
             whitelistId: whitelistId,
             backupAddress: backupAddress
-        });
+        })
 
-        await this.save();
+        await this.save()
     }
 
     dump() {
-        console.log('Properties:', this.getProperties());
+        console.log('Properties:', this.getProperties())
     }
 
     getNextPropertyId() {
@@ -90,7 +91,7 @@ class PropertyManager {
     }
 
     getProperty(propertyId) {
-        return this.properties.get(propertyId);
+        return this.properties.get(propertyId)
     }
 
     getProperties() {
@@ -99,7 +100,7 @@ class PropertyManager {
             ticker: property.ticker,
             totalInCirculation: property.totalInCirculation,
             type: property.type
-        }));
+        }))
     }
 
     /**
@@ -108,8 +109,8 @@ class PropertyManager {
     * @returns {boolean} - True if the property is a synthetic token (5), false otherwise.
     */
     isSyntheticToken(propertyId) {
-        const propertyInfo = this.getProperty(propertyId);
-        return propertyInfo && propertyInfo.type === 5;
+        const p = this.getProperty(propertyId)
+        return p?.type === 5;
     }
 }
 
@@ -117,6 +118,6 @@ let list
 (async() => {
     list = new PropertyManager(dbFactory.getDatabase('propertyList'))
     await list.load()
-})();
+})()
 
 exports.propertyList = list

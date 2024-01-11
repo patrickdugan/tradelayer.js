@@ -231,7 +231,6 @@ class TallyMap {
     async updateFees(propertyId, feeAmount) {
         await this.loadFees()
 
-
         if (!this.feeCache.has(propertyId)) {
             this.feeCache.set(propertyId, 0) // Initialize if not present
         }

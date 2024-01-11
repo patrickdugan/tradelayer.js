@@ -1,12 +1,8 @@
-const Datastore = require('nedb');
-const path = require('path');
-const util = require('util');
-const txIndex = require('./txIndex.js'); // Ensure this is the correct path to your TxIndex class
-const dbInstance = require('./db.js'); // Import the dbInstance from your db.js file
+const { dbFactory } = require('./db.js')
 
 async function updateMaxHeight(chainTip) {
     try {
-        const txIndexDB = dbInstance.getDatabase('txIndex'); // Retrieve the txIndex database using dbInstance
+        const txIndexDB = dbFactory.getDatabase('txIndex'); // Retrieve the txIndex database using dbFactory
         console.log(`Updating MaxHeight to ${chainTip}`);
         await txIndexDB.updateAsync(
             { _id: 'MaxHeight' },
@@ -22,7 +18,7 @@ async function updateMaxHeight(chainTip) {
 
 async function fetchMaxHeight() {
     try {
-        const txIndexDB = dbInstance.getDatabase('txIndex'); // Retrieve the txIndex database using dbInstance
+        const txIndexDB = dbFactory.getDatabase('txIndex'); // Retrieve the txIndex database using dbFactory
         const maxHeightDoc = await txIndexDB.findOneAsync({ _id: 'MaxHeight' });
         if (maxHeightDoc) {
             console.log(`MaxHeight fetched from DB: ${maxHeightDoc.value}`);
