@@ -229,12 +229,10 @@ class ContractRegistry {
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        
         // Check if contractInfo exists and has the 'inverse' property
         if (contractInfo && typeof contractInfo.inverse !== 'undefined') {
             return contractInfo.inverse;
         }
-
         // Return false by default if the contract is not found or doesn't have the 'inverse' property
         return false;
     }

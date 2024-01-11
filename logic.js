@@ -614,6 +614,16 @@ const Logic = {
 	        native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
+
+
+        // Load contracts from the database
+        await ContractsRegistry.loadContractsFromDB();
+
+        // Display the stringified contents of oracleList and nativeList
+        console.log('Oracle List:', JSON.stringify(ContractsRegistry.oracleList));
+        console.log('Native List:', JSON.stringify(ContractsRegistry.nativeList));
+
+
 	    return futureContractSeriesId;
 	},
 

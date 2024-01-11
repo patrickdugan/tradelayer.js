@@ -15,17 +15,33 @@ class MarginMap {
         return marginMap;
     }
 
+        
+    
     initMargin(address, contracts, price) {
-        const notional = contracts * price;
-        const margin = notional * 0.1;
+        // Convert contracts and price to BigNumber
+        const contractsBN = new BigNumber(contracts);
+        const priceBN = new BigNumber(price);
 
+        // Calculate notional and margin using BigNumber
+        const notional = contractsBN.times(priceBN);
+        const margin = notional.times(0.1);
+
+        // Create a BigNumber object for margin
+        const marginBN = new BigNumber(margin);
+
+        // Set values in the margins map
         this.margins.set(address, {
-            contracts,
-            margin,
-            unrealizedPl: 0
+            contracts: contractsBN,
+            margin: marginBN,
+            unrealizedPl: new BigNumber(0)
         });
 
-        return margin;
+        // Return values as regular numbers
+        return {
+            contracts: contractsBN.toNumber(),
+            margin: marginBN.toNumber(),
+            unrealizedPl: 0
+        };
     }
 
 // Set initial margin for a new position in the MarginMap
@@ -70,7 +86,7 @@ class MarginMap {
 
                 // Check for margin maintenance and realize PnL if needed
                 this.checkMarginMaintenance(address, contractId);
-            } else {
+            } else {  
                 // For sell orders, decrease contracts and adjust margin
                 position.contracts -= amount;
                 position.margin -= requiredMargin;
