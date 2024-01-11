@@ -44,6 +44,7 @@ class ContractRegistry {
 
         // Create the contract series object
         const contractSeries = {
+            id: seriesId,
             native: native,
             underlyingOracleId: underlyingOracleId,
             onChainData: onChainData,
@@ -202,7 +203,7 @@ class ContractRegistry {
 
     
     static async getContractType(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error("Contract type not found for contract ID: " + contractId);
         }
@@ -210,12 +211,12 @@ class ContractRegistry {
     }
 
     static async isNativeContract(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
     }
 
     static async getContractInfo(contractId) {
-        console.log('retrieving db info for contract '+contractId)
+        //console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -227,13 +228,11 @@ class ContractRegistry {
 
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
-        const contractInfo = await this.getContractInfo(contractId);
-        
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         // Check if contractInfo exists and has the 'inverse' property
         if (contractInfo && typeof contractInfo.inverse !== 'undefined') {
             return contractInfo.inverse;
         }
-
         // Return false by default if the contract is not found or doesn't have the 'inverse' property
         return false;
     }
@@ -317,9 +316,14 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        const instance = ContractRegistry.getInstance(); // Access singleton instance
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        return contractInfo && contractInfo.type === 'oracle';
+        let isOracle
+        if(contractInfo.native.native==false){
+            isOracle = contractInfo.native.underlyingOracleId
+        }else if (contractInfo.native.native==true){
+            isOracle = false
+        }
+        return isOracle
     }
 
     // Calculate the 1-hour funding rate for an oracle contract

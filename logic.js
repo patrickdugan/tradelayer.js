@@ -8,7 +8,7 @@ const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5
 const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const OracleList = require('./oracle.js')
 // Additional modules
@@ -77,7 +77,7 @@ const Logic = {
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
                 break;
             case 14:
-                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.oracleRegistry);
+                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.block);
                 break;
             case 15:
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry);
@@ -134,13 +134,13 @@ const Logic = {
                 Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
                 break;
             case 33:
-                Logic.createDerivativeOfLRC20OrRGB(params);
+                Logic.coloredCoin(params);
                 break;
             case 34:
-                Logic.registerOP_CTVCovenant(params);
+                Logic.crossLayerBridge(params);
                 break;
             case 35:
-                Logic.mintColoredCoin(params);
+                Logic.OP_CTVCovenant(params);
                 break;
             default:
                 console.log(`Unhandled transaction type: ${txNumber}`);
@@ -591,11 +591,12 @@ const Logic = {
 	    return oracleId;
 	},
 
-    async publishOracleData(oracleId, price, high, low, close, oracleRegistry) {
-
+    async publishOracleData(oracleId, price, high, low, close, block) {
+        console.log('publishing Oracle Data '+oracleId + ' '+ price)
 	    // Publish data to the oracle
-	    await oracleRegistry.publishData(oracleId, { price, high, low, close });
+	    await OracleList.publishData(oracleId, price, high, low, close, block);
 	    console.log(`Data published to oracle ${oracleId}`);
+        
         return
 	},
 
@@ -613,6 +614,16 @@ const Logic = {
 	        native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
+
+
+        // Load contracts from the database
+        await ContractsRegistry.loadContractsFromDB();
+
+        // Display the stringified contents of oracleList and nativeList
+        console.log('Oracle List:', JSON.stringify(ContractsRegistry.oracleList));
+        console.log('Native List:', JSON.stringify(ContractsRegistry.nativeList));
+
+
 	    return futureContractSeriesId;
 	},
 

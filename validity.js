@@ -434,8 +434,9 @@ const Validity = {
         // 14: Publish Oracle Data
         validatePublishOracleData: async (sender, params, txid) => {
             params.reason = '';
-            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
-            if (!params.valid) {
+            params.valid = await OracleList.isAdmin(sender, params.oracleId);
+            console.log('is oracle admin '+params.valid + ' ' + params.oracleId)
+            if (params.valid==false) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
 
@@ -443,22 +444,7 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
-            } else {
-                // Retrieve the oracle instance using its ID
-                const oracle = await OracleRegistry.getOracleData(params.oracleId);
-                if (!oracle) {
-                    params.reason += 'Oracle not found; ';
-                } else {
-                    // Check if the sender is the admin of the oracle
-                    const isAdmin = sender === oracle.adminAddress;
-                    if (!isAdmin) {
-                        params.reason += 'Sender is not admin of the specified oracle; ';
-                    } else {
-                        // Validation passes if the sender is the admin and the tx type is activated
-                        params.valid = true;
-                    }
-                }
-    }
+            }
 
             return params;
         },

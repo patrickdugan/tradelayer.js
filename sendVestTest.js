@@ -4,14 +4,14 @@ const Logic = require('./logic.js');
 const litecore = require('bitcore-lib-ltc');
 const TxUtils = require('./txUtils');
 
-function generateNewAddress() {
+/*function generateNewAddress() {
     const privateKey = new litecore.PrivateKey(); // Generate a new private key
     const address = privateKey.toAddress(); // Generate the address from the private key
     return {
         address: address.toString(),
         privateKey: privateKey.toString()
     };
-}
+}*/
 
     //const { address, privateKey } = generateNewAddress();
     //console.log('Generated new address:', address);
@@ -23,4 +23,6 @@ function randomNumber(min, max) {
 
 var random = randomNumber(10,11000)
 
-    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',3,random,null)
+    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q8xw3vsvkv77dpj59nqn30rxlc9m3xjw76cgrac',3,200,null)
+
+//tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk

@@ -401,7 +401,7 @@ const Encode = {
     },
 
     // Encode Create Derivative of LRC20 or RGB
-    encodeCreateDerivativeOfLRC20OrRGB: (params) => {
+    encodeColoredCoin: (params) => {
         const payload = [
             params.lrc20TokenSeriesId1.toString(36),
             params.lrc20TokenSeriesId2.toString(36),
@@ -422,11 +422,12 @@ const Encode = {
         return payload.join(',');
     },
 
-    // Encode Mint Colored Coin
-    encodeMintColoredCoin: (params) => {
+    // Encode cross TL chain bridging tx
+    encodeCrossLayerBridge: (params) => {
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
+            params.destinationAddr
         ];
         return payload.join(',');
     }

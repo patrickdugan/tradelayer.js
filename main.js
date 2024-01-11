@@ -11,7 +11,7 @@ const listen = require('./listener');
 //const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules
@@ -21,11 +21,12 @@ const fs = require('fs'); // File system module
 const Validity = require('./validity.js'); // Module for checking transaction validity
 const TxUtils = require('./txUtils.js'); // Utility functions for transactions
 const TxIndex = require('./txIndex.js') // Indexes TradeLayer transactions
-//const TradeChannel = require('./channels.js'); // Manages Trade Channels
+const TradeChannel = require('./channels.js'); // Manages Trade Channels
+const Clearing = require('./clearing.js')
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
-//const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
+const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
-//const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
+const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance()
@@ -241,6 +242,8 @@ class Main {
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
+            //do clearing
+            Clearing.clearingSequence(blockHeight)
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 

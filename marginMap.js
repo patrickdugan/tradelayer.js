@@ -15,17 +15,33 @@ class MarginMap {
         return marginMap;
     }
 
+        
+    
     initMargin(address, contracts, price) {
-        const notional = contracts * price;
-        const margin = notional * 0.1;
+        // Convert contracts and price to BigNumber
+        const contractsBN = new BigNumber(contracts);
+        const priceBN = new BigNumber(price);
 
+        // Calculate notional and margin using BigNumber
+        const notional = contractsBN.times(priceBN);
+        const margin = notional.times(0.1);
+
+        // Create a BigNumber object for margin
+        const marginBN = new BigNumber(margin);
+
+        // Set values in the margins map
         this.margins.set(address, {
-            contracts,
-            margin,
-            unrealizedPl: 0
+            contracts: contractsBN,
+            margin: marginBN,
+            unrealizedPl: new BigNumber(0)
         });
 
-        return margin;
+        // Return values as regular numbers
+        return {
+            contracts: contractsBN.toNumber(),
+            margin: marginBN.toNumber(),
+            unrealizedPl: 0
+        };
     }
 
 // Set initial margin for a new position in the MarginMap
@@ -52,7 +68,7 @@ class MarginMap {
         console.log('margin should be topped up '+JSON.stringify(this.margins))
 
         // Save changes to the database or your storage solution
-        await this.saveMarginMap();
+        //await this.saveMarginMap();
     }
 
     // Update the margin for a specific address and contract
@@ -70,13 +86,14 @@ class MarginMap {
 
                 // Check for margin maintenance and realize PnL if needed
                 this.checkMarginMaintenance(address, contractId);
-            } else {
+            } else {  
                 // For sell orders, decrease contracts and adjust margin
                 position.contracts -= amount;
                 position.margin -= requiredMargin;
 
                 // Realize PnL if the position is being reduced
-                this.realizePnL(address, contractId, amount, price);
+                let realizedPNL = this.realizePnL(address, contractId, amount, price, inverse);
+                //pass the rPNL into Available or deduct from margin TallyMap.updateBalance()
             }
 
             // Ensure the margin doesn't go below zero
@@ -118,6 +135,52 @@ class MarginMap {
         this.margins.set(address, position);
     }
 
+     /**
+     * Clears the margin for a specific address and contract based on PnL change.
+     * @param {string} contractId - The ID of the contract.
+     * @param {string} address - The address of the position holder.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     */
+    clearMargin(contractId, address, pnlChange, inverse) {
+        const position = this.margins.get(address);
+
+        if (!position) {
+            console.error(`No position found for address ${address}`);
+            return;
+        }
+
+        // Calculate the change in margin based on PnL
+        const marginChange = this.calculateMarginChange(pnlChange, inverse);
+        console.log('clearing margin for position in amount ' +JSON.stringify(position) + ' ' +marginChange)
+        // Update the margin for the position
+        position.margin -= marginChange;
+
+        // Ensure the margin doesn't go below zero
+        if(position.margin >0){
+            console.log('liquidation wipeout! '+position.margin)
+            //need to do some emergency liquidation stuff here
+        }
+        position.margin = Math.max(0, position.margin);
+
+        // Update the margin map
+        this.margins.set(address, position);
+        return position
+        // Additional logic if needed
+    }
+
+    /**
+     * Calculates the change in margin based on PnL change.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     * @returns {number} - The change in margin.
+     */
+    calculateMarginChange(pnlChange, inverse) {
+        // Example calculation, replace with your specific logic
+        const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
+        console.log('calculated marginChange with inverse? ' +inverse + 'marginChange')
+        return marginChange;
+    }
     
     calculateMarginRequirement(contracts, price, inverse) {
         
@@ -162,8 +225,10 @@ class MarginMap {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
             // Example: this.triggerLiquidation(address, contractId);
+            return true
         } else {
             console.log(`Margin level is adequate for address ${address}.`);
+            return false
         }
     }
 
@@ -214,7 +279,7 @@ class MarginMap {
 
         // Retrieve the marginMaps database from your Database instance
         const marginMapsDB = db.getDatabase('marginMaps');
-
+        console.log('saving ' + value + ' to marginMap for '+key)
         return new Promise((resolve, reject) => {
             // Perform an upsert operation
             marginMapsDB.updateAsync(
@@ -357,12 +422,14 @@ class MarginMap {
 
     async getMarketPrice(contract) {
         let marketPrice;
-
+        console.log('looking up market price '+JSON.stringify(contract))
         if (ContractsRegistry.isOracleContract(contract.id)) {
             // Fetch the 3-block TWAP for oracle-based contracts
+            console.log('getting TWAP for contract '+contract.id)
             marketPrice = await Oracles.getTwap(contract.id, 3); // Assuming the getTwap method accepts block count as an argument
         } else if (ContractsRegistry.isNativeContract(contract.id)) {
             // Fetch VWAP data for native contracts
+            console.log('getting native VWAP for contract '+contract.id)
             const contractInfo = ContractsRegistry.getContractInfo(contract.id);
             if (contractInfo && contractInfo.indexPair) {
                 const [propertyId1, propertyId2] = contractInfo.indexPair;

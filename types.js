@@ -203,7 +203,9 @@ const Types = {
                 break;
             case 14:
                 params = Decode.decodePublishOracleData(encodedPayload.substr(index));
+                console.log('publish oracle params '+ JSON.stringify(params))
                 params.senderAddress= sender
+                console.log('publish oracle sender '+sender)
                 params.txid=txId
                 params = await Validity.validatePublishOracleData(sender, params, txId)
                 break;
@@ -274,13 +276,13 @@ const Types = {
                 params = Decode.decodePublishNewTx(encodedPayload.substr(index));
                 break;
             case 33:
-                params = Decode.decodeCreateDerivativeOfLRC20OrRGB(encodedPayload.substr(index));
+                params = Decode.decodeColoredCoin(encodedPayload.substr(index));
                 break;
             case 34:
-                params = Decode.decodeRegisterOPCTVCovenant(encodedPayload.substr(index));
+                params = Decode.decodeCrossLayerBridge(encodedPayload.substr(index));
                 break;
             case 35:
-                params = Decode.decodeMintColoredCoin(encodedPayload.substr(index));
+                params = Decode.decodeOPCTVCovenant(encodedPayload.substr(index));
                 break;
           default:
             throw new Error('Unknown transaction type');

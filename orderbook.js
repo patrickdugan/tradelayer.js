@@ -464,7 +464,7 @@ class Orderbook {
         for (const match of matches) {
                 // Load the margin map for the given series ID and block height
                 const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
-                console.log('checking the marginMap for contractId '+ marginMap )
+                console.log('checking the marginMap for contractId '+ JSON.stringify(marginMap) )
                 // Get the existing position sizes for buyer and seller
                 const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress);
                 const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress);

@@ -51,7 +51,7 @@ const TxUtils = {
     /*async fetchTransactionData(txId) {
         console.log('fetching tx data '+txId)
         return new Promise((resolve, reject) => {
-            this.client.getRawTransaction(txId, true, (error, transaction) => {
+            TxUtils.client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
                     console.log('blah '+error);
                     reject(error);
@@ -66,7 +66,7 @@ const TxUtils = {
     async getSender(txId) {
         let tx
         try{
-            tx = await this.getRawTransaction(txId)
+            tx = await TxUtils.getRawTransaction(txId)
         }catch(err){
             console.log('err getting tx for sender'+err)
         }
@@ -81,7 +81,7 @@ const TxUtils = {
         }
                 //console.log('get sender tx id '+vin.txid)
 
-        const parentTx = await this.getRawTransaction(vin.txid)
+        const parentTx = await TxUtils.getRawTransaction(vin.txid)
         if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
             return new Error(`Invalid parent transaction data for ${vin.txid}`);
         }
@@ -412,7 +412,7 @@ const TxUtils = {
             const outputs = {};
 
             // Create the raw transaction
-            const rawTx = await this.createRawTransaction(inputs, [outputs]);
+            const rawTx = await TxUtils.createRawTransaction(inputs, [outputs]);
 
             return rawTx;
         } catch (error) {
@@ -542,7 +542,7 @@ const TxUtils = {
 
             // Find a suitable UTXO
             const minAmountSatoshis = STANDARD_FEE;
-            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
             // Create the transaction
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
@@ -586,7 +586,7 @@ const TxUtils = {
 
                 // Find a suitable UTXO
                 const minAmountSatoshis = STANDARD_FEE;
-                const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+                const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
                 // Create the transaction
                 let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
@@ -632,7 +632,7 @@ const TxUtils = {
 
             // Find a suitable UTXO
             const minAmountSatoshis = STANDARD_FEE;
-            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
             // Create the transaction
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
@@ -670,7 +670,7 @@ const TxUtils = {
             activationPayload += Encode.encodeActivateTradeLayer({'code':txTypeToActivate});
 
             // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [adminAddress]);
+            const utxos = await TxUtils.listUnspent(1, 9999999, [adminAddress]);
             console.log(utxos)
             if (!utxos || utxos.length === 0) {
                 throw new Error('No UTXOs available for the admin address');
@@ -680,7 +680,7 @@ const TxUtils = {
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(adminAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(adminAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(activationPayload)
@@ -713,7 +713,7 @@ const TxUtils = {
             payload += Encode.encodeCreateFutureContractSeries(contractParams);
 
             // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
+            const utxos = await TxUtils.listUnspent(1, 9999999, [thisAddress]);
             console.log(utxos)
             if (!utxos || utxos.length === 0) {
                 throw new Error('No UTXOs available for the admin address');
@@ -723,7 +723,7 @@ const TxUtils = {
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
@@ -777,18 +777,10 @@ const TxUtils = {
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateFutureContractSeries(contractParams);
 
-            // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
-
-
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(activationPayload)
@@ -819,18 +811,11 @@ const TxUtils = {
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateOracle(contractParams);
 
-            // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
-
 
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
             console.log('chosen utxo '+JSON.stringify(utxo))
             const rawTx = new litecore.Transaction()
                 .from(utxo)
@@ -863,18 +848,10 @@ const TxUtils = {
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodePublishOracleData(contractParams);
 
-            // Step 2: Create a new transaction
-            const utxos = await this.listUnspent(1, 9999999, [thisAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
-
-
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
@@ -889,16 +866,16 @@ const TxUtils = {
             const serializedTx = rawTx.serialize();
             const txid = await sendrawtransactionAsync(serializedTx);
             
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            console.log(`Oracle publish transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendActivationTransaction:', error);
+            console.error('Error in sendOracleTransaction:', error);
             throw error;
         }
     },
 
 
-    async createContractOnChainTradeTransaction(thisAddress, contractParams,txNumber) {
+    async createContractOnChainTradeTransaction(thisAddress, contractParams) {
         try {
             // Step 1: Create the activation payload
             // Assuming activation payload format: 'activation:<txTypeToActivate>'
@@ -911,7 +888,7 @@ const TxUtils = {
             const minAmountSatoshis = STANDARD_FEE;
 
             // Select an UTXO to use
-            const utxo = await this.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
