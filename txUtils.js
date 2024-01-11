@@ -19,6 +19,7 @@ const client = new Litecoin.Client({
 // Promisify the necessary client functions
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
 //const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
+const getBlockDataAsync = util.promisify(client.getBlock.bind(client))
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
 const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));

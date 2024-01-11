@@ -90,7 +90,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const confirmedBlock = 0
+        let confirmedBlock = 0
         const activationBlock = await tlActivation.checkActivationBlock(2)
 
         const rawTxData = await TxUtils.getRawTransaction(txId)
