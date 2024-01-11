@@ -45,10 +45,11 @@ class TxIndex {
         console.log('building index until' + chainTip)
         for (let height = startHeight; height <= chainTip; height++) {
             if (height % 1000 == 1) { console.log('indexed to ' + height) }
+                console.log('about to fetch block data for height '+height)
             let blockData = await this.fetchBlockData(height)
-            //console.log(blockData)
+            console.log(blockData)
             await this.processBlockData(blockData, height)
-            //chainTip = await this.fetchChainTip()
+            chainTip = await this.fetchChainTip()
         }
         console.log('indexed to chaintip')
 
@@ -82,15 +83,15 @@ class TxIndex {
     }
 
 
-    static async fetchChainTip() {
+    async fetchChainTip() {
         return await TxUtils.getBlockCountAsync()
     }
 
-    static async fetchBlockData(height) {
+    async fetchBlockData(height) {
         return await TxUtils.getBlockAsync(height)
     }
 
-    static async fetchTransactionData(txId) {
+    async fetchTransactionData(txId) {
         return await TxUtils.getRawTransaction(txId)
     }
 

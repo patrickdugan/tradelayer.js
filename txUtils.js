@@ -24,13 +24,22 @@ const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decode
 const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
 const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
 const getTransactionAsync = util.promisify(client.cmd.bind(client, 'gettransaction'));
+const getBlockAsync = util.promisify(client.cmd.bind(client, 'getblock'));
+const getBlockHashAsync = util.promisify(client.cmd.bind(client, 'getblockhash'));
+
 
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
 
-    async getBlockAsync(height) {
-        return await util.promisify(client.getBlock.bind(client))(height)
+    async getBlockAsync(height) {     
+        const blockHash = await getBlockHashAsync(height);
+        console.log('Block Hash:', blockHash);
+
+        // Get block details using the hash
+        const blockDetails = await getBlockAsync(blockHash);
+        console.log('Block Details:', blockDetails);
+        return blockDetails
     },
 
     async getBlockCountAsync() {
