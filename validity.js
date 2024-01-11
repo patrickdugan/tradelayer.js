@@ -90,7 +90,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const confirmedBlock = 0
+        let confirmedBlock = 0
         const activationBlock = await tlActivation.checkActivationBlock(2)
 
         const rawTxData = await TxUtils.getRawTransaction(txId)
@@ -104,6 +104,7 @@ const Validity = {
         }
 
         const TallyMap = require('./tally.js')
+        console.log('about to check sender tally '+sender +' ' +JSON.stringify(params))
         const senderTally = await tallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally ' + params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
         if (senderTally == 0) {
