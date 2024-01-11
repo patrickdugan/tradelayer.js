@@ -16,7 +16,7 @@ class MarginMap {
     }
 
         
-    
+    //legit function
     initMargin(address, contracts, price) {
         // Convert contracts and price to BigNumber
         const contractsBN = new BigNumber(contracts);
@@ -33,17 +33,18 @@ class MarginMap {
         this.margins.set(address, {
             contracts: contractsBN,
             margin: marginBN,
-            unrealizedPl: new BigNumber(0)
+            //unrealizedPl: new BigNumber(0)
         });
 
         // Return values as regular numbers
         return {
             contracts: contractsBN.toNumber(),
             margin: marginBN.toNumber(),
-            unrealizedPl: 0
+            //unrealizedPl: 0
         };
     }
 
+    //this is problematic, simple, but the data is weird 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin) {
         console.log('setting initial margin '+sender, contractId, totalInitialMargin)

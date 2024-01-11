@@ -209,7 +209,7 @@ class Clearing {
 	   				return true
 	   			}
 			} else {
-			    console.error('No data found for contractId:', contractId);
+			    //console.error('No data found for contractId:', contractId);
 			}
 	    } else {
 	        // Access the database where volume index data is stored
@@ -227,7 +227,7 @@ class Clearing {
 	   				return true
 	   			}
 			} else {
-			    console.error('No data found for contractId:', contractId);
+			    //console.error('No data found for contractId:', contractId);
 			}
 	    }
 	    //console.log('no new data')
@@ -249,7 +249,7 @@ class Clearing {
 		        // Iterate through each position to adjust for profit or loss
 	
 		        // Update margin maps based on mark prices and current contract positions
-		       	await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId);
+		       	await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId); //problem child
 
 		        // Adjust the balance based on the P&L change
 		        await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
@@ -340,7 +340,6 @@ class Clearing {
 	            // No data found for the target block height or lower
 	            return null;
 	        }
-	    
 	}
 
 
@@ -394,7 +393,6 @@ class Clearing {
             // No data found for the 2nd latest block
             return null;
         }
-
     }
 
     // Additional functions to be implemented
