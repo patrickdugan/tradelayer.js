@@ -87,7 +87,7 @@ class PropertyManager {
 
     getNextPropertyId() {
         let maxId = Math.max(...this.properties.keys())
-        return maxId + 1;
+        return (Number.isFinite(maxId) ? maxId : 0) + 1
     }
 
     getProperty(propertyId) {

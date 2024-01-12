@@ -7,7 +7,7 @@ const { tlVesting } = require('./vesting.js')
 
 class Activation {
 
-    #txRegistry = {
+    txRegistry = {
         0: { name: "Activate TradeLayer", active: false },
         1: { name: "Token Issue", active: false },
         2: { name: "Send", active: false },
