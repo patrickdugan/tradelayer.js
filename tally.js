@@ -313,7 +313,7 @@ class TallyMap {
     // Get the tally for a specific address and property
     async getTally(address, propertyId) {
         const data = this.addresses.get(address)
-        if (Array.isArray(data)){
+        if (Array.isArray(data)) {
             let p = data.at(propertyId-1)
             if (typeof p?.amount !== 'undefined') {
                 return {
@@ -323,6 +323,7 @@ class TallyMap {
                     margined: p.margined,
                     vesting: p.vesting
                 }
+            }
         }
 
         console.log(`can't find property for address: addr:${address}; pid:${propertyId}`)
