@@ -103,11 +103,10 @@ const Validity = {
             params.reason = 'Transaction type activated in the future';
         }
 
-        const TallyMap = require('./tally.js')
         console.log('about to check sender tally '+sender +' ' +JSON.stringify(params))
         const senderTally = await tallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally ' + params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
-        if (senderTally == 0) {
+        if (!senderTally?.amount) {
             var balances = await tallyMap.getAddressBalances(sender)
             if (balances == []) {
                 tallyMap.diagonistic(sender, params.propertyIds)
@@ -215,9 +214,8 @@ const Validity = {
             params.reason += "Vesting tokens cannot be traded"
         }
 
-        const TallyMap = require('./tally.js')
-        const hasSufficientBalance = await tallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
-        if (!hasSufficientBalance) {
+        const senderTally = await tallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
+        if (!senderTally?.amount) {
             params.valid = false;
             params.reason += 'Insufficient balance for offered token; ';
         }
