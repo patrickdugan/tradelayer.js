@@ -11,6 +11,7 @@ class Database {
             'txIndex',
             'propertyList',
             'oracleList',
+            'oracleData',
             'contractList',
             'tallyMap',
             'marginMaps',

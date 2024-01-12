@@ -90,12 +90,12 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const confirmedBlock = 0
+        let confirmedBlock = 0
         const activationBlock = await tlActivation.checkActivationBlock(2)
 
         const rawTxData = await TxUtils.getRawTransaction(txId)
         if (rawTxData?.blockhash){
-            confirmedBlock = await TxUtils.getBlockHeight(rawTxData?.blockhash)
+            confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
         }
         console.log('send comparing heights' + activationBlock + ' ' + confirmedBlock)
         if (isAlreadyActivated && confirmedBlock > activationBlock && activationBlock != null) { //come back and tighten this up when checkAct block returns null
@@ -103,10 +103,10 @@ const Validity = {
             params.reason = 'Transaction type activated in the future';
         }
 
-        const TallyMap = require('./tally.js')
+        console.log('about to check sender tally '+sender +' ' +JSON.stringify(params))
         const senderTally = await tallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally ' + params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
-        if (senderTally == 0) {
+        if (!senderTally?.available) {
             var balances = await tallyMap.getAddressBalances(sender)
             if (balances == []) {
                 tallyMap.diagonistic(sender, params.propertyIds)
@@ -214,9 +214,8 @@ const Validity = {
             params.reason += "Vesting tokens cannot be traded"
         }
 
-        const TallyMap = require('./tally.js')
-        const hasSufficientBalance = await tallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
-        if (!hasSufficientBalance) {
+        const senderTally = await tallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
+        if (!senderTally?.amount) {
             params.valid = false;
             params.reason += 'Insufficient balance for offered token; ';
         }
@@ -362,13 +361,13 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
         }
 
-        const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+        const isManagedProperty = propertyList.isManagedProperty(params.propertyId);
         if (!isManagedProperty) {
             params.valid = false;
             params.reason += 'Property is not of managed type; ';
@@ -394,13 +393,13 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
         }
 
-        const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+        const isManagedProperty = propertyList.isManagedProperty(params.propertyId);
         if (!isManagedProperty) {
             params.valid = false;
             params.reason += 'Property is not of managed type; ';
@@ -432,7 +431,7 @@ const Validity = {
     // 14: Publish Oracle Data
     validatePublishOracleData: async (sender, params, txid) => {
         params.reason = '';
-        params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }
@@ -443,7 +442,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         } else {
             // Retrieve the oracle instance using its ID
-            const oracle = await OracleRegistry.getOracleData(params.oracleId);
+            const oracle = await oracleList.getOracle(params.oracleId);
             if (!oracle) {
                 params.reason += 'Oracle not found; ';
             } else {
@@ -464,7 +463,7 @@ const Validity = {
     // 15: Close Oracle
     validateCloseOracle: async (sender, params, txid) => {
         params.reason = '';
-        params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }
@@ -610,10 +609,10 @@ const Validity = {
         }
 
         const contractDetails = await contractRegistry.getContractInfo(params.contractId);
-        console.log('checking contract details validity ' + JSON.stringify(contractDetails))
-        if (contractDetails == null || contractDetails == {}) {
+        console.log(`checking contract details validity: id:${params.contractId} => ` + JSON.stringify(contractDetails))
+        if (!contractDetails || contractDetails == {}) {
             params.valid = false
-            params.reason += "contractId not found"
+            params.reason += `contractId not found: ${params.contractId}`
             return params
         }
 

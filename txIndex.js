@@ -45,10 +45,11 @@ class TxIndex {
         console.log('building index until' + chainTip)
         for (let height = startHeight; height <= chainTip; height++) {
             if (height % 1000 == 1) { console.log('indexed to ' + height) }
+                //console.log('about to fetch block data for height '+height)
             let blockData = await this.fetchBlockData(height)
             //console.log(blockData)
             await this.processBlockData(blockData, height)
-            //chainTip = await this.fetchChainTip()
+            chainTip = await this.fetchChainTip()
         }
         console.log('indexed to chaintip')
 
@@ -82,29 +83,28 @@ class TxIndex {
     }
 
 
-    static async fetchChainTip() {
+    async fetchChainTip() {
         return await TxUtils.getBlockCountAsync()
     }
 
-    static async fetchBlockData(height) {
+    async fetchBlockData(height) {
         return await TxUtils.getBlockAsync(height)
     }
 
-    static async fetchTransactionData(txId) {
+    async fetchTransactionData(txId) {
         return await TxUtils.getRawTransaction(txId)
     }
 
     async processBlockData(blockData, blockHeight) {
-        const txdb = this.db.getDatabase('txIndex')
         for (const txId of blockData.tx) {
-            const txHex = await this.fetchTransactionData(txId)
-            const txData = await this.decodeRawTransaction(txHex)
+            const txBlob = await this.fetchTransactionData(txId)
+            const txData = await this.decodeRawTransaction(txBlob.hex)
             if (txData != null && txData != undefined && txData.marker === 'tl') {
                 const payload = txData.payload
                 const txDetails = await this.processTransaction(payload, txId, txData.marker)
                 console.log('payload ' + payload + JSON.stringify(txDetails))
                 try {
-                    await txdb.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
+                    await this.db.getDatabase('txIndex').insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError)
                 }

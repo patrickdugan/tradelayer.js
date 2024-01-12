@@ -1,5 +1,6 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
+const { tallyMap } = require('./tally.js')
 
 class ContractRegistry {
 
@@ -13,7 +14,8 @@ class ContractRegistry {
     async load() {
         try {
             const docs = await this.db.getDatabase('contractList').findAsync({ type: 'contractSeries' })
-            return this.contractList = new Map(docs.map(doc => [doc.id, doc.data]))
+            this.contractList = new Map(docs.map(doc => [doc.id, doc.data]))
+            return this.contractList
         } catch (error) {
             console.error('Error loading contract series data:', error)
         }
@@ -55,10 +57,13 @@ class ContractRegistry {
         return seriesId; // Return the new series ID
     }
 
+    _getNextId() {
+        return this.getNextId(this.contractList)
+    }
+
     getNextId(contractList) {
-        let nums = [...contractList.values()].map(v=>v.id)
-        let maxId = Math.max(...nums)
-        return (Number.isFinite(maxId) ? maxId : 0) + 1
+        let maxId = Math.max(0,...contractList.keys())
+        return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
     // Generate contracts within the series
@@ -112,7 +117,7 @@ class ContractRegistry {
     }
 
     getContractInfo(contractId) {
-        return this.contractList.has(contractId) ? this.contractList[contractId] : undefined
+        return this.contractList.has(contractId) ? this.contractList.get(contractId) : undefined
     }
 
     async isNativeContract(contractId) {
@@ -195,7 +200,7 @@ class ContractRegistry {
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
         console.log(totalInitialMargin)
         // Move collateral to margin position
-        await txTally.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true)
+        await tallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true)
         return totalInitialMargin
     }
 
@@ -279,4 +284,10 @@ class ContractRegistry {
     }
 }
 
-exports.contractRegistry = new ContractRegistry(dbFactory)
+let cr
+(async () => {
+    cr = new ContractRegistry(dbFactory)
+    await cr.load()
+})()
+
+exports.contractRegistry = cr

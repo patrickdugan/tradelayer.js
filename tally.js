@@ -2,6 +2,13 @@ const { dbFactory } = require('./db.js')
 const { propertyList } = require('./property.js')
 
 class TallyMap {
+    static Empty = {
+        amount: 0,
+        available: 0,
+        reserved: 0,
+        margined: 0,
+        vesting: 0
+    }
 
     constructor(dbTally, dbFee) {
         this.addresses = new Map()
@@ -36,45 +43,50 @@ class TallyMap {
         }
 
         if (!this.addresses.has(address)) {
-            this.addresses.set(address, {})
+            this.addresses.set(address, [TallyMap.Empty])
+        }
+        
+        const data = this.addresses.get(address)
+        let p = Array.isArray(data) ? data?.at(propertyId - 1) : undefined
+        if (!Number.isFinite(p?.amount)) {
+            return Error(`Invalid propertyId: ${propertyId}`)
         }
 
-        const addressObj = this.addresses.get(address)
-        console.log('addressObj being changed ' + JSON.stringify(addressObj) + ' for addr ' + address)
-        if (!addressObj[propertyId]) {
-            addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
-        }
+        console.log('Tally is being changed ' + JSON.stringify(data) + ' for addr ' + address)
+        // if (!addressObj[propertyId]) {
+        //     addressObj[propertyId] = TallyMap.Empty
+        // }
 
         // Check and update available balance
-        if (addressObj[propertyId].available + availableChange < 0) {
-            throw new Error("Available balance cannot go negative " + addressObj[propertyId].available + ' change ' + availableChange)
+        if (p.available + availableChange < 0) {
+            throw new Error("Available balance cannot go negative " + p.available + ' change ' + availableChange)
         }
-        addressObj[propertyId].available += availableChange;
+        p.available += availableChange;
 
         // Check and update reserved balance
-        if (addressObj[propertyId].reserved + reservedChange < 0) {
-            console.log('propertyId, reserved, reservedChange ' + JSON.stringify(addressObj[propertyId]) + ' ' + addressObj[propertyId].reserved + ' ' + reservedChange)
+        if (p.reserved + reservedChange < 0) {
+            console.log('propertyId, reserved, reservedChange ' + JSON.stringify(p) + ' ' + p.reserved + ' ' + reservedChange)
             throw new Error("Reserved balance cannot go negative " + propertyId + ' ' + availableChange + ' ' + reservedChange)
         }
-        addressObj[propertyId].reserved += reservedChange;
+        p.reserved += reservedChange;
 
         // Check and update margin balance
-        if (addressObj[propertyId].margin + marginChange < 0) {
+        if (p.margin + marginChange < 0) {
             throw new Error("Margin balance cannot go negative")
         }
-        addressObj[propertyId].margin += marginChange;
+        p.margin += marginChange;
 
         // Check and update vesting balance
-        if (addressObj[propertyId].vesting + vestingChange < 0) {
+        if (p.vesting + vestingChange < 0) {
             throw new Error("Vesting balance cannot go negative")
         }
-        addressObj[propertyId].vesting += vestingChange;
+        p.vesting += vestingChange;
 
         // Update the total amount
-        addressObj[propertyId].amount = this.constructor.calculateTotal(addressObj[propertyId])
+        p.amount = TallyMap.calculateTotal(p)
 
-        this.addresses.set(address, addressObj) // Update the map with the modified address object
-        console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId)
+        this.addresses.set(address, p) // Update the map with the modified address object
+        console.log('Updated balance for address:', JSON.stringify(p), 'with propertyId:', propertyId)
         await this.saveTally() // Save changes to the database
     }
 
@@ -140,7 +152,7 @@ class TallyMap {
             const senderTally = await this.getTally(senderAddress, propertyId)
             console.log('Checking senderTally', senderAddress, propertyId, JSON.stringify(senderTally))
 
-            if (!senderTally || senderTally.available === undefined) {
+            if (!senderTally?.available) {
                 return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
             }
 
@@ -302,9 +314,12 @@ class TallyMap {
 
     totalTokens(propertyId) {
         let total = 0;
-        for (const addressObj of this.addresses.values()) {
-            if (addressObj[propertyId]) {
-                total += addressObj[propertyId].available + addressObj[propertyId].reserved;
+        for (const v of this.addresses.values()) {
+            if (Array.isArray(v)) {
+                let p = v.at(propertyId - 1)
+                if (p?.available) {
+                    total += p.available + p.reserved;
+                }
             }
         }
         return total;
@@ -312,18 +327,23 @@ class TallyMap {
 
     // Get the tally for a specific address and property
     async getTally(address, propertyId) {
-        const obj = this.addresses.get(address)
-        if (!obj[propertyId]) {
-            console.log("can't find property in address")
-            return 0;
+        const data = this.addresses.get(address)
+        if (Array.isArray(data)) {
+            let p = data.at(propertyId - 1)
+            if (Number.isFinite(p?.amount)) {
+                return {
+                    amount: p.amount,
+                    available: p.available,
+                    reserved: p.reserved,
+                    margined: p.margined,
+                    vesting: p.vesting
+                }
+            }
         }
-        return {
-            amount: obj[propertyId].amount,
-            available: obj[propertyId].available,
-            reserved: obj[propertyId].reserved,
-            margined: obj[propertyId].margined,
-            vesting: obj[propertyId].vesting
-        }; // or other specific fields like available, reserved
+
+        console.log(`can't find property for address: addr:${address}; pid:${propertyId}`)
+
+        return TallyMap.Empty
     }
 
     getAddressBalances(address) {

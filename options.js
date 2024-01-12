@@ -69,11 +69,11 @@ class OptionChain {
 }
 
 // Example usage
-const optionChainManager = new OptionChainManager();
+const optionChain = new OptionChain();
 const contractSeriesId = 1; // Example series ID
 const strikeInterval = 5; // Example strike interval
 const europeanStyle = true; // European style option
-const optionChainz = optionChainManager.createOptionChain(contractSeriesId, strikeInterval, europeanStyle);
-console.log(optionChainz);
+const chain = optionChainManager.createOptionChain(contractSeriesId, strikeInterval, europeanStyle);
+console.log(chain);
 
 module.exports = optionChain
