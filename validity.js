@@ -106,7 +106,7 @@ const Validity = {
         console.log('about to check sender tally '+sender +' ' +JSON.stringify(params))
         const senderTally = await tallyMap.getTally(sender, params.propertyIds);
         console.log('checking senderTally ' + params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
-        if (!senderTally?.amount) {
+        if (!senderTally?.available) {
             var balances = await tallyMap.getAddressBalances(sender)
             if (balances == []) {
                 tallyMap.diagonistic(sender, params.propertyIds)
@@ -361,13 +361,13 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
         }
 
-        const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+        const isManagedProperty = propertyList.isManagedProperty(params.propertyId);
         if (!isManagedProperty) {
             params.valid = false;
             params.reason += 'Property is not of managed type; ';
@@ -393,13 +393,13 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
         }
 
-        const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+        const isManagedProperty = propertyList.isManagedProperty(params.propertyId);
         if (!isManagedProperty) {
             params.valid = false;
             params.reason += 'Property is not of managed type; ';
@@ -431,7 +431,7 @@ const Validity = {
     // 14: Publish Oracle Data
     validatePublishOracleData: async (sender, params, txid) => {
         params.reason = '';
-        params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }
@@ -442,7 +442,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         } else {
             // Retrieve the oracle instance using its ID
-            const oracle = await OracleRegistry.getOracleData(params.oracleId);
+            const oracle = await oracleList.getOracle(params.oracleId);
             if (!oracle) {
                 params.reason += 'Oracle not found; ';
             } else {
@@ -463,7 +463,7 @@ const Validity = {
     // 15: Close Oracle
     validateCloseOracle: async (sender, params, txid) => {
         params.reason = '';
-        params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }

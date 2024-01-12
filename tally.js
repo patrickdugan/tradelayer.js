@@ -140,7 +140,7 @@ class TallyMap {
             const senderTally = await this.getTally(senderAddress, propertyId)
             console.log('Checking senderTally', senderAddress, propertyId, JSON.stringify(senderTally))
 
-            if (!senderTally || senderTally.available === undefined) {
+            if (!senderTally?.available) {
                 return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
             }
 
@@ -314,7 +314,7 @@ class TallyMap {
     async getTally(address, propertyId) {
         const data = this.addresses.get(address)
         if (Array.isArray(data)) {
-            let p = data.at(propertyId-1)
+            let p = data.at(propertyId - 1)
             if (typeof p?.amount !== 'undefined') {
                 return {
                     amount: p.amount,

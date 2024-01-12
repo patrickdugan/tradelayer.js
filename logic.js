@@ -273,9 +273,9 @@ const Logic = {
 
 	async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
 		// Check if sender has enough balance
-		const senderBalance = tallyMap.getTally(senderAddress, propertyId);
-		console.log('checking balance before sending ' + JSON.stringify(senderBalance))
-		if (senderBalance < amount) {
+		const senderTally = tallyMap.getTally(senderAddress, propertyId);
+		console.log('checking balance before sending ' + JSON.stringify(senderTally))
+		if (!senderTally?.available || senderTally.available < amount) {
             /*throw new Error*/console.log("Insufficient balance");
 		}
 

@@ -21,7 +21,7 @@ class PropertyManager {
                     console.error('Invalid data format for propertyIndex:', data)
                     this.properties = new Map()
                 }
-            } 
+            }
         } catch (error) {
             console.error('Error loading data from NeDB:', error)
             //this.properties = new Map() // Use an empty Map in case of an error
@@ -103,6 +103,11 @@ class PropertyManager {
         }))
     }
 
+    isManagedProperty(propertyId) {
+        let p = this.getProperty(propertyId)
+        return p?.type === 2
+    }
+
     /**
     * Checks if the given propertyId is a synthetic token.
     * @param {number} propertyId - The ID of the property to check.
@@ -115,7 +120,7 @@ class PropertyManager {
 }
 
 let list
-(async() => {
+(async () => {
     list = new PropertyManager(dbFactory.getDatabase('propertyList'))
     await list.load()
 })()
