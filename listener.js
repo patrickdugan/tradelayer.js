@@ -145,7 +145,7 @@ app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
 
 app.get('/fundingHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
-    const fundingHistory = await ContractsRegistry.loadFundingEvents(contractId)
+    const fundingHistory = await contractRegistry.loadFundingEvents(contractId)
     res.json(fundingHistory)
 })
 

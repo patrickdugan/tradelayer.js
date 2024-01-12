@@ -609,10 +609,10 @@ const Validity = {
         }
 
         const contractDetails = await contractRegistry.getContractInfo(params.contractId);
-        console.log('checking contract details validity ' + JSON.stringify(contractDetails))
-        if (contractDetails == null || contractDetails == {}) {
+        console.log(`checking contract details validity: id:${params.contractId} => ` + JSON.stringify(contractDetails))
+        if (!contractDetails || contractDetails == {}) {
             params.valid = false
-            params.reason += "contractId not found"
+            params.reason += `contractId not found: ${params.contractId}`
             return params
         }
 

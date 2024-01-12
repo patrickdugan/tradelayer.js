@@ -13,7 +13,8 @@ class ContractRegistry {
     async load() {
         try {
             const docs = await this.db.getDatabase('contractList').findAsync({ type: 'contractSeries' })
-            return this.contractList = new Map(docs.map(doc => [doc.id, doc.data]))
+            this.contractList = new Map(docs.map(doc => [doc.id, doc.data]))
+            return this.contractList
         } catch (error) {
             console.error('Error loading contract series data:', error)
         }
@@ -112,7 +113,7 @@ class ContractRegistry {
     }
 
     getContractInfo(contractId) {
-        return this.contractList.has(contractId) ? this.contractList[contractId] : undefined
+        return this.contractList.has(contractId) ? this.contractList.get(contractId) : undefined
     }
 
     async isNativeContract(contractId) {
