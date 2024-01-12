@@ -279,4 +279,10 @@ class ContractRegistry {
     }
 }
 
-exports.contractRegistry = new ContractRegistry(dbFactory)
+let cr
+(async () => {
+    cr = new ContractRegistry(dbFactory)
+    await cr.load()
+})()
+
+exports.contractRegistry = cr
