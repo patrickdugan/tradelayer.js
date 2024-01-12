@@ -39,6 +39,10 @@ class OracleList {
     }
 
     async getOracle(oracleId) {
+        if (Number.isInteger(oracleId)) {
+            return null
+        }
+
         // Oracle key to search for
         const oracleKey = `oracle-${oracleId}`;
 
@@ -49,8 +53,7 @@ class OracleList {
         }
 
         // If not found in-memory, optionally check the database
-        const odb = this.db.getDatabase('oracleList')
-        oracle = await odb.findOneAsync({ _id: oracleKey })
+        oracle = await this.db.getDatabase('oracleList').findOneAsync({ _id: oracleKey })
         if (oracle) {
             return oracle;
         }
@@ -130,8 +133,8 @@ class OracleList {
 
     getNextId() {
         let nums = [...this.oracles.values()].map(v=>v.id)
-        let maxId = Math.max(...nums)
-        return (Number.isFinite(maxId) ? maxId : 0) + 1
+        let maxId = Math.max(0,...nums)
+        return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
     async saveOracleData(oracleId, data, blockHeight) {

@@ -96,7 +96,6 @@ class TxIndex {
     }
 
     async processBlockData(blockData, blockHeight) {
-        const txdb = this.db.getDatabase('txIndex')
         for (const txId of blockData.tx) {
             const txBlob = await this.fetchTransactionData(txId)
             const txData = await this.decodeRawTransaction(txBlob.hex)
@@ -105,7 +104,7 @@ class TxIndex {
                 const txDetails = await this.processTransaction(payload, txId, txData.marker)
                 console.log('payload ' + payload + JSON.stringify(txDetails))
                 try {
-                    await txdb.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
+                    await this.db.getDatabase('txIndex').insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError)
                 }

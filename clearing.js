@@ -77,7 +77,7 @@ class Clearing {
 
             marginMap.clear(marketPrice, contract.seriesId) // Update UPnL for each position in the margin map
 
-            await marginMap.saveMarginMap(blockHeight) // Save the updated margin map
+            await marginMap.save(blockHeight) // Save the updated margin map
         }
     }
 
@@ -104,7 +104,7 @@ class Clearing {
                 }
             }
 
-            await marginMap.saveMarginMap(blockHeight)
+            await marginMap.save(blockHeight)
         }
     }
 
@@ -288,7 +288,7 @@ class Clearing {
         }
 
             // Save the updated margin map
-        await marginMap.saveMarginMap(blockHeight);
+        await marginMap.save(blockHeight);
         console.log('any liquidations '+liquidationData)
         return liquidationData;
     }

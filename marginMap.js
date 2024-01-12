@@ -21,13 +21,13 @@ class MarginMap {
         }
     }
 
-    async save() {
+    async save(blockHeight) {
         const key = JSON.stringify({
             seriesId: this.seriesId
         })
         const value = JSON.stringify([...this.margins])
 
-        await this.db.updateAsync(
+        await dbFactory.getDatabase('marginMaps').updateAsync(
             { _id: key }, // Query: Match document with the specified _id
             { _id: key, value: value }, // Update: Document to be inserted or updated
             { upsert: true }) // Options: Perform an insert if document doesn't exist
@@ -314,7 +314,7 @@ class MarginMap {
             const value = { _id: key, orders: orders, blockHeight: blockHeight };
 
             // Save the liquidation orders in the marginMaps database
-            await this.db.insertAsync(value)
+            await dbFactory.getDatabase('marginMaps').insertAsync(value)
         } catch (error) {
             console.error(`Error saving liquidation orders for contract ${contract.id} at block height ${blockHeight}:`, error)
             throw error;

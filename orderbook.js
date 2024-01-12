@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
 const { tallyMap } = require('./tally.js')
+const { contractRegistry } = require('./contractRegistry.js')
 const MarginMap = require('./marginMap.js')
 
 class Orderbook {
@@ -480,7 +481,7 @@ class Orderbook {
             marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse)
 
             // Save the updated margin map
-            await marginMap.saveMarginMap(currentBlockHeight)
+            await marginMap.save(currentBlockHeight)
 
             // Construct a trade object for recording
             const trade = {

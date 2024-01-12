@@ -226,7 +226,7 @@ class TokenOrderbook {
           const sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
 
           // Save the updated margin map
-          await marginMap.saveMarginMap(currentBlockHeight);
+          await marginMap.save(currentBlockHeight);
 
           // Optionally handle the PnL if needed, e.g., logging or further processing
           // ...

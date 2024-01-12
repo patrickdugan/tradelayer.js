@@ -1,17 +1,12 @@
-class A {
-    constructor() {
-        console.error('before')
-        (async() => {
-            console.error('a1')
-            await this.delay(1000)
-            console.error('a2')
-        })();
-        console.error('after')
-    }
+const { propertyList } = require('../property.js')
+const { contractRegistry } = require('../contractRegistry.js')
+const { oracleList } = require('../oracle.js')
 
-    async delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-new A()
+(async() => {
+    await delay(1000)
+    console.log(`p:${propertyList.getNextId()} c:${contractRegistry._getNextId()} o:${oracleList.getNextId()}`)
+})()

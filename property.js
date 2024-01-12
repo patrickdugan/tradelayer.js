@@ -50,7 +50,7 @@ class PropertyManager {
             }
         }
 
-        const propertyId = await this.getNextPropertyId()
+        const propertyId = this.getNextId()
         await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress)
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`)
         return propertyId;
@@ -85,9 +85,9 @@ class PropertyManager {
         console.log('Properties:', this.getProperties())
     }
 
-    getNextPropertyId() {
-        let maxId = Math.max(...this.properties.keys())
-        return maxId + 1;
+    getNextId() {
+        let maxId = Math.max(0,...this.properties.keys())
+        return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
     getProperty(propertyId) {

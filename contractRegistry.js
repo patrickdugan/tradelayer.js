@@ -1,5 +1,6 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
+const { tallyMap } = require('./tally.js')
 
 class ContractRegistry {
 
@@ -56,10 +57,13 @@ class ContractRegistry {
         return seriesId; // Return the new series ID
     }
 
+    _getNextId() {
+        return this.getNextId(this.contractList)
+    }
+
     getNextId(contractList) {
-        let nums = [...contractList.values()].map(v=>v.id)
-        let maxId = Math.max(...nums)
-        return (Number.isFinite(maxId) ? maxId : 0) + 1
+        let maxId = Math.max(0,...contractList.keys())
+        return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
     // Generate contracts within the series
@@ -196,7 +200,7 @@ class ContractRegistry {
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
         console.log(totalInitialMargin)
         // Move collateral to margin position
-        await txTally.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true)
+        await tallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true)
         return totalInitialMargin
     }
 

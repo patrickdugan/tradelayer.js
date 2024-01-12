@@ -162,7 +162,7 @@ class SynthRegistry {
         marginMap.updateMargin(address, amount, syntheticTokenId) // assuming MarginMap has a method to update margin with synthetic token ID
 
         // Persist the updated MarginMap
-        await MarginMap.saveMarginMap(contractId, marginMap)
+        await MarginMap.save(contractId, marginMap)
 
         console.log(`Posted ${amount} of synthetic token ID ${syntheticTokenId} as margin for contract ID ${contractId}`)
     }
