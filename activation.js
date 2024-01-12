@@ -175,21 +175,12 @@ class Activation {
         }
     }
 
-    /**
-    * Checks if a transaction type is active in the transaction registry.
-    * @param {number} txTypeNumber - The transaction type number to check.
-    * @returns {boolean} - Returns true if the transaction type is active, false otherwise.
-    */
     async isTxTypeActive(txTypeNumber) {
         // Assuming txRegistry is accessible within this context
         await this.loadActivationsList()
         const txType = this.txRegistry[txTypeNumber];
         //console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
-        if (txType == undefined) { return false }
-        if (txType.active == true) {
-            return true;
-        }
-        return false;
+        return txType?.active === true ? true : false;
     }
 
     async checkActivationBlock(txTyp) {

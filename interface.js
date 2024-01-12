@@ -9,6 +9,8 @@ const { propertyList } = require('./property.js')
 const { tallyMap } = require('./tally.js')
 const { txIndex } = require('./txIndex.js')
 const { tlConsensus } = require('./consensus.js')
+const { tlActivation } = require('./activation.js')
+const { tlVesting } = require('./vesting.js')
 
 class Interface {
 
@@ -51,7 +53,7 @@ class Interface {
     }
 
     async getFeatureActivationStatus(featureId) {
-        return tlVesting.isTxTypeActive(featureId) ? { status: 'active' } : { status: 'inactive', message: `Feature ID ${featureId} not found or not active.` };
+        return await tlActivation.isTxTypeActive(featureId) ? { status: 'active' } : { status: 'inactive', message: `Feature ID ${featureId} not found or not active.` };
     }
 
     async getAllBalancesForAddress(address) {
@@ -68,7 +70,7 @@ class Interface {
     }
 
     async isTransactionTypeActive(txType) {
-        return tlVesting.isTxTypeActive(txType)
+        return await tlActivation.isTxTypeActive(txType)
     }
 
     async getAllActiveTransactionTypes() {
