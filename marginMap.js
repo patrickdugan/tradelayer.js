@@ -135,6 +135,54 @@ class MarginMap {
         this.margins.set(address, position)
     }
 
+    /**
+     * Clears the margin for a specific address and contract based on PnL change.
+     * @param {string} contractId - The ID of the contract.
+     * @param {string} address - The address of the position holder.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     */
+    clearMargin(contractId, address, pnlChange, inverse) {
+        const position = this.margins.get(address);
+
+        if (!position) {
+            console.error(`No position found for address ${address}`);
+            return;
+        }
+
+        // Calculate the change in margin based on PnL
+        const marginChange = this.calculateMarginChange(pnlChange, inverse);
+        console.log('clearing margin for position in amount ' +JSON.stringify(position) + ' ' +marginChange)
+        // Update the margin for the position
+        position.margin -= marginChange;
+
+        // Ensure the margin doesn't go below zero
+        if(position.margin >0){
+            console.log('liquidation wipeout! '+position.margin)
+            //need to do some emergency liquidation stuff here
+        }
+        position.margin = Math.max(0, position.margin);
+
+        // Update the margin map
+        this.margins.set(address, position);
+        return position
+        // Additional logic if needed
+    }
+
+    /**
+     * Calculates the change in margin based on PnL change.
+     * @param {number} pnlChange - The change in unrealized profit/loss.
+     * @param {boolean} inverse - Whether the contract is inverse.
+     * @returns {number} - The change in margin.
+     */
+    calculateMarginChange(pnlChange, inverse) {
+        // Example calculation, replace with your specific logic
+        const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
+        console.log('calculated marginChange with inverse? ' +inverse + 'marginChange')
+        return marginChange;
+    }
+
+
     calculateMarginRequirement(contracts, price, inverse) {
         // Ensure that the input values are BigNumber instances
         let bnContracts = new BigNumber(contracts)

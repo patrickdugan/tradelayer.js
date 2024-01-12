@@ -1,2 +1,5 @@
 {"_id":"propertyIndex","value":"[[null,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1}]]"}
 {"_id":"propertyIndex","value":"[[null,{\"ticker\":\"TLVEST\",\"totalInCirculation\":1500000,\"type\":4}]]"}
+{"_id":"propertyIndex","value":"[[null,{\"ticker\":\"TJRZT\",\"totalInCirculation\":694258,\"type\":1,\"whitelistId\":0,\"backupAddress\":\"LNmiS6p8z3KuHHx3q6Jf6x6TfcyptE68oP\"}]]"}
+{"_id":"propertyIndex","value":"[[null,{\"ticker\":\"OZGJE\",\"totalInCirculation\":471902,\"type\":1,\"whitelistId\":0,\"backupAddress\":\"LNmiS6p8z3KuHHx3q6Jf6x6TfcyptE68oP\"}]]"}
+{"_id":"propertyIndex","value":"[[null,{\"ticker\":\"CELFE\",\"totalInCirculation\":741256,\"type\":1,\"whitelistId\":0,\"backupAddress\":\"LNmiS6p8z3KuHHx3q6Jf6x6TfcyptE68oP\"}]]"}
