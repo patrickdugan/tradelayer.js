@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
 const { tallyMap } = require('./tally.js')
+const { tlFees } = require('./fees.js')
 const { contractRegistry } = require('./contractRegistry.js')
 const MarginMap = require('./marginMap.js')
 
@@ -282,7 +283,7 @@ class Orderbook {
                 console.log('maker fee ' + makerRebate)
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
                 console.log(' actual taker fee ' + takerFee)
-                await tallyMap.updateFees(buyOrderPropertyId, takerFee.toNumber())
+                await tlFees.update(buyOrderPropertyId, takerFee.toNumber())
                 console.log('about to calculate this supposed NaN ' + match.amountOfTokenA + ' ' + new BigNumber(match.amountOfTokenA) + ' ' + new BigNumber(match.amountOfTokenA).plus(makerRebate) + ' ' + new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
                 console.log('sell order amount change ' + sellOrderAmountChange)
@@ -294,7 +295,7 @@ class Orderbook {
                 takerFee = amountToTradeA.times(0.0002)
                 makerRebate = takerFee.div(2)
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                await tallyMap.updateFees(sellOrderPropertyId, takerFee.toNumber())
+                await tlFees.update(sellOrderPropertyId, takerFee.toNumber())
                 buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber()
             } else if (match.buyOrder.blockTime == match.sellOrder.blockTime) {
@@ -302,8 +303,8 @@ class Orderbook {
                 match.sellOrder.orderRole = 'split';
                 var takerFeeA = amountToTradeA.times(0.0001)
                 var takerFeeB = amountToTradeB.times(0.0001)
-                await tallyMap.updateFees(buyOrderPropertyId, takerFeeA.toNumber())
-                await tallyMap.updateFees(sellOrderPropertyId, takerFeeB.toNumber())
+                await tlFees.update(buyOrderPropertyId, takerFeeA.toNumber())
+                await tlFees.update(sellOrderPropertyId, takerFeeB.toNumber())
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber()
                 buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber()
             }

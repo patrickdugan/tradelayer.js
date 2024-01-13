@@ -93,8 +93,8 @@ class ContractRegistry {
 
     async save() {
         await this.saveData(this.contractList, 'contractSeries')
-        await this.saveData(this.oracleList, 'oracleContracts')
-        await this.saveData(this.nativeList, 'nativeContracts')
+        //await this.saveData(this.oracleList, 'oracleContracts')
+        //await this.saveData(this.nativeList, 'nativeContracts')
     }
 
     isValidSeriesId(seriesId) {

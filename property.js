@@ -4,6 +4,7 @@ class PropertyManager {
 
     constructor(db) {
         this.db = db;
+        this.db = db;
         this.properties = new Map()
     }
 
@@ -18,15 +19,15 @@ class PropertyManager {
                 if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
                     this.properties = new Map(data)
                 } else {
-                    console.error('Invalid data format for propertyIndex:', data)
+                    console.error('Invalid data format for propertyIndex: ', data)
                     this.properties = new Map()
                 }
             }
         } catch (error) {
-            console.error('Error loading data from NeDB:', error)
+            console.error('Error loading data from NeDB: ', error)
             //this.properties = new Map() // Use an empty Map in case of an error
         }
-        console.log('Loaded properties')
+        console.log('Loaded properties: '+[...this.properties.keys()])
     }
 
     async save() {
@@ -66,8 +67,8 @@ class PropertyManager {
             'Non-Fungible': 6,
         };
 
-        if (!cats[type]) {
-            throw new Error('Invalid property type.')
+        if (!propertyId || !cats[type]) {
+            throw new Error(`Invalid property: ${propertyId}, ${cats[type]}`)
         }
 
         this.properties.set(propertyId, {
@@ -82,7 +83,7 @@ class PropertyManager {
     }
 
     dump() {
-        console.log('Properties:', this.getProperties())
+        console.log('Properties: ', this.getProperties())
     }
 
     getNextId() {
@@ -108,11 +109,6 @@ class PropertyManager {
         return p?.type === 2
     }
 
-    /**
-    * Checks if the given propertyId is a synthetic token.
-    * @param {number} propertyId - The ID of the property to check.
-    * @returns {boolean} - True if the property is a synthetic token (5), false otherwise.
-    */
     isSyntheticToken(propertyId) {
         const p = this.getProperty(propertyId)
         return p?.type === 5;

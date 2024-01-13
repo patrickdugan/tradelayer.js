@@ -3,18 +3,18 @@ const { propertyList } = require('./property.js')
 
 class TallyMap {
     static Empty = {
+        propertyId: -1,
         amount: 0,
         available: 0,
         reserved: 0,
+        margin: 0,
         margined: 0,
         vesting: 0
     }
 
-    constructor(dbTally, dbFee) {
+    constructor(db) {
         this.addresses = new Map()
-        this.feeCache = new Map()
-        this.dbTally = dbTally;
-        this.dbFee = dbFee;
+        this.db = db
     }
 
     async verifyPropertyIds() {
@@ -32,8 +32,9 @@ class TallyMap {
 
     async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
         if (tradeSettlement == true) {
-            console.log('Trade Settlement: txid, property id, available change, reserved change ' + txid + propertyId, availableChange, reservedChange, marginChange)
+            console.log(`Trade Settlement: txid:${txid}, pid:${propertyId}, achange:${availableChange}, rchange:${reservedChange}, mchange:${marginChange}`)
         }
+
         if (availableChange == null || reservedChange == null || marginChange == null || vestingChange == null || isNaN(availableChange) || isNaN(reservedChange) || isNaN(marginChange) || isNaN(vestingChange)) {
             throw new Error('Somehow null passed into updateBalance... avail. ' + availableChange + ' reserved ' + reservedChange + ' margin' + marginChange + ' vesting ' + vestingChange)
         }
@@ -42,20 +43,20 @@ class TallyMap {
             return Error(`Invalid propertyId: ${propertyId}`)
         }
 
-        if (!this.addresses.has(address)) {
-            this.addresses.set(address, [TallyMap.Empty])
-        }
-        
-        const data = this.addresses.get(address)
-        let p = Array.isArray(data) ? data?.at(propertyId - 1) : undefined
-        if (!Number.isFinite(p?.amount)) {
-            return Error(`Invalid propertyId: ${propertyId}`)
+        let data = this.addresses.get(address)
+        if (!Array.isArray(data)) {
+            data = []
+            this.addresses.set(address, data)
         }
 
-        console.log('Tally is being changed ' + JSON.stringify(data) + ' for addr ' + address)
-        // if (!addressObj[propertyId]) {
-        //     addressObj[propertyId] = TallyMap.Empty
-        // }
+        let p = TallyMap.Empty
+        let i = data.findIndex(d => d?.propertyId == propertyId)
+        if (i < 0) {
+            p.propertyId = propertyId
+            data.push(p)
+        } else {
+            p = data[i]
+        }
 
         // Check and update available balance
         if (p.available + availableChange < 0) {
@@ -81,27 +82,19 @@ class TallyMap {
             throw new Error("Vesting balance cannot go negative")
         }
         p.vesting += vestingChange;
+        p.amount = p.available + p.reserved + p.margin + p.vesting
 
-        // Update the total amount
-        p.amount = TallyMap.calculateTotal(p)
+        i = data.findIndex(d => d?.propertyId == propertyId)
+        data[i] = p
+        this.addresses.set(address, data)
 
-        this.addresses.set(address, p) // Update the map with the modified address object
-        console.log('Updated balance for address:', JSON.stringify(p), 'with propertyId:', propertyId)
-        await this.saveTally() // Save changes to the database
+        await this.saveTally()
+
+        console.log('Tally has been changed: ' + JSON.stringify(data) + ' for addr: ' + address)
     }
-
-
-    static calculateTotal(balanceObj) {
-        return balanceObj.available + balanceObj.reserved + balanceObj.margin + balanceObj.vesting;
-    }
-
-    static roundToEightDecimals(number) {
-        return Math.floor(number * 1e8) / 1e8;
-    }
-
 
     async setInitializationFlag() {
-        await this.dbTally.updateAsync(
+        await this.db.updateAsync(
             { _id: '$TLinit' },
             { _id: '$TLinit', initialized: true },
             { upsert: true }
@@ -109,35 +102,8 @@ class TallyMap {
     }
 
     async checkInitializationFlag() {
-        const result = await this.dbTally.findOneAsync({ _id: '$TLinit' })
+        const result = await this.db.findOneAsync({ _id: '$TLinit' })
         return result ? result.initialized : false;
-    }
-
-
-    getAddressBalances(address) {
-        // Check if the address exists in the map
-        if (!this.addresses.has(address)) {
-            console.log(`No data found for address: ${address}`)
-            return [];
-        }
-
-        const addressObj = this.addresses.get(address)
-        //console.log(`Data for address ${address}:`, addressObj)
-        const balances = [];
-        for (const propertyId in addressObj) {
-            if (Object.hasOwnProperty.call(addressObj, propertyId)) {
-                const balanceObj = addressObj[propertyId];
-                balances.push({
-                    propertyId: propertyId,
-                    amount: balanceObj.amount,
-                    available: balanceObj.available,
-                    reserved: balanceObj.reserved,
-                    vesting: balanceObj.vesting
-                })
-            }
-        }
-        //console.log(`Balances for address ${address}:`, balances)
-        return balances;
     }
 
     /**
@@ -172,7 +138,7 @@ class TallyMap {
     async saveTally() {
         try {
             const serializedData = JSON.stringify([...this.addresses])
-            await this.dbTally.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true })
+            await this.db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true })
             console.log('TallyMap saved successfully.')
         } catch (error) {
             console.error('Error saving TallyMap:', error)
@@ -181,10 +147,12 @@ class TallyMap {
 
     async loadTally() {
         try {
-            const result = await this.dbTally.findOneAsync({ _id: 'tallyMap' })
-            if (result && result.data) {
-                const mapDataArray = JSON.parse(result.data)
-                this.addresses = new Map(mapDataArray.map(([key, value]) => [key, value]))
+            const result = await this.db.findOneAsync({ _id: 'tallyMap' })
+            if (result?.data) {
+                const data = JSON.parse(result.data)
+                this.addresses = new Map(data.map(([key, value]) => [key, value]))
+                //let d = [...this.addresses.keys()].map(k=>`${k}:${JSON.stringify(this.getAddressBalances(k))}`)
+                //console.log(`Loaded tally: ${d}`)
             } else {
                 //console.log('failed to load tallyMap, starting a new map')
                 this.addresses = new Map() // Ensure addresses is always a Map
@@ -194,44 +162,10 @@ class TallyMap {
         }
     }
 
-    async saveFees() {
-        try {
-            for (let [propertyId, feeAmount] of this.feeCache.entries()) {
-                const serializedFeeAmount = JSON.stringify(feeAmount)
-                await this.dbFee.updateAsync(
-                    { _id: 'feeCache-' + propertyId },
-                    { _id: 'feeCache-' + propertyId, value: serializedFeeAmount },
-                    { upsert: true }
-                )
-            }
-            console.log('FeeCache saved successfully.')
-        } catch (error) {
-            console.error('Error saving FeeCache:', error)
-        }
-    }
-
-    async loadFees() {
-        try {
-            this.feeCache = new Map()
-            let keys = await propertyList.getProperties().map(p => p.id)
-            // Assuming you have a list of property IDs, iterate through them
-            for (const k of keys) {
-                const result = await this.dbFee.findOneAsync(`{ _id: 'feeCache-${k}' }`)
-                if (result && result.value) {
-                    const feeAmount = JSON.parse(result.value)
-                    this.feeCache.set(k, feeAmount)
-                }
-            }
-            console.log('FeeCache loaded successfully.')
-        } catch (error) {
-            console.error('Error loading fee cache:', error)
-        }
-    }
-
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height
         for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
-            const serializedDelta = await this.dbTally.findOneAsync(`{ _id: 'tallyMapDelta-${height}' }`)
+            const serializedDelta = await this.db.findOneAsync(`{ _id: 'tallyMapDelta-${height}' }`)
             if (serializedDelta) {
                 const delta = JSON.parse(serializedDelta)
                 this.applyDelta(delta)
@@ -239,54 +173,11 @@ class TallyMap {
         }
     }
 
-    // Method to update fee cache for a property
-    async updateFees(propertyId, feeAmount) {
-        await this.loadFees()
-
-        if (!this.feeCache.has(propertyId)) {
-            this.feeCache.set(propertyId, 0) // Initialize if not present
-        }
-        const currentFee = this.feeCache.get(propertyId)
-        this.feeCache.set(propertyId, currentFee + feeAmount)
-
-        // Optionally, persist fee cache changes to database if necessary
-        await this.saveFees()
-    }
-
-    async drawOnFees(propertyId) {
-        await this.loadFees()
-
-        if (!this.feeCache.has(propertyId)) {
-            console.log(`No fee cache available for property ID ${propertyId}`)
-            return;
-        }
-
-        const feeAmount = this.feeCache.get(propertyId)
-        if (feeAmount <= 0) {
-            console.log(`Insufficient fee cache for property ID ${propertyId}`)
-            return;
-        }
-
-        // Logic to match with standing sell orders of property ID 1
-        // Adjust this logic based on how you handle order matching
-        // ...
-
-        // Deduct the matched amount from the fee cache
-        this.feeCache.set(propertyId, this.feeCache.get(propertyId) - matchedAmount)
-
-        // Insert the purchased property ID 1 units into the insurance fund
-        // Adjust this logic to match your insurance fund implementation
-        // ...
-
-        // Save the updated fee cache to the database
-        await this.saveFees()
-    }
-
     // Function to record a delta
     recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
         const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
         const delta = { address, propertyId, amountChange };
-        return this.dbTally.insert(deltaKey, JSON.stringify(delta))
+        return this.db.insert(deltaKey, JSON.stringify(delta))
     }
 
     // Function to apply a delta to the TallyMap
@@ -298,13 +189,13 @@ class TallyMap {
 
     async saveTallyDelta(blockHeight, delta) {
         const serializedDelta = JSON.stringify(delta)
-        this.dbTally.insert(`tallyMapDelta-${blockHeight}`, serializedDelta)
+        this.db.insert(`tallyMapDelta-${blockHeight}`, serializedDelta)
     }
 
     // Function to save the aggregated block delta
     saveBlockDelta(blockHeight, blockDelta) {
         const deltaKey = `blockDelta-${blockHeight}`;
-        this.dbTally.insert(deltaKey, JSON.stringify(blockDelta))
+        this.db.insert(deltaKey, JSON.stringify(blockDelta))
     }
 
     // Function to load all deltas for a block
@@ -316,9 +207,12 @@ class TallyMap {
         let total = 0;
         for (const v of this.addresses.values()) {
             if (Array.isArray(v)) {
-                let p = v.at(propertyId - 1)
-                if (p?.available) {
-                    total += p.available + p.reserved;
+                let i = v.findIndex(d => d?.propertyId == propertyId)
+                if (i > -1) {
+                    const p = v[i];
+                    if (p?.available) {
+                        total += p.available + p.reserved;
+                    }
                 }
             }
         }
@@ -327,16 +221,19 @@ class TallyMap {
 
     // Get the tally for a specific address and property
     async getTally(address, propertyId) {
-        const data = this.addresses.get(address)
-        if (Array.isArray(data)) {
-            let p = data.at(propertyId - 1)
-            if (Number.isFinite(p?.amount)) {
-                return {
-                    amount: p.amount,
-                    available: p.available,
-                    reserved: p.reserved,
-                    margined: p.margined,
-                    vesting: p.vesting
+        if (this.addresses.has(address)) {
+            const properties = this.addresses.get(address)
+            let i = properties.findIndex(d => d?.propertyId == propertyId)
+            if (i > -1) {
+                const p = properties[i];
+                if (Number.isInteger(p?.available)) {
+                    return {
+                        amount: p.amount,
+                        available: p.available,
+                        reserved: p.reserved,
+                        margined: p.margined,
+                        vesting: p.vesting
+                    }
                 }
             }
         }
@@ -347,18 +244,20 @@ class TallyMap {
     }
 
     getAddressBalances(address) {
-        console.log('ze tally map' + this.addresses)
-        const balances = [];
+        const balances = []
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address)
-            for (const [propertyId, balanceData] of Object.entries(properties)) {
+            for (const p of properties) {
                 balances.push({
-                    propertyId: propertyId,
-                    balance: balanceData
+                    propertyId: p.propertyId,
+                    amount: p.amount,
+                    available: p.available,
+                    reserved: p.reserved,
+                    vesting: p.vesting
                 })
             }
         }
-        return balances;
+        return balances
     }
 
     /**
@@ -367,28 +266,27 @@ class TallyMap {
      * @return {Array} - An array of addresses that have a balance for the specified property.
      */
     getAddressesWithBalanceForProperty(propertyId) {
-        const addressesWithBalances = [];
-
-        for (const [address, balances] of this.addresses.entries()) {
-            if (balances[propertyId]) {
-                const balanceInfo = balances[propertyId];
-                if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
-                    addressesWithBalances.push({
-                        address: address,
-                        amount: balanceInfo.amount,
-                        reserved: balanceInfo.reserved
+        const data = [];
+        for (const v of this.addresses.values()) {
+            let i = v.findIndex(d => d?.propertyId == propertyId)
+            if (i > -1) {
+                const bal = v[i];
+                if (bal?.amount > 0 || bal?.reserved > 0) {
+                    data.push({
+                        address: a,
+                        amount: bal.amount,
+                        reserved: bal.reserved
                     })
                 }
             }
         }
-
-        return addressesWithBalances;
+        return data;
     }
 }
 
 let tally
 (async () => {
-    tally = new TallyMap(dbFactory.getDatabase('tallyMap'), dbFactory.getDatabase('feeCache'))
+    tally = new TallyMap(dbFactory.getDatabase('tallyMap'))
     await tally.loadTally()
 })()
 

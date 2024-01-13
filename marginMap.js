@@ -57,11 +57,7 @@ class MarginMap {
         console.log('setting initial margin position ' + JSON.stringify(position))
 
         if (!position) {
-            // If no existing position, initialize a new one
-            position = {
-                contracts: 0,  // Number of contracts the sender has
-                margin: 0      // Total margin amount the sender has posted
-            };
+            position = MarginMap.Empty
         }
 
         // Update the margin for the existing or new position
