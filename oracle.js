@@ -39,7 +39,8 @@ class OracleList {
     }
 
     async getOracle(oracleId) {
-        if (Number.isInteger(oracleId)) {
+        if (!Number.isInteger(oracleId)) {
+            console.log(`Invalid oracle ID: ${oracleId}`)
             return null
         }
 
@@ -75,7 +76,7 @@ class OracleList {
         }
 
         // Verify admin address
-        return oracle && oracle.adminAddress === adminAddress;
+        return oracle?.adminAddress === adminAddress;
     }
 
 

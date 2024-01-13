@@ -192,9 +192,8 @@ class TxIndex {
 
     async getIndexData() {
         try {
-            const txdb = this.db.getDatabase('txIndex')
             let data = {}
-            const entries = await txdb.findAsync({})
+            const entries = await this.db.getDatabase('txIndex').findAsync({})
             entries.forEach(e => {
                 data[e._id] = e.value
             })

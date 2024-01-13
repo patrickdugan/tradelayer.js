@@ -2,6 +2,12 @@ const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
 
 class MarginMap {
+    static Empty = {
+        contracts: 0,
+        margin: 0,
+        unrealizedPl: 0,
+    }
+    
     constructor(seriesId) {
         this.seriesId = seriesId;
         this.margins = new Map()
@@ -12,10 +18,10 @@ class MarginMap {
         console.log('loading margin map for ' + seriesId)
 
         try {
-            const doc = await dbFactory.getDatabase('marginMaps').findOneAsync({ _id: key })
-            const m = new MarginMap(seriesId)
-            if (doc?.value) m.margins = new Map(JSON.parse(doc.value))
-            return m
+            const data = await dbFactory.getDatabase('marginMaps').findOneAsync({ _id: key })
+            const map = new MarginMap(seriesId)
+            map.margins = data?.value ? new Map(JSON.parse(data.value)) : new Map()
+            return map
         } catch (err) {
             console.log('Error loading margin map: ' + err)
         }
@@ -36,14 +42,10 @@ class MarginMap {
     initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
-
-        this.margins.set(address, {
-            contracts,
-            margin,
-            unrealizedPl: 0
-        })
-
-        return margin;
+        let pos = MarginMap.Empty
+        pos.margin = margin
+        this.margins.set(address, pos)
+        return pos
     }
 
     // Set initial margin for a new position in the MarginMap
@@ -351,27 +353,9 @@ class MarginMap {
 
     // Get the position for a specific address
     async getPositionForAddress(address, contractId) {
-        let position = this.margins.get(address)
-
-        // If the position is not found or margins map is empty, try loading from the database
-        // if (!position || this.margins.size === 0) {
-        //     await MarginMap.load(contractId)
-        //     position = this.margins.get(address)
-        // }
-
-        // If still not found, return a default position
-        if (!position) {
-            return {
-                contracts: 0,
-                margin: 0,
-                unrealizedPl: 0,
-                // Add other relevant fields if necessary
-            };
-        }
-
-        return position;
+        let pos = this.margins.get(address)
+        return pos ? pos : MarginMap.Empty
     }
 }
 
 module.exports = MarginMap
-

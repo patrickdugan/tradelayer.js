@@ -8,6 +8,7 @@ const Types = {
         let payload = "tl"
         payload += transactionId.toString(36)
         console.log(transactionId)
+        console.log(`>>: ${params}`)
         switch (transactionId) {
             case 0:
                 payload += Encode.encodeActivateTradeLayer(params)

@@ -430,6 +430,7 @@ const Validity = {
 
     // 14: Publish Oracle Data
     validatePublishOracleData: async (sender, params, txid) => {
+        console.log('validatePublishOracleData: ' + JSON.stringify(params))
         params.reason = '';
         params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
         if (!params.valid) {
