@@ -44,6 +44,7 @@ class ContractRegistry {
 
         // Create the contract series object
         const contractSeries = {
+            id: seriesId,
             native: native,
             underlyingOracleId: underlyingOracleId,
             onChainData: onChainData,
