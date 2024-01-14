@@ -44,9 +44,10 @@ class MarginMap {
             };
         }
 
+        console.log('margin before '+position.margin)
         // Update the margin for the existing or new position
         position.margin += totalInitialMargin;
-
+        console.log('margin after '+position.margin)
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
         console.log('margin should be topped up '+JSON.stringify(this.margins))

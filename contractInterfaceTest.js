@@ -15,6 +15,9 @@ async function runTest() {
 
     const balance2 = await expressInterface.getAllBalancesForAddress('tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk');
      console.log(`Balance for tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk:`, balance2);
+
+     const balance3 = await expressInterface.getAllBalancesForAddress('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8');
+     console.log(`Balance for tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8:`, balance3);
     
     // New calls
     const contractSeries = await expressInterface.listContractSeries();

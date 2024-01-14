@@ -171,7 +171,7 @@ class TallyMap {
     static async hasSufficientBalance(senderAddress, propertyId, requiredAmount) {
         try {
             const senderTally = await this.getTally(senderAddress, propertyId);
-            console.log('Checking senderTally', senderAddress, propertyId, JSON.stringify(senderTally));
+            console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.available === undefined) {
                 return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
@@ -369,7 +369,7 @@ class TallyMap {
         }
         const addressObj = instance.addresses.get(address);
         if (!addressObj[propertyId]) {
-            console.log("can't find property in address")
+            console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
             return 0;
         }
         return {amount: addressObj[propertyId].amount, 

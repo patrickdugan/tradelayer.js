@@ -107,7 +107,7 @@ const Validity = {
 
             const TallyMap = require('./tally.js')
             const senderTally = await TallyMap.getTally(sender, params.propertyIds);
-            console.log('checking senderTally '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
+            console.log('checking senderTally '+ JSON.stringify(params) + ' '+ params.senderAddress, params.propertyIds, JSON.stringify(senderTally))
             if (senderTally==0) {
                 var balances = await TallyMap.getAddressBalances(sender)
                 if(balances ==[]){
@@ -624,9 +624,12 @@ const Validity = {
             const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
             // Check if the sender has enough balance for the initial margin
-            const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.collateralPropertyId, params.totalInitialMargin);
+            console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
+            const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin);
             if (!hasSufficientBalance) {
-                throw new Error('Insufficient balance for initial margin');
+                console.log('Insufficient balance for initial margin');
+                params.valid=false
+                params.reason+= "Insufficient balance for initial margin"
             }
 
             if(params.leverage>50){

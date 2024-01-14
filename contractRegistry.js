@@ -301,11 +301,11 @@ class ContractRegistry {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
-        //console.log('initialMarginPerContract '+initialMarginPerContract)
+        console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        //console.log('collateralPropertyId '+collateralPropertyId)
+        console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        console.log(totalInitialMargin)
+        console.log('Total Initial Margin ' +totalInitialMargin)
         // Move collateral to margin position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true);
 
