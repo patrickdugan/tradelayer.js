@@ -2,3 +2,14 @@ node_modules
 *.db
 package*.json
 
+*.ldb
+*.log
+*.db
+dbPath/CURRENT
+dbPath/LOCK
+dbPath/LOG
+*.old
+dbPath/MANIFEST-000319
+*.db
+oldTests/dbDiag.js
+*.db
