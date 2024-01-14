@@ -376,19 +376,19 @@ class Orderbook {
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
         const ContractRegistry = require('./contractRegistry.js')
         const inverse = ContractRegistry.isInverse(contractId)
+         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.loadMarginMap(contractId);
                      // Get the existing position sizes for buyer and seller
         const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
         // Determine if the trade reduces the position size for buyer or seller
-        const isBuyerReducingPosition = existingPosition.contracts > 0 && match.amount < 0;
-        const isSellerReducingPosition = existingPosition.contracts < 0 && match.amount > 0;
+        const isBuyerReducingPosition = existingPosition.contracts > 0 && amount < 0;
+        const isSellerReducingPosition = existingPosition.contracts < 0 && amount > 0;
         console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
         if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
             //we're increasing or creating a new position so locking up init margin
             console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
-        await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
+            await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
         }
-        
 
         // Create a contract order object with the sell parameter
         const contractOrder = { contractId, amount, price, blockTime, side, sender };
@@ -493,14 +493,18 @@ class Orderbook {
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
                     buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
+                    //put this value to available or deduct it if negative
+                    //return initial margin for the # of contracts minus any loss 
                 }
                 if (isSellerReducingPosition) {
                     sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
+                    //put this value to available or deduct it if negative
+                    //return initial margin for the # of contracts minus any loss 
                 }
-                console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
+                //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
                 // Update margin based on the new positions
-                marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse);
-                marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
+                //marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse);
+                //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
 
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);
@@ -517,7 +521,6 @@ class Orderbook {
 
                 // Record the contract trade
                 await this.recordContractTrade(trade, currentBlockHeight, match.txid);
-
 
                     // Optionally handle the PnL if needed, e.g., logging or further processing
                 // ...    

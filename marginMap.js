@@ -57,7 +57,7 @@ class MarginMap {
     }
 
     // Update the margin for a specific address and contract
-    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
+    /*async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
             const position = this.margins.get(address) || this.initMargin(address, 0, price);
 
             // Calculate the required margin for the new amount
@@ -87,33 +87,42 @@ class MarginMap {
             this.margins.set(address, position);
 
             // Additional logic to handle margin calls or other adjustments if required
-    }
+    }*/
 
-    updateContractBalances(address, amount, price, isBuyOrder,position, inverse) {
+    updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
-        let marginAdjustment = this.calculateMarginRequirement(Math.abs(amount), price, inverse);
+        console.log('new newPositionSize '+newPositionSize)
+        position.contracts=newPositionSize
+        //let marginAdjustment = this.calculateMarginRequirement(Math.abs(amount), price, inverse);
+        //the initial margin is already moved when someone posts an order or, when they commit to a 
+        //channel, which has somewhat different logic so adding a flag
+        
 
         // Compare the absolute values of the old and new position sizes
-        if (Math.abs(newPositionSize) > Math.abs(position.contracts)) {
+        /*if (Math.abs(newPositionSize) > Math.abs(position.contracts)) {
             // Absolute value of position size has increased
-            console.log('Increasing margin by ' + marginAdjustment);
+            //console.log('Increasing margin by ' + marginAdjustment);
+            //Increasing margin by 12941.7 - an example from the console, the calcualteMargin Requirement function is all wrong
             position.margin += marginAdjustment;
+            //this may be redundant
         } else if (Math.abs(newPositionSize) < Math.abs(position.contracts)) {
             // Absolute value of position size has decreased
             console.log('Reducing margin by ' + marginAdjustment);
             position.margin -= marginAdjustment;
+            //not sure how this jibes with realizedPNL, may need to refactor this part in the realizedPNL aftermath
         }
 
         if(position.margin<0){
             console.log('warning, negative margin '+position.margin)
-        }
+            //this would be a sign of an extreme price dislocation
+        }*/
         // Ensure the margin doesn't go below zero 
-        position.margin = Math.max(0, position.margin);
-
+        //position.margin = Math.max(0, position.margin);
+        //if we have negative margin it needs to be addressed with the insurance fund or socialization
 
         // Update the margin map
         this.margins.set(address, position);
@@ -336,7 +345,7 @@ class MarginMap {
      // Get the position for a specific address
       async getPositionForAddress(address, contractId) {
         let position = this.margins.get(address);
-
+        console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
         // If the position is not found or margins map is empty, try loading from the database
         if (!position || this.margins.size === 0) {
             await MarginMap.loadMarginMap(contractId);
