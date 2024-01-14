@@ -15,7 +15,7 @@ class MarginMap {
         return marginMap;
     }
 
-    initMargin(address, contracts, price) {
+    /*initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
 
@@ -26,7 +26,7 @@ class MarginMap {
         });
 
         return margin;
-    }
+    }*/
 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin) {

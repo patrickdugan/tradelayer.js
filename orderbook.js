@@ -375,9 +375,20 @@ class Orderbook {
 
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
         const ContractRegistry = require('./contractRegistry.js')
-        console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
         const inverse = ContractRegistry.isInverse(contractId)
+        const marginMap = await MarginMap.loadMarginMap(contractId);
+                     // Get the existing position sizes for buyer and seller
+        const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
+        // Determine if the trade reduces the position size for buyer or seller
+        const isBuyerReducingPosition = existingPosition.contracts > 0 && match.amount < 0;
+        const isSellerReducingPosition = existingPosition.contracts < 0 && match.amount > 0;
+        console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
+        if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
+            //we're increasing or creating a new position so locking up init margin
+            console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
         await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
+        }
+        
 
         // Create a contract order object with the sell parameter
         const contractOrder = { contractId, amount, price, blockTime, side, sender };
@@ -466,8 +477,8 @@ class Orderbook {
                 const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                 console.log('checking the marginMap for contractId '+ marginMap )
                 // Get the existing position sizes for buyer and seller
-                const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress);
-                const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress);
+                const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+                const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
                 console.log('checking position for trade processing '+JSON.stringify(buyerPosition) +' buyer size '+' seller size '+JSON.stringify(sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
