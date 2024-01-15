@@ -383,6 +383,9 @@ class Orderbook {
         // Determine if the trade reduces the position size for buyer or seller
         const isBuyerReducingPosition = existingPosition.contracts > 0 && amount < 0;
         const isSellerReducingPosition = existingPosition.contracts < 0 && amount > 0;
+        if(sender == "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"&&isSellerReducingPosition){
+            console.log('troubleshooting lack of margin increase '+JSON.stringify(existingPosition)+' '+price +' '+amount + ' buy?'+side)
+        }
         console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
         if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
             //we're increasing or creating a new position so locking up init margin
