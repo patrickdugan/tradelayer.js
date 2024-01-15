@@ -38,18 +38,19 @@ class PropertyManager {
     clear() {
         this.db.remove({}, { multi: true })
     }
-
+        
     async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
-        let i = this.properties.values().findIndex(p => p?.ticker === ticker)
+        let i = [...this.properties.values()].findIndex(p => p?.ticker === ticker);
         if (i > -1) {
-            throw new Error(`Ticker "${ticker}" already exists.`)
+            throw new Error(`Ticker "${ticker}" already exists.`);
         }
 
-        const propertyId = this.getNextId()
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress)
-        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`)
+        const propertyId = this.getNextId();
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
+        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
     }
+
 
     async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress) {
         const cats = {
