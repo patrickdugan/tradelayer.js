@@ -89,14 +89,15 @@ class MarginMap {
             // Additional logic to handle margin calls or other adjustments if required
     }*/
 
-    updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
-        console.log('new newPositionSize '+newPositionSize)
+        console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
+        console.log('position now ' + JSON.stringify(position.contracts))
         //let marginAdjustment = this.calculateMarginRequirement(Math.abs(amount), price, inverse);
         //the initial margin is already moved when someone posts an order or, when they commit to a 
         //channel, which has somewhat different logic so adding a flag
@@ -126,6 +127,7 @@ class MarginMap {
 
         // Update the margin map
         this.margins.set(address, position);
+        await this.saveMarginMap();
     }
 
     

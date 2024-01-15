@@ -57,14 +57,15 @@ class Orderbook {
         }
 
         // Record a contract trade with specific key identifiers
-        async recordContractTrade(trade, blockHeight, txid) {
+        async recordContractTrade(trade, blockHeight, sellerTx, buyerTx) {
             const tradeRecordKey = `contract-${trade.contractId}`;
             const tradeRecord = {
                 key: tradeRecordKey,
                 type: 'contract',
                 trade,
                 blockHeight,
-                txid
+                sellerTx,
+                buyerTx
             };
             console.log('saving contract trade ' +JSON.stringify(trade))
             await this.saveTrade(tradeRecord);
@@ -381,8 +382,8 @@ class Orderbook {
                      // Get the existing position sizes for buyer and seller
         const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
         // Determine if the trade reduces the position size for buyer or seller
-        const isBuyerReducingPosition = existingPosition.contracts > 0 && amount < 0;
-        const isSellerReducingPosition = existingPosition.contracts < 0 && amount > 0;
+        const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&side==false);
+        const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && side==true);
         if(sender == "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"&&isSellerReducingPosition){
             console.log('troubleshooting lack of margin increase '+JSON.stringify(existingPosition)+' '+price +' '+amount + ' buy?'+side)
         }
@@ -394,7 +395,7 @@ class Orderbook {
         }
 
         // Create a contract order object with the sell parameter
-        const contractOrder = { contractId, amount, price, blockTime, side, sender };
+        const contractOrder = { contractId, amount, price, blockTime, side, sender, txid };
 
         // The orderBookKey is based on the contractId since it's a derivative contract
         const orderBookKey = `${contractId}`;
@@ -446,8 +447,8 @@ class Orderbook {
 
                 // Add match to the list
                 matches.push({ 
-                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender }, 
-                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender } 
+                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid }, 
+                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid } 
                 });
 
                 // Remove filled orders from the order book
@@ -485,8 +486,8 @@ class Orderbook {
                 console.log('checking position for trade processing '+JSON.stringify(buyerPosition) +' buyer size '+' seller size '+JSON.stringify(sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
-                marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, true,buyerPosition, inverse);
-                marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, false, sellerPosition, inverse);
+                await marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, true,buyerPosition, inverse);
+                await marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, false, sellerPosition, inverse);
 
                 // Determine if the trade reduces the position size for buyer or seller
                 const isBuyerReducingPosition = buyerPosition > 0 && match.amount < 0;
@@ -512,18 +513,19 @@ class Orderbook {
                 // Save the updated margin map
                 await marginMap.saveMarginMap(currentBlockHeight);
 
+                console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
                 // Construct a trade object for recording
                 const trade = {
-                    contractId: match.contractId,
-                    amount: match.amount,
-                    price: match.price,
+                    contractId: match.sellOrder.contractId,
+                    amount: match.sellOrder.amount,
+                    price: match.sellOrder.price,
                     buyerAddress: match.buyOrder.senderAddress,
                     sellerAddress: match.sellOrder.senderAddress,
                     // other relevant trade details...
                 };
 
                 // Record the contract trade
-                await this.recordContractTrade(trade, currentBlockHeight, match.txid);
+                await this.recordContractTrade(trade, currentBlockHeight, match.sellOrder.sellerTx, match.buyOrder.buyerTx);
 
                     // Optionally handle the PnL if needed, e.g., logging or further processing
                 // ...    
