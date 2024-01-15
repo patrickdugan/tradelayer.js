@@ -486,17 +486,16 @@ class Orderbook {
                 console.log('checking position for trade processing '+JSON.stringify(buyerPosition) +' buyer size '+' seller size '+JSON.stringify(sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
-                await marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, true,buyerPosition, inverse);
-                await marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, false, sellerPosition, inverse);
-
+                updateContractBalancesWithMatch(match, false)
                 // Determine if the trade reduces the position size for buyer or seller
-                const isBuyerReducingPosition = buyerPosition > 0 && match.amount < 0;
-                const isSellerReducingPosition = sellerPosition < 0 && match.amount > 0;
+                const isBuyerReducingPosition = Boolean(buyerPosition.contracts > 0);
+                const isSellerReducingPosition = Boolean(buyerPosition.contracts < 0);
 
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
                     buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
+                    TallyMap.updateBalance()
                     //put this value to available or deduct it if negative
                     //return initial margin for the # of contracts minus any loss 
                 }
@@ -511,7 +510,7 @@ class Orderbook {
                 //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
 
                 // Save the updated margin map
-                await marginMap.saveMarginMap(currentBlockHeight);
+                await marginMap.saveMarginMap();
 
                 console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
                 // Construct a trade object for recording
@@ -519,13 +518,15 @@ class Orderbook {
                     contractId: match.sellOrder.contractId,
                     amount: match.sellOrder.amount,
                     price: match.sellOrder.price,
-                    buyerAddress: match.buyOrder.senderAddress,
-                    sellerAddress: match.sellOrder.senderAddress,
+                    buyerAddress: match.buyOrder.buyerAddress,
+                    sellerAddress: match.sellOrder.sellerAddress,
+                    sellerTx: match.sellOrder.sellerTx,
+                    buyerTx: match.buyOrder.buyerTx
                     // other relevant trade details...
                 };
 
                 // Record the contract trade
-                await this.recordContractTrade(trade, currentBlockHeight, match.sellOrder.sellerTx, match.buyOrder.buyerTx);
+                await this.recordContractTrade(trade, currentBlockHeight);
 
                     // Optionally handle the PnL if needed, e.g., logging or further processing
                 // ...    
