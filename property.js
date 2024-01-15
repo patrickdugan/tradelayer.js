@@ -4,7 +4,6 @@ class PropertyManager {
 
     constructor(db) {
         this.db = db;
-        this.db = db;
         this.properties = new Map()
     }
 
@@ -41,14 +40,9 @@ class PropertyManager {
     }
 
     async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
-        // Check if the ticker already exists
-        if (this.properties.has(ticker)) {
-            return new (`Error: Ticker "${ticker}" already exists.`)
-        }
-        for (let [key, value] of this.properties.entries()) {
-            if (value.ticker === ticker) {
-                return Error(`Ticker "${ticker}" already exists.`)
-            }
+        let i = this.properties.values().findIndex(p => p?.ticker === ticker)
+        if (i > -1) {
+            throw new Error(`Ticker "${ticker}" already exists.`)
         }
 
         const propertyId = this.getNextId()
@@ -67,8 +61,8 @@ class PropertyManager {
             'Non-Fungible': 6,
         };
 
-        if (!propertyId || !cats[type]) {
-            throw new Error(`Invalid property: ${propertyId}, ${cats[type]}`)
+        if (!Number.isInteger(propertyId) || !cats[type]) {
+            throw new Error(`Invalid property: pid:${propertyId}, ticker:ticker}, cat:${cats[type]}`)
         }
 
         this.properties.set(propertyId, {
@@ -112,6 +106,11 @@ class PropertyManager {
     isSyntheticToken(propertyId) {
         const p = this.getProperty(propertyId)
         return p?.type === 5;
+    }
+
+    validateProperties(a1) {
+        const a2 = [...this.properties.keys()].filter(v => a1.includes(v))
+        return (a1.length == a2.length && a1.every(function(u, i) { return u === a2[i] }))
     }
 }
 

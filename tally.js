@@ -17,19 +17,6 @@ class TallyMap {
         this.db = db
     }
 
-    async verifyPropertyIds() {
-        const data = await propertyList.getProperties()
-
-        for (const [address, properties] of this.addresses.entries()) {
-            for (const propertyId in properties) {
-                if (!data.has(propertyId)) {
-                    console.error(`Invalid propertyId ${propertyId} found for address ${address}`)
-                    // TODO: Handle the error - either remove the invalid entry or log it for further investigation
-                }
-            }
-        }
-    }
-
     async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
         if (tradeSettlement == true) {
             console.log(`Trade Settlement: txid:${txid}, pid:${propertyId}, achange:${availableChange}, rchange:${reservedChange}, mchange:${marginChange}`)
@@ -40,7 +27,7 @@ class TallyMap {
         }
 
         if (!Number.isInteger(propertyId)) {
-            return Error(`Invalid propertyId: ${propertyId}`)
+            throw new Error(`Invalid propertyId: ${propertyId}`)
         }
 
         let data = this.addresses.get(address)
@@ -84,11 +71,7 @@ class TallyMap {
         p.vesting += vestingChange;
         p.amount = p.available + p.reserved + p.margin + p.vesting
 
-        i = data.findIndex(d => d?.propertyId == propertyId)
-        data[i] = p
-        this.addresses.set(address, data)
-
-        await this.saveTally()
+        await this.save()
 
         console.log('Tally has been changed: ' + JSON.stringify(data) + ' for addr: ' + address)
     }
@@ -135,7 +118,7 @@ class TallyMap {
         }
     }
 
-    async saveTally() {
+    async save() {
         try {
             const serializedData = JSON.stringify([...this.addresses])
             await this.db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true })
@@ -145,14 +128,14 @@ class TallyMap {
         }
     }
 
-    async loadTally() {
+    async load() {
         try {
             const result = await this.db.findOneAsync({ _id: 'tallyMap' })
             if (result?.data) {
                 const data = JSON.parse(result.data)
                 this.addresses = new Map(data.map(([key, value]) => [key, value]))
-                //let d = [...this.addresses.keys()].map(k=>`${k}:${JSON.stringify(this.getAddressBalances(k))}`)
-                //console.log(`Loaded tally: ${d}`)
+                let d = [...this.addresses.keys()].map(k=>`${k}:${JSON.stringify(this.getAddressBalances(k))}`)
+                console.log(`Loaded tally: ${d}`)
             } else {
                 //console.log('failed to load tallyMap, starting a new map')
                 this.addresses = new Map() // Ensure addresses is always a Map
@@ -207,12 +190,10 @@ class TallyMap {
         let total = 0;
         for (const v of this.addresses.values()) {
             if (Array.isArray(v)) {
-                let i = v.findIndex(d => d?.propertyId == propertyId)
-                if (i > -1) {
-                    const p = v[i];
-                    if (p?.available) {
-                        total += p.available + p.reserved;
-                    }
+                const i = v.findIndex(d => d?.propertyId == propertyId)
+                const p = v[i]
+                if (p?.available) {
+                    total += p.available + p.reserved;
                 }
             }
         }
@@ -223,17 +204,15 @@ class TallyMap {
     async getTally(address, propertyId) {
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address)
-            let i = properties.findIndex(d => d?.propertyId == propertyId)
-            if (i > -1) {
-                const p = properties[i];
-                if (Number.isInteger(p?.available)) {
-                    return {
-                        amount: p.amount,
-                        available: p.available,
-                        reserved: p.reserved,
-                        margined: p.margined,
-                        vesting: p.vesting
-                    }
+            const i = properties.findIndex(d => d?.propertyId == propertyId)
+            const p = properties[i]
+            if (Number.isInteger(p?.available)) {
+                return {
+                    amount: p.amount,
+                    available: p.available,
+                    reserved: p.reserved,
+                    margined: p.margined,
+                    vesting: p.vesting
                 }
             }
         }
@@ -244,11 +223,11 @@ class TallyMap {
     }
 
     getAddressBalances(address) {
-        const balances = []
+        const bal = []
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address)
             for (const p of properties) {
-                balances.push({
+                bal.push({
                     propertyId: p.propertyId,
                     amount: p.amount,
                     available: p.available,
@@ -257,7 +236,7 @@ class TallyMap {
                 })
             }
         }
-        return balances
+        return bal
     }
 
     /**
@@ -267,17 +246,15 @@ class TallyMap {
      */
     getAddressesWithBalanceForProperty(propertyId) {
         const data = [];
-        for (const v of this.addresses.values()) {
-            let i = v.findIndex(d => d?.propertyId == propertyId)
-            if (i > -1) {
-                const bal = v[i];
-                if (bal?.amount > 0 || bal?.reserved > 0) {
-                    data.push({
-                        address: a,
-                        amount: bal.amount,
-                        reserved: bal.reserved
-                    })
-                }
+        for (const [k,v] of this.addresses.entries()) {
+            const i = v.findIndex(d => d?.propertyId == propertyId)
+            const p = v[i]
+            if (p?.amount > 0 || p?.reserved > 0) {
+                data.push({
+                    address: k,
+                    amount: p.amount,
+                    reserved: p.reserved
+                })
             }
         }
         return data;
@@ -287,7 +264,7 @@ class TallyMap {
 let tally
 (async () => {
     tally = new TallyMap(dbFactory.getDatabase('tallyMap'))
-    await tally.loadTally()
+    await tally.load()
 })()
 
 exports.tallyMap = tally

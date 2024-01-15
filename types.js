@@ -128,7 +128,7 @@ const Types = {
         let params = {};
 
         if (marker != 'tl') {
-            return Error('Invalid payload')
+            throw new Error('Invalid payload')
         }
         console.log('checking that type is here ' + type)
         switch (type) {

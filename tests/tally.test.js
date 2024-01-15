@@ -10,7 +10,7 @@ describe('=== TALLY TESTs ===', function () {
 
     beforeEach(async () => {
         //console.log('--beforeEach');
-        await tallyMap.loadTally()
+        await tallyMap.load()
     });
 
     test('PUT', async () => {
