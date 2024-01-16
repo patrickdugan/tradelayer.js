@@ -477,6 +477,11 @@ class Orderbook {
         console.log('processing contract mathces '+JSON.stringify(matches))
 
         for (const match of matches) {
+
+                if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
+                    console.log('self trade nullified '+match.buyOrder.buyerAddress)
+                    continue
+                }
                 // Load the margin map for the given series ID and block height
                 const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                 console.log('checking the marginMap for contractId '+ marginMap )
