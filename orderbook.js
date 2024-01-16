@@ -481,26 +481,26 @@ class Orderbook {
                 const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                 console.log('checking the marginMap for contractId '+ marginMap )
                 // Get the existing position sizes for buyer and seller
-                const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
-                const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
-                console.log('checking position for trade processing '+JSON.stringify(buyerPosition) +' buyer size '+' seller size '+JSON.stringify(sellerPosition))
+                match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+                match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+                console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
-                updateContractBalancesWithMatch(match, false)
+                marginMap.updateContractBalancesWithMatch(match, false)
                 // Determine if the trade reduces the position size for buyer or seller
-                const isBuyerReducingPosition = Boolean(buyerPosition.contracts > 0);
-                const isSellerReducingPosition = Boolean(buyerPosition.contracts < 0);
+                const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
+                const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
 
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
-                    buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
-                    TallyMap.updateBalance()
+                    //buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
+                    //TallyMap.updateBalance()
                     //put this value to available or deduct it if negative
                     //return initial margin for the # of contracts minus any loss 
                 }
                 if (isSellerReducingPosition) {
-                    sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
+                    //sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
                     //put this value to available or deduct it if negative
                     //return initial margin for the # of contracts minus any loss 
                 }
