@@ -1,8 +1,8 @@
 const path = require('path');
-const TradeHistoryManager = require('./tradeHistoryManager.js');
+const TradeHistory = require('./tradeHistoryManager.js');
 
 async function runExample() {
-    const tradeHistoryManager = new TradeHistoryManager();
+    const tradeHistoryManager = new TradeHistory();
     const address = "tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk";
     const address2 = 'tltc1q8xw3vsvkv77dpj59nqn30rxlc9m3xjw76cgrac'
     const address3 = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'

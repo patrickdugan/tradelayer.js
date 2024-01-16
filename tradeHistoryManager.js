@@ -112,4 +112,4 @@ class TradeHistoryManager {
   }
 }
 
-module.exports = TradeHistoryManager;
+module.exports = TradeHistory;

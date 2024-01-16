@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js')
 const dbInstance = require('./db.js'); // Import your database instance
 const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
+const TradeHistory = require('./tradeHistoryManager.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -473,6 +474,7 @@ class Orderbook {
             matches = []; // Initialize as an empty array if that's appropriate
         }
         const MarginMap = require('./marginMap.js')
+        const tradeHistoryManager = new TradeHistory()
 
         console.log('processing contract mathces '+JSON.stringify(matches))
 
@@ -522,18 +524,71 @@ class Orderbook {
 
                 }
 
+                const collateralPropertyId = ContractRegistry.getCollateralId(match.sellOrder.contractId)
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
-                    //buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice);
-                    //TallyMap.updateBalance()
-                    //put this value to available or deduct it if negative
-                    //return initial margin for the # of contracts minus any loss 
+                    //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
+                    //on a LIFO basis that are being retroactively 'closed' by reference here
+                    const LIFO = tradeHistoryManager.calculateLIFOEntry(match.buyOrder.buyerAddress, match.buyOrder.amount)
+                    //{AvgEntry,blockTimes} 
+                    //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
+                    //and we figure what is the PNL that one would show on their taxes, to save a record.
+                    const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO.AvgEntry);
+                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                    //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
+                    //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+                    const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO, match.buyOrder.contractId) 
+                    //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
+                    const reduction = await marginMap.reduceMargin(match.buyOrder.buyerAddress, match.buyOrder.amount, settlementPNL);
+                    //{netMargin,mode}   
+
+                    await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)              
+                    //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
+                    //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
+                    //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
+                    //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
+                    //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
+                    //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
+                    //unusual edge case but we're covering it here 'maint'
+                    if(reduction.mode!='maint'){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, settlementPNL, 0, -settlementPNL, 0, false, true);
+                    } 
+                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
+                        match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), settlementPNL, reduction, LIFO)
                 }
+
                 if (isSellerReducingPosition) {
-                    //sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice);
-                    //put this value to available or deduct it if negative
-                    //return initial margin for the # of contracts minus any loss 
+                    //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
+                    //on a LIFO basis that are being retroactively 'closed' by reference here
+                    const LIFO = tradeHistoryManager.calculateLIFOEntry(match.sellOrder.sellerAddress, match.sellOrder.amount)
+                    //{AvgEntry,blockTimes} 
+                    //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
+                    //and we figure what is the PNL that one would show on their taxes, to save a record.
+                    const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO.AvgEntry);
+                    tradeHistoryManager.savePNL(accountingPNL, match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, collateralPropertyId, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                    //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
+                    //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+                    const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO, match.sellOrder.contractId) 
+                    //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
+                    const reduction = await marginMap.reduceMargin(match.sellOrder.sellerAddress, match.sellOrder.amount, settlementPNL);
+                    //{netMargin,mode}   
+
+                    await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)              
+                    //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
+                    //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
+                    //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
+                    //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
+                    //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
+                    //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
+                    //unusual edge case but we're covering it here 'maint'
+                    if(reduction.mode!='maint'){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, settlementPNL, 0, -settlementPNL, 0, false, true);
+                    } 
+                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
+                        match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), settlementPNL, reduction, LIFO)
                 }
                 //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
                 // Update margin based on the new positions
