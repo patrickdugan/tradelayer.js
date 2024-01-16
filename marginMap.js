@@ -42,7 +42,7 @@ class MarginMap {
     initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
-        let pos = MarginMap.Empty
+        let pos = {...MarginMap.Empty}
         pos.margin = margin
         this.margins.set(address, pos)
         return pos
@@ -57,7 +57,7 @@ class MarginMap {
         console.log('setting initial margin position ' + JSON.stringify(position))
 
         if (!position) {
-            position = MarginMap.Empty
+            position = {...MarginMap.Empty}
         }
 
         // Update the margin for the existing or new position
@@ -327,10 +327,10 @@ class MarginMap {
             const maintenanceMargin = notionalValue * maintenanceMarginFactor;
 
             if (position.margin < maintenanceMargin) {
-                return true; // Needs liquidation
+                return true;
             }
         }
-        return false; // No positions require liquidation
+        return false; 
     }
 
     getMarginLevel(contract) {
@@ -343,12 +343,16 @@ class MarginMap {
         return totalMargin;
     }
 
-    async hasOpenPositions() {
-        return this.margins.values().findIndex(v => v?.contracts > 0) > -1
+    // getMarginLevel(contractId) {
+    //     return [...this.margins.values()].map(v=>v).reduce(v=>v, 0)
+    // }
+
+    hasOpenPositions(contractId) {
+        return [...this.margins.values()].findIndex(v => v?.contracts > 0) > -1
     }
 
     // Get the position for a specific address
-    async getPositionForAddress(address, contractId) {
+    getPositionForAddress(address) {
         let pos = this.margins.get(address)
         return pos ? pos : MarginMap.Empty
     }

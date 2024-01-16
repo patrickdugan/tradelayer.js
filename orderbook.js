@@ -146,7 +146,7 @@ class Orderbook {
         console.log('Order Insertion Confirmation:', orderConfirmation)
 
         // Match orders in the orderbook
-        const matchResult = await this.matchTokenOrders(obKey)
+        const matchResult = this.matchTokenOrders(obKey)
         if (matchResult.matches && matchResult.matches.length > 0) {
             console.log('Match Result:', matchResult)
             await this.processTokenMatches(matchResult.matches, blockHeight, txid)
@@ -191,7 +191,7 @@ class Orderbook {
 
     matchTokenOrders(orderBookKey) {
         const orderBook = this.orderBooks[orderBookKey];
-        if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+        if (orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
             return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches
         }
 
@@ -269,9 +269,11 @@ class Orderbook {
             let amountToTradeA = new BigNumber(match.amountOfTokenA)
             let amountToTradeB = new BigNumber(match.amountOfTokenB)
 
+            // TODO: toremove
             if (txid == "5049a4ac9c8dd3f19278b780135eeb7900b0771e6b9829044900f9fb656b976a") {
                 console.log('looking into the problematic tx' + JSON.stringify(match) + 'times ' + match.sellOrder.blockTime + ' ' + match.buyOrder.blockTime)
             }
+
             console.log('amountTo Trade A and B ' + amountToTradeA + ' ' + amountToTradeB + ' ' + 'match values ' + match.amountOfTokenA + ' ' + match.amountOfTokenB)
             // Determine order roles and calculate fees
             if (match.sellOrder.blockTime < match.buyOrder.blockTime) {

@@ -2,13 +2,13 @@ const { dbFactory } = require('./db.js')
 const { propertyList } = require('./property.js')
 
 class TallyMap {
+    // addr => [{p1},{p2}...]
     static Empty = {
-        propertyId: -1,
+        propertyId: 0,
         amount: 0,
         available: 0,
         reserved: 0,
         margin: 0,
-        margined: 0,
         vesting: 0
     }
 
@@ -36,7 +36,7 @@ class TallyMap {
             this.addresses.set(address, data)
         }
 
-        let p = TallyMap.Empty
+        let p = {...TallyMap.Empty}
         let i = data.findIndex(d => d?.propertyId == propertyId)
         if (i < 0) {
             p.propertyId = propertyId
@@ -56,7 +56,8 @@ class TallyMap {
             console.log('propertyId, reserved, reservedChange ' + JSON.stringify(p) + ' ' + p.reserved + ' ' + reservedChange)
             throw new Error("Reserved balance cannot go negative " + propertyId + ' ' + availableChange + ' ' + reservedChange)
         }
-        p.reserved += reservedChange;
+        //p.reserved += reservedChange;
+        p.reserved = propertyId;
 
         // Check and update margin balance
         if (p.margin + marginChange < 0) {
@@ -133,7 +134,7 @@ class TallyMap {
             const result = await this.db.findOneAsync({ _id: 'tallyMap' })
             if (result?.data) {
                 const data = JSON.parse(result.data)
-                this.addresses = new Map(data.map(([key, value]) => [key, value]))
+                this.addresses = new Map(data.map(([k, v]) => [k, v]))
                 let d = [...this.addresses.keys()].map(k=>`${k}:${JSON.stringify(this.getAddressBalances(k))}`)
                 console.log(`Loaded tally: ${d}`)
             } else {
@@ -189,12 +190,10 @@ class TallyMap {
     totalTokens(propertyId) {
         let total = 0;
         for (const v of this.addresses.values()) {
-            if (Array.isArray(v)) {
-                const i = v.findIndex(d => d?.propertyId == propertyId)
-                const p = v[i]
-                if (p?.available) {
-                    total += p.available + p.reserved;
-                }
+            const i = Array.isArray(v) & v.findIndex(d => d?.propertyId == propertyId)
+            const p = v[i]
+            if (Number.isInteger(p?.available)) {
+                total += p.available + p.reserved;
             }
         }
         return total;
@@ -203,15 +202,15 @@ class TallyMap {
     // Get the tally for a specific address and property
     async getTally(address, propertyId) {
         if (this.addresses.has(address)) {
-            const properties = this.addresses.get(address)
-            const i = properties.findIndex(d => d?.propertyId == propertyId)
-            const p = properties[i]
+            const data = this.addresses.get(address)
+            const i = Array.isArray(data) & data.findIndex(d => d?.propertyId == propertyId)
+            const p = data[i]
             if (Number.isInteger(p?.available)) {
                 return {
                     amount: p.amount,
                     available: p.available,
                     reserved: p.reserved,
-                    margined: p.margined,
+                    margin: p.margin,
                     vesting: p.vesting
                 }
             }
@@ -247,7 +246,7 @@ class TallyMap {
     getAddressesWithBalanceForProperty(propertyId) {
         const data = [];
         for (const [k,v] of this.addresses.entries()) {
-            const i = v.findIndex(d => d?.propertyId == propertyId)
+            const i = Array.isArray(v) & v.findIndex(d => d?.propertyId == propertyId)
             const p = v[i]
             if (p?.amount > 0 || p?.reserved > 0) {
                 data.push({

@@ -1,6 +1,14 @@
 const { dbFactory } = require('./db.js')
 
 class PropertyManager {
+    // pid => {}
+    static Empty = {
+        ticker: '',
+        totalInCirculation : 0,
+        type: '?',
+        whitelistId: -1,
+        backupAddress: '?'
+    }
 
     constructor(db) {
         this.db = db;
@@ -40,14 +48,17 @@ class PropertyManager {
     }
         
     async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
-        let i = [...this.properties.values()].findIndex(p => p?.ticker === ticker);
+        let entries = [...this.properties.entries()]
+        let i = entries.findIndex(([k,v]) => v?.ticker === ticker)
         if (i > -1) {
-            throw new Error(`Ticker "${ticker}" already exists.`);
+            let pid = entries[i][0]
+            console.log(`Ticker "${ticker}" already exists, pid:${pid}`)
+            return pid
         }
 
-        const propertyId = this.getNextId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
-        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
+        const propertyId = this.getNextId()
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress)
+        console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`)
         return propertyId;
     }
 
