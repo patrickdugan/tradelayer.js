@@ -75,7 +75,7 @@ class Orderbook {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
 
             // Use the key provided in the trade record for storage
-            const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
+            const tradeId = `${tradeRecord.key}-${tradeRecord.blockHeight}`;
 
             // Construct the document to be saved
             const tradeDoc = {
