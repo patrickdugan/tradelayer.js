@@ -297,6 +297,19 @@ class ContractRegistry {
     }
 
         // In the contract order addition process
+    static async moveCollateralToReserve(sender, contractId, amount) {
+        const TallyMap = require('./tally.js')
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
+        console.log('initialMarginPerContract '+initialMarginPerContract)
+        const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
+        console.log('collateralPropertyId '+collateralPropertyId)
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+        console.log('Total Initial Margin ' +totalInitialMargin)
+        // Move collateral to reservd position
+        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true);
+        return
+    }
+
     static async moveCollateralToMargin(sender, contractId, amount) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
@@ -306,15 +319,12 @@ class ContractRegistry {
         console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         console.log('Total Initial Margin ' +totalInitialMargin)
-        // Move collateral to margin position
-        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true);
-
-        // Update MarginMap for the contract series
-        const marginMap = await MarginMap.getInstance(contractId);
-
-        // Use the instance method to set the initial margin
+        // Move collateral to reservd position
+        await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true);
         await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
+        return
     }
+
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {

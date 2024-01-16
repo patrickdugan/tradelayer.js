@@ -391,9 +391,9 @@ class Orderbook {
         }
         console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
         if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
-            //we're increasing or creating a new position so locking up init margin
+            //we're increasing or creating a new position so locking up init margin in the reserve column on TallyMap
             console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
-            await ContractRegistry.moveCollateralToMargin(sender, contractId, amount) //first we line up the capital
+            await ContractRegistry.moveCollateralToReserve(sender, contractId, amount) //first we line up the capital
         }
 
         // Create a contract order object with the sell parameter
@@ -415,10 +415,8 @@ class Orderbook {
             await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
         }
        
-
         await this.saveOrderBook(orderBookKey);
         return matchResult
-
     }
 
     async matchContractOrders(orderBookKey) {
@@ -494,9 +492,35 @@ class Orderbook {
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
                 marginMap.updateContractBalancesWithMatch(match, false)
+                const trade = {
+                    contractId: match.sellOrder.contractId,
+                    amount: match.sellOrder.amount,
+                    price: match.sellOrder.price,
+                    buyerAddress: match.buyOrder.buyerAddress,
+                    sellerAddress: match.sellOrder.sellerAddress,
+                    sellerTx: match.sellOrder.sellerTx,
+                    buyerTx: match.buyOrder.buyerTx
+                    // other relevant trade details...
+                };
+
+                const marginMap = await MarginMap.getInstance(contractId);
+
+                // Record the contract trade
+                await this.recordContractTrade(trade, currentBlockHeight);
                 // Determine if the trade reduces the position size for buyer or seller
                 const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                 const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
+                if(!isBuyerReducingPosition){
+                   // Use the instance method to set the initial margin
+                   await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount)
+                   
+                }
+                // Update MarginMap for the contract series
+                if(!isSellerReducingPosition){
+                    // Use the instance method to set the initial margin
+                    await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount)
+
+                }
 
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
@@ -521,19 +545,6 @@ class Orderbook {
 
                 console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
                 // Construct a trade object for recording
-                const trade = {
-                    contractId: match.sellOrder.contractId,
-                    amount: match.sellOrder.amount,
-                    price: match.sellOrder.price,
-                    buyerAddress: match.buyOrder.buyerAddress,
-                    sellerAddress: match.sellOrder.sellerAddress,
-                    sellerTx: match.sellOrder.sellerTx,
-                    buyerTx: match.buyOrder.buyerTx
-                    // other relevant trade details...
-                };
-
-                // Record the contract trade
-                await this.recordContractTrade(trade, currentBlockHeight);
 
                     // Optionally handle the PnL if needed, e.g., logging or further processing
                 // ...    
