@@ -1,6 +1,6 @@
 const BigNumber = require('bignumber.js')
 const dbInstance = require('./db.js'); // Import your database instance
-
+const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -74,8 +74,10 @@ class Orderbook {
     async saveTrade(tradeRecord) {
             const tradeDB = dbInstance.getDatabase('tradeHistory');
 
+            const uuid = uuidv4();
+
             // Use the key provided in the trade record for storage
-            const tradeId = `${tradeRecord.key}-${tradeRecord.blockHeight}`;
+            const tradeId = `${tradeRecord.key}-${uuid}-${tradeRecord.blockHeight}`;
 
             // Construct the document to be saved
             const tradeDoc = {

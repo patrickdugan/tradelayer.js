@@ -5,34 +5,51 @@ class TradeHistoryManager {
     this.tradeHistoryDb = database.getDatabase('tradeHistory');
   }
 
-  async loadTradeHistory() {
-    return this.tradeHistoryDb.findAsync({ "key": "contract-1" });
+  async loadTradeHistory(contractId) {
+    let key = { "key": "contract-" + contractId }
+    console.log('key to load trades ' +JSON.stringify(key))
+    return this.tradeHistoryDb.findAsync(key);
   }
 
-  async getTradeHistoryForAddress(address) {
-    const tradeHistory = await this.loadTradeHistory();
-    console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
+  async getTradeHistoryForAddress(address,contractId) {
+    const tradeHistory = await this.loadTradeHistory(contractId);
+    //console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
     return tradeHistory.filter((trade) =>
       [trade.trade.buyerAddress, trade.trade.sellerAddress].includes(address)
     );
   }
 
   async getPositionHistoryForContract(address, contractId) {
-    const addressTradeHistory = await this.getTradeHistoryForAddress(address);
-    console.log('filtered trade history for address  '+address+  '  ' +JSON.stringify(addressTradeHistory))
+    const addressTradeHistory = await this.getTradeHistoryForAddress(address,contractId);
+    addressTradeHistory.sort((a, b) => a.blockHeight - b.blockHeight);
+
+    //console.log('filtered trade history for address  '+address+  '  ' +JSON.stringify(addressTradeHistory))
     const positionHistory = [];
+    var position = 0
 
     for (const trade of addressTradeHistory) {
+      //console.log(JSON.stringify(trade))
       if (trade.trade.contractId === contractId) {
-        const position = {
-          amount: trade.trade.amount,
+        if(trade.trade.sellerAddress==address){
+          trade.trade.amount *= -1
+        }
+        // Check if the trade is a close
+        const isClose = Math.abs(position) > Math.abs(position + trade.trade.amount);
+        //console.log(Math.abs(position) + ' '+ Math.abs(position +trade.trade.amount))
+        position = position + trade.trade.amount
+
+        const snapshot = {
+          amount: position,
           price: trade.trade.price,
           blockHeight: trade.blockHeight,
+          isClose: isClose
         };
-        positionHistory.push(position);
+        //console.log(snapshot)
+        positionHistory.push(snapshot);
+
       }
     }
-
+    //console.log(positionHistory)
     return positionHistory;
   }
 
@@ -41,9 +58,14 @@ class TradeHistoryManager {
     const txIds = [];
 
     for (const trade of addressTradeHistory) {
-      if (trade.trade.contractId === contractId && trade.trade.action === action) {
+      if (trade.trade.contractId === contractId && trade.trade.buyerAddress === address) {
         txIds.push({
-          txId: trade.trade.buyerTx || trade.trade.sellerTx,
+          txId: trade.trade.buyerTx, 
+          blockHeight: trade.blockHeight,
+        });
+      }else if(trade.trade.contractId === contractId && trade.trade.sellerAddress === address){
+        txIds.push({
+          txId: trade.trade.sellerTx, 
           blockHeight: trade.blockHeight,
         });
       }
