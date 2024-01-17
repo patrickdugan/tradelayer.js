@@ -222,6 +222,95 @@ class MarginMap {
         return { netMargin, mode, totalMargin, requiredMargin };
     }
 
+    liberateMargin(address, contracts, pnl, mode) {
+        const pos = this.margins.get(address);
+
+        if (!pos) {
+            console.error(`No position found for address ${address}`);
+            return 0;
+        }
+
+        let liberatedMargin = 0;
+
+        switch (mode) {
+            case 'profit':
+                // Logic for liberating margin in case of profit
+                liberatedMargin = this.profitLiberation(pos, contracts, pnl);
+                break;
+            case 'fractionalProfit':
+                // Logic for liberating margin in case of fractional profit
+                liberatedMargin = this.fractionalProfitLiberation(pos, contracts, pnl);
+                break;
+            case 'moreThanMaint':
+                // Logic for liberating margin when remaining margin is more than maintenance margin
+                liberatedMargin = this.moreThanMaintLiberation(pos, contracts, pnl);
+                break;
+            case 'lessThanMaint':
+                // Logic for liberating margin when remaining margin is less than maintenance margin
+                liberatedMargin = this.lessThanMaintLiberation(pos, contracts, pnl);
+                break;
+            case 'maint':
+                // Logic for liberating margin when remaining margin is equal to maintenance margin
+                liberatedMargin = this.maintLiberation(pos, contracts, pnl);
+                break;
+            default:
+                console.error(`Invalid mode: ${mode}`);
+        }
+
+        // Update the margin map with the liberated margin
+        pos.margin -= liberatedMargin;
+        this.margins.set(address, pos);
+
+        // Save changes to the database or your storage solution
+        this.saveMarginMap();
+
+        return liberatedMargin;
+    }
+ 
+    profitLiberation(position, contracts, pnl) {
+        // Logic for liberating margin in case of profit
+        // Example: Liberating a fraction of the profit based on the total profit
+        const totalProfit = Math.abs(pnl);
+        const liberationFraction = totalProfit > 0 ? contracts * Math.min(1, contracts / totalProfit) : 0;
+
+        return liberationFraction;
+    }
+
+    fractionalProfitLiberation(position, contracts, pnl) {
+        // Logic for liberating margin in case of fractional profit
+        // Example: Liberating a fraction of the profit based on the total profit
+        const totalProfit = Math.abs(pnl);
+        const liberationFraction = totalProfit > 0 ? contracts * Math.min(1, contracts / totalProfit) : 0;
+
+        return liberationFraction;
+    }
+
+    moreThanMaintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is more than maintenance margin
+        // Example: Liberating a fixed fraction of the maintenance margin
+        const maintenanceMargin = this.calculateMaintenanceMargin(position.size, position.avgPrice);
+        const liberationFraction = maintenanceMargin > 0 ? contracts * 0.5 : 0;
+
+        return liberationFraction;
+    }
+
+    lessThanMaintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is less than maintenance margin
+        // Example: Liberating a fixed fraction of the remaining margin
+        const liberationFraction = contracts * 0.2;
+
+        return liberationFraction;
+    }
+
+    maintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is equal to maintenance margin
+        // Example: Liberating a fixed fraction of the maintenance margin
+        const maintenanceMargin = this.calculateMaintenanceMargin(position.size, position.avgPrice);
+        const liberationFraction = maintenanceMargin > 0 ? contracts * 0.5 : 0;
+
+        return liberationFraction;
+    }
+
 
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
         const pos = this.margins.get(address);
