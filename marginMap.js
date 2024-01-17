@@ -272,9 +272,10 @@ class MarginMap {
             return;
         }
 
+        const ContractRegistry = require('./contractRegistry.js')
         // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = this.initMargin(position.contracts, position.initialPrice);
-        let maintenanceMargin = initialMargin / 2;
+        let initialMargin = ContractRegistry.getInitialMargin(contractId);
+        let maintenanceMargin = (position.contracts * initialMargin) / 2;
 
         if (position.margin < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
@@ -285,20 +286,21 @@ class MarginMap {
         }
     }
 
-    async reduceMargin(address, contracts, pnl) {
-        const pos = this.margins.get(address);
+    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address) {
+        //const pos = this.margins.get(address); //this is showing null null for margin and UPNL, let's return to figure out why
+        console.log('checking position inside reduceMargin '+JSON.stringify(pos))
 
         if (!pos) return { netMargin: 0, mode: 'none' };
 
         // Calculate the initial margin for the position
-        const initialMargin = this.calculateInitialMargin(pos.size, pos.avgPrice);
+        const initialMargin = this.calculateMarginRequirement(pos.contracts, pos.avgPrice, isInverse);
 
         // Calculate the maintenance margin for the position
-        const maintMargin = this.calculateMaintenanceMargin(pos.size, pos.avgPrice);
+        const maintMargin = initialMargin/2
 
         // Calculate the remaining margin after considering pnl
         const remainingMargin = pos.margin - pnl;
-
+        console.log('inside reduce margin '+maintMargin + ' '+ remainingMargin)
         // Determine the mode based on different scenarios
         let mode;
         if (remainingMargin >= initialMargin) {
@@ -317,23 +319,24 @@ class MarginMap {
             // ...
             mode = 'insufficientMargin';
         }
+        console.log('mode '+mode)
 
         // Check if the margin is below maintenance level
-        this.checkMarginMaintenance(address, pos.contractId);
+        //this.checkMarginMaintenance(address, pos.contractId);
 
         // Get the margin level for the contract
-        const totalMargin = this.getMarginLevel(pos.contractId);
+        const totalMargin = pos.margin
 
         // Calculate the required margin for the new amount
         const requiredMargin = this.calculateMarginRequirement(contracts, pos.avgPrice, pos.isInverse);
 
         // Liberating margin on a pro-rata basis
-        const netMargin = this.liberateMargin(address, contracts, pnl, mode);
+        const netMargin = this.liberateMargin(pos, totalMargin, contracts, pnl, mode);
 
         return { netMargin, mode, totalMargin, requiredMargin };
     }
 
-    liberateMargin(address, contracts, pnl, mode) {
+    liberateMargin(pos, margin, contracts, pnl, mode) {
         const pos = this.margins.get(address);
 
         if (!pos) {
@@ -447,7 +450,7 @@ class MarginMap {
             const pos = this.margins.get(address);
 
             if (!pos) return 0;
-
+            const ContractRegistry = require('./ContractRegistry.js')
             // Check if the contract is associated with an oracle
             const isOracleContract = await ContractRegistry.isOracleContract(contractId);
 
@@ -560,15 +563,6 @@ class MarginMap {
         return false; // No positions require liquidation
     }
 
-    getMarginLevel(contract) {
-        // Assuming margins are stored per position in the contract
-        // Example: Return the margin level for the contract
-        let totalMargin = 0;
-        for (const position of Object.values(this.margins[contract.id])) {
-            totalMargin += position.margin;
-        }
-        return totalMargin;
-    }
 
      // Get the position for a specific address
       async getPositionForAddress(address, contractId) {

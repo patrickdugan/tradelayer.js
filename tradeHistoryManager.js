@@ -12,6 +12,7 @@ class TradeHistory {
   }
 
   async getTradeHistoryForAddress(address,contractId) {
+    console.log('about to call load history for contract '+contractId)
     const tradeHistory = await this.loadTradeHistory(contractId);
     //console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
     return tradeHistory.filter((trade) =>
@@ -20,6 +21,7 @@ class TradeHistory {
   }
 
   async getPositionHistoryForContract(address, contractId) {
+    console.log('about to call trade history for contract '+contractId)
     const addressTradeHistory = await this.getTradeHistoryForAddress(address,contractId);
     addressTradeHistory.sort((a, b) => a.blockHeight - b.blockHeight);
 
@@ -105,12 +107,11 @@ class TradeHistory {
     };
   }
 
-  async calculateLIFOEntry(address, amount) {
-    const positionHistory = await this.getPositionHistoryForAddress(address);
-    const categorizedTrades = await this.getCategorizedTrades(address);
-
+  async calculateLIFOEntry(address, amount, contractId) {
+    const categorizedTrades = await this.getCategorizedTrades(address, contractId);
+    console.log(JSON.stringify(categorizedTrades))
     // Filter trades where the given amount is involved
-    const relevantTrades = categorizedTrades.closedTrades.filter(trade =>
+    const relevantTrades = categorizedTrades.openTrades.filter(trade =>
       Math.abs(trade.amount) === Math.abs(amount)
     );
 
@@ -150,6 +151,7 @@ class TradeHistory {
       blockTimes,
     };
   }
+
   async displayPositionHistory(address, contractId) {
     const positionHistory = this.getPositionHistoryForContract(address, contractId);
     console.log(`Position History for Address ${address} and Contract ID ${contractId}:`);

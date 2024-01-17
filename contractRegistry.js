@@ -348,7 +348,6 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        const instance = ContractRegistry.getInstance(); // Access singleton instance
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         return contractInfo && contractInfo.type === 'oracle';
     }
