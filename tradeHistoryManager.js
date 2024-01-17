@@ -105,6 +105,51 @@ class TradeHistoryManager {
     };
   }
 
+  async calculateLIFOEntry(address, amount) {
+    const positionHistory = await this.getPositionHistoryForAddress(address);
+    const categorizedTrades = await this.getCategorizedTrades(address);
+
+    // Filter trades where the given amount is involved
+    const relevantTrades = categorizedTrades.closedTrades.filter(trade =>
+      Math.abs(trade.amount) === Math.abs(amount)
+    );
+
+    // Sort trades by block height in descending order (LIFO)
+    relevantTrades.sort((a, b) => b.blockHeight - a.blockHeight);
+
+    // Calculate the LIFO entry based on the sorted trades
+    let remainingAmount = Math.abs(amount);
+    let totalCost = 0;
+    const blockTimes = [];
+
+    for (const trade of relevantTrades) {
+      const tradeAmount = Math.abs(trade.amount);
+      const tradeCost = tradeAmount * trade.price;
+
+      if (tradeAmount <= remainingAmount) {
+        // Fully cover the remaining amount with the current trade
+        totalCost += tradeCost;
+        remainingAmount -= tradeAmount;
+        blockTimes.push(trade.blockHeight); // Add block time of the closing trade
+      } else {
+        // Partially cover the remaining amount with the current trade
+        totalCost += (remainingAmount / tradeAmount) * tradeCost;
+        remainingAmount = 0;
+        blockTimes.push(trade.blockHeight); // Add block time of the closing trade
+      }
+
+      if (remainingAmount === 0) {
+        // Fully covered the given amount
+        break;
+      }
+    }
+
+    // Return an object with total cost and block times
+    return {
+      totalCost,
+      blockTimes,
+    };
+  }
   async displayPositionHistory(address, contractId) {
     const positionHistory = this.getPositionHistoryForContract(address, contractId);
     console.log(`Position History for Address ${address} and Contract ID ${contractId}:`);

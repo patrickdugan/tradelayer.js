@@ -174,6 +174,55 @@ class MarginMap {
         }
     }
 
+    async reduceMargin(address, contracts, pnl) {
+        const pos = this.margins.get(address);
+
+        if (!pos) return { netMargin: 0, mode: 'none' };
+
+        // Calculate the initial margin for the position
+        const initialMargin = this.calculateInitialMargin(pos.size, pos.avgPrice);
+
+        // Calculate the maintenance margin for the position
+        const maintMargin = this.calculateMaintenanceMargin(pos.size, pos.avgPrice);
+
+        // Calculate the remaining margin after considering pnl
+        const remainingMargin = pos.margin - pnl;
+
+        // Determine the mode based on different scenarios
+        let mode;
+        if (remainingMargin >= initialMargin) {
+            mode = 'profit';
+        } else if (remainingMargin >= 0) {
+            mode = 'fractionalProfit';
+        } else if (remainingMargin >= maintMargin) {
+            mode = 'moreThanMaint';
+        } else if (remainingMargin > 0) {
+            mode = 'lessThanMaint';
+        } else if (remainingMargin === 0) {
+            mode = 'maint';
+        } else {
+            // Handle cases where pnl is negative and insufficient margin is available
+            // You may need to implement additional logic to cover insurance fund, system tab, etc.
+            // ...
+            mode = 'insufficientMargin';
+        }
+
+        // Check if the margin is below maintenance level
+        this.checkMarginMaintenance(address, pos.contractId);
+
+        // Get the margin level for the contract
+        const totalMargin = this.getMarginLevel(pos.contractId);
+
+        // Calculate the required margin for the new amount
+        const requiredMargin = this.calculateMarginRequirement(contracts, pos.avgPrice, pos.isInverse);
+
+        // Liberating margin on a pro-rata basis
+        const netMargin = this.liberateMargin(address, contracts, pnl, mode);
+
+        return { netMargin, mode, totalMargin, requiredMargin };
+    }
+
+
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
         const pos = this.margins.get(address);
 
@@ -192,6 +241,36 @@ class MarginMap {
         pos.unrealizedPl += pnl;
 
         return pnl;
+    }
+
+    async settlePNL(address, contracts, price, LIFO, contractId, currentBlockHeight) {
+            const pos = this.margins.get(address);
+
+            if (!pos) return 0;
+
+            // Check if the contract is associated with an oracle
+            const isOracleContract = await ContractRegistry.isOracleContract(contractId);
+
+            let oraclePrice;
+            if (isOracleContract) {
+                // Retrieve the oracle ID associated with the contract
+                const oracleId = await ContractRegistry.getOracleId(contractId);
+
+                // Retrieve the latest oracle data for the previous block
+                oraclePrice = await ContractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1);
+            }
+
+            // Use settlement price based on the oracle data or LIFO Avg. Entry
+            const settlementPrice = oraclePrice || LIFO.AvgEntry;
+
+            // Calculate PnL based on settlement price
+            const pnl = (price - settlementPrice) * contracts;
+
+            // Update margin and unrealized PnL
+            pos.margin -= Math.abs(pnl);
+            pos.unrealizedPl += pnl;
+
+            return pnl;
     }
 
     clear(price, contractId) {

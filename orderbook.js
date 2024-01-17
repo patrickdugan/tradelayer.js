@@ -525,6 +525,8 @@ class Orderbook {
                 }
 
                 const collateralPropertyId = ContractRegistry.getCollateralId(match.sellOrder.contractId)
+                const notionalValue = ContractRegistry.getNotionalValue(match.sellOrder.contractId)
+                const isInverse = ContractRegistry.isInverse(match.sellOrder.contractId)
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
@@ -534,11 +536,10 @@ class Orderbook {
                     //{AvgEntry,blockTimes} 
                     //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                     //and we figure what is the PNL that one would show on their taxes, to save a record.
-                    const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO.AvgEntry);
-                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                    const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO.AvgEntry, true, notionalValue);
                     //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                     //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                    const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO, match.buyOrder.contractId) 
+                    const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO, match.buyOrder.contractId, currentBlockHeight) 
                     //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                     const reduction = await marginMap.reduceMargin(match.buyOrder.buyerAddress, match.buyOrder.amount, settlementPNL);
                     //{netMargin,mode}   
@@ -551,12 +552,20 @@ class Orderbook {
                     //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
                     //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                     //unusual edge case but we're covering it here 'maint'
+                    //also if this trade realizes a loss that wipes out all maint. margin that we have to look at available balance and go for that
+                    //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
+                    //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
                     if(reduction.mode!='maint'){
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, settlementPNL, 0, -settlementPNL, 0, false, true);
                     } 
+                    if(reduction.mode=='shortfall'){
+                        //check the address available balance for the neg. balance
+                        //if there's enough in available then do a tallyMap shuffle
+                        //otherwise go to insurance or maybe post a system loss at the bankruptcy price and see if it can get cleared before tapping the ins. fund
+                    }
                     tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
                         match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
-                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), settlementPNL, reduction, LIFO)
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), match.buyOrder.buyerTx, settlementPNL, reduction, LIFO)
                 }
 
                 if (isSellerReducingPosition) {
