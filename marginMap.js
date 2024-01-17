@@ -15,9 +15,42 @@ class MarginMap {
         return marginMap;
     }
 
-
-    
     static async loadMarginMap(seriesId) {
+        const key = JSON.stringify({ seriesId });
+        console.log('loading margin map for ' + seriesId);
+        // Retrieve the marginMaps database from your Database instance
+        const marginMapsDB = db.getDatabase('marginMaps');
+
+        try {
+            const doc = await marginMapsDB.findOneAsync({ _id: key });
+            if (!doc) {
+                // Return a new instance if not found
+                console.log('no MarginMap found, spinning up a fresh one');
+                return new MarginMap(seriesId);
+            }
+
+            console.log('marginMap parsed from DB ' + JSON.stringify(doc));
+            const map = new MarginMap(seriesId);
+
+            // Parse the value property assuming it's a JSON string
+            const parsedValue = JSON.parse(doc.value);
+            
+            if (parsedValue instanceof Array) {
+                // Assuming parsedValue is an array
+                map.margins = new Map(parsedValue);
+            } else {
+                console.error('Error parsing margin map value. Expected an array.');
+            }
+
+            console.log('returning a map from the file ' + JSON.stringify(map.margins));
+            return map;
+        } catch (err) {
+            console.error('Error loading margin Map ' + err);
+        }
+    }
+
+
+    /*static async loadMarginMap(seriesId) {
         const key = JSON.stringify({ seriesId});
         console.log('loading margin map for '+seriesId)
         // Retrieve the marginMaps database from your Database instance
@@ -30,7 +63,7 @@ class MarginMap {
                 console.log('no MarginMap found, spinning up a fresh one')
                 return new MarginMap(seriesId);
             }
-
+            console.log('marginMap parsed from DB '+JSON.stringify(doc))
             var map = new MarginMap(seriesId);
             map.margins = new Map(JSON.parse(doc.value));
             console.log('returning a map from the file '+JSON.stringify(map))
@@ -38,7 +71,7 @@ class MarginMap {
         } catch (err) {
             console.log('err loading margin Map '+err)
         }
-    }
+    }*/
 
     /*initMargin(address, contracts, price) {
         const notional = contracts * price;
@@ -78,8 +111,60 @@ class MarginMap {
         console.log('margin should be topped up '+JSON.stringify(this.margins))
 
         // Save changes to the database or your storage solution
-        await this.saveMarginMap();
+        await this.saveMarginMap(true);
+        return position
     }
+
+      // add save/load methods
+    async saveMarginMap(isMargin) {
+        try {
+            const key = JSON.stringify({ seriesId: this.seriesId });
+            const marginMapsDB = db.getDatabase('marginMaps');
+            const value = JSON.stringify([...this.margins]);
+            if(isMargin){
+                console.log('updating marginMap with margin '+JSON.stringify(value))
+            }else{
+                console.log('updating marginMap after match process '+JSON.stringify(value))
+            }
+            // Save the margin map to the database
+            await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+
+            console.log('MarginMap saved successfully.');
+        } catch (err) {
+            console.error('Error saving MarginMap:', err);
+            throw err;
+        }
+    }
+
+
+    /*async setInitialMargin(sender, contractId, totalInitialMargin) {
+        console.log('setting initial margin ' + sender, contractId, totalInitialMargin);
+        // Load the existing margin map
+        const existingMap = await MarginMap.loadMarginMap(contractId);
+        let position = existingMap.margins.get(sender);
+
+        console.log('setting initial margin position ' + JSON.stringify(position));
+
+        if (!position) {
+            // If no existing position, initialize a new one
+            position = {
+                contracts: 0,  // Number of contracts the sender has
+                margin: 0      // Total margin amount the sender has posted
+            };
+        }
+
+        console.log('margin before ' + position.margin);
+        // Update the margin for the existing or new position
+        position.margin += totalInitialMargin;
+        console.log('margin after ' + position.margin);
+        // Update the MarginMap with the modified position
+        existingMap.margins.set(sender, position);
+        console.log('margin should be topped up ' + JSON.stringify(existingMap.margins));
+
+        // Save changes to the database or your storage solution
+        await existingMap.saveMarginMap();
+    }*/
+
 
     // Update the margin for a specific address and contract
     /*async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
@@ -115,6 +200,7 @@ class MarginMap {
     }*/
 
     async updateContractBalancesWithMatch(match, channelTrade) {
+        console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         await this.updateContractBalances(
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
@@ -144,10 +230,10 @@ class MarginMap {
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
         console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
-        console.log('position now ' + JSON.stringify(position.contracts))
+        console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);
-        await this.saveMarginMap();
+        //await this.saveMarginMap();
     }
 
     
@@ -287,7 +373,7 @@ class MarginMap {
         this.margins.set(address, pos);
 
         // Save changes to the database or your storage solution
-        this.saveMarginMap();
+        //this.saveMarginMap();
 
         return liberatedMargin;
     }
@@ -404,29 +490,6 @@ class MarginMap {
         }
     }
 
-  // add save/load methods
-    saveMarginMap() {
-        const key = JSON.stringify({
-            seriesId: this.seriesId
-        });
-
-        const value = JSON.stringify([...this.margins]);
-
-        // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = db.getDatabase('marginMaps');
-
-        return new Promise((resolve, reject) => {
-            // Perform an upsert operation
-            marginMapsDB.updateAsync(
-                { _id: key }, // Query: Match document with the specified _id
-                { _id: key, value: value }, // Update: Document to be inserted or updated
-                { upsert: true } // Options: Perform an insert if document doesn't exist
-            )
-            .then(() => resolve())
-            .catch(err => reject(err));
-        });
-    }
-
     async triggerLiquidations(contract) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
@@ -512,7 +575,8 @@ class MarginMap {
         let position = this.margins.get(address);
         console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
         // If the position is not found or margins map is empty, try loading from the database
-        if (!position || this.margins.size === 0) {
+        if (!position || this.margins.length === 0) {
+            console.log('going into exception for getting Position ')
             await MarginMap.loadMarginMap(contractId);
             position = this.margins.get(address);
         }

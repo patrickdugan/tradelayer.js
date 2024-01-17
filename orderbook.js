@@ -491,6 +491,20 @@ class Orderbook {
                 // Get the existing position sizes for buyer and seller
                 match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                 match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+
+                const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
+                const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
+                if(!isBuyerReducingPosition){
+                   // Use the instance method to set the initial margin
+                   match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount)                 
+                }
+                // Update MarginMap for the contract series
+                if(!isSellerReducingPosition){
+                    // Use the instance method to set the initial margin
+                   match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount)
+                }
+
+
                 console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
@@ -509,20 +523,7 @@ class Orderbook {
                 // Record the contract trade
                 await this.recordContractTrade(trade, currentBlockHeight);
                 // Determine if the trade reduces the position size for buyer or seller
-                const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
-                const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
-                if(!isBuyerReducingPosition){
-                   // Use the instance method to set the initial margin
-                   await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount)
-                   
-                }
-                // Update MarginMap for the contract series
-                if(!isSellerReducingPosition){
-                    // Use the instance method to set the initial margin
-                    await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount)
-
-                }
-
+              
                 const collateralPropertyId = ContractRegistry.getCollateralId(match.sellOrder.contractId)
                 const notionalValue = ContractRegistry.getNotionalValue(match.sellOrder.contractId)
                 const isInverse = ContractRegistry.isInverse(match.sellOrder.contractId)
@@ -604,7 +605,7 @@ class Orderbook {
                 //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
 
                 // Save the updated margin map
-                await marginMap.saveMarginMap();
+                await marginMap.saveMarginMap(false);
 
                 console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
                 // Construct a trade object for recording

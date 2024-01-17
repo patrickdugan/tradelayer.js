@@ -342,10 +342,9 @@ class ContractRegistry {
         console.log('Total Initial Margin ' +totalInitialMargin)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true);
-        await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
-        return
+        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
+        return position
     }
-
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
