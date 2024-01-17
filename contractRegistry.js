@@ -226,6 +226,25 @@ class ContractRegistry {
         return doc.data;
     }
 
+    static async getNotionalValue(contractId) {
+        
+            // Assuming contractData is the data structure for the contract
+            const contractData = await this.getContractInfo(contractId);
+            console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
+        try {
+            if (contractData && contractData.native && contractData.native.notionalValue !== undefined) {
+                const notionalValue = contractData.native.notionalValue;
+                return notionalValue;
+            } else {
+                console.error(`Notional value not found for contractId: ${contractId}`);
+                return 0; // or any default value
+            }
+        } catch (error) {
+            console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
+            throw error;
+        }
+    };
+
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
         const contractInfo = await this.getContractInfo(contractId);
@@ -310,9 +329,11 @@ class ContractRegistry {
         return
     }
 
-    static async moveCollateralToMargin(sender, contractId, amount) {
+   static async moveCollateralToMargin(sender, contractId, amount) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
+        const marginMap = await MarginMap.getInstance(contractId)
+        console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
         console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)

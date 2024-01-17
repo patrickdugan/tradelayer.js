@@ -15,6 +15,31 @@ class MarginMap {
         return marginMap;
     }
 
+
+    
+    static async loadMarginMap(seriesId) {
+        const key = JSON.stringify({ seriesId});
+        console.log('loading margin map for '+seriesId)
+        // Retrieve the marginMaps database from your Database instance
+        const marginMapsDB = db.getDatabase('marginMaps');
+
+        try {
+            const doc = await marginMapsDB.findOneAsync({ _id: key });
+            if (!doc) {
+                // Return a new instance if not found
+                console.log('no MarginMap found, spinning up a fresh one')
+                return new MarginMap(seriesId);
+            }
+
+            var map = new MarginMap(seriesId);
+            map.margins = new Map(JSON.parse(doc.value));
+            console.log('returning a map from the file '+JSON.stringify(map))
+            return map;
+        } catch (err) {
+            console.log('err loading margin Map '+err)
+        }
+    }
+
     /*initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
@@ -266,7 +291,7 @@ class MarginMap {
 
         return liberatedMargin;
     }
- 
+
     profitLiberation(position, contracts, pnl) {
         // Logic for liberating margin in case of profit
         // Example: Liberating a fraction of the profit based on the total profit
@@ -401,31 +426,6 @@ class MarginMap {
             .catch(err => reject(err));
         });
     }
-
-
-    static async loadMarginMap(seriesId) {
-        const key = JSON.stringify({ seriesId});
-        console.log('loading margin map for '+seriesId)
-        // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = db.getDatabase('marginMaps');
-
-        try {
-            const doc = await marginMapsDB.findOneAsync({ _id: key });
-            if (!doc) {
-                // Return a new instance if not found
-                console.log('no MarginMap found, spinning up a fresh one')
-                return new MarginMap(seriesId);
-            }
-
-            var map = new MarginMap(seriesId);
-            map.margins = new Map(JSON.parse(doc.value));
-            console.log('returning a map from the file '+JSON.stringify(map))
-            return map;
-        } catch (err) {
-            console.log('err loading margin Map '+err)
-        }
-    }
-
 
     async triggerLiquidations(contract) {
         // Logic to handle the liquidation process

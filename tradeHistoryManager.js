@@ -1,6 +1,6 @@
 const database = require('./db.js')
 
-class TradeHistoryManager {
+class TradeHistory {
   constructor() {
     this.tradeHistoryDb = database.getDatabase('tradeHistory');
   }

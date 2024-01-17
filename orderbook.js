@@ -2,6 +2,7 @@ const BigNumber = require('bignumber.js')
 const dbInstance = require('./db.js'); // Import your database instance
 const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
 const TradeHistory = require('./tradeHistoryManager.js')
+const ContractRegistry = require('./contractRegistry.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -504,8 +505,6 @@ class Orderbook {
                     buyerTx: match.buyOrder.buyerTx
                     // other relevant trade details...
                 };
-
-                const marginMap = await MarginMap.getInstance(contractId);
 
                 // Record the contract trade
                 await this.recordContractTrade(trade, currentBlockHeight);
