@@ -109,7 +109,7 @@ class TradeHistory {
 
   async calculateLIFOEntry(address, amount, contractId) {
       const categorizedTrades = await this.getCategorizedTrades(address, contractId);
-      console.log(categorizedTrades.openTrades.length);
+      console.log('open trades ' +JSON.stringify(categorizedTrades.openTrades));
 
       // Sort trades by block height in descending order (LIFO)
       categorizedTrades.openTrades.sort((a, b) => b.blockHeight - a.blockHeight);
@@ -165,30 +165,16 @@ class TradeHistory {
      * @param {object} LIFO - The LIFO data object.
      * @returns {Promise<string>} - A Promise that resolves to the key under which the data is saved.
      */
-    async savePNL(currentBlockHeight, contractId, accountingPNL, buyerAddress, 
-                                         orderAmount, orderPrice, collateralPropertyId, 
-                                         timestamp, buyerTx, settlementPNL, reduction, LIFO) {
+    async savePNL(params) {
       // Assuming tradeHistoryManager is an instance of a database manager or similar
       // Adjust the following code based on your actual database handling implementation
 
       // Assuming rPNL-address-contractId-block is the key structure you want to use
-      const key = `rPNL-${buyerAddress}-${contractId}-${currentBlockHeight}`;
+      const key = `rPNL-${params.address}-${params.contractId}-${params.height}`;
+      console.log('preparing to save PNL '+JSON.stringify(params))
 
       // Assuming tradeHistoryManager.save is a method to save data to the database
-      await this.save(key, {
-        currentBlockHeight,
-        contractId,
-        accountingPNL,
-        buyerAddress,
-        orderAmount,
-        orderPrice,
-        collateralPropertyId,
-        timestamp,
-        buyerTx,
-        settlementPNL,
-        reduction,
-        LIFO,
-      });
+      await this.save(key, params);
 
       // Optionally, you can return the key or any other relevant information
       return key;

@@ -576,9 +576,13 @@ class Orderbook {
                         //if there's enough in available then do a tallyMap shuffle
                         //otherwise go to insurance or maybe post a system loss at the bankruptcy price and see if it can get cleared before tapping the ins. fund
                     }
-                    tradeHistoryManager.savePNL(currentBlockHeight, match.buyOrder.contractId, accountingPNL, match.buyOrder.buyerAddress, 
-                        match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
-                        new Date().toISOString(), match.buyOrder.buyerTx, settlementPNL, reduction, LIFO)
+
+                    
+                    const savePNLParams = {height:currentBlockHeight, contractId:match.buyOrder.contractId, accountingPNL: accountingPNL, 
+                        address: match.buyOrder.buyerAddress, amount: match.buyOrder.amount, tradePrice: match.buyOrder.price, collateralPropertyId: collateralPropertyId,
+                        timestamp: new Date().toISOString(), txid: match.buyOrder.buyerTx, settlementPNL: settlementPNL, marginReduction:reduction, LIFOAvgEntry: avgEntry}
+                    console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
+                    tradeHistoryManager.savePNL(savePNLParams)
                 }
 
                 if (isSellerReducingPosition) {
@@ -616,9 +620,11 @@ class Orderbook {
                     if(reduction.mode!='maint'){
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL, 0, false, true);
                     } 
-                    tradeHistoryManager.savePNL(currentBlockHeight, accountingPNL, match.buyOrder.buyerAddress, 
-                        match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
-                        new Date().toISOString(), settlementPNL, reduction, LIFO)
+                   const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: accountingPNL, 
+                        address: match.sellOrder.sellerAddress, amount: match.sellOrder.amount, tradePrice: match.sellOrder.price, collateralPropertyId: collateralPropertyId,
+                        timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, LIFOAvgEntry: avgEntry}
+                    console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
+                    tradeHistoryManager.savePNL(savePNLParams)
                 }
                 //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
                 // Update margin based on the new positions

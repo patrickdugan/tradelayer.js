@@ -435,12 +435,15 @@ class MarginMap {
         if (!pos) return 0;
 
         let pnl;
+        console.log('inside realizedPNL '+address + ' '+contracts + ' trade price ' +price + ' avg. entry '+avgPrice + ' is inverse '+ isInverse + ' notional '+notionalValue + ' position' +JSON.stringify(pos))
         if (isInverse) {
             // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
             pnl = (1 / avgPrice - 1 / price) * contracts * notionalValue;
+            console.log('pnl '+pnl)
         } else {
             // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
             pnl = (price - avgPrice) * contracts * notionalValue;
+            console.log('pnl '+(price - avgPrice), contracts, notionalValue, pnl)
         }
 
         //pos.margin -= Math.abs(pnl);
