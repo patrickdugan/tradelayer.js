@@ -108,55 +108,121 @@ class TradeHistory {
   }
 
   async calculateLIFOEntry(address, amount, contractId) {
-    const categorizedTrades = await this.getCategorizedTrades(address, contractId);
-    //console.log(JSON.stringify(categorizedTrades))
-    // Filter trades where the given amount is involved
-    const relevantTrades = categorizedTrades.openTrades.filter(trade =>
-      Math.abs(trade.amount) === Math.abs(amount)
-    );
+      const categorizedTrades = await this.getCategorizedTrades(address, contractId);
+      console.log(categorizedTrades.openTrades.length);
 
-    // Sort trades by block height in descending order (LIFO)
-    relevantTrades.sort((a, b) => b.blockHeight - a.blockHeight);
+      // Sort trades by block height in descending order (LIFO)
+      categorizedTrades.openTrades.sort((a, b) => b.blockHeight - a.blockHeight);
 
-    // Calculate the LIFO entry based on the sorted trades
-    let remainingAmount = Math.abs(amount);
-    let totalCost = 0;
-    const blockTimes = [];
+      // Calculate the LIFO entry based on the sorted trades
+      let remainingAmount = Math.abs(amount);
+      let totalCost = 0;
+      const blockTimes = [];
 
-    for (const trade of relevantTrades) {
-      const tradeAmount = Math.abs(trade.amount);
-      const tradeCost = tradeAmount * trade.price;
+      for (const trade of categorizedTrades.openTrades) {
+        const tradeAmount = Math.abs(trade.amount);
+        const tradeCost = tradeAmount * trade.price;
+        console.log('old open trade ' +JSON.stringify(trade)+ ' '+totalCost)
+        if (tradeAmount <= remainingAmount) {
+          // Fully cover the remaining amount with the current trade
+          totalCost += tradeCost;
+          remainingAmount -= tradeAmount;
+          blockTimes.push(trade.blockHeight); // Add block time of the closing trade
+        } else {
+          // Partially cover the remaining amount with the current trade
+          totalCost += (remainingAmount / tradeAmount) * tradeCost;
+          remainingAmount = 0;
+          blockTimes.push(trade.blockHeight); // Add block time of the closing trade
+        }
 
-      if (tradeAmount <= remainingAmount) {
-        // Fully cover the remaining amount with the current trade
-        totalCost += tradeCost;
-        remainingAmount -= tradeAmount;
-        blockTimes.push(trade.blockHeight); // Add block time of the closing trade
-      } else {
-        // Partially cover the remaining amount with the current trade
-        totalCost += (remainingAmount / tradeAmount) * tradeCost;
-        remainingAmount = 0;
-        blockTimes.push(trade.blockHeight); // Add block time of the closing trade
+        if (remainingAmount === 0) {
+          // Fully covered the given amount
+          break;
+        }
       }
 
-      if (remainingAmount === 0) {
-        // Fully covered the given amount
-        break;
-      }
+      // Return an object with total cost and block times
+      return {
+        totalCost,
+        blockTimes,
+      };
     }
 
-    // Return an object with total cost and block times
-    return {
-      totalCost,
-      blockTimes,
-    };
-  }
+    /**
+     * Save PNL data to the trade history database.
+     *
+     * @param {number} currentBlockHeight - The current block height.
+     * @param {string} contractId - The contract ID associated with the trade.
+     * @param {number} accountingPNL - The accounting PNL value.
+     * @param {string} buyerAddress - The address of the buyer.
+     * @param {number} orderAmount - The amount in the buy order.
+     * @param {number} orderPrice - The price in the buy order.
+     * @param {string} collateralPropertyId - The ID of the collateral property.
+     * @param {string} timestamp - The timestamp of the trade.
+     * @param {string} buyerTx - The buyer's transaction ID.
+     * @param {number} settlementPNL - The settlement PNL value.
+     * @param {number} reduction - The reduction value.
+     * @param {object} LIFO - The LIFO data object.
+     * @returns {Promise<string>} - A Promise that resolves to the key under which the data is saved.
+     */
+    async savePNL(currentBlockHeight, contractId, accountingPNL, buyerAddress, 
+                                         orderAmount, orderPrice, collateralPropertyId, 
+                                         timestamp, buyerTx, settlementPNL, reduction, LIFO) {
+      // Assuming tradeHistoryManager is an instance of a database manager or similar
+      // Adjust the following code based on your actual database handling implementation
 
-  async displayPositionHistory(address, contractId) {
-    const positionHistory = this.getPositionHistoryForContract(address, contractId);
-    console.log(`Position History for Address ${address} and Contract ID ${contractId}:`);
-    console.table(positionHistory);
-  }
+      // Assuming rPNL-address-contractId-block is the key structure you want to use
+      const key = `rPNL-${buyerAddress}-${contractId}-${currentBlockHeight}`;
+
+      // Assuming tradeHistoryManager.save is a method to save data to the database
+      await this.save(key, {
+        currentBlockHeight,
+        contractId,
+        accountingPNL,
+        buyerAddress,
+        orderAmount,
+        orderPrice,
+        collateralPropertyId,
+        timestamp,
+        buyerTx,
+        settlementPNL,
+        reduction,
+        LIFO,
+      });
+
+      // Optionally, you can return the key or any other relevant information
+      return key;
+    }
+
+     /**
+       * Save data to the trade history database.
+       *
+       * @param {string} key - The key under which to save the data.
+       * @param {object} data - The data to be saved.
+       * @returns {Promise<void>} - A Promise that resolves once the data is saved.
+       */
+      async save(key, data) {
+        try {
+          const db = database.getDatabase('tradeHistory');
+          const value = JSON.stringify(data);
+
+          console.log(`updating tradeHistoryDB with ${value}`);
+
+          // Save the data to the database
+          await db.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+
+          console.log(`tradeHistoryDB saved successfully.`);
+        } catch (err) {
+          console.error(`Error saving tradeHistory rPNL:`, err);
+          throw err;
+        }
+      }
+
+    async displayPositionHistory(address, contractId) {
+      const positionHistory = this.getPositionHistoryForContract(address, contractId);
+      console.log(`Position History for Address ${address} and Contract ID ${contractId}:`);
+      console.table(positionHistory);
+    }
 }
 
 module.exports = TradeHistory;

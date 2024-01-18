@@ -576,7 +576,7 @@ class Orderbook {
                         //if there's enough in available then do a tallyMap shuffle
                         //otherwise go to insurance or maybe post a system loss at the bankruptcy price and see if it can get cleared before tapping the ins. fund
                     }
-                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
+                    tradeHistoryManager.savePNL(currentBlockHeight, match.buyOrder.contractId, accountingPNL, match.buyOrder.buyerAddress, 
                         match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
                         new Date().toISOString(), match.buyOrder.buyerTx, settlementPNL, reduction, LIFO)
                 }
@@ -616,7 +616,7 @@ class Orderbook {
                     if(reduction.mode!='maint'){
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL, 0, false, true);
                     } 
-                    tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
+                    tradeHistoryManager.savePNL(currentBlockHeight, accountingPNL, match.buyOrder.buyerAddress, 
                         match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
                         new Date().toISOString(), settlementPNL, reduction, LIFO)
                 }
