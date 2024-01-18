@@ -76,36 +76,45 @@ class TradeHistory {
     return txIds;
   }
 
-  async getCategorizedTrades(address, contractId) {
-    const openTrades = [];
-    const partiallyClosedTrades = [];
-    const closedTrades = [];
+    async getCategorizedTrades(address, contractId) {
+      const trades = await this.getPositionHistoryForContract(address, contractId);
 
-    const positionHistory = await this.getPositionHistoryForContract(address, contractId);
+      const openTrades = [];
+      const partiallyClosedTrades = [];
+      const closedTrades = [];
 
-    for (let i = 0; i < positionHistory.length; i++) {
-      const currentPosition = positionHistory[i];
+      for (let i = 0; i < trades.length; i++) {
+          const currentTrade = trades[i];
 
-      if (i === 0) {
-        openTrades.push(currentPosition);
-      } else {
-        const prevPosition = positionHistory[i - 1];
+          if (i === 0) {
+              openTrades.push(currentTrade);
+          } else {
+              const prevTrade = trades[i - 1];
 
-        if (currentPosition.amount === prevPosition.amount) {
-          partiallyClosedTrades.push(currentPosition);
-        } else {
-          closedTrades.push(currentPosition);
-          openTrades.push(currentPosition);
-        }
+              const tradedAmount = currentTrade.amount - prevTrade.amount;
+
+              // Update the trade object with the tradedAmount
+              currentTrade.tradedAmount = tradedAmount;
+
+              if (tradedAmount === 0) {
+                  partiallyClosedTrades.push(currentTrade);
+              } else {
+                  if (currentTrade.isClose) {
+                      closedTrades.push(currentTrade);
+                  } else {
+                      openTrades.push(currentTrade);
+                  }
+              }
+          }
       }
-    }
 
-    return {
-      openTrades,
-      partiallyClosedTrades,
-      closedTrades,
-    };
+      return {
+          openTrades,
+          partiallyClosedTrades,
+          closedTrades,
+      };
   }
+
 
   async calculateLIFOEntry(address, amount, contractId) {
       const categorizedTrades = await this.getCategorizedTrades(address, contractId);
@@ -120,7 +129,7 @@ class TradeHistory {
       const blockTimes = [];
 
       for (const trade of categorizedTrades.openTrades) {
-        const tradeAmount = Math.abs(trade.amount);
+        const tradeAmount = Math.abs(trade.tradedAmount);
         const tradeCost = tradeAmount * trade.price;
         console.log('old open trade ' +JSON.stringify(trade)+ ' '+totalCost)
         if (tradeAmount <= remainingAmount) {
