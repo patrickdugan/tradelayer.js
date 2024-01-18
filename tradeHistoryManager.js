@@ -21,7 +21,7 @@ class TradeHistory {
   }
 
   async getPositionHistoryForContract(address, contractId) {
-    console.log('about to call trade history for contract '+contractId)
+    //console.log('about to call trade history for contract '+contractId)
     const addressTradeHistory = await this.getTradeHistoryForAddress(address,contractId);
     addressTradeHistory.sort((a, b) => a.blockHeight - b.blockHeight);
 
@@ -109,7 +109,7 @@ class TradeHistory {
 
   async calculateLIFOEntry(address, amount, contractId) {
     const categorizedTrades = await this.getCategorizedTrades(address, contractId);
-    console.log(JSON.stringify(categorizedTrades))
+    //console.log(JSON.stringify(categorizedTrades))
     // Filter trades where the given amount is involved
     const relevantTrades = categorizedTrades.openTrades.filter(trade =>
       Math.abs(trade.amount) === Math.abs(amount)

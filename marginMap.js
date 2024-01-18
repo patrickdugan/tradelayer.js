@@ -201,7 +201,7 @@ class MarginMap {
 
     async updateContractBalancesWithMatch(match, channelTrade) {
         console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
-        await this.updateContractBalances(
+        let buyerPosition = await this.updateContractBalances(
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
             match.buyOrder.price,
@@ -211,7 +211,7 @@ class MarginMap {
             channelTrade
         );
 
-        await this.updateContractBalances(
+        let sellerPosition = await this.updateContractBalances(
             match.sellOrder.sellerAddress,
             match.sellOrder.amount,
             match.sellOrder.price,
@@ -220,6 +220,7 @@ class MarginMap {
             match.inverse,
             channelTrade
         );
+        return {bp: buyerPosition, sp: sellerPosition}
     }
 
     async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade) {
@@ -233,6 +234,7 @@ class MarginMap {
         console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);
+        return position
         //await this.saveMarginMap();
     }
 
@@ -247,7 +249,7 @@ class MarginMap {
 
         // Calculate the notional value
          if (inverse === true) {
-            // For inverse contracts, the notional value is typically the number of contracts divided by the price
+            // For inverse contracts, the notional value in denominator collateral is typically the number of contracts divided by the price
             notional = bnContracts.dividedBy(bnPrice);
         } else {
             // For regular contracts, the notional value is the number of contracts multiplied by the price
@@ -286,15 +288,16 @@ class MarginMap {
         }
     }
 
-    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address) {
+    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address, avgPrice) {
         //const pos = this.margins.get(address); //this is showing null null for margin and UPNL, let's return to figure out why
         console.log('checking position inside reduceMargin '+JSON.stringify(pos))
 
         if (!pos) return { netMargin: 0, mode: 'none' };
 
         // Calculate the initial margin for the position
-        const initialMargin = this.calculateMarginRequirement(pos.contracts, pos.avgPrice, isInverse);
-
+        //const initialMargin = this.calculateMarginRequirement(pos.contracts, avgPrice, isInverse);
+        let initialMargin = contracts*0.1
+        console.log('initialMargin '+initialMargin + ' pos margin '+pos.margin + ' pnl '+pnl)
         // Calculate the maintenance margin for the position
         const maintMargin = initialMargin/2
 
@@ -331,13 +334,13 @@ class MarginMap {
         const requiredMargin = this.calculateMarginRequirement(contracts, pos.avgPrice, pos.isInverse);
 
         // Liberating margin on a pro-rata basis
-        const netMargin = this.liberateMargin(pos, totalMargin, contracts, pnl, mode);
+        const netMargin = this.liberateMargin(pos, totalMargin, contracts, pnl, mode,address);
 
         return { netMargin, mode, totalMargin, requiredMargin };
     }
 
-    liberateMargin(pos, margin, contracts, pnl, mode) {
-        const pos = this.margins.get(address);
+    liberateMargin(pos, margin, contracts, pnl, mode,address) {
+        //const pos = this.margins.get(address);
 
         if (!pos) {
             console.error(`No position found for address ${address}`);
@@ -426,8 +429,8 @@ class MarginMap {
     }
 
 
-    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
-        const pos = this.margins.get(address);
+    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
+        //const pos = this.margins.get(address);
 
         if (!pos) return 0;
 
@@ -440,9 +443,9 @@ class MarginMap {
             pnl = (price - avgPrice) * contracts * notionalValue;
         }
 
-        pos.margin -= Math.abs(pnl);
-        pos.unrealizedPl += pnl;
-
+        //pos.margin -= Math.abs(pnl);
+        //pos.unrealizedPl += pnl; //be sure to modify uPNL and scoop it out for this value...
+        console.log('inside realizePnl '+price + ' price then avgPrice '+avgPrice +' contracts '+contracts + ' notionalValue '+notionalValue)
         return pnl;
     }
 

@@ -1,4 +1,4 @@
-{"_id":"MaxHeight","value":3123273}
+{"_id":"MaxHeight","value":3123340}
 {"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl"},"type":0,"valid":true}

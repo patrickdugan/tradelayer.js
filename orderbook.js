@@ -511,7 +511,7 @@ class Orderbook {
                 console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
                 console.log('reviewing Match object before processing '+JSON.stringify(match))
                 // Update contract balances for the buyer and seller
-                marginMap.updateContractBalancesWithMatch(match, false)
+                let positions = await marginMap.updateContractBalancesWithMatch(match, false)
                 const trade = {
                     contractId: match.sellOrder.contractId,
                     amount: match.sellOrder.amount,
@@ -523,13 +523,19 @@ class Orderbook {
                     // other relevant trade details...
                 };
 
+                match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+                match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+                console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
+
+                console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
+
                 // Record the contract trade
                 await this.recordContractTrade(trade, currentBlockHeight);
                 // Determine if the trade reduces the position size for buyer or seller
               
-                const collateralPropertyId = ContractRegistry.getCollateralId(match.sellOrder.contractId)
-                const notionalValue = ContractRegistry.getNotionalValue(match.sellOrder.contractId)
-                const isInverse = ContractRegistry.isInverse(match.sellOrder.contractId)
+                const collateralPropertyId = await ContractRegistry.getCollateralId(match.sellOrder.contractId)
+                const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
+                const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                 // Realize PnL if the trade reduces the position size
                 let buyerPnl = 0, sellerPnl = 0;
                 if (isBuyerReducingPosition) {
@@ -537,15 +543,18 @@ class Orderbook {
                     //on a LIFO basis that are being retroactively 'closed' by reference here
                     console.log('about to call trade history manager '+match.buyOrder.contractId)
                     const LIFO = tradeHistoryManager.calculateLIFOEntry(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.contractId)
-                    //{AvgEntry,blockTimes} 
+                    //{AvgEntry,blockTimes}
+                    let avgEntry = LIFO.totalCost/match.buyOrder.amount 
                     //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                     //and we figure what is the PNL that one would show on their taxes, to save a record.
-                    const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO.AvgEntry, true, notionalValue);
+                    const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, avgEntry, true, notionalValue, match.buyerPosition);
                     //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                     //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+                    
                     const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO, match.buyOrder.contractId, currentBlockHeight) 
                     //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                    const reduction = await marginMap.reduceMargin(match.buyerPosition, match.buyOrder.amount, settlementPNL, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress);
+                    console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
+                    const reduction = await marginMap.reduceMargin(match.buyerPosition, match.buyOrder.amount, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress);
                     //{netMargin,mode}   
 
                     await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)              
@@ -560,7 +569,7 @@ class Orderbook {
                     //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                     //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
                     if(reduction.mode!='maint'){
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, settlementPNL, 0, -settlementPNL, 0, false, true);
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL/*-settlementPNL*/, 0, false, true);
                     } 
                     if(reduction.mode=='shortfall'){
                         //check the address available balance for the neg. balance
@@ -575,18 +584,25 @@ class Orderbook {
                 if (isSellerReducingPosition) {
                     //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
                     //on a LIFO basis that are being retroactively 'closed' by reference here
+                    console.log('position before going into LIFO '+JSON.stringify(match.sellerPosition))
                     console.log('about to call trade history manager '+match.sellOrder.contractId)
                     const LIFO = await tradeHistoryManager.calculateLIFOEntry(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.contractId)
+                    let avgEntry = LIFO.totalCost/match.sellOrder.amount 
                     //{AvgEntry,blockTimes} 
                     //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                     //and we figure what is the PNL that one would show on their taxes, to save a record.
                     console.log('LIFO '+JSON.stringify(LIFO))
-                    const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO.AvgEntry, isInverse, notionalValue);
+
+                    console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
+                    const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, avgEntry, isInverse, notionalValue, match.sellerPosition);
                    //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                     //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+                    
+                    console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
                     const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO, match.sellOrder.contractId,currentBlockHeight) 
                     //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                    const reduction = await marginMap.reduceMargin(match.sellerPosition, match.sellOrder.amount, accountingPNL, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress);
+                    console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
+                    const reduction = await marginMap.reduceMargin(match.sellerPosition, match.sellOrder.amount, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress);
                     //{netMargin,mode}   
 
                     await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)              
@@ -598,7 +614,7 @@ class Orderbook {
                     //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                     //unusual edge case but we're covering it here 'maint'
                     if(reduction.mode!='maint'){
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL, 0, -accountingPNL, 0, false, true);
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL, 0, false, true);
                     } 
                     tradeHistoryManager.savePNL(accountingPNL, match.buyOrder.buyerAddress, 
                         match.buyOrder.amount, match.buyOrder.price, collateralPropertyId, 
