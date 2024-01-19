@@ -596,7 +596,7 @@ const Validity = {
         validateTradeContractOnchain: async (params, sender, block) => {
             params.reason = '';
             params.valid = true;
-
+            console.log('validating contract trade '+JSON.stringify(params))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(18);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -611,13 +611,13 @@ const Validity = {
                 return params
             }
 
-            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, contractDetails);
+            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
             const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
             // Check if the sender has enough balance for the initial margin
             console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
             const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin);
-            if (!hasSufficientBalance) {
+            if (hasSufficientBalance.hasSufficient==false) {
                 console.log('Insufficient balance for initial margin');
                 params.valid=false
                 params.reason+= "Insufficient balance for initial margin"

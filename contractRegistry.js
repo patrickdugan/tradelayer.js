@@ -259,7 +259,7 @@ class ContractRegistry {
     }
 
      // Function to get initial margin requirement for a contract
-    static async getInitialMargin(contractId) {
+    static async getInitialMargin(contractId, price) {
         console.log('checking contractId inside getInitialMargin '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
@@ -269,7 +269,7 @@ class ContractRegistry {
         let inverse = contractInfo.native.inverse;
         let notionalValue = contractInfo.native.notionalValue
         let leverage = contractInfo.native.leverage
-        console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage)
+        console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
             return BigNumber(notionalValue).div(leverage).toNumber();
@@ -279,7 +279,7 @@ class ContractRegistry {
             const collateralValue = await ContractRegistry.getCollateralValue(contractInfo);
             return BigNumber(collateralValue).div(leverage);
             */
-            return BigNumber(notionalValue).div(leverage).toNumber(); //assuming property is like a dollarcoin just to get things moving, you know
+            return BigNumber(notionalValue).times(price).div(leverage).toNumber();
         }
     }
 
