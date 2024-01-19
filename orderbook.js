@@ -3,27 +3,27 @@ const { dbFactory } = require('./db.js')
 const { tallyMap } = require('./tally.js')
 const { tlFees } = require('./fees.js')
 const { contractRegistry } = require('./contractRegistry.js')
+const { tradeHistory } = require('./tradeHistory.js')
 const MarginMap = require('./marginMap.js')
 
 class Orderbook {
     constructor(tickSize = new BigNumber('0.00000001')) {
         this.tickSize = tickSize;
         //this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
-        this.orderBooks = {};
+        this.orderBooks = {}
     }
 
     async load(key) {
         const data = await dbFactory.getDatabase('orderBooks').findOneAsync({ _id: key })
         if (data?.value) {
-            this.orderBooks[key] = JSON.parse(data.value)
+            this.orderBooks[key] = data.value
             //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
         } else {
             // If no data found, create a new order book
-            this.orderBooks[key] = { buy: [], sell: [] };
+            this.orderBooks[key] = { buy: [], sell: [] }
             console.log('loading fresh orderbook ' + this.orderBooks[key])
 
         }
-        await this.save(key)
         return this.orderBooks[key]
     }
 
@@ -31,88 +31,37 @@ class Orderbook {
         //console.log('saving pair ' + JSON.stringify(key) /*, + ' ' + JSON.stringify(this.orderbooks[key])*/)
         await dbFactory.getDatabase('orderBooks').updateAsync(
             { _id: key },
-            { _id: key, value: JSON.stringify(this.orderBooks[key]) },
+            { _id: key, value: this.orderBooks[key] },
             { upsert: true }
         )
     }
 
     // Record a token trade with specific key identifiers
     async recordTokenTrade(trade, blockHeight, txid) {
-        const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
+        const key = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
         const tradeRecord = {
-            key: tradeRecordKey,
+            key: key,
             type: 'token',
             trade,
             blockHeight,
             txid
-        };
-        await this.saveTrade(tradeRecord)
+        }
+        await tradeHistory.saveTrade(tradeRecord)
+        console.log('saved token trade ' + JSON.stringify(trade))
     }
 
     // Record a contract trade with specific key identifiers
     async recordContractTrade(trade, blockHeight, txid) {
-        const tradeRecordKey = `contract-${trade.contractId}`;
+        const key = `contract-${trade.contractId}`;
         const tradeRecord = {
-            key: tradeRecordKey,
+            key: key,
             type: 'contract',
             trade,
             blockHeight,
             txid
-        };
-        console.log('saving contract trade ' + JSON.stringify(trade))
-        await this.saveTrade(tradeRecord)
-    }
-
-    async saveTrade(tradeRecord) {
-        const tradeDB = dbFactory.getDatabase('tradeHistory')
-
-        // Use the key provided in the trade record for storage
-        const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
-
-        // Construct the document to be saved
-        const tradeDoc = {
-            _id: tradeId,
-            ...tradeRecord
-        };
-
-        // Save or update the trade record in the database
-        try {
-            await tradeDB.updateAsync(
-                { _id: tradeId },
-                tradeDoc,
-                { upsert: true }
-            )
-            console.log(`Trade record saved successfully: ${tradeId}`)
-        } catch (error) {
-            console.error(`Error saving trade record: ${tradeId}`, error)
-            throw error; // Rethrow the error for handling upstream
         }
-    }
-
-    // Retrieve token trading history by propertyId pair
-    async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
-        const tradeDB = dbFactory.getDatabase('tradeHistory')
-        const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
-        const trades = await tradeDB.findAsync({ key: tradeRecordKey })
-        return trades.map(doc => doc.trade)
-    }
-
-    // Retrieve contract trading history by contractId
-    async getContractTradeHistoryByContractId(contractId) {
-        console.log('loading trade history for ' + contractId)
-        const tradeDB = dbFactory.getDatabase('tradeHistory')
-        const tradeRecordKey = `contract-${contractId}`;
-        const trades = await tradeDB.findAsync({ key: tradeRecordKey })
-        return trades.map(doc => doc.trade)
-    }
-
-    // Retrieve trade history by address for both token and contract trades
-    async getTradeHistoryByAddress(address) {
-        const tradeDB = dbFactory.getDatabase('tradeHistory')
-        const trades = await tradeDB.findAsync({
-            $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
-        })
-        return trades.map(doc => doc.trade)
+        await tradeHistory.saveTrade(tradeRecord)
+        console.log('saved contract trade ' + JSON.stringify(trade))
     }
 
     // Function to divide two numbers with an option to round up or down to the nearest Satoshi
@@ -168,7 +117,7 @@ class Orderbook {
 
     insertOrder(order, orderBookKey, isBuyOrder) {
         if (!this.orderBooks[orderBookKey]) {
-            this.orderBooks[orderBookKey] = { buy: [], sell: [] };
+            this.orderBooks[orderBookKey] = { buy: [], sell: [] }
         }
 
         const side = isBuyOrder ? 'buy' : 'sell';
@@ -190,9 +139,10 @@ class Orderbook {
     }
 
     matchTokenOrders(orderBookKey) {
+
         const orderBook = this.orderBooks[orderBookKey];
-        if (orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-            return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches
+        if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+            return { orderBook: this.orderBooks[orderBookKey], matches: [] } // Return empty matches
         }
 
         let matches = [];
@@ -209,6 +159,8 @@ class Orderbook {
 
             // Check for price match
             if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+
+
                 // Ensure that sellOrder.amountOffered and buyOrder.amountExpected are BigNumber objects
                 let sellOrderAmountOffered = new BigNumber(sellOrder.amountOffered)
                 let buyOrderAmountExpected = new BigNumber(buyOrder.amountExpected)
@@ -234,7 +186,7 @@ class Orderbook {
             }
         }
 
-        return { orderBook: this.orderBooks[orderBookKey], matches };
+        return { orderBook: this.orderBooks[orderBookKey], matches }
     }
 
     async processTokenMatches(matches, blockHeight, txid) {
@@ -269,11 +221,9 @@ class Orderbook {
             let amountToTradeA = new BigNumber(match.amountOfTokenA)
             let amountToTradeB = new BigNumber(match.amountOfTokenB)
 
-            // TODO: toremove
             if (txid == "5049a4ac9c8dd3f19278b780135eeb7900b0771e6b9829044900f9fb656b976a") {
                 console.log('looking into the problematic tx' + JSON.stringify(match) + 'times ' + match.sellOrder.blockTime + ' ' + match.buyOrder.blockTime)
             }
-
             console.log('amountTo Trade A and B ' + amountToTradeA + ' ' + amountToTradeB + ' ' + 'match values ' + match.amountOfTokenA + ' ' + match.amountOfTokenB)
             // Determine order roles and calculate fees
             if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
@@ -285,7 +235,7 @@ class Orderbook {
                 console.log('maker fee ' + makerRebate)
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
                 console.log(' actual taker fee ' + takerFee)
-                await tlFees.update(buyOrderPropertyId, takerFee.toNumber())
+                await tallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber())
                 console.log('about to calculate this supposed NaN ' + match.amountOfTokenA + ' ' + new BigNumber(match.amountOfTokenA) + ' ' + new BigNumber(match.amountOfTokenA).plus(makerRebate) + ' ' + new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
                 console.log('sell order amount change ' + sellOrderAmountChange)
@@ -297,7 +247,7 @@ class Orderbook {
                 takerFee = amountToTradeA.times(0.0002)
                 makerRebate = takerFee.div(2)
                 takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                await tlFees.update(sellOrderPropertyId, takerFee.toNumber())
+                await tallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber())
                 buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber()
             } else if (match.buyOrder.blockTime == match.sellOrder.blockTime) {
@@ -305,8 +255,8 @@ class Orderbook {
                 match.sellOrder.orderRole = 'split';
                 var takerFeeA = amountToTradeA.times(0.0001)
                 var takerFeeB = amountToTradeB.times(0.0001)
-                await tlFees.update(buyOrderPropertyId, takerFeeA.toNumber())
-                await tlFees.update(sellOrderPropertyId, takerFeeB.toNumber())
+                await tallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber())
+                await tallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber())
                 sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber()
                 buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber()
             }
@@ -354,53 +304,58 @@ class Orderbook {
                 amountOffered: match.amountOfTokenA, // or appropriate amount
                 amountExpected: match.amountOfTokenB, // or appropriate amount
                 // other relevant trade details...
-            };
+            }
 
             // Record the token trade
             await this.recordTokenTrade(trade, blockHeight, txid)
-
         }
     }
 
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
-        console.log('about to call moveCollateralToMargin ' + contractId, amount, sender)
-        
-        const totalInitialMargin = await contractRegistry.moveCollateralToMargin(sender, contractId, amount)
-        if (totalInitialMargin) {
-            const marginMap = await MarginMap.load(contractId)
-            await marginMap.setInitialMargin(sender, contractId, totalInitialMargin)
+        const inverse = contractRegistry.isInverse(contractId)
+        const marginMap = await MarginMap.load(contractId)
+        // Get the existing position sizes for buyer and seller
+        const existingPosition = await marginMap.getPositionForAddress(sender, contractId)
+        // Determine if the trade reduces the position size for buyer or seller
+        const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 && side == false)
+        const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && side == true)
+        if (sender == "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8" && isSellerReducingPosition) {
+            console.log('troubleshooting lack of margin increase ' + JSON.stringify(existingPosition) + ' ' + price + ' ' + amount + ' buy?' + side)
+        }
+        console.log('adding contract order... existingPosition? ' + JSON.stringify(existingPosition) + ' reducing position? ' + isBuyerReducingPosition + ' ' + isSellerReducingPosition)
+        if (isBuyerReducingPosition == false && isSellerReducingPosition == false) {
+            //we're increasing or creating a new position so locking up init margin in the reserve column on tallyMap
+            console.log('about to call moveCollateralToMargin ' + contractId, amount, sender)
+            await this.moveCollateralToReserve(sender, contractId, amount) //first we line up the capital
         }
 
         // Create a contract order object with the sell parameter
-        const contractOrder = { contractId, amount, price, blockTime, side, sender };
+        const contractOrder = { contractId, amount, price, blockTime, side, sender, txid }
 
         // The orderBookKey is based on the contractId since it's a derivative contract
         const orderBookKey = `${contractId}`;
 
         // Load the order book for the given contract
-        await this.load(orderBookKey)
+        //await this.loadOrCreateOrderBook(orderBookKey)
 
         // Insert the contract order into the order book
         this.insertOrder(contractOrder, orderBookKey, side)
 
         // Match orders in the derivative contract order book
-        var matchResult = this.matchContractOrders(orderBookKey)
+        var matchResult = await this.matchContractOrders(orderBookKey)
         if (matchResult != []) {
             console.log('contract match result ' + JSON.stringify(matchResult))
-            const inverse = contractRegistry.isInverse(contractId)
             await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
         }
 
         await this.save(orderBookKey)
-
         return matchResult
-
     }
 
-    matchContractOrders(orderBookKey) {
+    async matchContractOrders(orderBookKey) {
         const orderBook = this.orderBooks[orderBookKey];
         if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-            return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches if no orders
+            return { orderBook: this.orderBooks[orderBookKey], matches: [] } // Return empty matches if no orders
         }
 
         let matches = [];
@@ -425,8 +380,8 @@ class Orderbook {
 
                 // Add match to the list
                 matches.push({
-                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender },
-                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender }
+                    sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid },
+                    buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid }
                 })
 
                 // Remove filled orders from the order book
@@ -441,7 +396,7 @@ class Orderbook {
             }
         }
 
-        return { orderBook: this.orderBooks[orderBookKey], matches };
+        return { orderBook: this.orderBooks[orderBookKey], matches }
     }
 
     async processContractMatches(matches, currentBlockHeight, inverse) {
@@ -454,55 +409,197 @@ class Orderbook {
         console.log('processing contract mathces ' + JSON.stringify(matches))
 
         for (const match of matches) {
+
+            if (match.buyOrder.buyerAddress == match.sellOrder.sellerAddress) {
+                console.log('self trade nullified ' + match.buyOrder.buyerAddress)
+                continue
+            }
             // Load the margin map for the given series ID and block height
             const marginMap = await MarginMap.load(match.sellOrder.contractId)
             console.log('checking the marginMap for contractId ' + marginMap)
             // Get the existing position sizes for buyer and seller
-            const buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress)
-            const sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress)
-            console.log('checking position for trade processing ' + JSON.stringify(buyerPosition) + ' buyer size ' + ' seller size ' + JSON.stringify(sellerPosition))
+            match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId)
+            match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId)
+
+            const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0)
+            const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0)
+            if (!isBuyerReducingPosition) {
+                // Use the instance method to set the initial margin
+                match.buyerPosition = await this.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, match.buyOrder.amount)
+                console.log('buyer position after moveCollat ' + match.buyerPosition)
+            }
+            // Update MarginMap for the contract series
+            if (!isSellerReducingPosition) {
+                // Use the instance method to set the initial margin
+                match.sellerPosition = await this.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, match.sellOrder.amount)
+                console.log('sellerPosition after moveCollat ' + match.sellerPosition)
+            }
+
+
+            console.log('checking position for trade processing ' + JSON.stringify(match.buyerPosition) + ' buyer size ' + ' seller size ' + JSON.stringify(match.sellerPosition))
             console.log('reviewing Match object before processing ' + JSON.stringify(match))
             // Update contract balances for the buyer and seller
-            marginMap.updateContractBalances(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, true, buyerPosition, inverse)
-            marginMap.updateContractBalances(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, false, sellerPosition, inverse)
+            let positions = await marginMap.updateContractBalancesWithMatch(match, false)
+            const trade = {
+                contractId: match.sellOrder.contractId,
+                amount: match.sellOrder.amount,
+                price: match.sellOrder.price,
+                buyerAddress: match.buyOrder.buyerAddress,
+                sellerAddress: match.sellOrder.sellerAddress,
+                sellerTx: match.sellOrder.sellerTx,
+                buyerTx: match.buyOrder.buyerTx
+                // other relevant trade details...
+            }
 
+            match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId)
+            match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId)
+            console.log('checking positions based on mMap vs. return of object in contract update ' + JSON.stringify(positions) + ' ' + JSON.stringify(match.buyerPosition) + ' ' + JSON.stringify(match.sellerPosition))
+
+            console.log('checking positions after contract adjustment, seller ' + JSON.stringify(match.sellerPosition) + ' buyer ' + JSON.stringify(match.buyerPosition))
+
+            // Record the contract trade
+            await this.recordContractTrade(trade, currentBlockHeight)
             // Determine if the trade reduces the position size for buyer or seller
-            const isBuyerReducingPosition = buyerPosition > 0 && match.amount < 0;
-            const isSellerReducingPosition = sellerPosition < 0 && match.amount > 0;
 
+            const collateralPropertyId = await contractRegistry.getCollateralId(match.sellOrder.contractId)
+            const notionalValue = await contractRegistry.getNotionalValue(match.sellOrder.contractId)
+            const isInverse = await contractRegistry.isInverse(match.sellOrder.contractId)
             // Realize PnL if the trade reduces the position size
             let buyerPnl = 0, sellerPnl = 0;
             if (isBuyerReducingPosition) {
-                buyerPnl = marginMap.realizePnl(match.buyerAddress, match.amount, match.price, match.buyerAvgPrice)
+                //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
+                //on a LIFO basis that are being retroactively 'closed' by reference here
+                console.log('about to call trade history manager ' + match.buyOrder.contractId)
+                const LIFO = tradeHistory.calculateLIFOEntry(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.contractId)
+                //{AvgEntry,blockTimes}
+                let avgEntry = LIFO.totalCost / match.buyOrder.amount
+                //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
+                //and we figure what is the PNL that one would show on their taxes, to save a record.
+                const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, avgEntry, true, notionalValue, match.buyerPosition)
+                //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
+                //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+
+                const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, LIFO, match.buyOrder.contractId, currentBlockHeight)
+                //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
+                console.log('position before going into reduce Margin ' + JSON.stringify(match.buyerPosition))
+                const reduction = await marginMap.reduceMargin(match.buyerPosition, match.buyOrder.amount, accountingPNL /*settlementPNL*/, isInverse, match.buyOrder.contractId, match.buyOrder.buyerAddress)
+                //{netMargin,mode}   
+
+                await tallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)
+                //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
+                //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
+                //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
+                //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
+                //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
+                //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
+                //unusual edge case but we're covering it here 'maint'
+                //also if this trade realizes a loss that wipes out all maint. margin that we have to look at available balance and go for that
+                //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
+                //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
+                if (reduction.mode != 'maint') {
+                    await tallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL/*-settlementPNL*/, 0, false, true)
+                }
+                if (reduction.mode == 'shortfall') {
+                    //check the address available balance for the neg. balance
+                    //if there's enough in available then do a tallyMap shuffle
+                    //otherwise go to insurance or maybe post a system loss at the bankruptcy price and see if it can get cleared before tapping the ins. fund
+                }
+
+
+                const savePNLParams = {
+                    height: currentBlockHeight, contractId: match.buyOrder.contractId, accountingPNL: accountingPNL,
+                    address: match.buyOrder.buyerAddress, amount: match.buyOrder.amount, tradePrice: match.buyOrder.price, collateralPropertyId: collateralPropertyId,
+                    timestamp: new Date().toISOString(), txid: match.buyOrder.buyerTx, settlementPNL: settlementPNL, marginReduction: reduction, LIFOAvgEntry: avgEntry
+                }
+                console.log('preparing to call savePNL with params ' + JSON.stringify(savePNLParams))
+                tradeHistory.savePNL(savePNLParams)
             }
+
             if (isSellerReducingPosition) {
-                sellerPnl = marginMap.realizePnl(match.sellerAddress, -match.amount, match.price, match.sellerAvgPrice)
+                //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
+                //on a LIFO basis that are being retroactively 'closed' by reference here
+                console.log('position before going into LIFO ' + JSON.stringify(match.sellerPosition))
+                console.log('about to call trade history manager ' + match.sellOrder.contractId)
+                const LIFO = await tradeHistory.calculateLIFOEntry(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.contractId)
+                let avgEntry = LIFO.totalCost / match.sellOrder.amount
+                //{AvgEntry,blockTimes} 
+                //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
+                //and we figure what is the PNL that one would show on their taxes, to save a record.
+                console.log('LIFO ' + JSON.stringify(LIFO))
+
+                console.log('position before realizePnl ' + JSON.stringify(match.sellerPosition))
+                const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, avgEntry, isInverse, notionalValue, match.sellerPosition)
+                //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
+                //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
+
+                console.log('position before settlePNL ' + JSON.stringify(match.sellerPosition))
+                const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO, match.sellOrder.contractId, currentBlockHeight)
+                //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
+                console.log('position before going into reduce Margin ' + JSON.stringify(match.sellerPosition))
+                const reduction = await marginMap.reduceMargin(match.sellerPosition, match.sellOrder.amount, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress)
+                //{netMargin,mode}   
+
+                await tallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, false, true)
+                //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
+                //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
+                //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
+                //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
+                //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
+                //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
+                //unusual edge case but we're covering it here 'maint'
+                if (reduction.mode != 'maint') {
+                    await tallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL, 0, false, true)
+                }
+                const savePNLParams = {
+                    height: currentBlockHeight, contractId: match.sellOrder.contractId, accountingPNL: accountingPNL,
+                    address: match.sellOrder.sellerAddress, amount: match.sellOrder.amount, tradePrice: match.sellOrder.price, collateralPropertyId: collateralPropertyId,
+                    timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction: reduction, LIFOAvgEntry: avgEntry
+                }
+                console.log('preparing to call savePNL with params ' + JSON.stringify(savePNLParams))
+                tradeHistory.savePNL(savePNLParams)
             }
-            console.log('params before calling updateMargin ' + match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price)
+            //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
             // Update margin based on the new positions
-            marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse)
-            marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse)
+            //marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse)
+            //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse)
 
             // Save the updated margin map
-            await marginMap.save(currentBlockHeight)
+            await marginMap.saveMarginMap(false)
 
+            console.log('checking match object before writing trade data obj ' + JSON.stringify(match) + ' what this looks like inside sellOrder contractid ' + match.sellOrder.contractId + ' amount ' + match.sellOrder.amount)
             // Construct a trade object for recording
-            const trade = {
-                contractId: match.contractId,
-                amount: match.amount,
-                price: match.price,
-                buyerAddress: match.buyOrder.senderAddress,
-                sellerAddress: match.sellOrder.senderAddress,
-                // other relevant trade details...
-            };
-
-            // Record the contract trade
-            await this.recordContractTrade(trade, currentBlockHeight, match.txid)
-
 
             // Optionally handle the PnL if needed, e.g., logging or further processing
             // ...    
         }
+    }
+
+    async moveCollateralToReserve(sender, contractId, amount) {
+        const initialMarginPerContract = await contractRegistry.getInitialMargin(contractId)
+        console.log('initialMarginPerContract '+initialMarginPerContract)
+        const collateralPropertyId = await contractRegistry.getCollateralId(contractId)
+        console.log('collateralPropertyId '+collateralPropertyId)
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
+        console.log('Total Initial Margin ' +totalInitialMargin)
+        // Move collateral to reserved position
+        await tallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true)
+    }
+
+   async moveCollateralToMargin(sender, contractId, amount) {
+        console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
+        const initialMarginPerContract = await contractRegistry.getInitialMargin(contractId)
+        console.log('initialMarginPerContract '+initialMarginPerContract)
+        const collateralPropertyId = await contractRegistry.getCollateralId(contractId)
+        console.log('collateralPropertyId '+collateralPropertyId)
+        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
+        console.log('Total Initial Margin ' +totalInitialMargin)
+        // Move collateral to reservd position
+        await tallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true)
+       
+        const marginMap = await MarginMap.load(contractId)
+        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin)
+        
+        return position
     }
 
     // Function to return the current state of the order book for the given key

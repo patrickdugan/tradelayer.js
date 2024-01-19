@@ -1,5 +1,8 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
+const { contractRegistry } = require('./contractRegistry.js')
+const { oracleList } = require('./oracle.js')
+const { volumeIndex } = require('./volumeIndex.js')
 
 class MarginMap {
     static Empty = {
@@ -7,20 +10,21 @@ class MarginMap {
         margin: 0,
         unrealizedPl: 0,
     }
-    
+
     constructor(seriesId) {
         this.seriesId = seriesId;
         this.margins = new Map()
     }
 
     static async load(seriesId) {
-        const key = JSON.stringify({ seriesId })
-        console.log('loading margin map for ' + seriesId)
+        const key = JSON.stringify({ seriesId: seriesId })
 
         try {
             const data = await dbFactory.getDatabase('marginMaps').findOneAsync({ _id: key })
             const map = new MarginMap(seriesId)
-            map.margins = data?.value ? new Map(JSON.parse(data.value)) : new Map()
+            map.margins = new Map(data?.value)
+            let d = [...map.margins.entries()].map(e => `{${e[0]}:[${e[1].contracts}, ${e[1].margin}]}`)
+            console.log(`Loaded margins for {seriesId:${seriesId}}: ${d}`)
             return map
         } catch (err) {
             console.log('Error loading margin map: ' + err)
@@ -28,10 +32,8 @@ class MarginMap {
     }
 
     async save(blockHeight) {
-        const key = JSON.stringify({
-            seriesId: this.seriesId
-        })
-        const value = JSON.stringify([...this.margins])
+        const key = JSON.stringify({ seriesId: this.seriesId })
+        const value = [...this.margins]
 
         await dbFactory.getDatabase('marginMaps').updateAsync(
             { _id: key }, // Query: Match document with the specified _id
@@ -42,7 +44,8 @@ class MarginMap {
     initMargin(address, contracts, price) {
         const notional = contracts * price;
         const margin = notional * 0.1;
-        let pos = {...MarginMap.Empty}
+        let pos = { ...MarginMap.Empty }
+        pos.contracts = contracts
         pos.margin = margin
         this.margins.set(address, pos)
         return pos
@@ -57,131 +60,67 @@ class MarginMap {
         console.log('setting initial margin position ' + JSON.stringify(position))
 
         if (!position) {
-            position = {...MarginMap.Empty}
+            // If no existing position, initialize a new one
+            position = {
+                contracts: 0,  // Number of contracts the sender has
+                margin: 0      // Total margin amount the sender has posted
+            };
         }
 
+        console.log('margin before ' + position.margin)
         // Update the margin for the existing or new position
         position.margin += totalInitialMargin;
-
+        console.log('margin after ' + position.margin)
         // Update the MarginMap with the modified position
         this.margins.set(sender, position)
         console.log('margin should be topped up ' + JSON.stringify(this.margins))
 
         // Save changes to the database or your storage solution
         await this.save()
+        return position
     }
 
-    // Update the margin for a specific address and contract
-    async updateMargin(contractId, address, amount, price, isBuyOrder, inverse) {
-        const position = this.margins.get(address) || this.initMargin(address, 0, price)
+    async updateContractBalancesWithMatch(match, channelTrade) {
+        console.log('updating contract balances, buyer ' + JSON.stringify(match.buyerPosition) + '  and seller ' + JSON.stringify(match.sellerPosition))
+        let buyerPosition = await this.updateContractBalances(
+            match.buyOrder.buyerAddress,
+            match.buyOrder.amount,
+            match.buyOrder.price,
+            true,
+            match.buyerPosition,
+            match.inverse,
+            channelTrade
+        )
 
-        // Calculate the required margin for the new amount
-        console.log('checking requiredMargin in updateMargin ' + JSON.stringify(position) + ' amount ' + amount + ' price ' + price + ' inverse ' + inverse)
-        const requiredMargin = this.calculateMarginRequirement(amount, price, inverse)
-
-        if (isBuyOrder) {
-            // For buy orders, increase contracts and adjust margin
-            position.contracts += amount;
-            position.margin += requiredMargin;
-
-            // Check for margin maintenance and realize PnL if needed
-            this.checkMarginMaintenance(address, contractId)
-        } else {
-            // For sell orders, decrease contracts and adjust margin
-            position.contracts -= amount;
-            position.margin -= requiredMargin;
-
-            // Realize PnL if the position is being reduced
-            this.realizePnl(address, contractId, amount, price)
-        }
-
-        // Ensure the margin doesn't go below zero
-        position.margin = Math.max(0, position.margin)
-
-        // Update the margin map
-        this.margins.set(address, position)
-
-        // Additional logic to handle margin calls or other adjustments if required
+        let sellerPosition = await this.updateContractBalances(
+            match.sellOrder.sellerAddress,
+            match.sellOrder.amount,
+            match.sellOrder.price,
+            false,
+            match.sellerPosition,
+            match.inverse,
+            channelTrade
+        )
+        return { bp: buyerPosition, sp: sellerPosition }
     }
 
-    updateContractBalances(address, amount, price, isBuyOrder, position, inverse) {
+    async updateContractBalances(address, amount, price, isBuyOrder, position, inverse, channelTrade) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price)
         console.log('updating the above position for amount ' + JSON.stringify(position) + ' ' + amount + ' price ' + price + ' address ' + address + ' is buy ' + isBuyOrder)
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
-        let marginAdjustment = this.calculateMarginRequirement(Math.abs(amount), price, inverse)
+        console.log('new newPositionSize ' + newPositionSize + ' address ' + address + ' amount ' + amount + ' isBuyOrder ' + isBuyOrder)
+        position.contracts = newPositionSize
+        console.log('position now ' + JSON.stringify(position))
 
-        // Compare the absolute values of the old and new position sizes
-        if (Math.abs(newPositionSize) > Math.abs(position.contracts)) {
-            // Absolute value of position size has increased
-            console.log('Increasing margin by ' + marginAdjustment)
-            position.margin += marginAdjustment;
-        } else if (Math.abs(newPositionSize) < Math.abs(position.contracts)) {
-            // Absolute value of position size has decreased
-            console.log('Reducing margin by ' + marginAdjustment)
-            position.margin -= marginAdjustment;
-        }
-
-        if (position.margin < 0) {
-            console.log('warning, negative margin ' + position.margin)
-        }
-        // Ensure the margin doesn't go below zero 
-        position.margin = Math.max(0, position.margin)
-
-        // Update the margin map
         this.margins.set(address, position)
-    }
-
-    /**
-     * Clears the margin for a specific address and contract based on PnL change.
-     * @param {string} contractId - The ID of the contract.
-     * @param {string} address - The address of the position holder.
-     * @param {number} pnlChange - The change in unrealized profit/loss.
-     * @param {boolean} inverse - Whether the contract is inverse.
-     */
-    clearMargin(contractId, address, pnlChange, inverse) {
-        const position = this.margins.get(address);
-
-        if (!position) {
-            console.error(`No position found for address ${address}`);
-            return;
-        }
-
-        // Calculate the change in margin based on PnL
-        const marginChange = this.calculateMarginChange(pnlChange, inverse);
-        console.log('clearing margin for position in amount ' +JSON.stringify(position) + ' ' +marginChange)
-        // Update the margin for the position
-        position.margin -= marginChange;
-
-        // Ensure the margin doesn't go below zero
-        if(position.margin >0){
-            console.log('liquidation wipeout! '+position.margin)
-            //need to do some emergency liquidation stuff here
-        }
-        position.margin = Math.max(0, position.margin);
-
-        // Update the margin map
-        this.margins.set(address, position);
         return position
-        // Additional logic if needed
+        //await this.saveMarginMap()
     }
-
-    /**
-     * Calculates the change in margin based on PnL change.
-     * @param {number} pnlChange - The change in unrealized profit/loss.
-     * @param {boolean} inverse - Whether the contract is inverse.
-     * @returns {number} - The change in margin.
-     */
-    calculateMarginChange(pnlChange, inverse) {
-        // Example calculation, replace with your specific logic
-        const marginChange = Math.abs(pnlChange) * (inverse ? 1 : -1);
-        console.log('calculated marginChange with inverse? ' +inverse + 'marginChange')
-        return marginChange;
-    }
-
 
     calculateMarginRequirement(contracts, price, inverse) {
+
         // Ensure that the input values are BigNumber instances
         let bnContracts = new BigNumber(contracts)
         let bnPrice = new BigNumber(price)
@@ -190,7 +129,7 @@ class MarginMap {
 
         // Calculate the notional value
         if (inverse === true) {
-            // For inverse contracts, the notional value is typically the number of contracts divided by the price
+            // For inverse contracts, the notional value in denominator collateral is typically the number of contracts divided by the price
             notional = bnContracts.dividedBy(bnPrice)
         } else {
             // For regular contracts, the notional value is the number of contracts multiplied by the price
@@ -215,9 +154,10 @@ class MarginMap {
             return;
         }
 
+        const ContractRegistry = require('./contractRegistry.js')
         // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = this.initMargin(position.contracts, position.initialPrice)
-        let maintenanceMargin = initialMargin / 2;
+        let initialMargin = ContractRegistry.getInitialMargin(contractId)
+        let maintenanceMargin = (position.contracts * initialMargin) / 2;
 
         if (position.margin < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`)
@@ -228,20 +168,195 @@ class MarginMap {
         }
     }
 
-    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue) {
-        const pos = this.margins.get(address)
+    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address, avgPrice) {
+        //const pos = this.margins.get(address) //this is showing null null for margin and UPNL, let's return to figure out why
+        console.log('checking position inside reduceMargin ' + JSON.stringify(pos))
 
-        if (!pos) return 0;
+        if (!pos) return { netMargin: 0, mode: 'none' };
+
+        // Calculate the initial margin for the position
+        //const initialMargin = this.calculateMarginRequirement(pos.contracts, avgPrice, isInverse)
+        let initialMargin = contracts * 0.1
+        console.log('initialMargin ' + initialMargin + ' pos margin ' + pos.margin + ' pnl ' + pnl)
+        // Calculate the maintenance margin for the position
+        const maintMargin = initialMargin / 2
+
+        // Calculate the remaining margin after considering pnl
+        const remainingMargin = pos.margin - pnl;
+        console.log('inside reduce margin ' + maintMargin + ' ' + remainingMargin)
+        // Determine the mode based on different scenarios
+        let mode;
+        if (remainingMargin >= initialMargin) {
+            mode = 'profit';
+        } else if (remainingMargin >= 0) {
+            mode = 'fractionalProfit';
+        } else if (remainingMargin >= maintMargin) {
+            mode = 'moreThanMaint';
+        } else if (remainingMargin > 0) {
+            mode = 'lessThanMaint';
+        } else if (remainingMargin === 0) {
+            mode = 'maint';
+        } else {
+            // Handle cases where pnl is negative and insufficient margin is available
+            // You may need to implement additional logic to cover insurance fund, system tab, etc.
+            // ...
+            mode = 'insufficientMargin';
+        }
+        console.log('mode ' + mode)
+
+        // Check if the margin is below maintenance level
+        //this.checkMarginMaintenance(address, pos.contractId)
+
+        // Get the margin level for the contract
+        const totalMargin = pos.margin
+
+        // Calculate the required margin for the new amount
+        const requiredMargin = this.calculateMarginRequirement(contracts, pos.avgPrice, pos.isInverse)
+
+        // Liberating margin on a pro-rata basis
+        const netMargin = this.liberateMargin(pos, totalMargin, contracts, pnl, mode, address)
+
+        return { netMargin, mode, totalMargin, requiredMargin };
+    }
+
+    liberateMargin(pos, margin, contracts, pnl, mode, address) {
+        //const pos = this.margins.get(address)
+
+        if (!pos) {
+            console.error(`No position found for address ${address}`)
+            return 0;
+        }
+
+        let liberatedMargin = 0;
+
+        switch (mode) {
+            case 'profit':
+                // Logic for liberating margin in case of profit
+                liberatedMargin = this.profitLiberation(pos, contracts, pnl)
+                break;
+            case 'fractionalProfit':
+                // Logic for liberating margin in case of fractional profit
+                liberatedMargin = this.fractionalProfitLiberation(pos, contracts, pnl)
+                break;
+            case 'moreThanMaint':
+                // Logic for liberating margin when remaining margin is more than maintenance margin
+                liberatedMargin = this.moreThanMaintLiberation(pos, contracts, pnl)
+                break;
+            case 'lessThanMaint':
+                // Logic for liberating margin when remaining margin is less than maintenance margin
+                liberatedMargin = this.lessThanMaintLiberation(pos, contracts, pnl)
+                break;
+            case 'maint':
+                // Logic for liberating margin when remaining margin is equal to maintenance margin
+                liberatedMargin = this.maintLiberation(pos, contracts, pnl)
+                break;
+            default:
+                console.error(`Invalid mode: ${mode}`)
+        }
+
+        // Update the margin map with the liberated margin
+        pos.margin -= liberatedMargin;
+        this.margins.set(address, pos)
+
+        // Save changes to the database or your storage solution
+        //this.saveMarginMap()
+
+        return liberatedMargin;
+    }
+
+    profitLiberation(position, contracts, pnl) {
+        // Logic for liberating margin in case of profit
+        // Example: Liberating a fraction of the profit based on the total profit
+        const totalProfit = Math.abs(pnl)
+        const liberationFraction = totalProfit > 0 ? contracts * Math.min(1, contracts / totalProfit) : 0;
+
+        return liberationFraction;
+    }
+
+    fractionalProfitLiberation(position, contracts, pnl) {
+        // Logic for liberating margin in case of fractional profit
+        // Example: Liberating a fraction of the profit based on the total profit
+        const totalProfit = Math.abs(pnl)
+        const liberationFraction = totalProfit > 0 ? contracts * Math.min(1, contracts / totalProfit) : 0;
+
+        return liberationFraction;
+    }
+
+    moreThanMaintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is more than maintenance margin
+        // Example: Liberating a fixed fraction of the maintenance margin
+        const maintenanceMargin = this.calculateMaintenanceMargin(position.size, position.avgPrice)
+        const liberationFraction = maintenanceMargin > 0 ? contracts * 0.5 : 0;
+
+        return liberationFraction;
+    }
+
+    lessThanMaintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is less than maintenance margin
+        // Example: Liberating a fixed fraction of the remaining margin
+        const liberationFraction = contracts * 0.2;
+
+        return liberationFraction;
+    }
+
+    maintLiberation(position, contracts, pnl) {
+        // Logic for liberating margin when remaining margin is equal to maintenance margin
+        // Example: Liberating a fixed fraction of the maintenance margin
+        const maintenanceMargin = this.calculateMaintenanceMargin(position.size, position.avgPrice)
+        const liberationFraction = maintenanceMargin > 0 ? contracts * 0.5 : 0;
+
+        return liberationFraction;
+    }
+
+
+    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
+        if (!pos) {
+            return 0
+        }
 
         let pnl;
+        console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos))
         if (isInverse) {
             // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
-            pnl = (1 / avgPrice - 1 / price) * contracts * notionalValue;
+            pnl = (1 / avgPrice - 1 / price) * contracts * notionalValue
+            console.log('pnl ' + pnl)
         } else {
             // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
             pnl = (price - avgPrice) * contracts * notionalValue;
+            console.log('pnl ' + (price - avgPrice), contracts, notionalValue, pnl)
         }
 
+        //pos.margin -= Math.abs(pnl)
+        //pos.unrealizedPl += pnl; //be sure to modify uPNL and scoop it out for this value...
+        console.log('inside realizePnl ' + price + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue)
+        return pnl;
+    }
+
+    async settlePNL(address, contracts, price, LIFO, contractId, currentBlockHeight) {
+        const pos = this.margins.get(address)
+        if (!pos) {
+            return 0;
+        }
+
+        // Check if the contract is associated with an oracle
+        const isOracleContract = await ContractRegistry.isOracleContract(contractId)
+
+        let oraclePrice;
+        if (isOracleContract) {
+            // Retrieve the oracle ID associated with the contract
+            const oracleId = await contractRegistry.getOracleId(contractId)
+
+            // Retrieve the latest oracle data for the previous block
+            oraclePrice = await contractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1)
+        }
+
+        // Use settlement price based on the oracle data or LIFO Avg. Entry
+        const settlementPrice = oraclePrice || LIFO.AvgEntry;
+
+        // Calculate PnL based on settlement price
+        const pnl = (price - settlementPrice) * contracts;
+
+        // Update margin and unrealized PnL
         pos.margin -= Math.abs(pnl)
         pos.unrealizedPl += pnl;
 
@@ -270,37 +385,36 @@ class MarginMap {
         // This could involve creating liquidation orders and updating the contract's state
 
         // Example:
-        // const liquidationOrders = this.generateLiquidationOrders(contract)
-        // await this.saveLiquidationOrders(contract, liquidationOrders)
+        const liquidationOrders = this.generateLiquidationOrders(contract)
+        await this.saveLiquidationOrders(contract, liquidationOrders)
 
-        // // Update the contract's state as needed
-        // // Example: contract.state = 'liquidating';
-        // await ContractsRegistry.updateContractState(contract)
+        // Update the contract's state as needed
+        // Example: contract.state = 'liquidating';
+        await contractRegistry.updateContractState(contract)
 
-        // return liquidationOrders;
-        return {}
+        return liquidationOrders;
     }
 
     generateLiquidationOrders(contract) {
         const liquidationOrders = [];
         const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
+        // TODO: fixme
+        // for (const [address, position] of Object.entries(this.margins[contract.id])) {
+        //     const notionalValue = position.contracts * contract.marketPrice;
+        //     const maintenanceMargin = notionalValue * maintenanceMarginFactor;
 
-        for (const [address, position] of Object.entries(this.margins[contract.id])) {
-            const notionalValue = position.contracts * contract.marketPrice;
-            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
-
-            if (position.margin < maintenanceMargin) {
-                // Liquidate 50% of the position if below maintenance margin
-                const liquidationSize = position.contracts * 0.5;
-                liquidationOrders.push({
-                    address,
-                    contractId: contract.id,
-                    size: liquidationSize,
-                    price: contract.marketPrice, // Assuming market price for simplicity
-                    type: 'liquidation'
-                })
-            }
-        }
+        //     if (position.margin < maintenanceMargin) {
+        //         // Liquidate 50% of the position if below maintenance margin
+        //         const liquidationSize = position.contracts * 0.5;
+        //         liquidationOrders.push({
+        //             address,
+        //             contractId: contract.id,
+        //             size: liquidationSize,
+        //             price: contract.marketPrice, // Assuming market price for simplicity
+        //             type: 'liquidation'
+        //         })
+        //     }
+        // }
 
         return liquidationOrders;
     }
@@ -320,41 +434,62 @@ class MarginMap {
     }
 
     needsLiquidation(contract) {
-        const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value
+        // const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value
+        // TODO: fixme
+        // for (const [address, position] of Object.entries(this.margins[contract.id])) {
+        //     const notionalValue = position.contracts * contract.marketPrice;
+        //     const maintenanceMargin = notionalValue * maintenanceMarginFactor;
 
-        for (const [address, position] of Object.entries(this.margins[contract.id])) {
-            const notionalValue = position.contracts * contract.marketPrice;
-            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
-
-            if (position.margin < maintenanceMargin) {
-                return true;
-            }
-        }
-        return false; 
+        //     if (position.margin < maintenanceMargin) {
+        //         return true; // Needs liquidation
+        //     }
+        // }
+        return false; // No positions require liquidation
     }
 
-    getMarginLevel(contract) {
-        // Assuming margins are stored per position in the contract
-        // Example: Return the margin level for the contract
-        let totalMargin = 0;
-        for (const position of Object.values(this.margins[contract.id])) {
-            totalMargin += position.margin;
-        }
-        return totalMargin;
-    }
-
-    // getMarginLevel(contractId) {
-    //     return [...this.margins.values()].map(v=>v).reduce(v=>v, 0)
-    // }
-
-    hasOpenPositions(contractId) {
-        return [...this.margins.values()].findIndex(v => v?.contracts > 0) > -1
-    }
 
     // Get the position for a specific address
-    getPositionForAddress(address) {
-        let pos = this.margins.get(address)
-        return pos ? pos : MarginMap.Empty
+    async getPositionForAddress(address, contractId) {
+        let position = this.margins.get(address)
+        console.log('loading position for address ' + address + ' contract ' + contractId + ' ' + JSON.stringify(position))
+        // If the position is not found or margins map is empty, try loading from the database
+        if (!position || this.margins.length === 0) {
+            console.log('going into exception for getting Position ')
+            await MarginMap.load(contractId)
+            position = this.margins.get(address)
+        }
+
+        // If still not found, return a default position
+        if (!position) {
+            return {
+                contracts: 0,
+                margin: 0,
+                unrealizedPl: 0,
+                // Add other relevant fields if necessary
+            };
+        }
+
+        return position;
+    }
+
+    async getMarketPrice(contract) {
+        let marketPrice;
+
+        if (contractRegistry.isOracleContract(contract.id)) {
+            // Fetch the 3-block TWAP for oracle-based contracts
+            marketPrice = await oracleList.getTwap(contract.id, 3) // Assuming the getTwap method accepts block count as an argument
+        } else if (contractRegistry.isNativeContract(contract.id)) {
+            // Fetch VWAP data for native contracts
+            const contractInfo = contractRegistry.getContractInfo(contract.id)
+            if (contractInfo && contractInfo.indexPair) {
+                const [propertyId1, propertyId2] = contractInfo.indexPair;
+                marketPrice = await volumeIndex.getVwapData(propertyId1, propertyId2)
+            }
+        } else {
+            throw new Error(`Unknown contract type for contract ID: ${contract.id}`)
+        }
+
+        return marketPrice;
     }
 }
 

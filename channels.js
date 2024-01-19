@@ -1,4 +1,5 @@
 const { dbFactory } = require('./db.js')
+const { tradeHistory } = require('./tradeHistory.js')
 
 class TradeChannel {
     constructor() {
@@ -12,23 +13,20 @@ class TradeChannel {
     }
 
     async removeFromRegistry(channelAddress) {
-        // Add logic to remove a trade channel
         this.channelsRegistry.delete(channelAddress)
         await this.saveChannelsRegistry()
     }
 
     async saveChannelsRegistry() {
-        // Persist the channels registry to NeDB
-        const channelsDB = this.dbFactory.getDatabase('channels')
         const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
             return {
                 _id: `channel-${channelId}`, // Unique identifier for each channel
                 data: channelData
             };
         })
-
+        const db = dbFactory.getDatabase('channels')
         for (const entry of entries) {
-            await channelsDB.updateAsync(
+            await db.updateAsync(
                 { _id: entry._id },
                 { $set: { data: entry.data } },
                 { upsert: true }
@@ -37,9 +35,8 @@ class TradeChannel {
     }
 
     async loadChannelsRegistry() {
-        // Load the channels registry from LevelDB
         try {
-            const value = await this.dbFactory.getDatabase('channelsRegistry')
+            const value = await dbFactory.getDatabase('channels')
             this.channelsRegistry = new Map(JSON.parse(value))
         } catch (error) {
             if (error.type === 'NotFoundError') {
@@ -60,7 +57,7 @@ class TradeChannel {
             blockHeight,
             txid
         };
-        await this.saveTrade(tradeRecord)
+        await tradeHistory.saveTrade(tradeRecord)
     }
 
     // Record a contract trade with specific key identifiers
@@ -73,35 +70,8 @@ class TradeChannel {
             blockHeight,
             txid
         };
-        await this.saveTrade(tradeRecord)
+        await tradeHistory.saveTrade(tradeRecord)
     }
-
-    async saveTrade(tradeRecord) {
-        const tradeDB = this.dbFactory.getDatabase('tradeHistory')
-
-        // Use the key provided in the trade record for storage
-        const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
-
-        // Construct the document to be saved
-        const tradeDoc = {
-            _id: tradeId,
-            ...tradeRecord
-        };
-
-        // Save or update the trade record in the database
-        try {
-            await tradeDB.updateAsync(
-                { _id: tradeId },
-                tradeDoc,
-                { upsert: true }
-            )
-            console.log(`Trade record saved successfully: ${tradeId}`)
-        } catch (error) {
-            console.error(`Error saving trade record: ${tradeId}`, error)
-            throw error; // Rethrow the error for handling upstream
-        }
-    }
-
 
     async getChannel(channelId) {
         // Ensure the channels registry is loaded
@@ -113,7 +83,7 @@ class TradeChannel {
     }
 
     async addCommitment(channelId, commitment) {
-        await this.dbFactory.getDatabase('channels').updateAsync(
+        await dbFactory.getDatabase('channels').updateAsync(
             { channelId: channelId },
             { $push: { commitments: commitment } },
             { upsert: true }
@@ -121,7 +91,7 @@ class TradeChannel {
     }
 
     async getCommitments(channelId) {
-        const channel = await this.dbFactory.getDatabase('channels').findOneAsync({ channelId: channelId })
+        const channel = await dbFactory.getDatabase('channels').findOneAsync({ channelId: channelId })
         return channel ? channel.commitments : [];
     }
 
@@ -264,7 +234,6 @@ class TradeChannel {
         this.channelsRegistry.set(channelAddress, channel)
     }
 
-
     channelContractTrade(transaction) {
         const { channelAddress, contractId, amount, price, side } = transaction;
         const channel = this.channelsRegistry.get(channelAddress)
@@ -368,7 +337,6 @@ class TradeChannel {
 
         console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress} with purpose: ${commitPurpose}`)
     }
-
 }
 
-module.exports = TradeChannel;
+module.exports = TradeChannel

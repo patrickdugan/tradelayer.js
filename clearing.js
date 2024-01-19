@@ -278,7 +278,7 @@ class Clearing {
             if (marginMap.checkMarginMaintainence(position.holderAddress,contractId)) {
                 // Move funds from available to margin in TallyMap
                 if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
-                        await TallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
+                        await tallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
                 }else{
                     console.log('insufficient maint. margin for '+JSON.stringify(newPosition))
                     let liquidationOrders = await marginMap.triggerLiquidations(newPosition);

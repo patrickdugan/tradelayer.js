@@ -9,32 +9,29 @@ class OracleList {
 
     async load() {
         try {
-            const oracles = await this.db.getDatabase('oracleList').findAsync({})
+            const oracles = await this.db.findAsync({})
             this.oracles = new Map(oracles.map(o => [o._id, o]))
-            console.log('Loaded oracles: '+[...this.oracles.values()].map(v=>v.id))
+            console.log('Loaded oracles: ' + [...this.oracles.keys()])
         } catch (error) {
             console.error('Error loading oracles from the database:', error)
         }
     }
 
     async getAll() {
-        // Convert the Map of oracles to an array
-        return Array.from(this.oracles.values())
+        return [...this.oracles.values()]
     }
 
-    async addOracle(oracleId, oracleData) {
+    async createOracle(data) {
         try {
-            // Add to in-memory map
-            this.oracles.set(oracleId, oracleData)
+            const oracleId = this.getNextId()
+            await this.db.insertAsync({ _id: oracleId, ...data })
+            this.oracles.set(oracleId, data)
 
-            // Add to NeDB database (if applicable)
-            const odb = this.db.getDatabase('oracleList')
-            await odb.insertAsync({ _id: oracleId, ...oracleData })
-
-            console.log(`Oracle added: ID ${oracleId}`)
+            console.log(`New oracle created: ID ${oracleId}, Name: ${JSON.stringify(data)}`)
+            return oracleId
         } catch (error) {
-            console.error(`Error adding oracle: ID ${oracleId}`, error)
-            throw error; // Re-throw the error for the caller to handle
+            console.error('Error creating new oracle:', error)
+            throw error
         }
     }
 
@@ -44,139 +41,74 @@ class OracleList {
             return null
         }
 
-        // Oracle key to search for
-        const oracleKey = `oracle-${oracleId}`;
-
-        // Check in the in-memory map
-        let oracle = this.oracles.get(oracleKey)
-        if (oracle) {
-            return oracle;
+        let oracle = this.oracles.get(oracleId)
+        if (!oracle) {
+            oracle = await this.db.findOneAsync({ _id: oracleId })
         }
-
-        // If not found in-memory, optionally check the database
-        oracle = await this.db.getDatabase('oracleList').findOneAsync({ _id: oracleKey })
-        if (oracle) {
-            return oracle;
+        if (!oracle) {
+            console.log(`Oracle data not found for oracle ID: ${oracleId}`)
+            return null
         }
-
-        console.log(`Oracle data not found for oracle ID: ${oracleId}`)
-
-        return null;
+        return oracle
     }
 
     async verifyAdmin(oracleId, adminAddress) {
-        const oracleKey = `oracle-${oracleId}`;
-        // Check in-memory map first
-        let oracle = this.oracles.get(oracleKey)
-
-        // If not found in-memory, check the database
-        if (!oracle) {
-            const odb = this.db.getDatabase('oracleList')
-            oracle = await odb.findOneAsync({ _id: oracleKey })
-        }
-
-        // Verify admin address
+        let oracle = this.getOracle(oracleId)
         return oracle?.adminAddress === adminAddress;
     }
 
-
     async updateAdmin(oracleId, newAdminAddress) {
-        const oracleKey = `oracle-${oracleId}`;
-
-        // Get the NeDB datastore for oracles
-        const odb = this.db.getDatabase('oracleList')
-
-        // Fetch the current oracle data
-        const oracle = await odb.findOneAsync({ _id: oracleKey })
-
+        let oracle = this.getOracle(oracleId)
         if (!oracle) {
-            throw new Error('Oracle not found')
+            throw new Error(`Oracle not found: id:${oracleId}`)
         }
-
-        // Update the admin address
         oracle.adminAddress = newAdminAddress;
 
-        // Update the oracle in the database
-        await odb.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {})
-
-        // Optionally, update the in-memory map if you are maintaining one
-        this.oracles.set(oracleKey, oracle)
-
+        await this.db.updateAsync({ _id: oracleId }, { $set: { adminAddress: newAdminAddress } }, {})
+        this.oracles.set(oracleId, oracle)
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`)
     }
 
-    async createOracle(name, adminAddress) {
-        const oracleId = this.getNextId()
-        const oracleKey = `oracle-${oracleId}`;
-
-        const newOracle = {
-            _id: oracleKey, // NeDB uses _id as the primary key
-            id: oracleId,
-            name: name,
-            adminAddress: adminAddress,
-            data: {} // Initial data, can be empty or preset values
-        };
-
-        try {
-            // Save the new oracle to the database
-            await this.db.getDatabase('oracleList').insertAsync(newOracle)
-
-            // Also save the new oracle to the in-memory map
-            this.oracles.set(oracleKey, newOracle)
-
-            console.log(`New oracle created: ID ${oracleId}, Name: ${name}`)
-            return oracleId; // Return the new oracle ID
-        } catch (error) {
-            console.error('Error creating new oracle:', error)
-            throw error; // Re-throw the error for the caller to handle
-        }
-    }
-
     getNextId() {
-        let nums = [...this.oracles.values()].map(v=>v.id)
-        let maxId = Math.max(0,...nums)
+        let maxId = Math.max(0, ...this.oracles.keys())
         return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
-    async saveOracleData(oracleId, data, blockHeight) {
-        const odb = this.db.getDatabase('oracleData')
-        const recordKey = `oracle-${oracleId}-${blockHeight}`;
-
-        const oracleDataRecord = {
-            _id: recordKey,
+    async setOracleData(oracleId, data, blockHeight) {
+        const key = `oracle-${oracleId}-${blockHeight}`
+        const entry = {
+            _id: key,
             oracleId,
             data,
             blockHeight
-        };
+        }
 
         try {
-            await odb.updateAsync(
-                { _id: recordKey },
-                oracleDataRecord,
+            await dbFactory.getDatabase('oracleData').updateAsync(
+                { _id: key },
+                entry,
                 { upsert: true }
             )
-            console.log(`Oracle data record saved successfully: ${recordKey}`)
+            console.log(`Oracle data record saved successfully: ${key}`)
         } catch (error) {
-            console.error(`Error saving oracle data record: ${recordKey}`, error)
-            throw error;
+            console.error(`Error saving oracle data record: ${key}`, error)
+            throw error
         }
     }
 
-    async loadOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const odb = this.db.getDatabase('oracleData')
+    async getOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
         try {
-            const query = {
+            const data = await dbFactory.getDatabase('oracleData').findAsync({
                 oracleId: oracleId,
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
-            };
-            const oracleDataRecords = await odb.findAsync(query)
-            return oracleDataRecords.map(record => ({
+            })
+            return data.map(record => ({
                 blockHeight: record.blockHeight,
                 data: record.data
             }))
         } catch (error) {
-            console.error(`Error loading oracle data for oracleId ${oracleId}:`, error)
-            throw error;
+            console.error(`Error loading oracle data for oracleId:${oracleId}:`, error)
+            throw error
         }
     }
 
@@ -188,8 +120,8 @@ class OracleList {
 }
 
 let list
-(async() => {
-    list = new OracleList(dbFactory)
+(async () => {
+    list = new OracleList(dbFactory.getDatabase('oracleList'))
     await list.load()
 })()
 

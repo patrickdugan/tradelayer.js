@@ -1,8 +1,8 @@
 const BigNumber = require('bignumber.js')
 const { dbFactory } = require('./db.js')
-const { tallyMap } = require('./tally.js')
 
 class ContractRegistry {
+    static ContractSeries = 'contractSeries'
 
     constructor(db) {
         this.db = db
@@ -13,18 +13,34 @@ class ContractRegistry {
 
     async load() {
         try {
-            const docs = await this.db.getDatabase('contractList').findAsync({ type: 'contractSeries' })
-            this.contractList = new Map(docs.map(doc => [doc.id, doc.data]))
+            const data = await this.db.getDatabase('contractList').findAsync({ type: ContractRegistry.ContractSeries })
+            this.contractList = new Map(data.map(d => [d._id, d.value]))
             return this.contractList
         } catch (error) {
             console.error('Error loading contract series data:', error)
         }
     }
 
+    async saveData(dataMap, dataType) {
+        const dataArray = Array.from(dataMap.entries()).map(([k, v]) => ({
+            key: k, value: v
+        }))
+
+        await Promise.all(dataArray.map(e =>
+            this.db.getDatabase('contractList').updateAsync({ _id: e.key }, { $set: { value: e.value, type: dataType } }, { upsert: true })
+        ))
+    }
+
+    async save() {
+        await this.saveData(this.contractList, ContractRegistry.ContractSeries)
+        //await this.saveData(this.oracleList, 'oracleContracts')
+        //await this.saveData(this.nativeList, 'nativeContracts')
+    }
+
     async createContractSeries(native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
         // Generate a unique ID for the new contract series
         await this.load()
-        
+
         const seriesId = this.getNextId(this.contractList)
         const contracts = this.generateContracts(expiryPeriod, series, seriesId, block)
 
@@ -51,7 +67,7 @@ class ContractRegistry {
         this.contractList.set(seriesId, contractSeries)
 
         // Save the updated contract list back to the database
-        await this.save(this.contractList, 'contractSeries')
+        await this.save(this.contractList, ContractRegistry.ContractSeries)
 
         console.log(`New contract series created: ID ${seriesId}`)
         return seriesId; // Return the new series ID
@@ -62,7 +78,7 @@ class ContractRegistry {
     }
 
     getNextId(contractList) {
-        let maxId = Math.max(0,...contractList.keys())
+        let maxId = Math.max(0, ...contractList.keys())
         return (Number.isInteger(maxId) ? maxId : 0) + 1
     }
 
@@ -79,22 +95,6 @@ class ContractRegistry {
             expirationBlock += parseInt(expiryPeriod)
         }
         return contracts;
-    }
-
-    async saveData(dataMap, dataType) {
-        const dataArray = Array.from(dataMap.entries()).map(([id, data]) => ({
-            id, data, type: dataType
-        }))
-
-        await Promise.all(dataArray.map(entry =>
-            this.db.getDatabase('contractList').updateAsync({ id: entry.id }, entry, { upsert: true })
-        ))
-    }
-
-    async save() {
-        await this.saveData(this.contractList, 'contractSeries')
-        //await this.saveData(this.oracleList, 'oracleContracts')
-        //await this.saveData(this.nativeList, 'nativeContracts')
     }
 
     isValidSeriesId(seriesId) {
@@ -189,19 +189,6 @@ class ContractRegistry {
         // Return the collateral property ID from the contract information
         //console.log('returning collateral id '+contractInfo.native.collateralPropertyId+ ' type of '+typeof contractInfo.native.collateralPropertyId)
         return contractInfo.native.collateralPropertyId;
-    }
-
-    // In the contract order addition process
-    async moveCollateralToMargin(sender, contractId, amount) {
-        const initialMarginPerContract = this.getInitialMargin(contractId)
-        //console.log('initialMarginPerContract '+initialMarginPerContract)
-        const collateralPropertyId = this.getCollateralId(contractId)
-        //console.log('collateralPropertyId '+collateralPropertyId)
-        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
-        console.log(totalInitialMargin)
-        // Move collateral to margin position
-        await tallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, 0, totalInitialMargin, 0, true)
-        return totalInitialMargin
     }
 
     // Calculate the 1-hour funding rate for an oracle contract

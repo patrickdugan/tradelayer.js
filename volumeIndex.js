@@ -129,4 +129,4 @@ class VolumeIndex {
     }
 }
 
-exports.volumeIndex = new VolumeIndex(dbFactory.getDatabase('tradeVolumeDB')
+exports.volumeIndex = new VolumeIndex(dbFactory.getDatabase('tradeVolumeDB'))

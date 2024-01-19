@@ -3,10 +3,10 @@ const { dbFactory } = require('./db.js')
 class PropertyManager {
     // pid => {}
     static Empty = {
-        ticker: '',
+        ticker: '?',
         totalInCirculation : 0,
         type: '?',
-        whitelistId: -1,
+        whitelistId: 0,
         backupAddress: '?'
     }
 
@@ -17,30 +17,17 @@ class PropertyManager {
 
     async load() {
         try {
-            const entry = await this.db.findOneAsync({ _id: 'propertyIndex' })
-            if (entry?.value) {
-                // Check if the value is a string and parse it as JSON
-                const data = typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value;
-
-                // Ensure the data is an array of arrays before converting it to a Map
-                if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
-                    this.properties = new Map(data)
-                } else {
-                    console.error('Invalid data format for propertyIndex: ', data)
-                    this.properties = new Map()
-                }
-            }
+            const entries = await this.db.findAsync({})
+            this.properties = new Map(entries.map(e => [e._id, e.value]))
         } catch (error) {
-            console.error('Error loading data from NeDB: ', error)
-            //this.properties = new Map() // Use an empty Map in case of an error
+            console.error('Error loading properties: ', error)
         }
         console.log('Loaded properties: '+[...this.properties.keys()])
     }
 
-    async save() {
-        const json = JSON.stringify([...this.properties.entries()])
-        await this.db.updateAsync({ _id: 'propertyIndex' }, { _id: 'propertyIndex', value: json }, { upsert: true })
-        console.log('Updated propertties:' + this.properties)
+    async save(pid, property) {
+        await this.db.updateAsync({ _id: pid }, { $set: { value: property } }, { upsert: true })
+        console.log('Updated properties:' + this.properties)
     }
 
     clear() {
@@ -62,7 +49,6 @@ class PropertyManager {
         return propertyId;
     }
 
-
     async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress) {
         const cats = {
             'Fixed': 1,
@@ -77,15 +63,16 @@ class PropertyManager {
             throw new Error(`Invalid property: pid:${propertyId}, ticker:ticker}, cat:${cats[type]}`)
         }
 
-        this.properties.set(propertyId, {
+        let p = {
             ticker,
             totalInCirculation,
             type: cats[type],
             whitelistId: whitelistId,
             backupAddress: backupAddress
-        })
+        }
+        this.properties.set(propertyId, p)
 
-        await this.save()
+        await this.save(propertyId, p)
     }
 
     dump() {

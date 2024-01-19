@@ -37,7 +37,7 @@ class Vesting {
             const balances = await tallyMap.getAddressBalances(this.adminAddress)
 
             // After initializing tokens, set the flag
-            await tallyMap.setInitializationFlag()
+            // await tallyMap.setInitializationFlag()
             return balances
         }
     }

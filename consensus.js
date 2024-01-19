@@ -17,7 +17,7 @@ class Consensus {
     async getConsensusHash(blockHeight) {
         try {
             const docs = await this.db.findAsync({ blockHeight })
-            if (docs.length > 0) {
+            if (docs?.length > 0) {
                 return docs[0].consensusHash;
             }
         } catch (err) {
@@ -36,8 +36,8 @@ class Consensus {
     }
 
     async getMaxProcessedHeight() {
-        const doc = await this.db.findOneAsync({ _id: 'MaxProcessedHeight' });
-        return (doc && doc.value) ? doc.value : 0
+        const d = await this.db.findOneAsync({ _id: 'MaxProcessedHeight' });
+        return Number.isInteger(d?.value) ? d.value : 0
     }
 
     async updateMaxProcessedHeight(maxProcessedHeight) {

@@ -361,7 +361,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.propertyId, params.senderAddress);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
@@ -393,7 +393,7 @@ const Validity = {
             params.reason += 'Tx type not yet activated '
         }
 
-        const isPropertyAdmin = oracleList.verifyAdmin(params.senderAddress, params.propertyId);
+        const isPropertyAdmin = oracleList.verifyAdmin(params.propertyId, params.senderAddress);
         if (!isPropertyAdmin) {
             params.valid = false;
             params.reason += 'Sender is not admin of the property; ';
@@ -432,7 +432,7 @@ const Validity = {
     validatePublishOracleData: async (sender, params, txid) => {
         console.log('validatePublishOracleData: ' + JSON.stringify(params))
         params.reason = '';
-        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.oracleId, params.senderAddress);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }
@@ -464,7 +464,7 @@ const Validity = {
     // 15: Close Oracle
     validateCloseOracle: async (sender, params, txid) => {
         params.reason = '';
-        params.valid = oracleList.verifyAdmin(params.senderAddress, params.oracleId);
+        params.valid = oracleList.verifyAdmin(params.oracleId, params.senderAddress);
         if (!params.valid) {
             params.reason = 'Sender is not admin of the specified oracle; ';
         }

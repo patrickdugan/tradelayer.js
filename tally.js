@@ -17,14 +17,34 @@ class TallyMap {
         this.db = db
     }
 
-    async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
+    async load() {
+        try {
+            const entries = await this.db.findAsync({})
+            this.addresses = new Map(entries.map(e => [e._id, e?.value]))
+            let d = [...this.addresses.entries()].map(e => `{${e[0]}=>[${e[1].map(p => p?.propertyId)}]}`)
+            console.log(`Loaded tally: ${d}`)
+        } catch (error) {
+            console.error('Error loading tally:', error)
+        }
+    }
+
+    async save(addr, data) {
+        try {
+            await this.db.updateAsync({ _id: addr }, { $set: { value: data } }, { upsert: true })
+            console.log(`Tally saved: addr:${addr}:${data.map(p => p?.propertyId)}`)
+        } catch (error) {
+            console.error('Error saving tally:', error)
+        }
+    }
+
+    async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement) {
         if (tradeSettlement == true) {
-            console.log(`Trade Settlement: txid:${txid}, pid:${propertyId}, achange:${availableChange}, rchange:${reservedChange}, mchange:${marginChange}`)
+            console.log(`Trade Settlement: pid:${propertyId}, achange:${availableChange}, rchange:${reservedChange}, mchange:${marginChange}`)
         }
 
-        if (availableChange == null || reservedChange == null || marginChange == null || vestingChange == null || isNaN(availableChange) || isNaN(reservedChange) || isNaN(marginChange) || isNaN(vestingChange)) {
-            throw new Error('Somehow null passed into updateBalance... avail. ' + availableChange + ' reserved ' + reservedChange + ' margin' + marginChange + ' vesting ' + vestingChange)
-        }
+        // if (availableChange == null || reservedChange == null || marginChange == null || vestingChange == null || isNaN(availableChange) || isNaN(reservedChange) || isNaN(marginChange) || isNaN(vestingChange)) {
+        //     throw new Error('Somehow null passed into updateBalance... avail. ' + availableChange + ' reserved ' + reservedChange + ' margin' + marginChange + ' vesting ' + vestingChange)
+        // }
 
         if (!Number.isInteger(propertyId)) {
             throw new Error(`Invalid propertyId: ${propertyId}`)
@@ -36,7 +56,7 @@ class TallyMap {
             this.addresses.set(address, data)
         }
 
-        let p = {...TallyMap.Empty}
+        let p = { ...TallyMap.Empty }
         let i = data.findIndex(d => d?.propertyId == propertyId)
         if (i < 0) {
             p.propertyId = propertyId
@@ -56,8 +76,7 @@ class TallyMap {
             console.log('propertyId, reserved, reservedChange ' + JSON.stringify(p) + ' ' + p.reserved + ' ' + reservedChange)
             throw new Error("Reserved balance cannot go negative " + propertyId + ' ' + availableChange + ' ' + reservedChange)
         }
-        //p.reserved += reservedChange;
-        p.reserved = propertyId;
+        p.reserved += reservedChange;
 
         // Check and update margin balance
         if (p.margin + marginChange < 0) {
@@ -72,22 +91,13 @@ class TallyMap {
         p.vesting += vestingChange;
         p.amount = p.available + p.reserved + p.margin + p.vesting
 
-        await this.save()
+        await this.save(address, data)
 
         console.log('Tally has been changed: ' + JSON.stringify(data) + ' for addr: ' + address)
     }
 
-    async setInitializationFlag() {
-        await this.db.updateAsync(
-            { _id: '$TLinit' },
-            { _id: '$TLinit', initialized: true },
-            { upsert: true }
-        )
-    }
-
     async checkInitializationFlag() {
-        const result = await this.db.findOneAsync({ _id: '$TLinit' })
-        return result ? result.initialized : false;
+        return propertyList.getProperty(1)?.ticker === 'TL'
     }
 
     /**
@@ -117,74 +127,6 @@ class TallyMap {
             console.error('Error in hasSufficientBalance:', error)
             return { hasSufficient: false, reason: 'Unexpected error checking balance' };
         }
-    }
-
-    async save() {
-        try {
-            const serializedData = JSON.stringify([...this.addresses])
-            await this.db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true })
-            console.log('TallyMap saved successfully.')
-        } catch (error) {
-            console.error('Error saving TallyMap:', error)
-        }
-    }
-
-    async load() {
-        try {
-            const result = await this.db.findOneAsync({ _id: 'tallyMap' })
-            if (result?.data) {
-                const data = JSON.parse(result.data)
-                this.addresses = new Map(data.map(([k, v]) => [k, v]))
-                let d = [...this.addresses.keys()].map(k=>`${k}:${JSON.stringify(this.getAddressBalances(k))}`)
-                console.log(`Loaded tally: ${d}`)
-            } else {
-                //console.log('failed to load tallyMap, starting a new map')
-                this.addresses = new Map() // Ensure addresses is always a Map
-            }
-        } catch (error) {
-            console.error('Error loading tally map from dbInstance:', error)
-        }
-    }
-
-    async applyDeltasSinceLastHeight(lastHeight) {
-        // Retrieve and apply all deltas from lastHeight to the current height
-        for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
-            const serializedDelta = await this.db.findOneAsync(`{ _id: 'tallyMapDelta-${height}' }`)
-            if (serializedDelta) {
-                const delta = JSON.parse(serializedDelta)
-                this.applyDelta(delta)
-            }
-        }
-    }
-
-    // Function to record a delta
-    recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
-        const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
-        const delta = { address, propertyId, amountChange };
-        return this.db.insert(deltaKey, JSON.stringify(delta))
-    }
-
-    // Function to apply a delta to the TallyMap
-    async applyDeltaToTallyMap(delta) {
-        const { address, propertyId, amountChange } = delta;
-        // Logic to apply the change to TallyMap
-        await this.updateBalance(address, propertyId, amountChange)
-    }
-
-    async saveTallyDelta(blockHeight, delta) {
-        const serializedDelta = JSON.stringify(delta)
-        this.db.insert(`tallyMapDelta-${blockHeight}`, serializedDelta)
-    }
-
-    // Function to save the aggregated block delta
-    saveBlockDelta(blockHeight, blockDelta) {
-        const deltaKey = `blockDelta-${blockHeight}`;
-        this.db.insert(deltaKey, JSON.stringify(blockDelta))
-    }
-
-    // Function to load all deltas for a block
-    async loadDeltasForBlock(blockHeight) {
-        // Load and parse all deltas from the database for the given block height
     }
 
     totalTokens(propertyId) {
@@ -245,7 +187,7 @@ class TallyMap {
      */
     getAddressesWithBalanceForProperty(propertyId) {
         const data = [];
-        for (const [k,v] of this.addresses.entries()) {
+        for (const [k, v] of this.addresses.entries()) {
             const i = Array.isArray(v) & v.findIndex(d => d?.propertyId == propertyId)
             const p = v[i]
             if (p?.amount > 0 || p?.reserved > 0) {
@@ -258,6 +200,48 @@ class TallyMap {
         }
         return data;
     }
+
+    // TODO: fixme
+    // async applyDeltasSinceLastHeight(lastHeight) {
+    //     // Retrieve and apply all deltas from lastHeight to the current height
+    //     for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
+    //         const serializedDelta = await this.db.findOneAsync(`{ _id: 'tallyMapDelta-${height}' }`)
+    //         if (serializedDelta) {
+    //             const delta = JSON.parse(serializedDelta)
+    //             this.applyDelta(delta)
+    //         }
+    //     }
+    // }
+
+    // Function to record a delta
+    // recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
+    //     const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
+    //     const delta = { address, propertyId, amountChange };
+    //     return this.db.insert(deltaKey, JSON.stringify(delta))
+    // }
+
+    // Function to apply a delta to the TallyMap
+    // async applyDeltaToTallyMap(delta) {
+    //     const { address, propertyId, amountChange } = delta;
+    //     // Logic to apply the change to TallyMap
+    //     await this.updateBalance(address, propertyId, amountChange)
+    // }
+
+    // async saveTallyDelta(blockHeight, delta) {
+    //     const serializedDelta = JSON.stringify(delta)
+    //     this.db.insert(`tallyMapDelta-${blockHeight}`, serializedDelta)
+    // }
+
+    // Function to save the aggregated block delta
+    // saveBlockDelta(blockHeight, blockDelta) {
+    //     const deltaKey = `blockDelta-${blockHeight}`;
+    //     this.db.insert(deltaKey, JSON.stringify(blockDelta))
+    // }
+
+    // Function to load all deltas for a block
+    // async loadDeltasForBlock(blockHeight) {
+    //     // Load and parse all deltas from the database for the given block height
+    // }
 }
 
 let tally

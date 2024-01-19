@@ -90,7 +90,6 @@ class Main {
         }
     }
 
-
     async constructOrLoadConsensus() {
         try {
             //const lastSavedHeight = await persistenceDB.get('lastSavedHeight')
@@ -215,7 +214,7 @@ class Main {
 
     async checkBlockLag() {
         const chaintip = await TxUtils.getBlockCountAsync()
-        const maxConsensusBlock = await tlConsensus
+        const maxConsensusBlock = await tlConsensus.getMaxProcessedHeight()
         //console.log(maxConsensusBlock)
         var lag = chaintip - maxConsensusBlock
         return { 'lag': lag, 'chainTip': chaintip, 'maxConsensus': maxConsensusBlock }

@@ -4,6 +4,7 @@ const { orderBook } = require('./orderbook.js')
 const { contractRegistry } = require('./contractRegistry.js')
 const { oracleList } = require('./oracle.js')
 const { tallyMap } = require('./tally.js')
+const { tradeHistory } = require('./tradeHistory.js')
 const MarginMap = require('./marginMap.js')
 const Main = require('./main.js')
 
@@ -132,15 +133,15 @@ app.post('/listOracles', async (req, res) => {
 
 app.get('/contractTradeHistory/:contractId', async (req, res) => {
     const { contractId } = req.params;
-    const contractTradeHistory = await orderBook.getContractTradeHistoryByContractId(contractId)
+    const contractTradeHistory = await tradeHistory.getContractHistory(contractId)
     res.json(contractTradeHistory)
 })
 
 app.get('/tradeHistory/:propertyId1/:propertyId2', async (req, res) => {
     const { propertyId1, propertyId2 } = req.params;
-    const tradeHistory = await orderBook.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2)
-    console.log('returning trade history ' + JSON.stringify(tradeHistory))
-    res.json(tradeHistory)
+    const h = await tradeHistory.getTokenHistory(propertyId1, propertyId2)
+    console.log('returning trade history ' + JSON.stringify(h))
+    res.json(h)
 })
 
 app.get('/fundingHistory/:contractId', async (req, res) => {

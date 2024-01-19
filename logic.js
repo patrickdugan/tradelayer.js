@@ -448,7 +448,7 @@ const Logic = {
 		}
 
 		// Save the updated order book to the database
-		await orderBook.saveOrderBook(`${offeredPropertyId}-${desiredPropertyId}`);
+		await orderBook.save(`${offeredPropertyId}-${desiredPropertyId}`);
 
 		// Log the cancellation for record-keeping
 		console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);

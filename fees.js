@@ -11,10 +11,9 @@ class Fees {
     async save() {
         try {
             for (let [propertyId, feeAmount] of this.fees.entries()) {
-                const serializedFeeAmount = JSON.stringify(feeAmount)
                 await this.db.updateAsync(
                     { _id: 'feeCache-' + propertyId },
-                    { _id: 'feeCache-' + propertyId, value: serializedFeeAmount },
+                    { _id: 'feeCache-' + propertyId, value: feeAmount },
                     { upsert: true }
                 )
             }
