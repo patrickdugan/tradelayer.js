@@ -395,7 +395,7 @@ class Orderbook {
         if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
             //we're increasing or creating a new position so locking up init margin in the reserve column on TallyMap
             console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
-            await ContractRegistry.moveCollateralToReserve(sender, contractId, amount) //first we line up the capital
+            await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price) //first we line up the capital
         }
 
         // Create a contract order object with the sell parameter
@@ -497,13 +497,13 @@ class Orderbook {
                 const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                 if(!isBuyerReducingPosition){
                    // Use the instance method to set the initial margin
-                   match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount)                 
+                   match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price)                 
                    console.log('buyer position after moveCollat '+match.buyerPosition)
                 }
                 // Update MarginMap for the contract series
                 if(!isSellerReducingPosition){
                     // Use the instance method to set the initial margin
-                   match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount)
+                   match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price)
                    console.log('sellerPosition after moveCollat '+match.sellerPosition)
                 }
 

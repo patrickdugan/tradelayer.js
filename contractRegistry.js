@@ -316,25 +316,25 @@ class ContractRegistry {
     }
 
         // In the contract order addition process
-    static async moveCollateralToReserve(sender, contractId, amount) {
+    static async moveCollateralToReserve(sender, contractId, amount,price) {
         const TallyMap = require('./tally.js')
-        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        console.log('Total Initial Margin ' +totalInitialMargin)
+        console.log('Total Initial Margin to reserve ' +totalInitialMargin)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true);
         return
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount) {
+   static async moveCollateralToMargin(sender, contractId, amount, price) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
         console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
-        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId);
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         console.log('collateralPropertyId '+collateralPropertyId)

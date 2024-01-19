@@ -173,8 +173,9 @@ const Validity = {
                 params.reason += 'Invalid sender address';
             }
 
+            let hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, params.propertyId, params.amount)
             // Check if the sender has sufficient balance
-            if (!TallyMap.hasSufficientBalance(params.sender, params.propertyId, params.amount)) {
+            if (hasSufficientBalance.hasSufficient==false){
                 params.valid = false
                 params.reason += 'Insufficient token balance for commitment';
             }
@@ -218,7 +219,7 @@ const Validity = {
 
             const TallyMap = require('./tally.js')
             const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
-            if (!hasSufficientBalance) {
+            if (!hasSufficientBalance.hasSufficient) {
                 params.valid = false;
                 params.reason += 'Insufficient balance for offered token; ';
             }
@@ -377,7 +378,7 @@ const Validity = {
             }
 
             const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
-            if (!hasSufficientBalance) {
+            if (hasSufficientBalance.hasSufficient==false) {
                 params.valid = false;
                 params.reason += 'Insufficient balance to grant tokens; ';
             }
@@ -722,7 +723,7 @@ const Validity = {
             }
 
             const hasSufficientFunds = tallyMap.hasSufficientBalance(params.channelAddress, params.propertyId, params.amount);
-            if (!hasSufficientFunds) {
+            if (hasSufficientFunds.hasSufficient==false) {
                 params.valid = false;
                 params.reason += 'Insufficient funds for withdrawal; ';
             }
@@ -754,7 +755,7 @@ const Validity = {
             }
 
             const hasSufficientBalance = tallyMap.hasSufficientBalance(params.fromChannelAddress, params.propertyId, params.amount);
-            if (!hasSufficientBalance) {
+            if (!hasSufficientBalance.hasSufficient==false) {
                 params.valid = false;
                 params.reason += 'Insufficient balance for transfer; ';
             }
@@ -818,7 +819,7 @@ const Validity = {
         }
         // Ensure the sender has sufficient balance of the underlying property
         const hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, collateralPropertyId, params.amount*notional);
-        if(hasSufficientBalance==false){
+        if(hasSufficientBalance.hasSufficient==false){
                 params.valid=false
                 params.reason += 'insufficient collateral to create a 1x hedge position'
         }
@@ -838,7 +839,7 @@ const Validity = {
         }
         // Ensure the sender has sufficient balance of the synthetic property
         const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
-        if(hasSufficientBalance==false){
+        if(hasSufficientBalance.hasSufficient==false){
                 params.valid=false
                 params.reason += 'insufficient tokens to redeem in this amount'
         }
@@ -851,7 +852,7 @@ const Validity = {
         const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
         // Additional checks can be implemented based on the specific rules of Pay to Tokens transactions
 
-        return hasSufficientBalance;
+        return hasSufficientBalance.hasSufficient;
     },
 
         // 27: Create Option Chain
@@ -891,7 +892,7 @@ const Validity = {
         // Validate invoice terms (due date, collateral, etc.)
         const isValidInvoiceTerms = invoiceRegistry.isValidInvoiceTerms(params.dueDateBlock, params.propertyIdCollateral);
 
-        return hasSufficientBalance && isValidInvoiceTerms;
+        return hasSufficientBalance.hasSufficient && isValidInvoiceTerms;
     },
 
     // 31: Batch Move Zk Rollup
