@@ -445,41 +445,56 @@ const Logic = {
         return order;
     },
 
-	async cancelOrder(fromAddress, offeredPropertyId, desiredPropertyId, cancelAll, price, cancelParams = {}) {
-		    let cancelledOrders = [];
+	async cancelOrder(fromAddress, offeredPropertyId, desiredPropertyId, cancelAll, price, cancelParams) {
+        let cancelledOrders = [];
 
-		    // Handle contract cancellation if only one property ID is provided
-		    if (offeredPropertyId && !desiredPropertyId) {
-		        // Contract cancellation logic here
-		    }
-		    // Cancel a specific order by txid
-		    else if (cancelParams.txid) {
-		        cancelledOrders = orderbook.cancelOrderByTxid(fromAddress, cancelParams.txid);
-		    } 
-		    // Cancel all orders for the given property pair
-		    else if (cancelAll && offeredPropertyId && desiredPropertyId) {
-		        cancelledOrders = orderbook.cancelAllOrders(fromAddress, offeredPropertyId, desiredPropertyId);
-		    } 
-		    // Cancel orders by price or order type
-		    else if (cancelParams.price || cancelParams.orderType) {
-		        cancelledOrders = orderbook.cancelOrdersByPriceOrType(fromAddress, offeredPropertyId, desiredPropertyId, cancelParams);
-		    } 
-		    // Cancel all orders for the address
-		    else if (cancelAll) {
-		        cancelledOrders = orderbook.cancelAllOrdersForAddress(fromAddress);
-		    } else {
-		        throw new Error('Invalid cancellation parameters');
-		    }
+        // Handle contract cancellation if only one property ID is provided
+        if (offeredPropertyId && !desiredPropertyId) {
+            // Contract cancellation logic here
+            if(cancelAll){
+                orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
+            }
+            if(cancelParams.txid){
+                orderbook.cancellContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
+            }
+            if(cancelParams.price){
+                if(cancelParams.buy){
+                    orderbook.cancelContractBuyOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.buy)
+                }
+                if(cancelParams.sell){
+                    orderbook.cancelContractSellOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.sell)
+                }
+            }
+        }
+        // Cancel a specific order by txid
+        else if (cancelParams.txid) {
+            cancelledOrders = orderbook.cancelOrderByTxid(fromAddress, cancelParams.txid);
+        } 
+        // Cancel all orders for the given property pair
+        else if (cancelAll && offeredPropertyId && desiredPropertyId) {
+            cancelledOrders = orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
+        } 
+        // Cancel orders by price or order type
+        else if (price || cancelParams.orderType) {
+            if (price) {
+                // Cancel sell orders greater than or equal to the price
+                cancelledOrders = orderbook.cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price);
+                
+                // Cancel buy orders less than or equal to the price
+                cancelledOrders = [...cancelledOrders, ...orderbook.cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price)];
+            }
+            // Add more conditions based on your cancel params if needed
+        } 
 
-		    // Save the updated order book to the database
-		    await orderbook.saveOrderBook(`${offeredPropertyId}-${desiredPropertyId}`);
+        // Save the updated order book to the database
+        await orderbook.saveOrderBook(`${offeredPropertyId}-${desiredPropertyId}`);
 
-		    // Log the cancellation for record-keeping
-		    console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
+        // Log the cancellation for record-keeping
+        console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
 
-		    // Return the details of the cancelled orders
-		    return cancelledOrders;
-	},
+        // Return the details of the cancelled orders
+        return cancelledOrders;
+    }
 
 		    /**
 		     * Creates a new whitelist.
