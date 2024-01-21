@@ -307,7 +307,7 @@ class ContractRegistry {
 
         // Check if contract information is available
         if (!contractInfo) {
-            throw new Error(`Contract info not found for contract ID: ${contractId}`);
+            console.log(`Contract info not found for contract ID: ${contractId}`);
         }
         //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.native.collateralPropertyId))
         // Return the collateral property ID from the contract information

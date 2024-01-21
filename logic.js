@@ -445,17 +445,23 @@ const Logic = {
         return order;
     },
 
-	async cancelOrder(fromAddress, offeredPropertyId, desiredPropertyId, cancelAll, price, cancelParams) {
+	async cancelOrder(fromAddress, isContract, offeredPropertyId, desiredPropertyId, cancelAll, cancelParams) {
         let cancelledOrders = [];
-
+        let key
+        if(isContract==true){
+            key = {id: offeredPropertyId}
+        }else if(isContract==false){
+            key = {id: offeredPropertyId+'-'+desiredPropertyId}
+        }
+        let orderbook = new Orderbook(key)
         // Handle contract cancellation if only one property ID is provided
         if (offeredPropertyId && !desiredPropertyId) {
             // Contract cancellation logic here
             if(cancelAll){
-                orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
+                return cancelledOrders = orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
             }
             if(cancelParams.txid){
-                orderbook.cancellContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
+                orderbook.cancelContractOrdersByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
             }
             if(cancelParams.price){
                 if(cancelParams.buy){
@@ -466,14 +472,17 @@ const Logic = {
                 }
             }
         }
-        // Cancel a specific order by txid
-        else if (cancelParams.txid) {
-            cancelledOrders = orderbook.cancelOrderByTxid(fromAddress, cancelParams.txid);
-        } 
+       
         // Cancel all orders for the given property pair
         else if (cancelAll && offeredPropertyId && desiredPropertyId) {
-            cancelledOrders = orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
+            return cancelledOrders = orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
         } 
+
+         // Cancel a specific order by txid
+        else if (cancelParams.txid) {
+            cancelledOrders = orderbook.cancelTokenOrdersByTxid(fromAddress, cancelParams.txid);
+        } 
+
         // Cancel orders by price or order type
         else if (price || cancelParams.orderType) {
             if (price) {

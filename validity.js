@@ -7,6 +7,7 @@ const OracleList = require('./oracle.js')
 const ContractRegistry = require('./contractRegistry.js')
 const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
+const Orderbook = require('./orderbook.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -267,7 +268,7 @@ const Validity = {
 
             // Validate offered property ID
             if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
-                const propertyExists = await PropertyManager.getPropertyData(params.offeredPropertyId);
+                const propertyExists = await PropertyList.getPropertyData(params.offeredPropertyId);
                 if (!propertyExists) {
                     params.valid = false;
                     params.reason += 'Invalid offered property ID; ';
@@ -279,7 +280,7 @@ const Validity = {
 
             // Validate desired property ID
             if (params.desiredPropertyId && Number.isInteger(params.desiredPropertyId)) {
-                const propertyExists = await PropertyManager.getPropertyData(params.desiredPropertyId);
+                const propertyExists = await PropertyList.getPropertyData(params.desiredPropertyId);
                 if (!propertyExists) {
                     params.valid = false;
                     params.reason += 'Invalid desired property ID; ';
@@ -309,7 +310,7 @@ const Validity = {
             }
 
             // Check if the sender has orders in the relevant orderbook
-            const orderbook = await getOrderbookInstance(`${params.offeredPropertyId}-${params.desiredPropertyId}`);
+            const orderbook = await Orderbook.getOrderbookInstance(`${params.offeredPropertyId}-${params.desiredPropertyId}`);
             let senderOrders
 
             if(params.isContract){

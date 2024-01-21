@@ -132,7 +132,7 @@ class PropertyManager {
 
         // If the propertyIndex is empty, load it first
         if (instance.propertyIndex.size === 0) {
-            await instance.loadPropertyIndex();
+            await instance.load();
         }
 
         // Get the property data from the index
