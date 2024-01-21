@@ -174,6 +174,9 @@ const Types = {
                 break;
             case 6:
                 params = Decode.decodeCancelOrder(encodedPayload.substr(index))
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateOnChainTokenForToken(sender, params, txId)
                 break;
             case 7:
                 params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));

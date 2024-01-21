@@ -678,16 +678,16 @@ class Orderbook {
         // Retrieve relevant order details and calculate margin reserved amounts
         const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
         const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, criteria);
-        cancelledOrders.forEach(order => {
-                    const reserveAmount = calculateMarginReservedAmount(order.amount);
-                    const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
+        const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
 
-                    await TallyMap.updateBalances(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount);
-                });
+        for (const order of cancelledOrders) {
+            const reserveAmount = calculateMarginReservedAmount(order.amount);
+            await TallyMap.updateBalances(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount);
+        }
 
         // Return the details of the cancelled orders
         return cancelledOrders;
-    },
+    }
 
     async cancelContractOrderByTxid (fromAddress, offeredPropertyId, txid) {
         // Logic to cancel a specific contract order by txid
@@ -700,88 +700,108 @@ class Orderbook {
 
         // Return the details of the cancelled order
         return cancelledOrder;
-    },
+    }
 
-    async cancelContractBuyOrdersByPrice (fromAddress, offeredPropertyId, price, buy) {
-        // Logic to cancel contract buy orders by price
-        // Retrieve relevant buy orders and calculate margin reserved amounts
+    async cancelContractBuyOrdersByPrice(fromAddress, offeredPropertyId, price, buy) {
         const criteria = { price: price, buy: false }; // Criteria to cancel sell orders by price
         const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, criteria);
-        cancelledOrders.forEach(order => {
-             const reserveAmount = calculateMarginReservedAmount(cancelledOrder.amount);
-            const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
+
+        const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
+
+        for (const order of cancelledOrders) {
+            const reserveAmount = calculateMarginReservedAmount(order.amount);
             await TallyMap.updateBalances(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
-        });
+        }
 
         // Return the details of the cancelled orders
         return cancelledOrders;
-    },
+    }
 
-    async cancelContractSellOrdersByPrice(fromAddress, offeredPropertyId, price, sell) {
-        // Logic to cancel contract sell orders by price
-        // Retrieve relevant sell orders and calculate margin reserved amounts
-        const criteria = { price: price, buy: false }; // Criteria to cancel sell orders by price
-        const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, criteria);
-        cancelledOrders.forEach(order => {
-            const reserveAmount = calculateMarginReservedAmount(cancelledOrder.amount);
-            const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
-            await TallyMap.updateBalances(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
-         });
-
-        // Return the details of the cancelled orders
-        return cancelledOrders;
-    },
-
-    // Similar functions for token orders
     async cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId) {
         // Logic to cancel all token orders
         // Retrieve relevant order details and calculate margin reserved amounts
         const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
         const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, criteria);
-        cancelledOrders.forEach(order => {
+
+        const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
+
+        for (const order of cancelledOrders) {
             const reserveAmount = order.amount;
-            await TallyMap.updateBalances(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount);
-        });
+            await TallyMap.updateBalances(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
+        }
 
         // Return the details of the cancelled orders
         return cancelledOrders;
-    },
+    }
 
-    cancelTokenOrderByTxid: function (fromAddress, offeredPropertyId, desiredPropertyId, txid) {
+    async cancelTokenOrderByTxid(fromAddress, offeredPropertyId, desiredPropertyId, txid) {
         // Logic to cancel a specific token order by txid
         // Retrieve order details and calculate margin reserved amount
-        const cancelledOrder = /* ... */;
-         const reserveAmount = order.amount;
+        const cancelledOrder = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, desiredPropertyId, {txid:txid});
+        const reserveAmount = order.amount;
         await TallyMap.updateBalances(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount);
 
         // Return the details of the cancelled order
         return cancelledOrder;
-    },
+    }
 
-    cancelTokenBuyOrdersByPrice: function (fromAddress, offeredPropertyId, desiredPropertyId, price) {
+    async cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price) {
         // Logic to cancel token buy orders by price
         // Retrieve relevant buy orders and calculate margin reserved amounts
-        const cancelledOrders = /* ... */;
-        cancelledOrders.forEach(order => {
+        const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, desiredPropertyId, {price:price, buy:true});
+
+        const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
+
+        for (const order of cancelledOrders) {
             const reserveAmount = order.amount;
-            await TallyMap.updateBalances(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount);
-        });
+            await TallyMap.updateBalances(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
+        }
 
         // Return the details of the cancelled orders
         return cancelledOrders;
-    },
+    }
 
-    cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price) {
+    async cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price) {
         // Logic to cancel token sell orders by price
         // Retrieve relevant sell orders and calculate margin reserved amounts
-        const cancelledOrders = /* ... */;
-        cancelledOrders.forEach(order => {
+        const cancelledOrders = await cancelOrdersByCriteria(fromAddress, offeredPropertyId, desiredPropertyId, {price:price, buy:false});
+
+        const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
+
+        for (const order of cancelledOrders) {
             const reserveAmount = order.amount;
-            await TallyMap.updateBalances(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount);
-        });
+            await TallyMap.updateBalances(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
+        }
 
         // Return the details of the cancelled orders
         return cancelledOrders;
+    }
+
+    async getOrdersForAddress(address, contractId, offeredPropertyId, desiredPropertyId) {
+        const orderbookId = contractId ? contractId.toString() : `${offeredPropertyId}-${desiredPropertyId}`;
+
+        try {
+            // Load orderbook data from the database
+            const orderbookEntry = await db.getDatabase('orderbook').findOneAsync({ _id: orderbookId });
+            if (!orderbookEntry || !orderbookEntry.value) {
+                return []; // Return an empty array if the orderbook is not found
+            }
+
+            const orderbookData = JSON.parse(orderbookEntry.value);
+            const { buy, sell } = orderbookData;
+
+            // Filter buy orders for the given address
+            const buyOrders = buy.filter(order => order.sender === address);
+
+            // Filter sell orders for the given address
+            const sellOrders = sell.filter(order => order.sender === address);
+
+            // Concatenate buy and sell orders and return the result
+            return buyOrders.concat(sellOrders);
+        } catch (error) {
+            console.error('Error getting orders for address:', error);
+            return []; // Return an empty array in case of an error
+        }
     }
 
     // Function to return the current state of the order book for the given key

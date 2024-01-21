@@ -81,14 +81,20 @@ const Encode = {
     },
 
     encodeCancelOrder: (params) => {
-        let encodedTx = params.fromAddress;
+        let encodedTx = params.isContract;
 
-        // Encode property IDs and cancel all flag
-        encodedTx += `,${params.offeredPropertyId.toString(36)},${params.desiredPropertyId.toString(36)},${params.cancelAll ? 1 : 0}`;
+        if (params.isContract) {
+            // Encode contract cancellation with a single property ID
+            encodedTx += `,${params.contractId.toString(36)},${params.cancelAll ? 1 : 0}`;
+        } else {
+            // Encode token cancellation with two property IDs
+            encodedTx += `,${params.offeredPropertyId.toString(36)},${params.desiredPropertyId.toString(36)},${params.cancelAll ? 1 : 0}`;
+        }
 
         // Encode optional price if provided
-        if (params.price !== undefined) {
-            encodedTx += `,${params.price.toString(36)}`;
+        if (params.cancelParams && params.cancelParams.price !== undefined) {
+            encodedTx += `,${params.cancelParams.price.toString(36)}`;
+            encodedTx += `,${params.cancelParams.side.toString(36)}`;
         }
 
         // Encode cancel parameters
@@ -98,6 +104,8 @@ const Encode = {
 
         return encodedTx;
     },
+
+
 
 
     // Encode Create Whitelist Transaction

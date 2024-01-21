@@ -7,6 +7,7 @@ async function cancelOrders() {
     // Mode 1: Cancel all contract orders
     const cancelParamsMode1 = {
         fromAddress: adminAddress,
+        isContract: 0,
         offeredPropertyId: 3, // Replace with the correct property ID
         desiredPropertyId: 4, // Replace with the correct property ID
         cancelAll: true,
@@ -17,8 +18,8 @@ async function cancelOrders() {
     // Mode 2: Cancel a specific contract order by txid
     const cancelParamsMode2 = {
         fromAddress: adminAddress,
-        offeredPropertyId: 1, // Replace with the correct property ID
-        desiredPropertyId: null, // Replace with the correct property ID
+        isContract: 1,
+        contractId: 1, // Replace with the correct property ID
         cancelAll: 0,
         cancelParams: {
             txid: '8b146ed06d51a7856e3f27ba1d0d80229b34885cbc63784a2c1051de1ccdc37b', // Replace with the actual txid
@@ -30,12 +31,13 @@ async function cancelOrders() {
     // Mode 3: Cancel contract buy orders above 0.5
     const cancelParamsMode3Buy = {
         fromAddress: adminAddress,
+        isContract: 0,
         offeredPropertyId: 3, // Replace with the correct property ID
         desiredPropertyId: 4, // Replace with the correct property ID
         cancelAll: 0,
         cancelParams: {
             price: 0.5,
-            buy: true,
+            side: 1,
         },
     };
 
@@ -44,12 +46,12 @@ async function cancelOrders() {
     // Mode 4: Cancel contract sell orders below 0.48
     const cancelParamsMode4Sell = {
         fromAddress: adminAddress,
-        offeredPropertyId: 1, // Replace with the correct property ID
-        desiredPropertyId: null,
+        isContract: 1,
+        contractId: 1, // Replace with the correct property ID
         cancelAll: 0,
         cancelParams: {
             price: 42500, // Replace with the actual price
-            sell: true,
+            side: 0,
         },
     };
 

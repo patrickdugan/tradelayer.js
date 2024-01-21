@@ -239,32 +239,99 @@ const Validity = {
             return params;
         },
 
+        
         // 6: Cancel Order
         validateCancelOrder: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(6);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
+            if (!isAlreadyActivated) {
+                params.valid = false;
+                params.reason += 'Tx type not yet activated ';
             }
 
             if (!(typeof params.fromAddress === 'string')) {
                 params.valid = false;
                 params.reason += 'Invalid from address; ';
             }
-            if (params.offeredPropertyId && !Number.isInteger(params.offeredPropertyId)) {
+
+            // Validate offered property ID
+            if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
+                const propertyExists = await PropertyManager.getPropertyData(params.offeredPropertyId);
+                if (!propertyExists) {
+                    params.valid = false;
+                    params.reason += 'Invalid offered property ID; ';
+                }
+            } else {
                 params.valid = false;
                 params.reason += 'Invalid offered property ID; ';
             }
-            if (params.desiredPropertyId && !Number.isInteger(params.desiredPropertyId)) {
+
+            // Validate desired property ID
+            if (params.desiredPropertyId && Number.isInteger(params.desiredPropertyId)) {
+                const propertyExists = await PropertyManager.getPropertyData(params.desiredPropertyId);
+                if (!propertyExists) {
+                    params.valid = false;
+                    params.reason += 'Invalid desired property ID; ';
+                }
+            } else {
                 params.valid = false;
                 params.reason += 'Invalid desired property ID; ';
             }
+
+            if (!(typeof params.cancelAll === 'boolean')) {
+                params.valid = false;
+                params.reason += 'Invalid cancelAll parameter; ';
+            }
+
+            if (params.isContract) {
+                // Check the validity of the contract ID
+                if (params.contractId && Number.isInteger(params.contractId)) {
+                    const contractExists = await ContractRegistry.getContractInfo(params.contractId);
+                    if (!contractExists) {
+                        params.valid = false;
+                        params.reason += 'Invalid contract ID; ';
+                    }
+                } else {
+                    params.valid = false;
+                    params.reason += 'Invalid contract ID; ';
+                }
+            }
+
+            // Check if the sender has orders in the relevant orderbook
+            const orderbook = await getOrderbookInstance(`${params.offeredPropertyId}-${params.desiredPropertyId}`);
+            let senderOrders
+
+            if(params.isContract){
+                senderOrders = orderbook.getOrdersForAddress(params.fromAddress, params.contractId);
+            }else{
+                senderOrders = orderbook.getOrdersForAddress(params.fromAddress, null, params.offeredPropertyId, params.desiredPropertyId)
+            }
+
+            if (senderOrders.length === 0) {
+                params.valid = false;
+                params.reason += 'No orders found for the sender in the relevant orderbook; ';
+            }
+
             if (!(typeof params.cancelParams === 'object')) {
                 params.valid = false;
                 params.reason += 'Invalid cancel parameters; ';
+            } else {
+                if (params.cancelParams.price && typeof params.cancelParams.price !== 'number') {
+                    params.valid = false;
+                    params.reason += 'Invalid price parameter; ';
+                }
+
+                if (params.cancelParams.side && !['buy', 'sell'].includes(params.cancelParams.side)) {
+                    params.valid = false;
+                    params.reason += 'Invalid side parameter; ';
+                }
+
+                if (params.cancelParams.txid && typeof params.cancelParams.txid !== 'string') {
+                    params.valid = false;
+                    params.reason += 'Invalid txid parameter; ';
+                }
             }
 
             return params;

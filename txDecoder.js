@@ -74,29 +74,32 @@ const Decode = {
     },
 
     decodeCancelOrder(encodedTx) {
-        const elements = encodedTx.split(',');
+      const elements = encodedTx.split(',');
 
-        // Decode the elements
-        const fromAddress = elements[0];
-        const offeredPropertyId = parseInt(elements[1], 36);
-        const desiredPropertyId = parseInt(elements[2], 36);
-        const cancelAll = elements[3] === '1';
-        const price = elements[4] ? parseInt(elements[4], 36) : undefined;
-        const cancelParams = {};
+      // Decode the elements
+      const fromAddress = elements[0];
+      const isContract = elements.length === 4; // If there are 4 elements, it's a contract cancellation
+      const offeredPropertyId = parseInt(elements[1], 36);
+      const desiredPropertyId = isContract ? null : parseInt(elements[2], 36);
+      const cancelAll = elements[elements.length - 1] === '1';
+      const price = elements[3] ? parseInt(elements[3], 36) : undefined;
+      const cancelParams = {};
 
-        if (elements.length > 5) {
-            cancelParams.txid = elements[5];
-        }
+      if (elements.length > 4) {
+          cancelParams.txid = elements[4];
+      }
 
-        return {
-            fromAddress,
-            offeredPropertyId,
-            desiredPropertyId,
-            cancelAll,
-            price,
-            cancelParams
-        };
-    },
+      return {
+          fromAddress,
+          isContract,
+          offeredPropertyId,
+          desiredPropertyId,
+          cancelAll,
+          price,
+          cancelParams
+      };
+  },
+
 
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {

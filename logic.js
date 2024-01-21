@@ -53,7 +53,7 @@ const Logic = {
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
                 break;
             case 6:
-                await Logic.cancelOrder(params.fromAddress, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.price, params.cancelParams);
+                await Logic.cancelOrder(params.fromAddress, params.isCancel, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams);
                 break;
            case 7:
                 await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
@@ -494,7 +494,7 @@ const Logic = {
 
         // Return the details of the cancelled orders
         return cancelledOrders;
-    }
+    },
 
 		    /**
 		     * Creates a new whitelist.
