@@ -265,40 +265,43 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Invalid from address; ';
             }
-
-            // Validate offered property ID
-            if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
-                const propertyExists = await PropertyList.getPropertyData(params.offeredPropertyId);
-                if (!propertyExists) {
+            if(params.isContract==false){
+                // Validate offered property ID
+                if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
+                    const propertyExists = await PropertyList.getPropertyData(params.offeredPropertyId);
+                    if (!propertyExists) {
+                        params.valid = false;
+                        params.reason += 'Invalid offered property ID; ';
+                    }
+                } else {
                     params.valid = false;
                     params.reason += 'Invalid offered property ID; ';
                 }
-            } else {
-                params.valid = false;
-                params.reason += 'Invalid offered property ID; ';
-            }
 
-            // Validate desired property ID
-            if (params.desiredPropertyId && Number.isInteger(params.desiredPropertyId)) {
-                const propertyExists = await PropertyList.getPropertyData(params.desiredPropertyId);
-                if (!propertyExists) {
+                // Validate desired property ID
+                if (params.desiredPropertyId && Number.isInteger(params.desiredPropertyId)) {
+                    const propertyExists = await PropertyList.getPropertyData(params.desiredPropertyId);
+                    if (!propertyExists) {
+                        params.valid = false;
+                        params.reason += 'Invalid desired property ID; ';
+                    }
+                } else {
                     params.valid = false;
                     params.reason += 'Invalid desired property ID; ';
                 }
-            } else {
-                params.valid = false;
-                params.reason += 'Invalid desired property ID; ';
-            }
 
-            if (!(typeof params.cancelAll === 'boolean')) {
-                params.valid = false;
-                params.reason += 'Invalid cancelAll parameter; ';
+                if (!(typeof params.cancelAll === 'boolean')) {
+                    params.valid = false;
+                    params.reason += 'Invalid cancelAll parameter; ';
+                }
             }
 
             if (params.isContract) {
+                console.log('cancelling contract order '+JSON.stringify(params) + '')
                 // Check the validity of the contract ID
-                if (params.contractId && Number.isInteger(params.contractId)) {
-                    const contractExists = await ContractRegistry.getContractInfo(params.contractId);
+                if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
+                    const contractExists = await ContractRegistry.getContractInfo(params.offeredPropertyId);
+                    console.log('checking contract data for isContract cancel '+params.offeredPropertyId+' '+JSON.stringify(contractExists))
                     if (!contractExists) {
                         params.valid = false;
                         params.reason += 'Invalid contract ID; ';
