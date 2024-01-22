@@ -1,4 +1,6 @@
 // txDecoder.js
+const BigNumber = require('bignumber.js');
+
 const Decode = {
    // Decode Activate TradeLayer Transaction
     decodeActivateTradeLayer: (payload) => {
@@ -64,41 +66,71 @@ const Decode = {
 
     // Decode On-chain Token for Token Transaction
     decodeOnChainTokenForToken: (payload) => {
-        const parts = payload.split(',');
+            const parts = payload.split(',');
+            return {
+                propertyIdOffered: parseInt(parts[0], 36),
+                propertyIdDesired: parseInt(parts[1], 36),
+                amountOffered: parseInt(parts[2], 36),
+                amountExpected: parseInt(parts[3], 36)
+            };
+      },
+
+    decodeCancelOrder:(encodedTx) =>{
+        const elements = encodedTx.split(',');
+
+        // Decode the first element
+        let isContract = elements[0];
+        const cancelParams = {};
+        console.log('decoding cancel, isContract'+isContract)
+        // Determine if it's a contract cancellation based on the first element
+        let offeredPropertyId
+        let desiredPropertyId
+        let cancelAll
+        if (isContract==1) {
+            isContract=true
+            offeredPropertyId = parseInt(elements[1], 36);
+            desiredPropertyId = null;
+            cancelAll = parseInt(elements[2], 36);
+
+            // Check if elements[3] exists before accessing its length property
+            if (elements[3] && elements[3].length > 20) {
+                cancelParams.txid = elements[3];
+            } else {
+                cancelParams.price = elements[3];
+                cancelParams.side = elements[4];
+            }
+        } else {
+            isContract=false
+            offeredPropertyId = parseInt(elements[1], 36);
+            desiredPropertyId = isContract ? null : parseInt(elements[2], 36);
+            cancelAll = parseInt(elements[3], 36);
+
+            // Check if elements[4] exists before accessing its length property
+            if (elements[4] && elements[4].length > 20) {
+                // It's a non-contract cancellation with additional parameters
+                cancelParams.txid = elements[4];
+            } else {
+                const priceDecoded = new BigNumber(elements[3]).dividedBy(8).toNumber(); // Decode and divide by 8
+                cancelParams.price = priceDecoded;   cancelParams.side = elements[5];
+                if(cancelParams.side==1){
+                  cancelParams.side=true
+                }else{
+                  cancelParams.side=false
+                }
+            }
+        }
+
+        // Decode the remaining elements
+
         return {
-            propertyIdOffered: parseInt(parts[0], 36),
-            propertyIdDesired: parseInt(parts[1], 36),
-            amountOffered: parseInt(parts[2], 36),
-            amountExpected: parseInt(parts[3], 36)
+            isContract,
+            offeredPropertyId,
+            desiredPropertyId,
+            cancelAll,
+            cancelParams
         };
     },
 
-    decodeCancelOrder(encodedTx) {
-      const elements = encodedTx.split(',');
-
-      // Decode the elements
-      const fromAddress = elements[0];
-      const isContract = elements.length === 4; // If there are 4 elements, it's a contract cancellation
-      const offeredPropertyId = parseInt(elements[1], 36);
-      const desiredPropertyId = isContract ? null : parseInt(elements[2], 36);
-      const cancelAll = elements[elements.length - 1] === '1';
-      const price = elements[3] ? parseInt(elements[3], 36) : undefined;
-      const cancelParams = {};
-
-      if (elements.length > 4) {
-          cancelParams.txid = elements[4];
-      }
-
-      return {
-          fromAddress,
-          isContract,
-          offeredPropertyId,
-          desiredPropertyId,
-          cancelAll,
-          price,
-          cancelParams
-      };
-  },
 
 
     // Decode Create Whitelist Transaction

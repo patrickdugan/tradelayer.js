@@ -18,20 +18,27 @@ class Orderbook {
             return orderbook;
         }
 
-         async loadOrCreateOrderBook(key) {
+         async loadOrCreateOrderBook(key, flag) {
+            const stringKey = typeof key === 'string' ? key : String(key);
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
-            const orderBookData = await orderBooksDB.findOneAsync({ _id: key });
-
-            if (orderBookData) {
-                this.orderBooks[key] = JSON.parse(orderBookData.value);
-                //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
-            } else {
+             console.log('checking orderbook in this cancel call '+key)
+            try{
+                 const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
+               if (orderBookData && orderBookData.value) {
+                    this.orderBooks[key] = JSON.parse(orderBookData.value);
+                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                }
+            }   catch (error) {
+                 console.error('Error loading or parsing order book data:', error);
+                // Handle the error as needed, e.g., by logging, notifying, or taking corrective actions.
+            }
+           /* else {
                 // If no data found, create a new order book
                 this.orderBooks[key] = { buy: [], sell: [] };
                 console.log('loading fresh orderbook ' + this.orderBooks[key])
 
                 await this.saveOrderBook(key);
-            }
+            }*/
         }
 
         async saveOrderBook(key) {
@@ -641,16 +648,16 @@ class Orderbook {
             }
         }
 
-        async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria) {
-            await this.loadOrCreateOrderBook(orderBookKey)
+        async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token) {
+            await this.loadOrCreateOrderBook(orderBookKey,true)
             console.log('canceling for key ' +orderBookKey)
             const orderBook = this.orderBooks[orderBookKey]; // Assuming this is the correct reference
             const cancelledOrders = [];
-
+            //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
 
             for (let i = 0; i < orderBook.buy.length; i++) {
                 const order = orderBook.buy[i];
-
+                console.log('buy order ' +JSON.stringify(order))
                 if (
                     (!criteria.txid || order.txid === criteria.txid) &&
                     (!criteria.price || (criteria.buy ? order.price <= criteria.price : order.price >= criteria.price))
@@ -660,11 +667,17 @@ class Orderbook {
                     orderBook.buy.splice(i, 1);
                     i--; // Adjust the index after removing the element
                 }
+                if (criteria.address && order.sender === criteria.address) {
+                    // Logic to cancel the order
+                    cancelledOrders.push(order);
+                    orderBook.buy.splice(i, 1);
+                    i--; // Adjust the index after removing the element
+                }
             }
 
             for (let i = 0; i < orderBook.sell.length; i++) {
                 const order = orderBook.sell[i];
-
+                console.log('sell order ' +JSON.stringify(order))
                 if (
                     (!criteria.txid || order.txid === criteria.txid) &&
                     (!criteria.price || (criteria.sell ? order.price <= criteria.price : order.price >= criteria.price))
@@ -672,6 +685,13 @@ class Orderbook {
                     // Logic to cancel the order
                     cancelledOrders.push(order);
                     orderBook.sell.splice(i, 1);
+                    i--; // Adjust the index after removing the element
+                }
+
+                if (criteria.address && order.sender === criteria.address) {
+                    // Logic to cancel the order
+                    cancelledOrders.push(order);
+                    orderBook.buy.splice(i, 1);
                     i--; // Adjust the index after removing the element
                 }
             }
@@ -692,6 +712,7 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key = offeredPropertyId
+            console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
 
@@ -712,10 +733,13 @@ class Orderbook {
             const criteria = { txid: txid }; // Criteria to cancel orders by txid
             const key = offeredPropertyId
             const cancelledOrder = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
-            const initMarginPerContract = ContractRegistry.getInitialMargin(offeredPropertyId, order.price);
-            const reserveAmount = order.amount *initMarginPerContract
+            //console.log('cancelling order '+JSON.stringify(cancelledOrder)+' cancelled order price '+cancelledOrder[0].price)
+            const initMarginPerContract = await ContractRegistry.getInitialMargin(offeredPropertyId, cancelledOrder[0].price);
+            console.log('about to calculate reserveAmount '+cancelledOrder[0].amount + ' '+initMarginPerContract)
+            const reserveAmount = cancelledOrder[0].amount *initMarginPerContract
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount);
+            console.log('about to move reserve back to available cancelling contract order by txid '+reserveAmount +' '+collateralPropertyId)
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0);
 
             // Return the details of the cancelled order
             return cancelledOrder;
@@ -748,8 +772,9 @@ class Orderbook {
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
 
             for (const order of cancelledOrders) {
-                const reserveAmount = order.amount;
-                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount);
+                const reserveAmount = order.amountOffered;
+                console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
+                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0);
             }
 
             // Return the details of the cancelled orders

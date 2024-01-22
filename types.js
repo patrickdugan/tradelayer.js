@@ -177,6 +177,7 @@ const Types = {
                 params.senderAddress= sender
                 params.txid=txId
                 params = await Validity.validateCancelOrder(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 7:
                 params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));

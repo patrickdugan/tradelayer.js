@@ -254,14 +254,14 @@ const Validity = {
         validateCancelOrder: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
-
+            console.log('validating cancel order '+JSON.stringify(params), sender, txid)
             const isAlreadyActivated = await activationInstance.isTxTypeActive(6);
             if (!isAlreadyActivated) {
                 params.valid = false;
                 params.reason += 'Tx type not yet activated ';
             }
 
-            if (!(typeof params.fromAddress === 'string')) {
+            if (!(typeof sender === 'string')) {
                 params.valid = false;
                 params.reason += 'Invalid from address; ';
             }
@@ -288,11 +288,6 @@ const Validity = {
                 } else {
                     params.valid = false;
                     params.reason += 'Invalid desired property ID; ';
-                }
-
-                if (!(typeof params.cancelAll === 'boolean')) {
-                    params.valid = false;
-                    params.reason += 'Invalid cancelAll parameter; ';
                 }
             }
 

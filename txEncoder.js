@@ -1,4 +1,5 @@
 // txEncoder.js
+const BigNumber = require('bignumber.js');
 
 const Encode = {
     // Encode Simple Token Issue Transaction
@@ -80,6 +81,8 @@ const Encode = {
         return payload.join(',');
     },
 
+   
+    // Encode function
     encodeCancelOrder: (params) => {
         let encodedTx = params.isContract;
 
@@ -91,9 +94,16 @@ const Encode = {
             encodedTx += `,${params.offeredPropertyId.toString(36)},${params.desiredPropertyId.toString(36)},${params.cancelAll ? 1 : 0}`;
         }
 
+        let priceEncoded
         // Encode optional price if provided
         if (params.cancelParams && params.cancelParams.price !== undefined) {
-            encodedTx += `,${params.cancelParams.price.toString(36)}`;
+            if(params.isContract==0||params.isContract==false){
+                priceEncoded = new BigNumber(params.cancelParams.price).times(8).toString(36); // Encode and multiply by 8
+            }else if(params.isContract==1||params.isContract==true){
+               priceEncoded = params.cancelParams.price.toString(36);
+            }
+
+            encodedTx += `,${priceEncoded}`;
             encodedTx += `,${params.cancelParams.side.toString(36)}`;
         }
 
@@ -104,7 +114,6 @@ const Encode = {
 
         return encodedTx;
     },
-
 
 
 

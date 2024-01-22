@@ -53,7 +53,7 @@ const Logic = {
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
                 break;
             case 6:
-                await Logic.cancelOrder(params.fromAddress, params.isCancel, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams);
+                await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams);
                 break;
            case 7:
                 await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
@@ -455,13 +455,15 @@ const Logic = {
         }
         let orderbook = new Orderbook(key)
         // Handle contract cancellation if only one property ID is provided
+        console.log('in logic function for cancelOrder '+fromAddress + ' '+isContract +' '+offeredPropertyId+' '+desiredPropertyId +' '+cancelAll+ ' '+cancelParams)
             if(isContract==true){
                 // Contract cancellation logic here
                 if(cancelAll){
                     return cancelledOrders = orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
+                    console.log('contract cancel all'+JSON.stringify(cancelledOrders))
                 }
                 if(cancelParams.txid){
-                    orderbook.cancelContractOrdersByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
+                    orderbook.cancelContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
                 }
                 if(cancelParams.price){
                     if(cancelParams.buy){

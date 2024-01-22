@@ -26,7 +26,7 @@ async function cancelOrders() {
         },
     };
 
-    await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode2, 6);
+    //await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode2, 6);
 
     // Mode 3: Cancel contract buy orders above 0.5
     const cancelParamsMode3Buy = {
@@ -48,11 +48,11 @@ async function cancelOrders() {
         fromAddress: adminAddress,
         isContract: 1,
         contractId: 1, // Replace with the correct property ID
-        cancelAll: 0,
+        cancelAll: 1/*,
         cancelParams: {
             price: 42500, // Replace with the actual price
             side: 0,
-        },
+        },*/
     };
 
     await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode4Sell, 6);
