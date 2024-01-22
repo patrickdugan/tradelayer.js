@@ -449,54 +449,55 @@ const Logic = {
         let cancelledOrders = [];
         let key
         if(isContract==true){
-            key = {id: offeredPropertyId}
+            key = offeredPropertyId
         }else if(isContract==false){
-            key = {id: offeredPropertyId+'-'+desiredPropertyId}
+            key = offeredPropertyId+'-'+desiredPropertyId
         }
         let orderbook = new Orderbook(key)
         // Handle contract cancellation if only one property ID is provided
-        if (offeredPropertyId && !desiredPropertyId) {
-            // Contract cancellation logic here
-            if(cancelAll){
-                return cancelledOrders = orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
-            }
-            if(cancelParams.txid){
-                orderbook.cancelContractOrdersByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
-            }
-            if(cancelParams.price){
-                if(cancelParams.buy){
-                    orderbook.cancelContractBuyOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.buy)
+            if(isContract==true){
+                // Contract cancellation logic here
+                if(cancelAll){
+                    return cancelledOrders = orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
                 }
-                if(cancelParams.sell){
-                    orderbook.cancelContractSellOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.sell)
+                if(cancelParams.txid){
+                    orderbook.cancelContractOrdersByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
                 }
+                if(cancelParams.price){
+                    if(cancelParams.buy){
+                        orderbook.cancelContractBuyOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.buy)
+                    }
+                    if(cancelParams.sell){
+                        orderbook.cancelContractSellOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.sell)
+                    }
+                }
+                await orderbook.saveOrderBook(`${offeredPropertyId}`);
             }
-        }
-       
-        // Cancel all orders for the given property pair
-        else if (cancelAll && offeredPropertyId && desiredPropertyId) {
-            return cancelledOrders = orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
-        } 
 
-         // Cancel a specific order by txid
-        else if (cancelParams.txid) {
-            cancelledOrders = orderbook.cancelTokenOrdersByTxid(fromAddress, cancelParams.txid);
-        } 
+            if(isContract==false){
+                if (cancelAll && offeredPropertyId && desiredPropertyId) {
+                            return cancelledOrders = orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
+                }
+                 // Cancel a specific order by txid
+                if (cancelParams.txid) {
+                    cancelledOrders = orderbook.cancelTokenOrdersByTxid(fromAddress, cancelParams.txid);
+                } 
 
-        // Cancel orders by price or order type
-        else if (price || cancelParams.orderType) {
-            if (price) {
-                // Cancel sell orders greater than or equal to the price
-                cancelledOrders = orderbook.cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price);
-                
-                // Cancel buy orders less than or equal to the price
-                cancelledOrders = [...cancelledOrders, ...orderbook.cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price)];
+                // Cancel orders by price or order type
+                if (price || cancelParams.orderType) {
+                    if (price) {
+                        // Cancel sell orders greater than or equal to the price
+                        cancelledOrders = orderbook.cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price);
+                        
+                        // Cancel buy orders less than or equal to the price
+                        cancelledOrders = [...cancelledOrders, ...orderbook.cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price)];
+                    }
+                    // Add more conditions based on your cancel params if needed
+                }  
+
+                // Save the updated order book to the database
+                await orderbook.saveOrderBook(`${offeredPropertyId}-${desiredPropertyId}`);
             }
-            // Add more conditions based on your cancel params if needed
-        } 
-
-        // Save the updated order book to the database
-        await orderbook.saveOrderBook(`${offeredPropertyId}-${desiredPropertyId}`);
 
         // Log the cancellation for record-keeping
         console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
