@@ -1,6 +1,6 @@
 nedb-data
 node_modules
-*db
+*.db
 db*
 package*.json
 

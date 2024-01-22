@@ -4,17 +4,18 @@ const { tallyMap } = require('./tally.js')
 const { tlFees } = require('./fees.js')
 const { contractRegistry } = require('./contractRegistry.js')
 const { tradeHistory } = require('./tradeHistory.js')
-const MarginMap = require('./marginMap.js')
+const ContractMargins = require('./marginMap.js')
 
 class Orderbook {
-    constructor(tickSize = new BigNumber('0.00000001')) {
+    constructor(db, tickSize = new BigNumber('0.00000001')) {
+        this.db = db
         this.tickSize = tickSize;
         //this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
         this.orderBooks = {}
     }
 
     async load(key) {
-        const data = await dbFactory.getDatabase('orderBooks').findOneAsync({ _id: key })
+        const data = await this.db.findOneAsync({ _id: key })
         if (data?.value) {
             this.orderBooks[key] = data.value
             //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
@@ -29,9 +30,9 @@ class Orderbook {
 
     async save(key) {
         //console.log('saving pair ' + JSON.stringify(key) /*, + ' ' + JSON.stringify(this.orderbooks[key])*/)
-        await dbFactory.getDatabase('orderBooks').updateAsync(
+        await this.db.updateAsync(
             { _id: key },
-            { _id: key, value: this.orderBooks[key] },
+            { $set: { value: this.orderBooks[key] } },
             { upsert: true }
         )
     }
@@ -313,7 +314,7 @@ class Orderbook {
 
     async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
         const inverse = contractRegistry.isInverse(contractId)
-        const marginMap = await MarginMap.load(contractId)
+        const marginMap = await ContractMargins.getMargins(contractId)
         // Get the existing position sizes for buyer and seller
         const existingPosition = await marginMap.getPositionForAddress(sender, contractId)
         // Determine if the trade reduces the position size for buyer or seller
@@ -415,7 +416,7 @@ class Orderbook {
                 continue
             }
             // Load the margin map for the given series ID and block height
-            const marginMap = await MarginMap.load(match.sellOrder.contractId)
+            const marginMap = await ContractMargins.getMargins(match.sellOrder.contractId)
             console.log('checking the marginMap for contractId ' + marginMap)
             // Get the existing position sizes for buyer and seller
             match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId)
@@ -564,7 +565,7 @@ class Orderbook {
             //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse)
 
             // Save the updated margin map
-            await marginMap.saveMarginMap(false)
+            await marginMap.save(false)
 
             console.log('checking match object before writing trade data obj ' + JSON.stringify(match) + ' what this looks like inside sellOrder contractid ' + match.sellOrder.contractId + ' amount ' + match.sellOrder.amount)
             // Construct a trade object for recording
@@ -576,29 +577,29 @@ class Orderbook {
 
     async moveCollateralToReserve(sender, contractId, amount) {
         const initialMarginPerContract = await contractRegistry.getInitialMargin(contractId)
-        console.log('initialMarginPerContract '+initialMarginPerContract)
+        console.log('initialMarginPerContract ' + initialMarginPerContract)
         const collateralPropertyId = await contractRegistry.getCollateralId(contractId)
-        console.log('collateralPropertyId '+collateralPropertyId)
+        console.log('collateralPropertyId ' + collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
-        console.log('Total Initial Margin ' +totalInitialMargin)
+        console.log('Total Initial Margin ' + totalInitialMargin)
         // Move collateral to reserved position
         await tallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true)
     }
 
-   async moveCollateralToMargin(sender, contractId, amount) {
-        console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
+    async moveCollateralToMargin(sender, contractId, amount) {
+        console.log('checking instance of marginMap ' + JSON.stringify(marginMap))
         const initialMarginPerContract = await contractRegistry.getInitialMargin(contractId)
-        console.log('initialMarginPerContract '+initialMarginPerContract)
+        console.log('initialMarginPerContract ' + initialMarginPerContract)
         const collateralPropertyId = await contractRegistry.getCollateralId(contractId)
-        console.log('collateralPropertyId '+collateralPropertyId)
+        console.log('collateralPropertyId ' + collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber()
-        console.log('Total Initial Margin ' +totalInitialMargin)
+        console.log('Total Initial Margin ' + totalInitialMargin)
         // Move collateral to reservd position
         await tallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true)
-       
-        const marginMap = await MarginMap.load(contractId)
+
+        const marginMap = await ContractMargins.getMargins(contractId)
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin)
-        
+
         return position
     }
 
@@ -608,4 +609,4 @@ class Orderbook {
     // }
 }
 
-exports.orderBook = new Orderbook()
+exports.orderBook = new Orderbook(dbFactory.getDatabase('orderBooks'))

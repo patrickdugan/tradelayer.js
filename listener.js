@@ -5,7 +5,7 @@ const { contractRegistry } = require('./contractRegistry.js')
 const { oracleList } = require('./oracle.js')
 const { tallyMap } = require('./tally.js')
 const { tradeHistory } = require('./tradeHistory.js')
-const MarginMap = require('./marginMap.js')
+const ContractMargins = require('./marginMap.js')
 const Main = require('./main.js')
 
 let isInitialized = false; // A flag to track the initialization status
@@ -161,7 +161,7 @@ app.get('/oracleHistory/:contractId', async (req, res) => {
 app.get('/contractPosition/:address/:contractId', async (req, res) => {
     const { address, contractId } = req.params;
     try {
-        const marginMap = await MarginMap.load(contractId)
+        const marginMap = await ContractMargins.getMargins(contractId)
         const position = marginMap.getPositionForAddress(address)
         res.json(position)
     } catch (error) {

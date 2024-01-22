@@ -11,34 +11,32 @@ class MarginMap {
         unrealizedPl: 0,
     }
 
-    constructor(seriesId) {
+    constructor(db, seriesId) {
         this.seriesId = seriesId;
         this.margins = new Map()
+        this.db = db
     }
 
-    static async load(seriesId) {
-        const key = JSON.stringify({ seriesId: seriesId })
+    async load() {
+        const key = { seriesId: this.seriesId }
 
         try {
-            const data = await dbFactory.getDatabase('marginMaps').findOneAsync({ _id: key })
-            const map = new MarginMap(seriesId)
-            map.margins = new Map(data?.value)
-            let d = [...map.margins.entries()].map(e => `{${e[0]}:[${e[1].contracts}, ${e[1].margin}]}`)
-            console.log(`Loaded margins for {seriesId:${seriesId}}: ${d}`)
-            return map
-        } catch (err) {
-            console.log('Error loading margin map: ' + err)
+            const data = await this.db.findOneAsync({ _id: key })
+            this.margins = new Map(data?.value)
+            console.log(`Loaded margins for: seriesId:${this.seriesId} => ${JSON.stringify([...this.margins.entries()])}`)
+        } catch (error) {
+            console.log('Error loading margins: ' + error)
         }
     }
 
-    async save(blockHeight) {
-        const key = JSON.stringify({ seriesId: this.seriesId })
+    async save() {
+        const key = { seriesId: this.seriesId }
         const value = [...this.margins]
 
-        await dbFactory.getDatabase('marginMaps').updateAsync(
-            { _id: key }, // Query: Match document with the specified _id
-            { _id: key, value: value }, // Update: Document to be inserted or updated
-            { upsert: true }) // Options: Perform an insert if document doesn't exist
+        await this.db.updateAsync(
+            { _id: key },
+            { _id: key, value: value },
+            { upsert: true })
     }
 
     initMargin(address, contracts, price) {
@@ -61,10 +59,7 @@ class MarginMap {
 
         if (!position) {
             // If no existing position, initialize a new one
-            position = {
-                contracts: 0,  // Number of contracts the sender has
-                margin: 0      // Total margin amount the sender has posted
-            };
+            position = { ...MarginMap.Empty }
         }
 
         console.log('margin before ' + position.margin)
@@ -77,6 +72,7 @@ class MarginMap {
 
         // Save changes to the database or your storage solution
         await this.save()
+
         return position
     }
 
@@ -426,7 +422,7 @@ class MarginMap {
             const value = { _id: key, orders: orders, blockHeight: blockHeight };
 
             // Save the liquidation orders in the marginMaps database
-            await dbFactory.getDatabase('marginMaps').insertAsync(value)
+            await this.db.insertAsync(value)
         } catch (error) {
             console.error(`Error saving liquidation orders for contract ${contract.id} at block height ${blockHeight}:`, error)
             throw error;
@@ -455,21 +451,11 @@ class MarginMap {
         // If the position is not found or margins map is empty, try loading from the database
         if (!position || this.margins.length === 0) {
             console.log('going into exception for getting Position ')
-            await MarginMap.load(contractId)
+            //await MarginMap.create(contractId)
             position = this.margins.get(address)
         }
 
-        // If still not found, return a default position
-        if (!position) {
-            return {
-                contracts: 0,
-                margin: 0,
-                unrealizedPl: 0,
-                // Add other relevant fields if necessary
-            };
-        }
-
-        return position;
+        return position ? position : { ...MarginMap.Empty }
     }
 
     async getMarketPrice(contract) {
@@ -493,4 +479,10 @@ class MarginMap {
     }
 }
 
-module.exports = MarginMap
+module.exports = {
+    async getMargins(contractId) {
+        let mm = new MarginMap(dbFactory.getDatabase('marginMaps'), contractId)
+        await mm.load()
+        return mm
+    }
+}

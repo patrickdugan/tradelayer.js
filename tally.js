@@ -21,8 +21,8 @@ class TallyMap {
         try {
             const entries = await this.db.findAsync({})
             this.addresses = new Map(entries.map(e => [e._id, e?.value]))
-            let d = [...this.addresses.entries()].map(e => `{${e[0]}=>[${e[1].map(p => p?.propertyId)}]}`)
-            console.log(`Loaded tally: ${d}`)
+            let tl = [...this.addresses.entries()].map(e => `{${this._dump(e[0],e[1])}`)
+            console.log(`Loaded tally: ${tl}`)
         } catch (error) {
             console.error('Error loading tally:', error)
         }
@@ -31,10 +31,14 @@ class TallyMap {
     async save(addr, data) {
         try {
             await this.db.updateAsync({ _id: addr }, { $set: { value: data } }, { upsert: true })
-            console.log(`Tally saved: addr:${addr}:${data.map(p => p?.propertyId)}`)
+            console.log(`Saved tally: ${this._dump(addr,data)}`)
         } catch (error) {
-            console.error('Error saving tally:', error)
+            console.error('Error saving tally: ', error)
         }
+    }
+    
+    _dump(addr, data) {
+        return `${addr} => ${JSON.stringify(data)}`
     }
 
     async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement) {

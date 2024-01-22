@@ -1,7 +1,7 @@
 const { dbFactory } = require('./db.js')
 const { propertyList } = require('./property.js')
 const { contractRegistry } = require('./contractRegistry.js')
-const MarginMap = require('./marginMap.js')
+const ContractMargins = require('./marginMap.js')
 
 class SynthRegistry {
     constructor() {
@@ -158,11 +158,11 @@ class SynthRegistry {
         await TallyMap.updateBalance(address, syntheticTokenId, -amount, 0, amount, 0)
 
         // Update the MarginMap for the contract
-        const marginMap = await MarginMap.loadMarginMap(contractId)
+        const marginMap = await ContractMargins.getMargins(contractId)
         marginMap.updateMargin(address, amount, syntheticTokenId) // assuming MarginMap has a method to update margin with synthetic token ID
 
         // Persist the updated MarginMap
-        await MarginMap.save(contractId, marginMap)
+        await marginMap.save(contractId)
 
         console.log(`Posted ${amount} of synthetic token ID ${syntheticTokenId} as margin for contract ID ${contractId}`)
     }

@@ -1,22 +1,6 @@
 const TxUtils = require('./txUtils.js')
 const Types = require('./types.js')
-const {dbFactory} = require('./db.js')
-
-//const e = require('express')
-
-// const clientConfig = /*test ?*/ {
-//     host: '127.0.0.1',
-//     port: 18332,
-//     user: 'user',
-//     pass: 'pass',
-//     timeout: 10000
-// }
-
-// const client = new litecoin.Client(clientConfig)
-
-// const getTransactionAsync = util.promisify(client.cmd.bind(client, 'gettransaction'))
-// const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
-// const transparentIndex = [];
+const { dbFactory } = require('./db.js')
 
 class TxIndex {
 
@@ -26,11 +10,11 @@ class TxIndex {
 
     async ensureGenesisBlock(genesisBlock) {
         try {
-            const block = await this.db.getDatabase('txIndex').findOneAsync({ _id: 'genesisBlock' })
+            const block = await this.db.findOneAsync({ _id: 'genesisBlock' })
             if (block?.value) {
                 console.log('Genesis block is already initialized:', block.value)
             } else {
-                await this.db.getDatabase('txIndex').insertAsync({ _id: 'genesisBlock', value: genesisBlock })
+                await this.db.insertAsync({ _id: 'genesisBlock', value: genesisBlock })
                 console.log('Genesis block initialized:', genesisBlock)
             }
         } catch (error) {
@@ -45,7 +29,7 @@ class TxIndex {
         console.log('building index until' + chainTip)
         for (let height = startHeight; height <= chainTip; height++) {
             if (height % 1000 == 1) { console.log('indexed to ' + height) }
-                //console.log('about to fetch block data for height '+height)
+            //console.log('about to fetch block data for height '+height)
             let blockData = await this.fetchBlockData(height)
             //console.log(blockData)
             await this.processBlockData(blockData, height)
@@ -55,9 +39,8 @@ class TxIndex {
 
         // Use the correct NeDB method to insert or update the 'indexExists' document
         // After processing the block, update 'MaxHeight'
-        let txdb = this.db.getDatabase('txIndex')
         try {
-            await txdb.updateAsync(
+            await this.db.updateAsync(
                 { _id: 'MaxHeight' },
                 { _id: 'MaxHeight', value: chainTip },
                 { upsert: true }
@@ -68,7 +51,7 @@ class TxIndex {
         }
 
         try {
-            await txdb.updateAsync(
+            await this.db.updateAsync(
                 { _id: 'indexExists' },
                 { _id: 'indexExists', value: true },
                 { upsert: true } // This option ensures that the document is inserted if it doesn't exist or updated if it does.
@@ -99,12 +82,12 @@ class TxIndex {
         for (const txId of blockData.tx) {
             const txBlob = await this.fetchTransactionData(txId)
             const txData = await this.decodeRawTransaction(txBlob.hex)
-            if (txData != null && txData != undefined && txData.marker === 'tl') {
+            if (txData?.marker === 'tl') {
                 const payload = txData.payload
                 const txDetails = await this.processTransaction(payload, txId, txData.marker)
                 console.log('payload ' + payload + JSON.stringify(txDetails))
                 try {
-                    await this.db.getDatabase('txIndex').insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
+                    await this.db.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails })
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError)
                 }
@@ -140,7 +123,9 @@ class TxIndex {
                 // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(payloadStart)
                 const payload = Buffer.from(payloadHex, 'hex').toString()
-                if (marker == 'tl') { console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload + ' decoding the whole thing ' + Buffer.from(opReturnData, 'hex').toString()) }
+                if (marker == 'tl') {
+                    console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload + ' decoding the whole thing ' + Buffer.from(opReturnData, 'hex').toString())
+                }
                 return { marker, payload, decodedTx }
             } else {
                 //console.log('No OP_RETURN output found.')
@@ -170,18 +155,15 @@ class TxIndex {
         console.log(document)
 
         try {
-            // Check if the document already exists
-            let txdb = this.getDatabase('txIndex')
-            const existingDocument = await txdb.findOneAsync({ _id: indexKey })
-
+            const existingDocument = await this.db.findOneAsync({ _id: indexKey })
             if (existingDocument) {
                 // Document exists, perform an update
                 const update = { $set: { txData, payload } }
-                await txdb.updateAsync({ _id: indexKey }, update)
+                await this.db.updateAsync({ _id: indexKey }, update)
                 //console.log(`Transaction data updated for ${indexKey}`)
             } else {
                 // Document does not exist, perform an insert
-                await txdb.insertAsync(document)
+                await this.db.insertAsync(document)
                 //console.log(`Transaction data inserted for ${indexKey}`)
             }
         } catch (error) {
@@ -192,14 +174,9 @@ class TxIndex {
 
     async getIndexData() {
         try {
-            let data = {}
-            const entries = await this.db.getDatabase('txIndex').findAsync({})
-            entries.forEach(e => {
-                data[e._id] = e.value
-            })
-            return entries
+            return await this.db.findAsync({ _id: { $regex: /^tx-\d{1,10}-/ } })
         } catch (error) {
-            console.error('Error loading index:', error)
+            console.error('Error loading index: ', error)
         }
     }
 
@@ -208,7 +185,7 @@ class TxIndex {
 
         try {
             // Assuming the database instance is accessible as `db`
-            await this.db.getDatabase('txIndex').updateAsync(
+            await this.db.updateAsync(
                 { _id: indexKey },
                 { $set: { type: type, valid: isValid, reason: reason } },
                 { upsert: true }
@@ -219,23 +196,21 @@ class TxIndex {
         }
     }
 
-    async clear() {
-        await this.db.getDatabase('txIndex').remove({}, { multi: true })
+    clear() {
+        this.db.remove({}, { multi: true })
         console.log('Cleared all entries from txIndex DB.')
     }
 
-    async resetIndexFlag() {
-        await this.db.getDatabase('txIndex').del('indexExists')
-        await this.db.getDatabase('txIndex').del('genesisBlock')
+    resetIndexFlag() {
+        this.db.del('indexExists')
+        this.db.del('genesisBlock')
         console.log('Index flags reset successfully.')
     }
 
     async findMaxIndexedBlock() {
         try {
-            const txdb = this.db.getDatabase('txIndex')
-            const mh = await txdb.findOneAsync({ _id: 'MaxHeight' })
-
-            if (mh) {
+            const mh = await this.db.findOneAsync({ _id: 'MaxHeight' })
+            if (mh?.value) {
                 return mh.value
             } else {
                 // Handle the case where MaxHeight hasn't been set yet
@@ -255,11 +230,8 @@ class TxIndex {
      */
     async getTransactionData(txId) {
         try {
-            const txdb = this.db.getDatabase('txIndex')
-            //const blockHeight = this.fetchChainTip()
-            const txData = await txdb.findOneAsync({ _id: txId })
-
-            if (txData) {
+            const txData = await this.db.findOneAsync({ _id: txId })
+            if (txData?.value) {
                 console.log(`Transaction data found for ${txId}:`, txData)
                 return txData.value // Return the value part of the transaction data
             } else {
@@ -274,11 +246,9 @@ class TxIndex {
 
     async checkForIndex() {
         try {
-            const txdb = this.db.getDatabase('txIndex')
-            const exists = await txdb.findOneAsync({ _id: 'indexExists' })
-
+            const exists = await this.db.findOneAsync({ _id: 'indexExists' })
             if (exists) {
-                console.log(`'indexExists' key found with value: ${exists.value}`)
+                console.log(`'indexExists' key found with value: ${exists?.value}`)
                 return true // The index exists
             } else {
                 console.log("'indexExists' key not found.")
@@ -291,4 +261,4 @@ class TxIndex {
     }
 }
 
-exports.txIndex = new TxIndex(dbFactory)
+exports.txIndex = new TxIndex(dbFactory.getDatabase('txIndex'))
