@@ -482,7 +482,7 @@ const Logic = {
                 }
                  // Cancel a specific order by txid
                 if (cancelParams.txid) {
-                    cancelledOrders = orderbook.cancelTokenOrdersByTxid(fromAddress, cancelParams.txid);
+                    cancelledOrders = orderbook.cancelTokenOrdersByTxid(fromAddress,offeredPropertyId,desiredPropertyId, cancelParams.txid);
                 } 
 
                 // Cancel orders by price or order type

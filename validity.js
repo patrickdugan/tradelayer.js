@@ -254,6 +254,7 @@ const Validity = {
         validateCancelOrder: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
+            let key
             console.log('validating cancel order '+JSON.stringify(params), sender, txid)
             const isAlreadyActivated = await activationInstance.isTxTypeActive(6);
             if (!isAlreadyActivated) {
@@ -266,6 +267,7 @@ const Validity = {
                 params.reason += 'Invalid from address; ';
             }
             if(params.isContract==false){
+                key = params.offeredPropertyId+'-'+params.desiredPropertyId
                 // Validate offered property ID
                 if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
                     const propertyExists = await PropertyList.getPropertyData(params.offeredPropertyId);
@@ -292,6 +294,7 @@ const Validity = {
             }
 
             if (params.isContract) {
+                key= params.offeredPropertyId
                 console.log('cancelling contract order '+JSON.stringify(params) + '')
                 // Check the validity of the contract ID
                 if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
@@ -308,7 +311,7 @@ const Validity = {
             }
 
             // Check if the sender has orders in the relevant orderbook
-            const orderbook = await Orderbook.getOrderbookInstance(`${params.offeredPropertyId}-${params.desiredPropertyId}`);
+            const orderbook = await Orderbook.getOrderbookInstance(key)
             let senderOrders
 
             if(params.isContract){
