@@ -46,7 +46,7 @@ class Orderbook {
 
         async saveOrderBook(key) {
             // Save order book to your database
-            console.log('saving pair ' + JSON.stringify(key) /*, + ' ' + JSON.stringify(this.orderbooks[key])*/)
+            //console.log('saving pair ' + JSON.stringify(key) /*, + ' ' + JSON.stringify(this.orderbooks[key])*/)
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
                 { _id: key },
@@ -152,7 +152,7 @@ class Orderbook {
             
             // Determine the correct orderbook key
             const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
-            console.log('Normalized Order Book Key:', normalizedOrderBookKey);
+            //console.log('Normalized Order Book Key:', normalizedOrderBookKey);
 
             // Create an instance of Orderbook for the pair and load its data
             const orderbook = new Orderbook(normalizedOrderBookKey);
@@ -160,7 +160,7 @@ class Orderbook {
 
             // Calculate the price for the order and round to the nearest tick interval
             const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
-            console.log('Calculated Price:', calculatedPrice);
+            //console.log('Calculated Price:', calculatedPrice);
             order.price = calculatedPrice; // Append the calculated price to the order object
 
             // Determine if the order is a sell order
@@ -168,15 +168,15 @@ class Orderbook {
 
             // Add the order to the orderbook
             const orderConfirmation = await orderbook.insertOrder(order, normalizedOrderBookKey, isSellOrder);
-            console.log('Order Insertion Confirmation:', orderConfirmation);
+            //console.log('Order Insertion Confirmation:', orderConfirmation);
 
             // Match orders in the orderbook
             const matchResult = await orderbook.matchTokenOrders(normalizedOrderBookKey);
             if (matchResult.matches && matchResult.matches.length > 0) {
-                console.log('Match Result:', matchResult);
+                //console.log('Match Result:', matchResult);
                 await this.processTokenMatches(matchResult.matches, blockHeight, txid);
             }else{console.log('No Matches for ' +txid)}
-            console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
+            //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
             // Save the updated orderbook back to the database
             await orderbook.saveOrderBook(normalizedOrderBookKey);
@@ -208,7 +208,7 @@ class Orderbook {
 
         calculatePrice(amountOffered, amountExpected) {
             const priceRatio = new BigNumber(amountOffered).dividedBy(amountExpected);
-            console.log('price ratio '+priceRatio)
+            //console.log('price ratio '+priceRatio)
             return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
         }
 
@@ -266,13 +266,13 @@ class Orderbook {
         async processTokenMatches(matches, blockHeight, txid) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches) || matches.length === 0) {
-                console.log('No valid matches to process');
+                //console.log('No valid matches to process');
                 return;
             }
 
             for (const match of matches) {
                 if (!match.sellOrder || !match.buyOrder) {
-                    console.error('Invalid match object:', match);
+                    //console.error('Invalid match object:', match);
                     continue;
                 }
 
@@ -296,24 +296,21 @@ class Orderbook {
                 let amountToTradeA = new BigNumber(match.amountOfTokenA)
                 let amountToTradeB = new BigNumber(match.amountOfTokenB)
 
-                if(txid=="5049a4ac9c8dd3f19278b780135eeb7900b0771e6b9829044900f9fb656b976a"){
-                    console.log('looking into the problematic tx' +JSON.stringify(match)+ 'times '+match.sellOrder.blockTime + ' '+match.buyOrder.blockTime)
-                }
                 console.log('amountTo Trade A and B '+ amountToTradeA + ' '+ amountToTradeB + ' '+ 'match values '+ match.amountOfTokenA + ' '+ match.amountOfTokenB)
                 // Determine order roles and calculate fees
                 if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
                     match.sellOrder.orderRole = 'maker';
                     match.buyOrder.orderRole = 'taker';
                     takerFee = amountToTradeB.times(0.0002);
-                    console.log('taker fee '+takerFee)
+                    //console.log('taker fee '+takerFee)
                     makerRebate = takerFee.div(2);
-                    console.log('maker fee '+makerRebate)
+                    //console.log('maker fee '+makerRebate)
                     takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                    console.log(' actual taker fee '+takerFee)
+                    //console.log(' actual taker fee '+takerFee)
                     await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
-                    console.log('about to calculate this supposed NaN '+match.amountOfTokenA+' '+new BigNumber(match.amountOfTokenA) + ' '+new BigNumber(match.amountOfTokenA).plus(makerRebate)+ ' '+ new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
+                    //console.log('about to calculate this supposed NaN '+match.amountOfTokenA+' '+new BigNumber(match.amountOfTokenA) + ' '+new BigNumber(match.amountOfTokenA).plus(makerRebate)+ ' '+ new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
                     sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
-                    console.log('sell order amount change ' +sellOrderAmountChange)
+                    //console.log('sell order amount change ' +sellOrderAmountChange)
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
 
                 } else if (match.buyOrder.blockTime < match.sellOrder.blockTime) {
@@ -397,13 +394,10 @@ class Orderbook {
             // Determine if the trade reduces the position size for buyer or seller
             const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&side==false);
             const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && side==true);
-            if(sender == "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"&&isSellerReducingPosition){
-                console.log('troubleshooting lack of margin increase '+JSON.stringify(existingPosition)+' '+price +' '+amount + ' buy?'+side)
-            }
-            console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
+            //console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
                 //we're increasing or creating a new position so locking up init margin in the reserve column on TallyMap
-                console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
+                //console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
                 await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price) //first we line up the capital
             }
 
@@ -421,8 +415,8 @@ class Orderbook {
 
             // Match orders in the derivative contract order book
             var matchResult = await this.matchContractOrders(orderBookKey);
-            if(matchResult !=[]){
-                console.log('contract match result '+JSON.stringify(matchResult))
+            if(matchResult.matches !=[]){
+                //console.log('contract match result '+JSON.stringify(matchResult))
                 await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
             }
            
@@ -653,13 +647,13 @@ class Orderbook {
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token) {
             await this.loadOrCreateOrderBook(orderBookKey,true)
-            console.log('canceling for key ' +orderBookKey)
+            //console.log('canceling for key ' +orderBookKey)
             const orderBook = this.orderBooks[orderBookKey]; // Assuming this is the correct reference
             const cancelledOrders = [];
             //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
             for (let i = orderBook.buy.length - 1; i >= 0; i--) {
                 const order = orderBook.buy[i];
-                console.log('buy order ' + JSON.stringify(order));
+                //console.log('buy order ' + JSON.stringify(order));
 
                 // Check if order is defined before accessing its properties
                 if (order && order.sender) {
@@ -683,10 +677,10 @@ class Orderbook {
                 }
             }
 
-            console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
+            //console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
             for (let i = orderBook.sell.length - 1; i >= 0; i--) {
                 const order = orderBook.sell[i];
-                console.log('sell order ' + JSON.stringify(order) + ' orders in orderbook ' + i + '/' + orderBook.sell.length)
+                //console.log('sell order ' + JSON.stringify(order) + ' orders in orderbook ' + i + '/' + orderBook.sell.length)
 
                 // Check if order is defined before accessing its properties
                 if (order && order.sender) {
@@ -715,7 +709,7 @@ class Orderbook {
             await this.saveOrderBook(orderBookKey);
 
             // Log the cancellation for record-keeping
-            console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
+            //console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
 
             // Return the details of the cancelled orders
             return cancelledOrders;
@@ -727,12 +721,12 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key = offeredPropertyId
-            console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
+            //console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
 
             for (const order of cancelledOrders) {
-                console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
+                //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
                 const initMarginPerContract = await ContractRegistry.getInitialMargin(offeredPropertyId, order.price);
                 const reserveAmount = order.amount *initMarginPerContract
                 console.log('about to apply changes '+initMarginPerContract+ ' '+reserveAmount)
@@ -752,10 +746,10 @@ class Orderbook {
             const cancelledOrder = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
             //console.log('cancelling order '+JSON.stringify(cancelledOrder)+' cancelled order price '+cancelledOrder[0].price)
             const initMarginPerContract = await ContractRegistry.getInitialMargin(offeredPropertyId, cancelledOrder[0].price);
-            console.log('about to calculate reserveAmount '+cancelledOrder[0].amount + ' '+initMarginPerContract)
+            //console.log('about to calculate reserveAmount '+cancelledOrder[0].amount + ' '+initMarginPerContract)
             const reserveAmount = cancelledOrder[0].amount *initMarginPerContract
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
-            console.log('about to move reserve back to available cancelling contract order by txid '+reserveAmount +' '+collateralPropertyId)
+            //console.log('about to move reserve back to available cancelling contract order by txid '+reserveAmount +' '+collateralPropertyId)
             await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0);
 
             // Return the details of the cancelled order
@@ -786,12 +780,12 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key =  offeredPropertyId+'-'+desiredPropertyId
-            console.log('cancelAllTokenOrders key'+key)
+            //console.log('cancelAllTokenOrders key'+key)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
 
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
-                console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
+                //console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
                 await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0);
             }
 

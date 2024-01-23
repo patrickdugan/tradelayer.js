@@ -151,11 +151,11 @@ const Logic = {
     async activateTradeLayer(txType, block) { 
     		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
         // Call the activateSystem method from the Activation class instance
-        console.log('in activate TradeLayer logic function '+ txType+ ' block ' +block)
+        //console.log('in activate TradeLayer logic function '+ txType+ ' block ' +block)
         const activationResult = await activation.activate(txType, block);
 
         // Log or handle the result of activation
-        console.log('activation result ' +activationResult);
+        //console.log('activation result ' +activationResult);
         return activationResult; // You might want to return this for further processing
  
     },
@@ -178,7 +178,7 @@ const Logic = {
         // Create the token in the property manager
         try {
             var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
-            console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
+            //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
             await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
         } catch (error) {
@@ -192,13 +192,13 @@ const Logic = {
         console.log('send logic parameters '+sendAll + ' '+ senderAddress + ' '+ recipientAddresses + ' ' + propertyIdNumbers + ' '+ amounts)
         if (sendAll) {
             // Handle sending all available balances
-            console.log('sendingAll')
+            //console.log('sendingAll')
             await sendAll(senderAddress,recipientAddresses)
         } else {
             // Check if handling a multi-send or single send
             const isMultiSend = Array.isArray(propertyIdNumbers) && Array.isArray(amounts);
             if (isMultiSend) {
-                console.log('multisend '+ isMultiSend + ' is this an array? '+propertyIdNumbers+ ' what about amounts '+amounts)
+                //console.log('multisend '+ isMultiSend + ' is this an array? '+propertyIdNumbers+ ' what about amounts '+amounts)
                 // Ensure arrays are of the same length
                 if (propertyIdNumbers.length !== amounts.length || propertyIdNumbers.length !== recipientAddresses.length) {
                     throw new Error('Property IDs, amounts, and recipient addresses arrays must have the same length.');
@@ -214,14 +214,14 @@ const Logic = {
                 }
             } else {
                 // Special handling for TLVEST (Property ID 2)
-                console.log('propertyIdnumbers ' +propertyIdNumbers)
+                //console.log('propertyIdnumbers ' +propertyIdNumbers)
                     if (propertyIdNumbers == 2) {
                         console.log('vesting single send '+senderAddress)
                         // Get TLVEST and TL balances for the sender
                         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
                         const tlTally = await TallyMap.getTally(senderAddress, 1);
 
-                        console.log('tallys for vesting '+ JSON.stringify(tlVestTally)+' '+JSON.stringify(tlTally))
+                       // console.log('tallys for vesting '+ JSON.stringify(tlVestTally)+' '+JSON.stringify(tlTally))
 
                         // Calculate the proportion of TLVEST being moved
                         const proportion = amounts / tlVestTally.available;
@@ -502,7 +502,7 @@ const Logic = {
             }
 
         // Log the cancellation for record-keeping
-        console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
+        //console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
 
         // Return the details of the cancelled orders
         return cancelledOrders;

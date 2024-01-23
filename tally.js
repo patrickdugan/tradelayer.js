@@ -130,7 +130,7 @@ class TallyMap {
                 console.log('TallyMap instance is not loaded. Attempting to load from DB...');
                 await instance.loadFromDB();
             } else {
-                console.log('TallyMap instance already exists. Using existing instance.');
+                //console.log('TallyMap instance already exists. Using existing instance.');
             }
 
             // Log the serialized form of the data from the DB
@@ -171,13 +171,13 @@ class TallyMap {
     static async hasSufficientBalance(senderAddress, propertyId, requiredAmount) {
         try {
             const senderTally = await this.getTally(senderAddress, propertyId);
-            console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, JSON.stringify(senderTally));
+            //console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.available === undefined) {
                 return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
             }
 
-            console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
+            //console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
 
             if (senderTally.available < requiredAmount) {
                 return { hasSufficient: false, reason: 'Insufficient available balance' };
@@ -216,7 +216,7 @@ class TallyMap {
                 // Convert the array back into a Map
                 this.addresses = new Map(mapDataArray.map(([key, value]) => [key, value]));
             } else {
-                //console.log('failed to load tallyMap, starting a new map')
+                console.log('failed to load tallyMap, starting a new map')
                 this.addresses = new Map(); // Ensure addresses is always a Map
             }
         } catch (error) {
@@ -364,12 +364,12 @@ class TallyMap {
     static async getTally(address, propertyId) {
         const instance = await TallyMap.getInstance(); // Ensure instance is loaded
         if (!instance.addresses.has(address)) {
-            console.log("can't find address in tallyMap")
+            //console.log("can't find address in tallyMap")
             return 0;
         }
         const addressObj = instance.addresses.get(address);
         if (!addressObj[propertyId]) {
-            console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
+            //console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
             return 0;
         }
         return {amount: addressObj[propertyId].amount, 
@@ -380,7 +380,7 @@ class TallyMap {
     }
 
     getAddressBalances(address) {
-        console.log('ze tally map'+this.addresses)
+        //console.log('ze tally map'+this.addresses)
         const balances = [];
         if (this.addresses.has(address)) {
             const properties = this.addresses.get(address);

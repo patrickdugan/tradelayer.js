@@ -14,9 +14,9 @@ class ContractRegistry {
     }
 
     static async loadContractSeries() {
-        console.log('loading contract list for this instance '+JSON.stringify(instance))
+        //console.log('loading contract list for this instance '+JSON.stringify(instance))
         const instance = ContractRegistry.getInstance(); // Access singleton instance
-        console.log('loading contract list for this instance '+JSON.stringify(instance))
+        //console.log('loading contract list for this instance '+JSON.stringify(instance))
         try {
             const docs = await db.getDatabase('contractList').findAsync({ type: 'contractSeries' });
             return instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
@@ -216,7 +216,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-        console.log('retrieving db info for contract '+contractId)
+        //console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -230,7 +230,7 @@ class ContractRegistry {
         
             // Assuming contractData is the data structure for the contract
             const contractData = await this.getContractInfo(contractId);
-            console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
+            //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
             if (contractData && contractData.native && contractData.native.notionalValue !== undefined) {
                 const notionalValue = contractData.native.notionalValue;
@@ -260,16 +260,16 @@ class ContractRegistry {
 
      // Function to get initial margin requirement for a contract
     static async getInitialMargin(contractId, price) {
-        console.log('checking contractId inside getInitialMargin '+contractId)
+        //console.log('checking contractId inside getInitialMargin '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-        console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
+        //console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
         let inverse = contractInfo.native.inverse;
         let notionalValue = contractInfo.native.notionalValue
         let leverage = contractInfo.native.leverage
-        console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
+        //console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
             return BigNumber(notionalValue).div(leverage).toNumber();
@@ -319,11 +319,11 @@ class ContractRegistry {
     static async moveCollateralToReserve(sender, contractId, amount,price) {
         const TallyMap = require('./tally.js')
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
-        console.log('initialMarginPerContract '+initialMarginPerContract)
+        //console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        console.log('collateralPropertyId '+collateralPropertyId)
+        //console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        console.log('Total Initial Margin to reserve ' +totalInitialMargin)
+        //console.log('Total Initial Margin to reserve ' +totalInitialMargin)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true);
         return
@@ -333,13 +333,13 @@ class ContractRegistry {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
-        console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
+        //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
-        console.log('initialMarginPerContract '+initialMarginPerContract)
+        //console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        console.log('collateralPropertyId '+collateralPropertyId)
+        //console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        console.log('Total Initial Margin ' +totalInitialMargin)
+        //console.log('Total Initial Margin ' +totalInitialMargin)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true);
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);

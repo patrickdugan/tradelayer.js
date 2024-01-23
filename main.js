@@ -214,7 +214,7 @@ class Main {
                 const referenceAddress = txData.value.reference.address; //a bit different from the older protocol, not always in the tx, sometimes in OP_Return
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
+                //console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
                 //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
@@ -223,11 +223,11 @@ class Main {
                       if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
                         decodedParams.valid = false
                         decodedParams.reason += 'Tx not yet activated despite being otherwise valid '
-                        console.log(decodedParams.reason)
+                        //console.log(decodedParams.reason)
                       }else if ((blockHeight<activationBlock)&&(decodedParams.valid==true)){
                         decodedParams.valid = false
                         decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues '
-                        console.log(decodedParams.reason)
+                        //console.log(decodedParams.reason)
                       }
                 }
                //console.log('decoded params with validity' +JSON.stringify(decodedParams))
@@ -408,33 +408,6 @@ class Main {
      * @param {string} propertyId - The identifier of the property or token.
      * @param {string} transactionType - The type of transaction (e.g., "send", "receive").
      */
-    updateTallyMap(address, amount, propertyId, transactionType) {
-        // Assuming tallyMap is a Map where each key is an address and each value is another Map,
-        // which maps property IDs to their respective tallies.
-        let propertyTallies = this.tallyMap.get(address);
-
-        if (!propertyTallies) {
-            propertyTallies = new Map();
-            this.tallyMap.set(address, propertyTallies);
-        }
-
-        let currentTally = propertyTallies.get(propertyId) || 0;
-
-        // Update the tally based on the transaction type
-        if (transactionType === "send") {
-            currentTally -= amount;
-        } else if (transactionType === "receive") {
-            currentTally += amount;
-        }
-
-        // Ensure tallies don't go negative
-        currentTally = Math.max(0, currentTally);
-
-        // Update the map with the new tally
-        propertyTallies.set(propertyId, currentTally);
-
-        console.log(`Updated tally for address ${address}, property ${propertyId}: ${currentTally}`);
-    }
 
     async processConfirmedWithdrawals() {
         console.log('Checking for confirmed withdrawals...');

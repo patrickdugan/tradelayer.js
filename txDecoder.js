@@ -22,7 +22,7 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
-      //console.log('send payload to decode '+ payload)
+      console.log('send payload to decode '+ payload)
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
         const address = parts[1];
@@ -33,7 +33,7 @@ const Decode = {
             // Single send
             const propertyId = parseInt(parts[2], 36); // Decode propertyId from base36
             const amount = parseInt(parts[3], 36); // Decode amount from base36
-            console.log('decoding single send amount ' +amount + ' '+ parts[3])
+            //console.log('decoding single send amount ' +amount + ' '+ parts[3])
             return { sendAll: sendAll, address:address, propertyIds:propertyId, amounts:amount };
         } else {
             // Multi-send
@@ -81,7 +81,7 @@ const Decode = {
         // Decode the first element
         let isContract = elements[0];
         const cancelParams = {};
-        console.log('decoding cancel, isContract'+isContract)
+        //console.log('decoding cancel, isContract'+isContract)
         // Determine if it's a contract cancellation based on the first element
         let offeredPropertyId
         let desiredPropertyId
