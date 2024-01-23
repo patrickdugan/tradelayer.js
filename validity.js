@@ -107,7 +107,7 @@ const Validity = {
             }
 
             const propertyData = PropertyList.getPropertyData(params.propertyIds)
-            if(propertyData==null){
+            if(propertyData==null||propertyData==undefined){
                 params.valid = false
                 params.reason = 'propertyId not found in Property List'
             }
@@ -123,13 +123,18 @@ const Validity = {
                 
             }
             console.log('checking we have enough tokens '+senderTally.available+ ' '+ params.amounts)
-            const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amounts)
+            if(senderTally.available<params.amounts||senderTally.available==undefined){
+                params.valid=false
+                params.reason += 'Insufficient available balance'
+                console.log(params.valid, params.reason)
+            }
+            /*const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amounts)
             console.log('validating send '+JSON.stringify(hasSufficientBalance))
             if(hasSufficientBalance.hasSufficient==false){
                 params.valid=false
                 params.reason += 'Insufficient available balance'
                 console.log(params.valid, params.reason)
-            }
+            }*/
 
             /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
             if (!isSenderWhitelisted) {
