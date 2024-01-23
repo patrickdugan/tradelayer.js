@@ -319,14 +319,31 @@ class TallyMap {
     }
 
     // Function to record a delta
-    static async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
+     static async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
         const db = dbInstance.getDatabase('tallyMapDelta');
         const deltaKey = `${address}-${propertyId}-${newUuid}`;
-        const delta = { address: address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type: type};
-        await db.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
-          
-        return 
+        const delta = { address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
+        
+        console.log('saving delta ' + JSON.stringify(delta));
+
+        try {
+            // Try to find an existing document based on the key
+            const existingDocument = await db.findOneAsync({ _id: deltaKey });
+
+            if (existingDocument) {
+                // If the document exists, update it
+                await db.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
+            } else {
+                // If the document doesn't exist, insert a new one
+                await db.insertAsync({ _id: deltaKey, data: delta });
+            }
+
+            return; // Return success or handle as needed
+        } catch (error) {
+            console.error('Error saving delta:', error);
+            throw error; // Rethrow the error or handle as needed
+        }
     }
 
 
