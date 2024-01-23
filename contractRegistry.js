@@ -325,7 +325,7 @@ class ContractRegistry {
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         //console.log('Total Initial Margin to reserve ' +totalInitialMargin)
         // Move collateral to reservd position
-        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, true);
+        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, ,'contractReserveInitMargin');
         return
     }
 
@@ -341,7 +341,7 @@ class ContractRegistry {
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         //console.log('Total Initial Margin ' +totalInitialMargin)
         // Move collateral to reservd position
-        await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, true);
+        await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
         return position
     }
@@ -387,7 +387,7 @@ class ContractRegistry {
         for (const [address, position] of marginMap.entries()) {
             if (position.contractId === contractId) {
                 const fundingAmount = calculateFundingAmount(position.size, fundingRate);
-                TallyMap.updateBalance(address, contractId, fundingAmount);
+                TallyMap.updateBalance(address, contractId, fundingAmount,0,0,0,'funding');
                 marginMap.updatePosition(address, contractId, fundingAmount);
             }
         }

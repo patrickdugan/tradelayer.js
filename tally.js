@@ -1,6 +1,7 @@
 var dbInstance = require('./db.js')
 var TxIndex = require('./txindex.js')
 var PropertyList = require('./property.js')
+const uuid = require('uuid');
 
 class TallyMap {
     static instance;
@@ -40,7 +41,7 @@ class TallyMap {
         }
     }
 
-    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, tradeSettlement, contractSettlement, contractClearing, txid) {
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) {
             if(tradeSettlement==true){
                 console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange, marginChange)
             }
@@ -89,6 +90,7 @@ class TallyMap {
 
             // Update the total amount
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
+            await recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) 
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -320,10 +322,13 @@ class TallyMap {
     }
 
     // Function to record a delta
-    async recordTallyMapDelta(blockHeight, txId, address, propertyId, amountChange) {
-        const deltaKey = `tallyMapDelta-${blockHeight}-${txId}`;
-        const delta = { address, propertyId, amountChange };
-        return await dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(delta));
+    async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
+        const newUuid = uuid.v4();
+        const deltaKey = `tallyMapDelta-${address}-${propertyId}-${newUuid}`;
+        const delta = { address: address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type: type, tx: txid, block: blockHeight};
+        await db.updateAsync({ _id: key }, { $set: { data: delta } });
+          
+        return 
     }
 
 

@@ -179,7 +179,7 @@ const Logic = {
         try {
             var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
-            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0);
+            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance');
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
         } catch (error) {
             console.error('Error creating token:', error);
@@ -229,11 +229,11 @@ const Logic = {
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
 
-                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
-                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
+                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend');
+                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingReceive');
 
-                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
-                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag');
+                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow');
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send')
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
@@ -263,11 +263,11 @@ const Logic = {
 
         // Calculate the amount of TL to move from vesting to available
         const tlVestingMovement = calculateVestingMovement(amounts, tlVestTally,tlTally)
-        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0);
-        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0);
+        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend');
+        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingSend');
 
-        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement);
-        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement);
+        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag');
+        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow');
         return
     },
 
@@ -305,8 +305,8 @@ const Logic = {
         }
 
         // Perform the send operation
-        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
-        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
+        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0,'send');
+        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receive');
 
         // Handle special case for TLVEST
         if (propertyId === 2) {
@@ -331,8 +331,8 @@ const Logic = {
         for (const balance of senderBalances) {
             const { propertyId, amount } = balance;
             if (amount > 0) {
-                await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0);
-                await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0);
+                await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0, 'sendAll');
+                await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receiveAll');
 
                 // Handle special case for TLVEST
                 if (propertyId === 'TLVEST') {
@@ -394,10 +394,10 @@ const Logic = {
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
       
         // Deduct tokens from sender's available balance
-        TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0);
+        TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit');
 
         // Add tokens to the channel's balance
-        TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0);
+        TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive');
 
         // Determine which column (A or B) to assign the tokens in the channel registry
         await tradeChannelManager.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
@@ -826,8 +826,8 @@ const Logic = {
 
 		    // Transfer tokens based on contract terms
 		    if (senderBalance >= amount) {
-		        this.updateBalance(contractDetails.senderAddress, propertyId, -amount);
-		        this.updateBalance(contractDetails.receiverAddress, propertyId, amount);
+		        this.updateBalance(contractDetails.senderAddress, propertyId, -amount, 0 ,0,0,'deliver');
+		        this.updateBalance(contractDetails.receiverAddress, propertyId, amount,0,0,0,'receiveExercise');
 		    } else {
 		        throw new Error('Insufficient balance for contract delivery');
 		    }

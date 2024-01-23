@@ -14,6 +14,7 @@ class Database {
             'oracleData',
             'contractList',
             'tallyMap',
+            'tallyMapDelta',
             'marginMaps',
             'whitelists',
             'clearing',
