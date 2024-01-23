@@ -42,9 +42,6 @@ class TallyMap {
     }
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) {
-            if(tradeSettlement==true){
-                console.log('Trade Settlement: txid, property id, available change, reserved change ' +txid +propertyId, availableChange, reservedChange, marginChange)
-            }
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
@@ -90,7 +87,7 @@ class TallyMap {
 
             // Update the total amount
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
-            await recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) 
+            await TallyMap.recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) 
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -322,11 +319,12 @@ class TallyMap {
     }
 
     // Function to record a delta
-    async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
+    static async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
-        const deltaKey = `tallyMapDelta-${address}-${propertyId}-${newUuid}`;
-        const delta = { address: address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type: type, tx: txid, block: blockHeight};
-        await db.updateAsync({ _id: key }, { $set: { data: delta } });
+        const db = dbInstance.getDatabase('tallyMapDelta');
+        const deltaKey = `${address}-${propertyId}-${newUuid}`;
+        const delta = { address: address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type: type};
+        await db.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
           
         return 
     }

@@ -325,7 +325,7 @@ class ContractRegistry {
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         //console.log('Total Initial Margin to reserve ' +totalInitialMargin)
         // Move collateral to reservd position
-        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, ,'contractReserveInitMargin');
+        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin');
         return
     }
 
