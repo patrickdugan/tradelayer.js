@@ -344,9 +344,9 @@ const Validity = {
                     params.reason += 'Invalid side parameter; ';
                 }
 
-                if (params.cancelParams.txid && typeof params.cancelParams.txid !== 'string') {
+                if (params.cancelParams.txid) {
                     params.valid = false;
-                    params.reason += 'Invalid txid parameter; ';
+                    params.reason += 'TxId parameter deprecated for now. ; ';
                 }
             }
 

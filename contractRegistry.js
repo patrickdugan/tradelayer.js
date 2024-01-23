@@ -326,7 +326,7 @@ class ContractRegistry {
         //console.log('Total Initial Margin to reserve ' +totalInitialMargin)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin');
-        return
+        return totalInitialMargin
     }
 
    static async moveCollateralToMargin(sender, contractId, amount, price) {
