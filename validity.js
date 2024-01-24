@@ -695,18 +695,28 @@ const Validity = {
                 return params
             }
 
+            const MarginMap = require('./marginMap.js')
+            const marginMap = await MarginMap.loadMarginMap(params.contractId);
+
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
             const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
-            // Check if the sender has enough balance for the initial margin
-            console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
-            const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin);
-            if (hasSufficientBalance.hasSufficient==false) {
-                console.log('Insufficient balance for initial margin');
-                params.valid=false
-                params.reason+= "Insufficient balance for initial margin"
-            }
+            const existingPosition = await marginMap.getPositionForAddress(sender, params.contractId);
+            // Determine if the trade reduces the position size for buyer or seller
+            const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&params.side==false);
+            const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && params.side==true);
+        
+            if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
 
+                // Check if the sender has enough balance for the initial margin
+                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
+                const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin);
+                if (hasSufficientBalance.hasSufficient==false) {
+                    console.log('Insufficient balance for initial margin');
+                    params.valid=false
+                    params.reason+= "Insufficient balance for initial margin"
+                }
+            }
             if(params.leverage>50){
                 params.valid=false
                 params.reason+= "Stop encouraging gambling!"

@@ -27,7 +27,7 @@ class Orderbook {
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
                 }else{
 
                 }
@@ -232,6 +232,15 @@ class Orderbook {
                     let sellOrder = orderBook.sell[0];
                     let buyOrder = orderBook.buy[0];
 
+                    let tradePrice 
+                    if(sellOrder.blockTime == buyOrder.blockTime){
+                        console.log('trades in the same block, defaulting to buy order')
+                        tradePrice = buyOrder.price
+                    }else{
+                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                    }
+
+
                     // Check for price match
                     if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
 
@@ -241,15 +250,19 @@ class Orderbook {
                         let buyOrderAmountExpected = new BigNumber(buyOrder.amountExpected);
 
                         // Use BigNumber methods to perform calculations
-                        let amountOfTokenA = BigNumber.min(sellOrderAmountOffered, buyOrderAmountExpected.times(sellOrder.price));
-                        let amountOfTokenB = amountOfTokenA.div(sellOrder.price);
+                        let amountOfTokenA = BigNumber.min(sellOrderAmountOffered, buyOrderAmountExpected.times(tradePrice));
+                        let amountOfTokenB = BigNumber(amountOfTokenA).div(tradePrice);
 
                         // Update orders after the match
                         sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountOfTokenA).toNumber();
                         buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountOfTokenB).toNumber();
 
                         // Add to matches
-                        matches.push({ sellOrder, buyOrder, amountOfTokenA: amountOfTokenA.toNumber(), amountOfTokenB: amountOfTokenB.toNumber() });
+                        matches.push({ sellOrder, 
+                                        buyOrder, 
+                                        amountOfTokenA: amountOfTokenA.toNumber(), 
+                                        amountOfTokenB: amountOfTokenB.toNumber(),
+                                        tradePrice });
                         matchOccurred = true;
 
 
@@ -386,7 +399,7 @@ class Orderbook {
         async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
             const ContractRegistry = require('./contractRegistry.js')
             const inverse = ContractRegistry.isInverse(contractId)
-             const MarginMap = require('./marginMap.js')
+            const MarginMap = require('./marginMap.js')
             const marginMap = await MarginMap.loadMarginMap(contractId);
                          // Get the existing position sizes for buyer and seller
             const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
@@ -442,6 +455,14 @@ class Orderbook {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
 
+                let tradePrice 
+                    if(sellOrder.blockTime == buyOrder.blockTime){
+                        console.log('contract trades in the same block, defaulting to buy order')
+                        tradePrice = buyOrder.price
+                    }else{
+                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                    }
+
                 // Check for price match
                 if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
                     // Calculate the amount to be traded
@@ -454,7 +475,8 @@ class Orderbook {
                     // Add match to the list
                     matches.push({ 
                         sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid }, 
-                        buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid } 
+                        buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid },
+                        tradePrice 
                     });
 
                     // Remove filled orders from the order book
@@ -501,13 +523,14 @@ class Orderbook {
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                     if(!isBuyerReducingPosition){
                        // Use the instance method to set the initial margin
-                       match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price)                 
+                       match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin)
+
                        console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
                     // Update MarginMap for the contract series
                     if(!isSellerReducingPosition){
                         // Use the instance method to set the initial margin
-                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price)
+                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin)
                        console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
 
@@ -519,7 +542,7 @@ class Orderbook {
                     const trade = {
                         contractId: match.sellOrder.contractId,
                         amount: match.sellOrder.amount,
-                        price: match.sellOrder.price,
+                        price: match.tradePrice
                         buyerAddress: match.buyOrder.buyerAddress,
                         sellerAddress: match.sellOrder.sellerAddress,
                         sellerTx: match.sellOrder.sellerTx,
@@ -551,7 +574,7 @@ class Orderbook {
                         let avgEntry = LIFO.totalCost/match.buyOrder.amount 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, avgEntry, true, notionalValue, match.buyerPosition);
+                        const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, match.buyOrder.amount, match.tradePrice, avgEntry, true, notionalValue, match.buyerPosition);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
@@ -602,12 +625,12 @@ class Orderbook {
                         console.log('LIFO '+JSON.stringify(LIFO))
 
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
-                        const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, avgEntry, isInverse, notionalValue, match.sellerPosition);
+                        const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, match.sellOrder.amount, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition);
                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, match.sellOrder.amount, match.sellOrder.price, LIFO, match.sellOrder.contractId,currentBlockHeight) 
+                        const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, match.sellOrder.amount, match.tradePrice, LIFO, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, match.sellOrder.amount, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress);

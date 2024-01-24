@@ -179,7 +179,7 @@ class TallyMap {
             //console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
 
             if (senderTally.available < requiredAmount) {
-                return { hasSufficient: false, reason: 'Insufficient available balance' };
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: requiredAmount-senderTally.available };
             }
 
             return { hasSufficient: true, reason: '' };
