@@ -22,12 +22,12 @@ class Orderbook {
             console.log('key before the string treatment '+key)
             const stringKey = typeof key === 'string' ? key : String(key);
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
-             console.log('checking orderbook in this cancel call '+key)
+             console.log('checking orderbook in this cancel call '+stringKey)
             try{
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
                 }else{
 
                 }
@@ -46,7 +46,7 @@ class Orderbook {
 
         async saveOrderBook(key) {
             // Save order book to your database
-            //console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderbooks[key]))
+            console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderBooks[key]))
             
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
@@ -133,7 +133,7 @@ class Orderbook {
         static async getTradeHistoryByAddress(address) {
                 const tradeDB = dbInstance.getDatabase('tradeHistory');
                 const trades = await tradeDB.findAsync({ 
-                    $or: [{ 'trade.senderAddress': address }, { 'trade.receiverAddress': address }]
+                    $or: [{ 'trade.sender': address }, { 'trade.receiverAddress': address }]
                 });
                 return trades.map(doc => doc.trade);
         }
@@ -149,7 +149,7 @@ class Orderbook {
         // Adds a token order to the order book
         async addTokenOrder(order, blockHeight, txid) {
             const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
-            await TallyMap.updateBalance(order.senderAddress, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder');
+            await TallyMap.updateBalance(order.sender, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder');
             
             // Determine the correct orderbook key
             const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
@@ -277,8 +277,8 @@ class Orderbook {
                     continue;
                 }
 
-                const sellOrderAddress = match.sellOrder.senderAddress;
-                const buyOrderAddress = match.buyOrder.senderAddress;
+                const sellOrderAddress = match.sellOrder.sender;
+                const buyOrderAddress = match.buyOrder.sender;
                 const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
                 const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
                 
@@ -336,7 +336,7 @@ class Orderbook {
 
                 // Debit the traded amount from the seller's reserve 
                 await TallyMap.updateBalance(
-                    match.sellOrder.senderAddress,
+                    match.sellOrder.sender,
                     match.sellOrder.offeredPropertyId,
                     0,  // Credit traded amount of Token B to available
                     -match.amountOfTokenA, // Debit the same amount from reserve
@@ -345,7 +345,7 @@ class Orderbook {
                 //and credit the opposite consideration to available
 
                 await TallyMap.updateBalance(
-                    match.sellOrder.senderAddress,
+                    match.sellOrder.sender,
                     match.sellOrder.desiredPropertyId,
                     match.amountOfTokenB,  // Credit traded amount of Token B to available
                     0, // Debit the same amount from reserve
@@ -355,14 +355,14 @@ class Orderbook {
                 // Update balance for the buyer
                 // Debit the traded amount from the buyer's reserve and credit it to available
                 await TallyMap.updateBalance(
-                    match.buyOrder.senderAddress,
+                    match.buyOrder.sender,
                     match.buyOrder.offeredPropertyId,
                     0,  // Credit traded amount of Token B to available
                     -match.amountOfTokenB, // Debit the same amount from reserve
                     0, 0,'tokenTrade' );
 
                 await TallyMap.updateBalance(
-                    match.buyOrder.senderAddress,
+                    match.buyOrder.sender,
                     match.buyOrder.desiredPropertyId,
                     match.amountOfTokenA,  // Credit traded amount of Token B to available
                     0, // Debit the same amount from reserve
@@ -655,15 +655,19 @@ class Orderbook {
             if(!token){
                 console.log('showing orderbook before cancel '+JSON.stringify(orderBook))
             }
+            if(orderBook==undefined){
+                console.log('orderbook undefined, maybe empty ')
+                return []
+            }
 
             if(criteria.txid!=undefined){
-                console.log('cancelling by txid '+criteria.txid)
+                //console.log('cancelling by txid '+criteria.txid)
               for (let i = orderBook.buy.length - 1; i >= 0; i--) {
                 const ord = orderBook.buy[i]
                 if(ord.txid === criteria.txid){
                         cancelledOrders.push(ord);
 
-                        console.log('splicing order '+JSON.stringify(ord))
+                        //console.log('splicing order '+JSON.stringify(ord))
                         orderBook.buy.splice(i, 1);
                 }
                }
@@ -671,10 +675,10 @@ class Orderbook {
                for (let i = orderBook.sell.length - 1; i >= 0; i--) {
                 const ordi = orderBook.sell[i]
                 if(ordi.txid === criteria.txid){
-                    console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
+                    //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
                         cancelledOrders.push(ordi);
 
-                        console.log('splicing order '+JSON.stringify(ordi))
+                        //console.log('splicing order '+JSON.stringify(ordi))
                         orderBook.buy.splice(i, 1);
                 }
                }
@@ -693,7 +697,7 @@ class Orderbook {
                             orderBook.buy.splice(i, 1);
 
                             if(token==true){
-                                returnFromReserve+=order.amount
+                                returnFromReserve+=order.amountOffered
                             }else{
                                 returnFromReserve+=order.initMargin
                             }
@@ -705,17 +709,14 @@ class Orderbook {
                     const order = orderBook.sell[i];
 
                     if(this.shouldCancelOrder(order,criteria)){
-                            if(criteria.txid=="8b146ed06d51a7856e3f27ba1d0d80229b34885cbc63784a2c1051de1ccdc37b"){
-                                console.log('splicing orders out erroneously for cancel by txid '+JSON.stringify(ordi))
-                            }
-                            if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
+                            //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
                          // Logic to cancel the order
                             cancelledOrders.push(order);
                             console.log('splicing order '+JSON.stringify(order))
                             orderBook.sell.splice(i, 1);
 
                             if(token==true){
-                                returnFromReserve+=order.amount
+                                returnFromReserve+=order.amountOffered
                             }else{
                                 returnFromReserve+=order.initMargin
                             }
@@ -740,11 +741,12 @@ class Orderbook {
         }
 
         shouldCancelOrder(order, criteria) {
-            if (!order || !order.sender) {
+            /*if (!order || !order.senderAddess) {
                 console.error('Invalid order:', order);
                 return false;
-            }
-
+            }*/
+            console.log('should cancel order? '+JSON.stringify(order)+' '+JSON.stringify(criteria))
+            console.log('cancel all criteria '+JSON.stringify(criteria.address!=undefined)+' '+JSON.stringify(order.sender===criteria.address))
             if(criteria.price!=undefined&&(criteria.buy ? order.price <= criteria.price : order.price >= criteria.price)){
                 return true
             }
@@ -761,12 +763,12 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key = offeredPropertyId
-            //console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
+            console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
             console.log('returning from reserve '+cancelledOrders.returnFromReserve)
             for (const order of cancelledOrders) {
-                //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
+                console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
                 const reserveAmount = order.initMargin
                 console.log('about to apply changes '+reserveAmount)
                 await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel');
@@ -837,7 +839,7 @@ class Orderbook {
             // Retrieve order details and calculate margin reserved amount
             const key =  offeredPropertyId+'-'+desiredPropertyId
             const cancelledOrder = await this.cancelOrdersByCriteria(fromAddress, key, {txid:txid});
-            const reserveAmount = order.amount;
+            const reserveAmount = order.amountOffered;
             await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
 
             // Return the details of the cancelled order
@@ -852,7 +854,7 @@ class Orderbook {
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, {price:price, buy:true});
 
             for (const order of cancelledOrders) {
-                const reserveAmount = order.amount;
+                const reserveAmount = order.amountOffered;
                 await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
             }
 
@@ -868,7 +870,7 @@ class Orderbook {
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, {price:price, buy:false});
 
             for (const order of cancelledOrders) {
-                const reserveAmount = order.amount;
+                const reserveAmount = order.amountOffered;
                 await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
             }
 

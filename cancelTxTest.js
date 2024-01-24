@@ -2,7 +2,7 @@ const TxUtils = require('./txUtils.js');
 
 async function cancelOrders() {
     // Admin address
-    const adminAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
+    const adminAddress = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'//tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
 
     // Mode 1: Cancel all contract orders
     const cancelParamsMode1 = {
@@ -13,7 +13,7 @@ async function cancelOrders() {
         cancelAll: true,
     };
 
-    await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode1, 6);
+    //await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode1, 6);
 
     // Mode 2: Cancel a specific contract order by txid
     const cancelParamsMode2 = {
@@ -41,7 +41,7 @@ async function cancelOrders() {
         },
     };
 
-    await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode3Buy, 6);
+    //await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode3Buy, 6);
 
     // Mode 4: Cancel contract sell orders below 0.48
     const cancelParamsMode4Sell = {
