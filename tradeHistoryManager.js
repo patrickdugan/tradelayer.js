@@ -1,4 +1,5 @@
 const database = require('./db.js')
+const BigNumber = require('bignumber.js');
 
 class TradeHistory {
   constructor() {
@@ -14,7 +15,7 @@ class TradeHistory {
   async getTradeHistoryForAddress(address,contractId) {
     console.log('about to call load history for contract '+contractId)
     const tradeHistory = await this.loadTradeHistory(contractId);
-    //console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
+    console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
     return tradeHistory.filter((trade) =>
       [trade.trade.buyerAddress, trade.trade.sellerAddress].includes(address)
     );
@@ -76,42 +77,172 @@ class TradeHistory {
     return txIds;
   }
 
-  async getCategorizedTrades(address, contractId) {
-    const trades = await this.getPositionHistoryForContract(address, contractId);
+    async getCategorizedTrades(address, contractId) {
+      const trades = await this.getTradeHistoryForAddress(address, contractId);
 
-    const categorizedTrades = {
-        openTrades: [],
-        partiallyClosedTrades: [],
-        closedTrades: [],
-    };
+          let openTrades = []
+          let closeTrades = []
 
-    for (let i = 0; i < trades.length; i++) {
-        const currentTrade = trades[i];
-        currentTrade.tradedAmount = i > 0 ? currentTrade.amount - trades[i - 1].amount : currentTrade.amount;
+      let sequentialAvgEntryPrice = 0;
+      let sequentialEntryAmount = 0;
 
-        if (currentTrade.tradedAmount === 0) {
-            categorizedTrades.partiallyClosedTrades.push(currentTrade);
-        } else {
-            if (currentTrade.isClose) {
-                // If it's a closing trade, back-reference the entry price
-                const entryTrade = trades.find((t, index) => index < i && t.contractId === currentTrade.contractId && t.tradedAmount > 0);
-                if (entryTrade) {
-                    currentTrade.entryPrice = entryTrade.price;
+      for (let i = 0; i < trades.length; i++) {
+          const currentTrade = trades[i];
+            console.log('checking each trade '+JSON.stringify(currentTrade))
+            let individualTrade={
+              address: '',
+              contractId: currentTrade.contractId,
+              price: currentTrade.price,
+              amount: 0,
+              block: currentTrade.block,
+              fullyClosesPosition: false
+            }
+
+            if(currentTrade.buyerClosed==0){
+                individualTrade.amount=currentTrade.amount
+                individualTrade.address=currentTrade.buyerAddress
+                openTrades.push(individualTrade)
+            }else{
+                individualTrade.amount=currentTrade.buyerClosed
+                individualTrade.address=currentTrade.buyerAddress
+                individualTrade.fullyClosesPosition=currentTrade.buyerFullClose
+                closeTrades.push(individualTrade)
+                if(currentTrade.amount-currentTrade.buyerClosed>0){
+                  //flip trade
+                  individualTrade.amount=currentTrade.buyerClosed
+                  individualTrade.address=currentTrade.buyerAddress
+                  individualTrade.fullyClosesPosition=true
+                  openTrades.push(individualTrade)
                 }
+            }
 
-                categorizedTrades.closedTrades.push(currentTrade);
-            } else {
-                categorizedTrades.openTrades.push(currentTrade);
+            if(currentTrade.sellerClosed==0){
+                individualTrade.amount=currentTrade.amount
+                individualTrade.address=currentTrade.sellerAddress
+                openTrades.push(individualTrade)
+            }else{
+                individualTrade.amount=currentTrade.sellerClosed
+                individualTrade.address=currentTrade.sellerAddress
+                individualTrade.fullyClosesPosition=currentTrade.sellerFullClose
+                closeTrades.push(individualTrade)
+                if(currentTrade.amount-currentTrade.sellerClosed>0){
+                  //flip trade
+                  individualTrade.amount=currentTrade.sellerClosed
+                  individualTrade.address=currentTrade.sellerAddress
+                  individualTrade.fullyClosesPosition=true
+                  openTrades.push(individualTrade)
+                }
             }
         }
-    }
 
-    return categorizedTrades;
+           const categorizedTrades = {
+                openTrades: openTrades,
+                closeTrades: closeTrades
+            };
+
+      return categorizedTrades;
+  }
+
+  computeAverageEntryPrices(openTrades) {
+      const avgEntryPrices = {};
+      let position = new BigNumber(0);
+
+      for (let i = 0; i < openTrades.length; i++) {
+          const trade = openTrades[i];
+          const blockHeight = trade.blockHeight;
+
+          if (!avgEntryPrices[blockHeight]) {
+              avgEntryPrices[blockHeight] = {
+                  sum: new BigNumber(0),
+                  count: new BigNumber(0),
+                  avg: new BigNumber(0),
+                  position: new BigNumber(0),
+              };
+          }
+
+          const price = new BigNumber(trade.price);
+          const amount = new BigNumber(trade.amount);
+
+          avgEntryPrices[blockHeight].sum = avgEntryPrices[blockHeight].sum.plus(price.times(amount));
+          avgEntryPrices[blockHeight].count = avgEntryPrices[blockHeight].count.plus(amount.abs());
+          avgEntryPrices[blockHeight].avg = avgEntryPrices[blockHeight].sum.dividedBy(avgEntryPrices[blockHeight].count);
+
+          position = position.plus(amount);
+          avgEntryPrices[blockHeight].position = position;
+
+          // Update avg. entry price and position in the trade object
+          trade.avgEntryPrice = avgEntryPrices[blockHeight].avg.toNumber();
+          trade.position = position.toNumber();
+      }
+      return avgEntryPrices;
+  }
+
+async trackPositionHistory(address, contractId) {
+    const { openTrades, closeTrades } = await this.getCategorizedTrades(address, contractId);
+    console.log('open trades for ' +address+ ' ' +JSON.stringify(openTrades)+ ' close trades '+JSON.stringify(closeTrades))
+    const avgEntryPrices = this.computeAverageEntryPrices(openTrades);
+    const positionHistory = [];
+
+    // Combine open and close trades and sort by block height
+    const allTrades = [...openTrades, ...closeTrades].sort((a, b) => a.block - b.block);
+
+    let position = new BigNumber(0);
+    let prevBlockHeight = 0;
+    let currentOpenTrades = [];
+
+    allTrades.forEach((trade) => {
+    const blockHeight = trade.block;
+
+    // Check if avgEntryPrices[blockHeight] exists
+    if (avgEntryPrices[blockHeight]) {
+          const entryPrice = avgEntryPrices[blockHeight].avg.toNumber();
+          const fullyClosesPosition = closeTrades.some((closeTrade) => closeTrade.block === blockHeight && closeTrade.fullyClosesPosition);
+
+          if (blockHeight !== prevBlockHeight) {
+              // If the block height changes, add a new entry to position history
+              positionHistory.push({
+                  blockHeight,
+                  position: position.toNumber(),
+                  avgEntryPrice: entryPrice,
+                  fullyClosesPosition,
+              });
+
+              // Store the current open trades for the next iteration
+              currentOpenTrades = [];
+          }
+
+          position = position.plus(trade.amount);
+
+          if (!trade.fullyClosesPosition) {
+              // Only update if the trade doesn't fully close the position
+              avgEntryPrices[blockHeight].position = position;
+          }
+
+          // Update avg. entry price in the trade object
+          trade.avgEntryPrice = entryPrice;
+          trade.position = position.toNumber();
+
+          // Store the open trades for the current block height
+          currentOpenTrades.push(trade);
+
+          prevBlockHeight = blockHeight;
+        }
+    });
+
+  return positionHistory;
+
 }
--
+
+computeAverageEntryPrice(openTrades) {
+    const sum = openTrades.reduce((total, trade) => total.plus(trade.price * trade.amount), new BigNumber(0));
+    const count = openTrades.reduce((total, trade) => total.plus(Math.abs(trade.amount)), new BigNumber(0));
+
+    return sum.dividedBy(count).toNumber();
+}
 
 
-  async calculateLIFOEntry(address, amount, contractId) {
+
+async calculateLIFOEntry(address, amount, contractId) {
       const categorizedTrades = await this.getCategorizedTrades(address, contractId);
       console.log('open trades ' +JSON.stringify(categorizedTrades.openTrades));
 

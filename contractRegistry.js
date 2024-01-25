@@ -329,45 +329,51 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-    static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice, side, initMargin) {
-                const TallyMap = require('./tally.js');
-                const MarginMap = require('./marginMap.js');
-                const marginMap = await MarginMap.getInstance(contractId);
+  User
 
-                const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
-                const collateralPropertyId = await ContractRegistry.getCollateralId(contractId);
-                const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-
-                let excessMargin = 0;
-                let contractUndo = 0;
-
-                if ((orderPrice > price && side==true) || (orderPrice < price && side==false)) {
-                    excessMargin = side ? initMargin - totalInitialMargin : totalInitialMargin - initMargin;
-
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin) {
+        const TallyMap = require('./tally.js')
+        const MarginMap = require('./marginMap.js')
+        const marginMap = await MarginMap.getInstance(contractId)
+        //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
+        //console.log('initialMarginPerContract '+initialMarginPerContract)
+        const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
+        //console.log('collateralPropertyId '+collateralPropertyId)
+        let totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+        //console.log('Total Initial Margin ' +totalInitialMargin)
+        // Move collateral to reservd position
+                    let contractUndo = 0
+                    let excessMargin
+            if(orderPrice>price&&side==true&&excessMargin!=0){
+                    excessMargin = initMargin -totalInitialMargin
+                    //contract was bid higher than the fill, the initMargin in reserve is too high and will be returned to available
+                     await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin,0, 0, 'returnExcessMargin');
+            }else if(orderPrice<price&&side==false&&excessMargin!=0){
+                    excessMargin = totalInitialMargin-initMargin
                     const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, excessMargin);
-
-                    if (!hasSufficientBalance.hasSufficient) {
+                    if(hasSufficientBalance.hasSufficient==false){
                         contractUndo = BigNumber(hasSufficientBalance.shortfall)
-                            .dividedBy(initialMarginPerContract)
-                            .decimalPlaces(0, BigNumber.ROUND_CEIL)
-                            .toNumber();
-
-                        amount -= contractUndo;
-                        totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-                        excessMargin = totalInitialMargin - initMargin;         
-                        await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin');
-                  
-                    } else if (hasSufficientBalance.hasSufficient) {
-                    await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin');
-                    }
-                }
-
-                await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
-                const position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
-
-                return position;
+                                              .dividedBy(initialMarginPerContract)
+                                              .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                                              .toNumber();
+                        amount -= contractUndo
+                        totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();                         
+                        excessMargin=totalInitialMargin-initMargin                               
+                    //contract was offered lower than the fill, init Margin in reserve is too high extra will return to available
+                        await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin');    
+                    }else{
+                       await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin');  
+                    }  
             }
---+
+
+        await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
+        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
+        return position
+    }           
+
+
+
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
