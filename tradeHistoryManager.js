@@ -76,44 +76,39 @@ class TradeHistory {
     return txIds;
   }
 
-    async getCategorizedTrades(address, contractId) {
-      const trades = await this.getPositionHistoryForContract(address, contractId);
+  async getCategorizedTrades(address, contractId) {
+    const trades = await this.getPositionHistoryForContract(address, contractId);
 
-      const openTrades = [];
-      const partiallyClosedTrades = [];
-      const closedTrades = [];
+    const categorizedTrades = {
+        openTrades: [],
+        partiallyClosedTrades: [],
+        closedTrades: [],
+    };
 
-      for (let i = 0; i < trades.length; i++) {
-          const currentTrade = trades[i];
+    for (let i = 0; i < trades.length; i++) {
+        const currentTrade = trades[i];
+        currentTrade.tradedAmount = i > 0 ? currentTrade.amount - trades[i - 1].amount : currentTrade.amount;
 
-          if (i === 0) {
-              openTrades.push(currentTrade);
-          } else {
-              const prevTrade = trades[i - 1];
+        if (currentTrade.tradedAmount === 0) {
+            categorizedTrades.partiallyClosedTrades.push(currentTrade);
+        } else {
+            if (currentTrade.isClose) {
+                // If it's a closing trade, back-reference the entry price
+                const entryTrade = trades.find((t, index) => index < i && t.contractId === currentTrade.contractId && t.tradedAmount > 0);
+                if (entryTrade) {
+                    currentTrade.entryPrice = entryTrade.price;
+                }
 
-              const tradedAmount = currentTrade.amount - prevTrade.amount;
+                categorizedTrades.closedTrades.push(currentTrade);
+            } else {
+                categorizedTrades.openTrades.push(currentTrade);
+            }
+        }
+    }
 
-              // Update the trade object with the tradedAmount
-              currentTrade.tradedAmount = tradedAmount;
-
-              if (tradedAmount === 0) {
-                  partiallyClosedTrades.push(currentTrade);
-              } else {
-                  if (currentTrade.isClose) {
-                      closedTrades.push(currentTrade);
-                  } else {
-                      openTrades.push(currentTrade);
-                  }
-              }
-          }
-      }
-
-      return {
-          openTrades,
-          partiallyClosedTrades,
-          closedTrades,
-      };
-  }
+    return categorizedTrades;
+}
+-
 
 
   async calculateLIFOEntry(address, amount, contractId) {
