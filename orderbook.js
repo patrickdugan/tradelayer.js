@@ -521,6 +521,55 @@ class Orderbook {
 
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
+
+
+                    //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
+                    //the purpose of which is to handle flipping positions long to short or visa versa
+                    const isBuyerFlippingPosition =  Boolean((match.buyOrder.amount>Math.abs(match.buyerPosition.contracts))&&match.buyerPosition.contracts<0)
+                    const isSellerFlippingPosition = Boolean((match.sellOrder.amount>Math.abs(match.sellerPosition.contracts))&&match.sellerPosition.contracts>0)
+                    let flipLong = 0 
+                    let flipShort = 0
+                    let initialMarginPerContract
+                    let totalMargin 
+                    let collateralPropertyId = ContractRegistry.getCollateralId(match.buyOrder.contractId)
+                    if(isBuyerFlippingPosition){
+                        flipLong=match.buyOrder.amount-Math.abs(match.buyerPosition.contracts)
+                        initialMarginPerContract = await ContractRegistry.getInitialMargin(match.buyOrder.contractId, match.tradePrice);
+                        totalMargin = initialMarginPerContract*flipLong
+                        TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId,totalMargin)
+                        if (!hasSufficientBalance.hasSufficient) {
+                        let contractUndo = BigNumber(hasSufficientBalance.shortfall)
+                            .dividedBy(initialMarginPerContract)
+                            .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                            .toNumber();
+
+                        flipLong -= contractUndo;
+                        totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+                        
+                        }
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin');
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
+                        await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, totalInitialMargin);
+                    }
+                    if(isSellerFlippingPosition){
+                        flipShort=match.sellOrder.amount-Math.abs(match.sellerPosition.contracts)
+                        initialMarginPerContract = await ContractRegistry.getInitialMargin(match.sellOrder.contractId, match.tradePrice);
+                        totalMargin = initialMarginPerContract*flipLong
+                        TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress, collateralPropertyId,totalMargin)
+                        if (!hasSufficientBalance.hasSufficient) {
+                        let contractUndo = BigNumber(hasSufficientBalance.shortfall)
+                            .dividedBy(initialMarginPerContract)
+                            .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                            .toNumber();
+
+                        flipShort -= contractUndo;
+                        totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
+                        }
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin');
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
+                        await marginMap.setInitialMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, totalInitialMargin);
+                  }
+
                     if(!isBuyerReducingPosition){
                        // Use the instance method to set the initial margin
                        match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin)
@@ -542,7 +591,7 @@ class Orderbook {
                     const trade = {
                         contractId: match.sellOrder.contractId,
                         amount: match.sellOrder.amount,
-                        price: match.tradePrice
+                        price: match.tradePrice,
                         buyerAddress: match.buyOrder.buyerAddress,
                         sellerAddress: match.sellOrder.sellerAddress,
                         sellerTx: match.sellOrder.sellerTx,
@@ -559,8 +608,7 @@ class Orderbook {
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
-                  
-                    const collateralPropertyId = await ContractRegistry.getCollateralId(match.sellOrder.contractId)
+                   
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     // Realize PnL if the trade reduces the position size

@@ -329,7 +329,7 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-           static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice, side, initMargin) {
+    static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice, side, initMargin) {
                 const TallyMap = require('./tally.js');
                 const MarginMap = require('./marginMap.js');
                 const marginMap = await MarginMap.getInstance(contractId);
@@ -367,7 +367,7 @@ class ContractRegistry {
 
                 return position;
             }
-
+--+
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
