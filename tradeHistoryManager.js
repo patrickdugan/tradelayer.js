@@ -15,7 +15,7 @@ class TradeHistory {
   async getTradeHistoryForAddress(address,contractId) {
     console.log('about to call load history for contract '+contractId)
     const tradeHistory = await this.loadTradeHistory(contractId);
-    console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
+    //console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
     return tradeHistory.filter((trade) =>
       [trade.trade.buyerAddress, trade.trade.sellerAddress].includes(address)
     );
@@ -76,169 +76,202 @@ class TradeHistory {
 
     return txIds;
   }
+async getCategorizedTrades(address, contractId) {
+    const trades = await this.getTradeHistoryForAddress(address, contractId);
 
-    async getCategorizedTrades(address, contractId) {
-      const trades = await this.getTradeHistoryForAddress(address, contractId);
+    let openTrades = [];
+    let closeTrades = [];
 
-          let openTrades = []
-          let closeTrades = []
+    for (let i = 0; i < trades.length; i++) {
+        const currentTrade = trades[i].trade;
+        console.log('checking currentTrade'+JSON.stringify(currentTrade))
+        let individualTrade = {
+            address: '',
+            contractId: currentTrade.contractId,
+            price: currentTrade.price,
+            amount: 0,
+            block: currentTrade.block,
+            fullyClosesPosition: false,
+        };
 
-      let sequentialAvgEntryPrice = 0;
-      let sequentialEntryAmount = 0;
-
-      for (let i = 0; i < trades.length; i++) {
-          const currentTrade = trades[i];
-            console.log('checking each trade '+JSON.stringify(currentTrade))
-            let individualTrade={
-              address: '',
-              contractId: currentTrade.contractId,
-              price: currentTrade.price,
-              amount: 0,
-              block: currentTrade.block,
-              fullyClosesPosition: false
-            }
-
-            if(currentTrade.buyerClosed==0){
-                individualTrade.amount=currentTrade.amount
-                individualTrade.address=currentTrade.buyerAddress
-                openTrades.push(individualTrade)
-            }else{
-                individualTrade.amount=currentTrade.buyerClosed
-                individualTrade.address=currentTrade.buyerAddress
-                individualTrade.fullyClosesPosition=currentTrade.buyerFullClose
-                closeTrades.push(individualTrade)
-                if(currentTrade.amount-currentTrade.buyerClosed>0){
-                  //flip trade
-                  individualTrade.amount=currentTrade.buyerClosed
-                  individualTrade.address=currentTrade.buyerAddress
-                  individualTrade.fullyClosesPosition=true
-                  openTrades.push(individualTrade)
-                }
-            }
-
-            if(currentTrade.sellerClosed==0){
-                individualTrade.amount=currentTrade.amount
-                individualTrade.address=currentTrade.sellerAddress
-                openTrades.push(individualTrade)
-            }else{
-                individualTrade.amount=currentTrade.sellerClosed
-                individualTrade.address=currentTrade.sellerAddress
-                individualTrade.fullyClosesPosition=currentTrade.sellerFullClose
-                closeTrades.push(individualTrade)
-                if(currentTrade.amount-currentTrade.sellerClosed>0){
-                  //flip trade
-                  individualTrade.amount=currentTrade.sellerClosed
-                  individualTrade.address=currentTrade.sellerAddress
-                  individualTrade.fullyClosesPosition=true
-                  openTrades.push(individualTrade)
-                }
+        if (currentTrade.buyerClose == 0&&currentTrade.buyerAddress==address) {
+            individualTrade.amount = currentTrade.amount;
+            individualTrade.address = currentTrade.buyerAddress;
+            openTrades.push(individualTrade);
+        } else if((currentTrade.buyerClose>0||currentTrade.buyerClose==null)&&currentTrade.buyerAddress==address){
+            individualTrade.amount = currentTrade.buyerClosed;
+            individualTrade.address = currentTrade.buyerAddress;
+            individualTrade.fullyClosesPosition = currentTrade.buyerFullClose;
+            closeTrades.push(individualTrade);
+            if (currentTrade.flipLong > 0) {
+                // flip trade
+                console.log('flip long before ajustment '+JSON.stringify(individualTrade))
+                individualTrade.amount = currentTrade.flipLong;
+                individualTrade.address = currentTrade.buyerAddress;
+                individualTrade.fullyClosesPosition = true;
+                console.log('flip long after adjustment '+JSON.stringify(individualTrade))
+                openTrades.push(individualTrade);
             }
         }
 
-           const categorizedTrades = {
-                openTrades: openTrades,
-                closeTrades: closeTrades
-            };
+        if (currentTrade.sellerClose == 0&&currentTrade.sellerAddress==address) {
+            individualTrade.amount = currentTrade.amount*-1;
+            individualTrade.address = currentTrade.sellerAddress;
+            openTrades.push(individualTrade);
+        } else if((currentTrade.sellerClose>0||currentTrade.sellerClose==null)&&currentTrade.sellerAddress==address){
+            individualTrade.amount = currentTrade.sellerClosed*-1;
+            individualTrade.address = currentTrade.sellerAddress;
+            individualTrade.fullyClosesPosition = currentTrade.sellerFullClose;
+            closeTrades.push(individualTrade);
+            if (currentTrade.flipShort> 0) {
+                // flip trade
+                individualTrade.amount = currentTrade.sellerClosed*-1;
+                individualTrade.address = currentTrade.sellerAddress;
+                individualTrade.fullyClosesPosition = true;
+                openTrades.push(individualTrade);
+            }
+        }
+    }
 
-      return categorizedTrades;
-  }
+    // Sort open and close trades by block height
+    openTrades.sort((a, b) => a.block - b.block);
+    closeTrades.sort((a, b) => a.block - b.block);
 
-  computeAverageEntryPrices(openTrades) {
-      const avgEntryPrices = {};
-      let position = new BigNumber(0);
+    const categorizedTrades = {
+        openTrades: openTrades,
+        closeTrades: closeTrades,
+    };
 
-      for (let i = 0; i < openTrades.length; i++) {
-          const trade = openTrades[i];
-          const blockHeight = trade.blockHeight;
+    return categorizedTrades;
+}
 
-          if (!avgEntryPrices[blockHeight]) {
-              avgEntryPrices[blockHeight] = {
-                  sum: new BigNumber(0),
-                  count: new BigNumber(0),
-                  avg: new BigNumber(0),
-                  position: new BigNumber(0),
-              };
-          }
 
-          const price = new BigNumber(trade.price);
-          const amount = new BigNumber(trade.amount);
+computeAverageEntryPrices(openTrades) {
+    let sum = new BigNumber(0);
+    let count = new BigNumber(0);
 
-          avgEntryPrices[blockHeight].sum = avgEntryPrices[blockHeight].sum.plus(price.times(amount));
-          avgEntryPrices[blockHeight].count = avgEntryPrices[blockHeight].count.plus(amount.abs());
-          avgEntryPrices[blockHeight].avg = avgEntryPrices[blockHeight].sum.dividedBy(avgEntryPrices[blockHeight].count);
+    for (let i = 0; i < openTrades.length; i++) {
+        const trade = openTrades[i];
+        const price = new BigNumber(trade.price);
+        const amount = new BigNumber(trade.amount);
 
-          position = position.plus(amount);
-          avgEntryPrices[blockHeight].position = position;
+        sum = sum.plus(price.times(amount.abs()));;
+        count = count.plus(amount.abs());
+    }
 
-          // Update avg. entry price and position in the trade object
-          trade.avgEntryPrice = avgEntryPrices[blockHeight].avg.toNumber();
-          trade.position = position.toNumber();
-      }
-      return avgEntryPrices;
-  }
+    const avgEntryPrice = count.isGreaterThan(0) ? sum.dividedBy(count) : new BigNumber(0);
+    return avgEntryPrice.toNumber();
+}
+
 
 async trackPositionHistory(address, contractId) {
     const { openTrades, closeTrades } = await this.getCategorizedTrades(address, contractId);
-    console.log('open trades for ' +address+ ' ' +JSON.stringify(openTrades)+ ' close trades '+JSON.stringify(closeTrades))
-    const avgEntryPrices = this.computeAverageEntryPrices(openTrades);
+    //console.log('open trades for ' + address + ' ' + JSON.stringify(openTrades) + ' close trades ' + JSON.stringify(closeTrades));
+
+    // Sort open and close trades by block height
+    const sortedOpenTrades = openTrades.sort((a, b) => a.blockHeight - b.blockHeight);
+    const sortedCloseTrades = closeTrades.sort((a, b) => a.blockHeight - b.blockHeight);
+
+    // Break up opening trades based on consecutive closing trades
+    const separatedOpenTrades = this.breakUpOpeningTrades([...sortedOpenTrades], sortedCloseTrades);
+    //console.log('separatedOpenTrades ' + JSON.stringify(separatedOpenTrades));
     const positionHistory = [];
 
-    // Combine open and close trades and sort by block height
-    const allTrades = [...openTrades, ...closeTrades].sort((a, b) => a.block - b.block);
+    for (const openTradesSubset of separatedOpenTrades) {
+        // Compute the average entry price for the current subset
+        const avgEntryPrice = this.computeAverageEntryPrices(openTradesSubset);
+        //console.log('avgEntryPrice for address ' + address + ' ' + avgEntryPrice);
 
-    let position = new BigNumber(0);
-    let prevBlockHeight = 0;
+        let position = new BigNumber(0);  // Reset position for each subset
+        let prevBlockHeight = 0;
+
+      openTradesSubset.forEach((trade) => {
+          const blockHeight = trade.block;
+
+          if (avgEntryPrice !== undefined) {
+              const entryPrice = avgEntryPrice;
+              const fullyClosesPosition = sortedCloseTrades.some(
+                  (closeTrade) => closeTrade.block === blockHeight && closeTrade.fullyClosesPosition
+              );
+
+              // Check if it's a closing trade
+              if (fullyClosesPosition) {
+                  // Calculate realized PNL for the closing trade
+                  const pnl = entryPrice.minus(trade.price).times(trade.amount);
+                  console.log('Realized PNL: ' + pnl.toNumber());
+                  
+                  // Adjust position based on the closing trade
+                  position = position.plus(pnl);
+              } else {
+                  // It's an opening trade, update position accordingly
+                  position = position.plus(trade.amount);
+              }
+
+              if (blockHeight !== prevBlockHeight) {
+                  // If the block height changes, add a new entry to position history
+                  positionHistory.push({
+                      blockHeight,
+                      position: position.toNumber(),
+                      avgEntryPrice: entryPrice,
+                      fullyClosesPosition,
+                  });
+
+                  // Reset the position for the new block height
+                  position = new BigNumber(0);
+              }
+
+              if (!fullyClosesPosition) {
+                  // Only update if the trade doesn't fully close the position
+                  trade.position = position.toNumber();
+              }
+          }
+      })
+    }
+
+    return positionHistory;
+}
+
+
+
+
+breakUpOpeningTrades(openTrades, closeTrades) {
+    const separatedOpenTrades = [];
+    let currentBlockHeight = null;
     let currentOpenTrades = [];
+    console.log('open and close trades in breakUpOpeningTrades ' + JSON.stringify(openTrades) + ' ' + JSON.stringify(closeTrades));
+    
+    let closeTrade = null; // Initialize closeTrade
 
-    allTrades.forEach((trade) => {
-    const blockHeight = trade.block;
+    for (const trade of openTrades) {
+        const blockHeight = trade.blockHeight;
 
-    // Check if avgEntryPrices[blockHeight] exists
-    if (avgEntryPrices[blockHeight]) {
-          const entryPrice = avgEntryPrices[blockHeight].avg.toNumber();
-          const fullyClosesPosition = closeTrades.some((closeTrade) => closeTrade.block === blockHeight && closeTrade.fullyClosesPosition);
+        if (currentBlockHeight !== blockHeight) {
+            // Check for consecutive closing trades
+            if (closeTrade && closeTrade.blockHeight === blockHeight - 1) {
+                console.log('close trade blockHeight ' + closeTrade.blockHeight + ' ' + (blockHeight - 1));
+            }
 
-          if (blockHeight !== prevBlockHeight) {
-              // If the block height changes, add a new entry to position history
-              positionHistory.push({
-                  blockHeight,
-                  position: position.toNumber(),
-                  avgEntryPrice: entryPrice,
-                  fullyClosesPosition,
-              });
+            const consecutiveCloses = closeTrades.filter(
+                close => close.blockHeight === blockHeight - 1
+            );
 
-              // Store the current open trades for the next iteration
-              currentOpenTrades = [];
-          }
-
-          position = position.plus(trade.amount);
-
-          if (!trade.fullyClosesPosition) {
-              // Only update if the trade doesn't fully close the position
-              avgEntryPrices[blockHeight].position = position;
-          }
-
-          // Update avg. entry price in the trade object
-          trade.avgEntryPrice = entryPrice;
-          trade.position = position.toNumber();
-
-          // Store the open trades for the current block height
-          currentOpenTrades.push(trade);
-
-          prevBlockHeight = blockHeight;
+            if (consecutiveCloses.length > 0) {
+                // Consecutive closing trade found, start a new array for open trades
+                separatedOpenTrades.push([...currentOpenTrades]);
+                currentOpenTrades = [];
+            }
         }
-    });
 
-  return positionHistory;
+        currentOpenTrades.push(trade);
+        currentBlockHeight = blockHeight;
+    }
 
+    // Add the last set of open trades to the result array
+    separatedOpenTrades.push([...currentOpenTrades]);
+
+    return separatedOpenTrades;
 }
 
-computeAverageEntryPrice(openTrades) {
-    const sum = openTrades.reduce((total, trade) => total.plus(trade.price * trade.amount), new BigNumber(0));
-    const count = openTrades.reduce((total, trade) => total.plus(Math.abs(trade.amount)), new BigNumber(0));
-
-    return sum.dividedBy(count).toNumber();
-}
 
 
 

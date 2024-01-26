@@ -705,7 +705,7 @@ const Validity = {
             // Determine if the trade reduces the position size for buyer or seller
             const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&params.side==false);
             const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && params.side==true);
-        
+
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
 
                 // Check if the sender has enough balance for the initial margin
@@ -717,6 +717,29 @@ const Validity = {
                     params.reason+= "Insufficient balance for initial margin"
                 }
             }
+
+             const isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPosition.contracts)&&existingPosition.contracts<0&&params.side==true)
+             const isSellerFlippingPosition = Boolean(params.amount>existingPosition.contracts&&match.sellerPosition.contracts>0&&params.side==false)           
+
+             let flipLong = 0 
+             let flipShort = 0
+
+             if(isBuyerFlippingPosition){
+                flipLong=params.amount-Math.abs(existingPosition.contracts)
+                totalInitialMargin = BigNumber(initialMarginPerContract).times(flipLong).toNumber();
+             }else if(isSellerFlippingPosition){
+                flipShort=params.amount-existingPosition.contracts
+                totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
+             }
+             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
+             if(hasSufficientBalance.hasSufficient==false){
+                 let contractUndo = BigNumber(hasSufficientBalance.shortfall)
+                                    .dividedBy(initialMarginPerContract)
+                                    .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                                    .toNumber();
+
+                params.amount -= contractUndo;
+             }
             if(params.leverage>50){
                 params.valid=false
                 params.reason+= "Stop encouraging gambling!"

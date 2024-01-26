@@ -527,39 +527,51 @@ class Orderbook {
                     //the purpose of which is to handle flipping positions long to short or visa versa
                     const isBuyerFlippingPosition =  Boolean((match.buyOrder.amount>Math.abs(match.buyerPosition.contracts))&&match.buyerPosition.contracts<0)
                     const isSellerFlippingPosition = Boolean((match.sellOrder.amount>Math.abs(match.sellerPosition.contracts))&&match.sellerPosition.contracts>0)
+                    /*if(match.sellOrder.sellerTx=="17e7d707a2b8ff0e4b4fc0ce35e85088431122a90266b60e8355ee6e528157ff"){
+                        console.log('checking our flip logic '+isBuyerFlippingPosition+ ' '+isSellerFlippingPosition)
+                    }*/
                     let flipLong = 0 
                     let flipShort = 0
                     let initialMarginPerContract
                     let totalMargin 
-                    let collateralPropertyId = ContractRegistry.getCollateralId(match.buyOrder.contractId)
+                    let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
                     let buyerFullyClosed =false
                     let sellerFullyClosed = false
                     if(isBuyerFlippingPosition){
                         flipLong=match.buyOrder.amount-Math.abs(match.buyerPosition.contracts)
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.buyOrder.contractId, match.tradePrice);
+                        
                         totalMargin = initialMarginPerContract*flipLong
+                        console.log('checking flip logic checking hasSufficientBalance'+match.buyOrder.buyerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
-                            let contractUndo = BigNumber(hasSufficientBalance.shortfall)
-                                .dividedBy(initialMarginPerContract)
-                                .decimalPlaces(0, BigNumber.ROUND_CEIL)
-                                .toNumber();
+                            console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
+                            if (initialMarginPerContract !== 0) {
+                                let contractUndo = BigNumber(hasSufficientBalance.shortfall)
+                                    .dividedBy(initialMarginPerContract)
+                                    .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                                    .toNumber();
 
-                            flipLong -= contractUndo;
-                            totalMargin = BigNumber(initialMarginPerContract).times(match.buyOrder.amount).toNumber();
-                            
+                                flipLong -= contractUndo;
+                                totalMargin = BigNumber(initialMarginPerContract).times(match.buyOrder.amount).toNumber();
+                            }
                         }
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin');
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
                         await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, totalMargin);
                         buyerFullyClosed=true
+                        console.log('checking flip logic '+flipLong+' '+match.buyOrder.amount + ' '+Math.abs(match.buyerPosition.contracts)+' total margin to adjust '+totalMargin)
                     }
                     if(isSellerFlippingPosition){
                         flipShort=match.sellOrder.amount-Math.abs(match.sellerPosition.contracts)
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.sellOrder.contractId, match.tradePrice);
                         totalMargin = initialMarginPerContract*flipLong
-                        let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId,totalMargin)
+                         console.log('checking flip logic checking hasSufficientBalance'+match.sellOrder.sellerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
+                      
+                        let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
+                            console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
+                      
                             let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                 .dividedBy(initialMarginPerContract)
                                 .decimalPlaces(0, BigNumber.ROUND_CEIL)
@@ -572,6 +584,7 @@ class Orderbook {
                         await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
                         await marginMap.setInitialMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, totalMargin);
                         sellerFullyClosed=true
+                        console.log('checking flip logic' +flipShort)
                   }
 
                     if(!isBuyerReducingPosition){
@@ -592,8 +605,8 @@ class Orderbook {
                     console.log('reviewing Match object before processing '+JSON.stringify(match))
                     // Update contract balances for the buyer and seller
                     let positions = await marginMap.updateContractBalancesWithMatch(match, false)
-                    let sellerClosed
-                    let buyerClosed
+                    let sellerClosed = 0
+                    let buyerClosed = 0
                     
                     if(isBuyerReducingPosition||isBuyerFlippingPosition){
                         buyerClosed =match.buyOrder.amount-flipLong
@@ -603,11 +616,11 @@ class Orderbook {
                         sellerClosed = match.sellOrder.amount-flipShort
                     }
 
-                    if(match.buyerPosition.contracts==match.buyOrder.amount){
+                    if(match.buyerPosition.contracts==match.buyOrder.amount&&isBuyerReducingPosition){
                         buyerFullyClosed=true
                     }
 
-                    if(match.sellerPosition.contracts==match.sellOrder.amount){
+                    if(match.sellerPosition.contracts==match.sellOrder.amount&&isSellerReducingPosition){
                         sellerFullyClosed=true
                     }
 
@@ -623,7 +636,9 @@ class Orderbook {
                         sellerClose: sellerClosed,
                         block: currentBlockHeight,
                         buyerFullClose: buyerFullyClosed,
-                        sellerFullClose: sellerFullyClosed 
+                        sellerFullClose: sellerFullyClosed,
+                        flipLong: flipLong,
+                        flipShort: flipShort
                         // other relevant trade details...
                     };
 

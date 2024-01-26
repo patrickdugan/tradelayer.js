@@ -22,13 +22,13 @@ async function runExample() {
     console.table(positionHistory3);
 
     // Get categorized trades
-    const categorizedTrades = await tradeHistoryManager.getCategorizedTrades(address, contractId);
+    /*const categorizedTrades = await tradeHistoryManager.getCategorizedTrades(address, contractId);
     console.log("Open Trades:", categorizedTrades.openTrades);
     console.log("Close Trades:", categorizedTrades.closeTrades);
 
     // Example usage
     const avgEntryPrices = tradeHistoryManager.computeAverageEntryPrices(categorizedTrades.openTrades);
-    console.log("Average Entry Prices:", avgEntryPrices);
+    console.log("Average Entry Prices:", avgEntryPrices);*/
 }
 
 // Call the async function
