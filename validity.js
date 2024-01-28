@@ -699,7 +699,7 @@ const Validity = {
             const marginMap = await MarginMap.loadMarginMap(params.contractId);
 
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
-            const totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
+            let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
 
             const existingPosition = await marginMap.getPositionForAddress(sender, params.contractId);
             // Determine if the trade reduces the position size for buyer or seller
@@ -719,7 +719,7 @@ const Validity = {
             }
 
              const isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPosition.contracts)&&existingPosition.contracts<0&&params.side==true)
-             const isSellerFlippingPosition = Boolean(params.amount>existingPosition.contracts&&match.sellerPosition.contracts>0&&params.side==false)           
+             const isSellerFlippingPosition = Boolean(params.amount>existingPosition.contracts&&existingPosition.contracts>0&&params.side==false)           
 
              let flipLong = 0 
              let flipShort = 0

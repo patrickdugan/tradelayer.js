@@ -199,7 +199,7 @@ class MarginMap {
             // Additional logic to handle margin calls or other adjustments if required
     }*/
 
-    async updateContractBalancesWithMatch(match, channelTrade) {
+    async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
         console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         let buyerPosition = await this.updateContractBalances(
             match.buyOrder.buyerAddress,
@@ -208,7 +208,9 @@ class MarginMap {
             true,
             match.buyerPosition,
             match.inverse,
-            channelTrade
+            channelTrade,
+            close,
+            flip
         );
 
         let sellerPosition = await this.updateContractBalances(
@@ -218,19 +220,38 @@ class MarginMap {
             false,
             match.sellerPosition,
             match.inverse,
-            channelTrade
+            channelTrade,
+            close,
+            flip
         );
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade, close,flip) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
+        //calculating avg. price
+        if(close==false&&flip==false){
+            if(position.contracts==0){
+                position.avgPrice=price
+            }else{
+                position.avgPrice=this.updateAveragePrice(position,amount,price)
+            }
+        }else if(flip==true){
+            //this is the first trade in the new direction of the flip so its price is the avg. entry price
+            position.avgPrice=price
+        }
+
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
         console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
+        if(position.contracts ==0){
+            //if the position is fully close we reset the avg. price, this may be redundant to the above
+            //but at least we'll have the object entry consistently visible on the tallyMap
+            position.avgPrice=0
+        }
         console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);
@@ -238,7 +259,27 @@ class MarginMap {
         //await this.saveMarginMap();
     }
 
-    
+    updateAveragePrice(position, amount, price) {
+        // Convert existing values to BigNumber
+        const avgPrice = new BigNumber(position.avgPrice || 0);
+        const contracts = new BigNumber(position.contracts || 0);
+        const amountBN = new BigNumber(amount);
+        const priceBN = new BigNumber(price);
+
+        // Calculate the updated average price
+        const updatedAvgPrice = avgPrice
+            .times(contracts)
+            .plus(amountBN.times(priceBN))
+            .dividedBy(contracts.plus(amountBN));
+
+        // Update the position object with the new values
+        position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
+        position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
+
+        // Return the updated position object
+        return position;
+    }
+        
     calculateMarginRequirement(contracts, price, inverse) {
         
         // Ensure that the input values are BigNumber instances

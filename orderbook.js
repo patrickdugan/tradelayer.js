@@ -604,7 +604,14 @@ class Orderbook {
                     console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
                     console.log('reviewing Match object before processing '+JSON.stringify(match))
                     // Update contract balances for the buyer and seller
-                    let positions = await marginMap.updateContractBalancesWithMatch(match, false)
+                    let close = false
+                    let flip = false
+                    if((isBuyerReducingPosition||isSellerReducingPosition)&&(isBuyerFlippingPosition==false||isSellerFlippingPosition==false)){
+                        close = true
+                    }else if(isBuyerFlippingPosition==true||isSellerFlippingPosition==true){
+                        flip=true
+                    }
+                    let positions = await marginMap.updateContractBalancesWithMatch(match, false, close,flip)
                     let sellerClosed = 0
                     let buyerClosed = 0
                     
@@ -656,7 +663,7 @@ class Orderbook {
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
-                    if (isBuyerReducingPosition) {
+                    if (isBuyerReducingPosition||isBuyerFlippingPosition) {
                         let closedContracts = match.buyOrder.amount
 
                         if(isBuyerFlippingPosition){
@@ -664,10 +671,10 @@ class Orderbook {
                         }
                         //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
                         //on a LIFO basis that are being retroactively 'closed' by reference here
-                        console.log('about to call trade history manager '+match.buyOrder.contractId)
-                        const LIFO = tradeHistoryManager.calculateLIFOEntry(match.buyOrder.buyerAddress, closedContracts, match.buyOrder.contractId)
+                        //console.log('about to call trade history manager '+match.buyOrder.contractId)
+                        //const LIFO = tradeHistoryManager.calculateLIFOEntry(match.buyOrder.buyerAddress, closedContracts, match.buyOrder.contractId)
                         //{AvgEntry,blockTimes}
-                        let avgEntry = LIFO.totalCost/closedContracts 
+                        let avgEntry = position.avgPrice 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
                         const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, true, notionalValue, match.buyerPosition);
@@ -708,7 +715,7 @@ class Orderbook {
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
 
-                    if (isSellerReducingPosition) {
+                    if (isSellerReducingPosition||isSellerFlippingPosition) {
                         let closedContracts = match.sellOrder.amount
 
                         if(isBuyerFlippingPosition){
@@ -716,14 +723,14 @@ class Orderbook {
                         }
                         //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
                         //on a LIFO basis that are being retroactively 'closed' by reference here
-                        console.log('position before going into LIFO '+JSON.stringify(match.sellerPosition))
-                        console.log('about to call trade history manager '+match.sellOrder.contractId)
-                        const LIFO = await tradeHistoryManager.calculateLIFOEntry(match.sellOrder.sellerAddress, closedContracts, match.sellOrder.contractId)
-                        let avgEntry = LIFO.totalCost/closedContracts
+                        //console.log('position before going into LIFO '+JSON.stringify(match.sellerPosition))
+                        //console.log('about to call trade history manager '+match.sellOrder.contractId)
+                        //const LIFO = await tradeHistoryManager.calculateLIFOEntry(match.sellOrder.sellerAddress, closedContracts, match.sellOrder.contractId)
+                        let avgEntry = position.avgPrice
                         //{AvgEntry,blockTimes} 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        console.log('LIFO '+JSON.stringify(LIFO))
+                        //console.log('LIFO '+JSON.stringify(LIFO))
 
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
                         const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition);
