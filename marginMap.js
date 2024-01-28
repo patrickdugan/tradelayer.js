@@ -247,11 +247,7 @@ class MarginMap {
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
         console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
-        if(position.contracts ==0){
-            //if the position is fully close we reset the avg. price, this may be redundant to the above
-            //but at least we'll have the object entry consistently visible on the tallyMap
-            position.avgPrice=0
-        }
+        
         console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);
