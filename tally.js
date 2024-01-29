@@ -50,6 +50,20 @@ class TallyMap {
                 return Error(`Invalid propertyId: ${propertyId}`);
             }
 
+            if (typeof availableChange !== 'number'){
+                console.log(`string passed in: ${availableChange}`);
+                availableChange = parseFloat(availableChange)
+            }else if(typeof reservedChange !== 'number'){
+                console.log(`string passed in: ${availableChange}`);
+                reservedChange = parseFloat(availableChange)
+            }else if(typeof marginChange !== 'number'){
+                console.log(`string passed in: ${marginChange}`);
+                marginChange = parseFloat(availableChange)
+            }else if(typeof vestingChange !== 'number'){
+                console.log(`string passed in: ${vestingChange}`);
+                vestingChange = parseFloat(availableChange)
+            }
+
             const instance = await this.getInstance();
             if (!instance.addresses.has(address)) {
                 instance.addresses.set(address, {});

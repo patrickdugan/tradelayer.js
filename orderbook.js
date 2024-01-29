@@ -902,8 +902,8 @@ class Orderbook {
             //console.log('returning from reserve '+cancelledOrders.returnFromReserve)
             for (const order of cancelledOrders) {
                 //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
-                const reserveAmount = order.initMargin
-                //console.log('about to apply changes '+reserveAmount)
+                const reserveAmount = parseFloat(order.initMargin)
+                console.log('about to apply changes '+reserveAmount+typeof reserveAmount)
                 await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel');
             }
 
