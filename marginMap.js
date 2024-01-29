@@ -204,7 +204,7 @@ class MarginMap {
         let buyerPosition = await this.updateContractBalances(
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
-            match.buyOrder.price,
+            match.tradePrice,
             true,
             match.buyerPosition,
             match.inverse,
@@ -216,7 +216,7 @@ class MarginMap {
         let sellerPosition = await this.updateContractBalances(
             match.sellOrder.sellerAddress,
             match.sellOrder.amount,
-            match.sellOrder.price,
+            match.tradePrice,
             false,
             match.sellerPosition,
             match.inverse,
@@ -465,8 +465,49 @@ class MarginMap {
         return liberationFraction;
     }
 
+    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy) {
+        if (!pos) return new BigNumber(0);
 
-    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
+        let pnl;
+        console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
+
+        const priceBN = new BigNumber(price);
+        const avgPriceBN = new BigNumber(avgPrice);
+        const contractsBN = new BigNumber(contracts);
+        const notionalValueBN = new BigNumber(notionalValue);
+
+        if (isInverse) {
+            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+            pnl = priceBN
+                .minus(1)
+                .dividedBy(avgPriceBN.minus(1))
+                .times(contractsBN)
+                .times(notionalValueBN);
+
+            console.log('pnl ' + pnl.toNumber());
+        } else {
+            // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
+            pnl = priceBN
+                .minus(avgPriceBN)
+                .times(contractsBN)
+                .times(notionalValueBN);
+
+            console.log('pnl ' + pnl.toNumber());
+        }
+
+        // Adjust the sign based on the isBuy flag
+        pnl = isBuy ? pnl.negated() : pnl;
+
+        // Modify the position object
+        // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
+        // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
+
+        console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
+        return pnl;
+    }
+
+
+    /*realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
         //const pos = this.margins.get(address);
 
         if (!pos) return 0;
@@ -487,7 +528,7 @@ class MarginMap {
         //pos.unrealizedPl += pnl; //be sure to modify uPNL and scoop it out for this value...
         console.log('inside realizePnl '+price + ' price then avgPrice '+avgPrice +' contracts '+contracts + ' notionalValue '+notionalValue)
         return pnl;
-    }
+    }*/
 
     async settlePNL(address, contracts, price, LIFO, contractId, currentBlockHeight) {
             const pos = this.margins.get(address);

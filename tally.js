@@ -55,7 +55,7 @@ class TallyMap {
                 instance.addresses.set(address, {});
             }
             const addressObj = instance.addresses.get(address);
-            console.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
+            //console.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
             if (!addressObj[propertyId]) {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }

@@ -46,7 +46,7 @@ class Orderbook {
 
         async saveOrderBook(key) {
             // Save order book to your database
-            console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderBooks[key]))
+            //console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderBooks[key]))
             
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
@@ -433,7 +433,7 @@ class Orderbook {
                 await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
             }
            
-            console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.matches)+' orderbook '+JSON.stringify(matchResult.orderBook))
+            //console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.matches)
             await this.saveOrderBook(orderBookKey);
             return matchResult
         }
@@ -611,6 +611,7 @@ class Orderbook {
                     }else if(isBuyerFlippingPosition==true||isSellerFlippingPosition==true){
                         flip=true
                     }
+
                     let positions = await marginMap.updateContractBalancesWithMatch(match, false, close,flip)
                     let sellerClosed = 0
                     let buyerClosed = 0
@@ -677,17 +678,18 @@ class Orderbook {
                         let avgEntry = match.buyerPosition.avgPrice 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, true, notionalValue, match.buyerPosition);
+                        const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.buyerPosition, true);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.buyOrder.price, avgEntry, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
+                        //console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress);
                         //{netMargin,mode}   
-
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
+                        if(reduction !=0){
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
+                        }
                         //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
                         //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
@@ -709,9 +711,9 @@ class Orderbook {
 
                         
                         const savePNLParams = {height:currentBlockHeight, contractId:match.buyOrder.contractId, accountingPNL: accountingPNL, 
-                            address: match.buyOrder.buyerAddress, amount: closedContracts, tradePrice: match.buyOrder.price, collateralPropertyId: collateralPropertyId,
+                            address: match.buyOrder.buyerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.buyOrder.buyerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
-                        console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
+                        //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
 
@@ -733,19 +735,19 @@ class Orderbook {
                         //console.log('LIFO '+JSON.stringify(LIFO))
 
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
-                        const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition);
+                        const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false);
                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
+                        //console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
                         const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
+                        //console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress);
                         //{netMargin,mode}   
-
-                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
-                        //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
+                        if(reduction !=0){
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
+                        } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
                         //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
                         //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
@@ -758,7 +760,7 @@ class Orderbook {
                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: accountingPNL, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.sellOrder.price, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
-                        console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
+                        //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
                     //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
@@ -769,7 +771,7 @@ class Orderbook {
                     // Save the updated margin map
                     await marginMap.saveMarginMap(false);
 
-                    console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
+                    //console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
                     // Construct a trade object for recording
 
                         // Optionally handle the PnL if needed, e.g., logging or further processing
@@ -784,10 +786,10 @@ class Orderbook {
             const cancelledOrders = [];
             let returnFromReserve = 0
             if(!token){
-                console.log('showing orderbook before cancel '+JSON.stringify(orderBook))
+                //console.log('showing orderbook before cancel '+JSON.stringify(orderBook))
             }
             if(orderBook==undefined){
-                console.log('orderbook undefined, maybe empty ')
+               // console.log('orderbook undefined, maybe empty ')
                 return []
             }
 
@@ -824,7 +826,7 @@ class Orderbook {
                          // Logic to cancel the order
                             cancelledOrders.push(order);
 
-                            console.log('splicing order '+JSON.stringify(order))
+                            //console.log('splicing order '+JSON.stringify(order))
                             orderBook.buy.splice(i, 1);
 
                             if(token==true){
@@ -843,7 +845,7 @@ class Orderbook {
                             //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
                          // Logic to cancel the order
                             cancelledOrders.push(order);
-                            console.log('splicing order '+JSON.stringify(order))
+                            //console.log('splicing order '+JSON.stringify(order))
                             orderBook.sell.splice(i, 1);
 
                             if(token==true){
@@ -856,12 +858,12 @@ class Orderbook {
 
             }
           
-            console.log('returning tokens from reserve '+returnFromReserve)
+            //console.log('returning tokens from reserve '+returnFromReserve)
             cancelledOrders.returnFromReserve=returnFromReserve
             // Save the updated order book to the database
 
             this.orderBooks[orderBookKey] = orderBook
-            console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
+            //console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
             await this.saveOrderBook(orderBookKey);
 
             // Log the cancellation for record-keeping
@@ -876,8 +878,8 @@ class Orderbook {
                 console.error('Invalid order:', order);
                 return false;
             }*/
-            console.log('should cancel order? '+JSON.stringify(order)+' '+JSON.stringify(criteria))
-            console.log('cancel all criteria '+JSON.stringify(criteria.address!=undefined)+' '+JSON.stringify(order.sender===criteria.address))
+            //console.log('should cancel order? '+JSON.stringify(order)+' '+JSON.stringify(criteria))
+            //console.log('cancel all criteria '+JSON.stringify(criteria.address!=undefined)+' '+JSON.stringify(order.sender===criteria.address))
             if(criteria.price!=undefined&&(criteria.buy ? order.price <= criteria.price : order.price >= criteria.price)){
                 return true
             }
@@ -894,14 +896,14 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key = offeredPropertyId
-            console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
+            //console.log('about to call cancelOrdersByCriteria in cancelAllContractOrders '+fromAddress, key, criteria)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId);
-            console.log('returning from reserve '+cancelledOrders.returnFromReserve)
+            //console.log('returning from reserve '+cancelledOrders.returnFromReserve)
             for (const order of cancelledOrders) {
-                console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
+                //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
                 const reserveAmount = order.initMargin
-                console.log('about to apply changes '+reserveAmount)
+                //console.log('about to apply changes '+reserveAmount)
                 await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel');
             }
 
