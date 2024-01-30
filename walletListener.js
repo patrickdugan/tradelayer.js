@@ -28,7 +28,7 @@ app.post('/tl_listproperties', async (req, res) => {
 
 app.post('/tl_getallbalancesforaddress', async (req, res) => {
     try {
-        const response = await interfaceInstance.getAllBalancesForAddress(req.body.params);
+        const response = await interfaceInstance.getAllBalancesForAddress({ params: req.body.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -46,7 +46,7 @@ app.post('/tl_getactivations', async (req, res) => {
 
 app.post('/tl_getorderbook', async (req, res) => {
     try {
-        const response = await interfaceInstance.getOrderBook(req.body.params);
+        const response = await interfaceInstance.getOrderBook({ params: req.body.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -55,7 +55,7 @@ app.post('/tl_getorderbook', async (req, res) => {
 
 app.post('/tl_getcontractorderbook', async (req, res) => {
     try {
-        const response = await interfaceInstance.getContractOrderBook(req.body.params);
+        const response = await interfaceInstance.getContractOrderBook({ params: req.body.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -82,7 +82,7 @@ app.post('/tl_listoracles', async (req, res) => {
 
 app.get('/tl_contractposition', async (req, res) => {
     try {
-        const response = await interfaceInstance.getContractPositionForAddressAndContractId(req.query.params);
+        const response = await interfaceInstance.getContractPositionForAddressAndContractId({ params: req.query.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -91,7 +91,7 @@ app.get('/tl_contractposition', async (req, res) => {
 
 app.get('/tl_tradehistory', async (req, res) => {
     try {
-        const response = await interfaceInstance.getTradeHistory(req.query.params);
+        const response = await interfaceInstance.getTradeHistory({ params: req.query.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -100,7 +100,7 @@ app.get('/tl_tradehistory', async (req, res) => {
 
 app.get('/tl_contracttradehistory', async (req, res) => {
     try {
-        const response = await interfaceInstance.getContractTradeHistory(req.query.params);
+        const response = await interfaceInstance.getContractTradeHistory({ params: req.query.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -109,7 +109,7 @@ app.get('/tl_contracttradehistory', async (req, res) => {
 
 app.get('/tl_fundinghistory', async (req, res) => {
     try {
-        const response = await interfaceInstance.getFundingHistory(req.query.params);
+        const response = await interfaceInstance.getFundingHistory({ params: req.query.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
@@ -118,7 +118,7 @@ app.get('/tl_fundinghistory', async (req, res) => {
 
 app.get('/tl_oraclehistory', async (req, res) => {
     try {
-        const response = await interfaceInstance.getOracleHistory(req.query.params);
+        const response = await interfaceInstance.getOracleHistory({ params: req.query.params });
         res.json(response);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
