@@ -2,6 +2,7 @@ var dbInstance = require('./db.js')
 var TxIndex = require('./txindex.js')
 var PropertyList = require('./property.js')
 const uuid = require('uuid');
+const BigNumber = require('bignumber.js');
 
 class TallyMap {
     static instance;
@@ -52,16 +53,21 @@ class TallyMap {
 
             if (typeof availableChange !== 'number'){
                 console.log(`string passed in: ${availableChange}`);
-                availableChange = parseFloat(availableChange)
-            }else if(typeof reservedChange !== 'number'){
-                console.log(`string passed in: ${availableChange}`);
-                reservedChange = parseFloat(availableChange)
-            }else if(typeof marginChange !== 'number'){
+                availableChange = new BigNumber(availableChange).toNumber()
+                 console.log('new availableChange '+availableChange)
+            }
+            if(typeof reservedChange !== 'number'){
+                console.log(`string passed in: ${reservedChange}`);
+                reservedChange = new BigNumber(reservedChange).toNumber()
+            }
+            if(typeof marginChange !== 'number'){
                 console.log(`string passed in: ${marginChange}`);
-                marginChange = parseFloat(availableChange)
-            }else if(typeof vestingChange !== 'number'){
+                marginChange = new BigNumber(marginChange).toNumber()
+                console.log('new margin Change '+marginChange)
+            }
+            if(typeof vestingChange !== 'number'){
                 console.log(`string passed in: ${vestingChange}`);
-                vestingChange = parseFloat(availableChange)
+                vestingChange = new BigNumber(vestingChange).toNumber()
             }
 
             const instance = await this.getInstance();
@@ -74,34 +80,57 @@ class TallyMap {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }
 
+            if(type=='contractTradeSettlement'){
+                console.log('about to return PNL inside tallyMap '+availableChange+ ' '+JSON.stringify(addressObj[propertyId]))
+            }
+
             // Check and update available balance
-            if (addressObj[propertyId].available + availableChange < 0) {
-                throw new Error("Available balance cannot go negative "+ addressObj[propertyId].available + ' change '+availableChange);
-            }
-            addressObj[propertyId].available += availableChange;
+            // Assuming addressObj[propertyId] and the respective change variables are already BigNumber instances
+            // Example for available balance
+            const originalAvailableBalance = new BigNumber(addressObj[propertyId].available);
+            const newAvailableBalance = originalAvailableBalance.plus(availableChange);
 
-            // Check and update reserved balance
-            if (addressObj[propertyId].reserved + reservedChange < 0) {
-                console.log('propertyId, reserved, reservedChange '+JSON.stringify(addressObj[propertyId]) + ' ' +addressObj[propertyId].reserved + ' ' + reservedChange)
-                throw new Error("Reserved balance cannot go negative "+propertyId + ' '+availableChange+' '+ reservedChange);
+            if (newAvailableBalance.isLessThan(0)) {
+                throw new Error("Available balance cannot go negative " + originalAvailableBalance.toString() + ' change ' + availableChange.toString());
             }
-            addressObj[propertyId].reserved += reservedChange;
 
-            // Check and update margin balance
-            if (addressObj[propertyId].margin + marginChange < 0) {
-                throw new Error("Margin balance cannot go negative");
-            }
-            addressObj[propertyId].margin += marginChange;
+            addressObj[propertyId].available = newAvailableBalance.toNumber();
 
-            // Check and update vesting balance
-            if (addressObj[propertyId].vesting + vestingChange < 0) {
-                throw new Error("Vesting balance cannot go negative");
+            // Repeat the pattern for reserved, margin, and vesting balances
+
+            // Example for reserved balance
+            const originalReservedBalance = new BigNumber(addressObj[propertyId].reserved);
+            const newReservedBalance = originalReservedBalance.plus(reservedChange);
+
+            if (newReservedBalance.isLessThan(0)) {
+                throw new Error("Reserved balance cannot go negative " + originalReservedBalance.toString() + ' change ' + reservedChange.toString());
             }
-            addressObj[propertyId].vesting += vestingChange;
+
+            addressObj[propertyId].reserved = newReservedBalance.toNumber();
+
+            // Example for margin balance
+            const originalMarginBalance = new BigNumber(addressObj[propertyId].margin);
+            const newMarginBalance = originalMarginBalance.plus(marginChange);
+
+            if (newMarginBalance.isLessThan(0)) {
+                throw new Error("Margin balance cannot go negative " + originalMarginBalance.toString() + ' change ' + marginChange.toString());
+            }
+
+            addressObj[propertyId].margin = newMarginBalance.toNumber();
+
+            // Example for vesting balance
+            const originalVestingBalance = new BigNumber(addressObj[propertyId].vesting);
+            const newVestingBalance = originalVestingBalance.plus(vestingChange);
+
+            if (newVestingBalance.isLessThan(0)) {
+                throw new Error("Vesting balance cannot go negative " + originalVestingBalance.toString() + ' change ' + vestingChange.toString());
+            }
+
+            addressObj[propertyId].vesting = newVestingBalance.toNumber();
 
             // Update the total amount
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
-            await TallyMap.recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) 
+            await TallyMap.recordTallyMapDelta(address, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -333,11 +362,11 @@ class TallyMap {
     }
 
     // Function to record a delta
-     static async recordTallyMapDelta(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type){
+     static async recordTallyMapDelta(address, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
         const db = dbInstance.getDatabase('tallyMapDelta');
         const deltaKey = `${address}-${propertyId}-${newUuid}`;
-        const delta = { address, property: propertyId, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
+        const delta = { address, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
         
         console.log('saving delta ' + JSON.stringify(delta));
 

@@ -15,6 +15,7 @@ class Database {
             'contractList',
             'tallyMap',
             'tallyMapDelta',
+            'marginMapDelta',
             'marginMaps',
             'whitelists',
             'clearing',

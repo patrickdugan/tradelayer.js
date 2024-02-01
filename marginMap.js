@@ -108,7 +108,7 @@ class MarginMap {
         console.log('margin after '+position.margin)
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
-        console.log('margin should be topped up '+JSON.stringify(this.margins))
+        console.log('margin should be topped up '+JSON.stringify(position))
 
         // Save changes to the database or your storage solution
         await this.saveMarginMap(true);
@@ -250,7 +250,9 @@ class MarginMap {
         
         console.log('position now ' + JSON.stringify(position))
 
-        this.margins.set(address, position);
+        this.margins.set(address, position);  
+        this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
+      
         return position
         //await this.saveMarginMap();
     }
@@ -272,6 +274,7 @@ class MarginMap {
         position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
         position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
+        this.recordMarginMapDelta(address, contractId,0,0,0,0,avgPrice.toNumber()-updatedAvgPrice.toNumber(),'newAvgPrice')
         // Return the updated position object
         return position;
     }
@@ -327,10 +330,13 @@ class MarginMap {
    
     async reduceMargin(pos, contracts, pnl, isInverse, contractId, address,side) {
         console.log('checking position inside reduceMargin ' + JSON.stringify(pos));
-
+        console.log('checking PNL math in reduceMargin '+pnl+' '+address)
         if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
         // Calculate the remaining margin after considering pnl
-        const remainingMargin = new BigNumber(pos.margin).minus(pnl);
+        //let remainingMargin = new BigNumber(pos.margin).plus(pnl);
+        //if(pnl>0){
+            let remainingMargin = new BigNumber(pos.margin)
+        //}
         console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber()));
 
         // Check if maintenance margin is hit, and if yes, pro-rate reduction
@@ -357,10 +363,13 @@ class MarginMap {
             posMargin = posMargin.minus(reduction);
 
             // Assign the updated pos.margin
-            pos.margin = posMargin.toNumber();     
+            pos.margin = posMargin.toNumber();    
+            console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
+             
         this.margins.set(address, pos);
-        console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos.margin)+ 'contractAmount '+contractAmount)
-        return reduction;
+        this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginReduction')
+        console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
+        return reduction.toNumber();
     }
 
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy) {
@@ -401,8 +410,38 @@ class MarginMap {
         // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
 
         console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
+        this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
+      
         return pnl;
     }
+
+    async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode) {
+            const newUuid = uuid.v4();
+            const dbInstance = db.getDatabase('marginMapDelta');
+            const deltaKey = `${address}-${contractId}-${newUuid}`;
+            const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, avail: 0, res: 0, mar: uPNL, vest: 0, avgEntry, mode };
+
+            console.log('saving marginMap delta ' + JSON.stringify(delta));
+
+            try {
+                // Try to find an existing document based on the key
+                const existingDocument = await dbInstance.findOneAsync({ _id: deltaKey });
+
+                if (existingDocument) {
+                    // If the document exists, update it
+                    await dbInstance.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
+                } else {
+                    // If the document doesn't exist, insert a new one
+                    await dbInstance.insertAsync({ _id: deltaKey, data: delta });
+                }
+
+                return; // Return success or handle as needed
+            } catch (error) {
+                console.error('Error saving marginMap delta:', error);
+                throw error; // Rethrow the error or handle as needed
+            }
+    }
+
 
 
     /*realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {

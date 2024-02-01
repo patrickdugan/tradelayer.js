@@ -269,10 +269,11 @@ class Clearing {
     
     static async updateMarginMaps(blockHeight, positions, block, contractId, collateralId, inverse) {
         let liquidationData = [];
+        // Load margin map for the specific contract series
+            let marginMap = await MarginMap.getInstance(position.contractSeriesId);
         console.log('positions in updateMarginMaps '+JSON.stringify(positions))
         for (let position of positions) {
-            // Load margin map for the specific contract series
-            let marginMap = await MarginMap.getInstance(position.contractSeriesId);
+            
 
             // Update margin based on PnL change
             let pnlChange = await Clearing.calculatePnLChange(position, blockHeight);
@@ -655,18 +656,18 @@ class Clearing {
             // Socialize loss among non-zero positions
             for (const entry of registerData) {
                 if (!zeroPositionAddresses.includes(entry.address)) {
-                    let balanceDetails = this.tallyMap.getAddressBalances(entry.address);
+                    let balanceDetails = TallyMap.getAddressBalances(entry.address);
                     let available = balanceDetails.find(b => b.propertyId === collateral)?.available || 0;
                     let amount = Math.min(available, fraction);
 
                     if (amount > 0) {
-                        this.tallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0); // Assuming updateBalance deducts from available
+                        TallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0); // Assuming updateBalance deducts from available
                     }
                 }
             }
 
             // Optionally, save the TallyMap state to the database
-            await this.tallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
+            await TallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
     }
 
     async getTotalLoss(contractId, notionalSize) {

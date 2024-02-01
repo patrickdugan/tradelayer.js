@@ -688,7 +688,8 @@ class Orderbook {
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
                         //{netMargin,mode}   
                         if(reduction !=0){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
+                            console.log('reduction about to pass to TallyMap' +reduction)
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
                         }
                         //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
@@ -701,7 +702,7 @@ class Orderbook {
                         //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                         //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL/*-settlementPNL*/, 0, 'contractTradeSettlement');
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement');
                         } 
                         if(reduction.mode=='shortfall'){
                             //check the address available balance for the neg. balance
@@ -746,7 +747,7 @@ class Orderbook {
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false);
                         //{netMargin,mode}   
                         if(reduction !=0){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction.netMargin, 0, -reduction.netMargin, 0, 'contractTradeSettlement')              
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
                         //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
@@ -755,10 +756,10 @@ class Orderbook {
                         //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                         //unusual edge case but we're covering it here 'maint'
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, -accountingPNL, 0, 'contractTradeSettlement');
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0, 0, 'contractTradeSettlement');
                         } 
                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: accountingPNL, 
-                            address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.sellOrder.price, collateralPropertyId: collateralPropertyId,
+                            address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
                         //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
                         tradeHistoryManager.savePNL(savePNLParams)
