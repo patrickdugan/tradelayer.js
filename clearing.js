@@ -1,11 +1,11 @@
-const tallyMap = require('./tally.js')
+const TallyMap = require('./tally.js')
 const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contractRegistry.js');
 
 class Clearing {
     // ... other methods ...
     constructor() {
         // Access the singleton instance of TallyMap
-        this.tallyMap = TallyMap.getSingletonInstance();
+        //this.tallyMap = TallyMap.getSingletonInstance();
         this.balanceChanges = []; // Initialize an array to track balance changes
 
     }
@@ -243,6 +243,7 @@ class Clearing {
                 let inverse = ContractList.isInverse(contract.id)
             // Fetch positions that need adjustment
                 let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
+                console.log('positions in clearing' +JSON.stringify(positions))
                 // Iterate through each position to adjust for profit or loss
     
                 // Update margin maps based on mark prices and current contract positions
@@ -435,7 +436,7 @@ class Clearing {
             const propertyId = this.getPropertyIdForPnL(); 
 
             // Fetch the current balance details
-            let balanceDetails = this.tallyMap.getAddressBalances(holderAddress);
+            let balanceDetails = TallyMap.getAddressBalances(holderAddress);
 
             // Assuming balanceDetails includes the fields 'available' and 'reserved'
             let available = balanceDetails.available || 0;
@@ -445,7 +446,7 @@ class Clearing {
             available += pnlChange;
 
             // Update the balance in TallyMap
-            this.tallyMap.updateBalance(holderAddress, propertyId, available, reserved);
+            TallyMap.updateBalance(holderAddress, propertyId, available, reserved);
             this.balanceChanges.push({
                 blockHeight: this.currentBlockHeight, // Assuming this is set appropriately
                 holderAddress: holderAddress,
@@ -453,7 +454,7 @@ class Clearing {
             });
 
             // Optionally, you can save the TallyMap state to the database
-            await this.tallyMap.save(someBlockHeight); // Replace someBlockHeight with the appropriate block height
+            await TallyMap.save(someBlockHeight); // Replace someBlockHeight with the appropriate block height
         } catch (error) {
             console.error('Error adjusting balance for address:', holderAddress, error);
             throw error;

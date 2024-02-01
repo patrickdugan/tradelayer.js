@@ -325,24 +325,43 @@ class MarginMap {
         }
     }
    
-    async reduceMargin(pos, contracts, pnl) {
+    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address,side) {
         console.log('checking position inside reduceMargin ' + JSON.stringify(pos));
 
         if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
         // Calculate the remaining margin after considering pnl
         const remainingMargin = new BigNumber(pos.margin).minus(pnl);
-        console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber());
+        console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber()));
 
         // Check if maintenance margin is hit, and if yes, pro-rate reduction
-            const reduction = remainingMargin.times(contracts.dividedBy(pos.contracts));
+            let contractAmount = new BigNumber(contracts);
+            let existingPosition = 0
+            if(side==false){
+                existingPosition = new BigNumber(pos.contracts).plus(contractAmount)
+            }else if(side ==true){
+                existingPosition = new BigNumber(pos.contracts).minus(contractAmount)
+            }
 
+            if(existingPosition==0){
+                //for some reason the math is off and this is going to create Infinity as a result so to avoid a throw
+                console.log('issue with calculating existing position '+existingPosition+' '+side+' pos '+pos.contracts +' '+contractAmount)
+                return existingPosition 
+            }
+            existingPosition = Math.abs(existingPosition)
+            // Now you can use the dividedBy method
+            const reduction = remainingMargin.times(contractAmount.dividedBy(existingPosition));
             // Update the margin and contracts based on the reduction ratio
-            pos.margin = pos.margin.minus(reduction);
-            
-        this.margins.set(address, pos);
+           let posMargin = new BigNumber(pos.margin);
 
+            // Now you can use the minus method
+            posMargin = posMargin.minus(reduction);
+
+            // Assign the updated pos.margin
+            pos.margin = posMargin.toNumber();     
+        this.margins.set(address, pos);
+        console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos.margin)+ 'contractAmount '+contractAmount)
         return reduction;
-    }}
+    }
 
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy) {
         if (!pos) return new BigNumber(0);
@@ -409,7 +428,7 @@ class MarginMap {
         return pnl;
     }*/
 
-    async settlePNL(address, contracts, price, LIFO, contractId, currentBlockHeight) {
+    async settlePNL(address, contracts, price, avgEntry, contractId, currentBlockHeight) {
             const pos = this.margins.get(address);
 
             if (!pos) return 0;
@@ -427,7 +446,7 @@ class MarginMap {
             }
 
             // Use settlement price based on the oracle data or LIFO Avg. Entry
-            const settlementPrice = oraclePrice || LIFO.AvgEntry;
+            const settlementPrice = isOracleContract ? oraclePrice : avgEntry;
 
             // Calculate PnL based on settlement price
             const pnl = (price - settlementPrice) * contracts;
