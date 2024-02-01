@@ -1,6 +1,8 @@
 // Assuming the LevelDB database is stored at './path_to_margin_db'
 const db = require('./db.js');
 const BigNumber = require('bignumber.js')
+const uuid = require('uuid');
+
 
 class MarginMap {
     constructor(seriesId) {
@@ -109,7 +111,7 @@ class MarginMap {
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
         console.log('margin should be topped up '+JSON.stringify(position))
-
+        await this.recordMarginMapDelta(sender, contractId, position.contracts, 0, totalInitialMargin, 0, 0, 'initialMargin')
         // Save changes to the database or your storage solution
         await this.saveMarginMap(true);
         return position
@@ -210,7 +212,8 @@ class MarginMap {
             match.inverse,
             channelTrade,
             close,
-            flip
+            flip,
+            match.buyOrder.contractId
         );
 
         let sellerPosition = await this.updateContractBalances(
@@ -222,12 +225,13 @@ class MarginMap {
             match.inverse,
             channelTrade,
             close,
-            flip
+            flip,
+            match.sellOrder.contractId
         );
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade, close,flip) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade, close,flip,contractId) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
@@ -235,7 +239,7 @@ class MarginMap {
             if(position.contracts==0){
                 position.avgPrice=price
             }else{
-                position.avgPrice=this.updateAveragePrice(position,amount,price)
+                position.avgPrice=this.updateAveragePrice(position,amount,price,contractId)
             }
         }else if(flip==true){
             //this is the first trade in the new direction of the flip so its price is the avg. entry price
@@ -251,13 +255,13 @@ class MarginMap {
         console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);  
-        this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
+        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
       
         return position
         //await this.saveMarginMap();
     }
 
-    updateAveragePrice(position, amount, price) {
+    updateAveragePrice(position, amount, price,contractId) {
         // Convert existing values to BigNumber
         const avgPrice = new BigNumber(position.avgPrice || 0);
         const contracts = new BigNumber(position.contracts || 0);
@@ -274,7 +278,7 @@ class MarginMap {
         position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
         position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
-        this.recordMarginMapDelta(address, contractId,0,0,0,0,avgPrice.toNumber()-updatedAvgPrice.toNumber(),'newAvgPrice')
+        this.recordMarginMapDelta(address, contractId,0,0,0,0,(avgPrice.toNumber()-updatedAvgPrice.toNumber()),'newAvgPrice')
         // Return the updated position object
         return position;
     }
@@ -367,12 +371,13 @@ class MarginMap {
             console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
              
         this.margins.set(address, pos);
-        this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginReduction')
+        await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginReduction')
         console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
+        await this.saveMarginMap(true);
         return reduction.toNumber();
     }
 
-    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy) {
+    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
         if (!pos) return new BigNumber(0);
 
         let pnl;
@@ -419,7 +424,7 @@ class MarginMap {
             const newUuid = uuid.v4();
             const dbInstance = db.getDatabase('marginMapDelta');
             const deltaKey = `${address}-${contractId}-${newUuid}`;
-            const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, avail: 0, res: 0, mar: uPNL, vest: 0, avgEntry, mode };
+            const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode };
 
             console.log('saving marginMap delta ' + JSON.stringify(delta));
 
@@ -491,9 +496,10 @@ class MarginMap {
             const pnl = (price - settlementPrice) * contracts;
 
             // Update margin and unrealized PnL
-            pos.margin -= Math.abs(pnl);
-            pos.unrealizedPl += pnl;
-
+            //pos.margin -= Math.abs(pnl);
+            pos.unrealizedPl -= pnl;
+            await this.recordMarginMapDelta(address, contractId, 0, contracts, 0, -pnl, 0, 'settlementPNL')
+  
             return pnl;
     }
 
