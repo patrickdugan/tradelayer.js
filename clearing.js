@@ -249,10 +249,7 @@ class Clearing {
                 // Update margin maps based on mark prices and current contract positions
                 await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId); //problem child
 
-                // Adjust the balance based on the P&L change
-                await Clearing.adjustBalance(position.holderAddress, pnlChange, collateralId);
-
-                // Perform additional tasks like loss socialization if needed
+                 // Perform additional tasks like loss socialization if needed
                 await Clearing.performAdditionalSettlementTasks(blockHeight, positions);
 
                 // Save the updated position information
@@ -277,20 +274,20 @@ class Clearing {
 
             // Update margin based on PnL change
             let pnlChange = await Clearing.calculatePnLChange(position, blockHeight);
-            console.log('updatingMarginMaps '+marginMap + ' '+ pnlChange)
+            console.log('updatingMarginMaps with pnlChange '+JSON.stringify(position) + ' '+ pnlChange)
             const newPosition = marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
             console.log('new Position '+ JSON.stringify(newPosition))
-            // Check if maintenance margin is breached
-            if (marginMap.checkMarginMaintainence(position.holderAddress,contractId)) {
+            
                 // Move funds from available to margin in TallyMap
                 if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
-                        await TallyMap.updateBalance(position.holderAddress, -pnlChange, 0, +pnlChange,0);
+                        await TallyMap.updateBalance(position.holderAddress, pnlChange, 0, 0,0);
                 }else{
-                    console.log('insufficient maint. margin for '+JSON.stringify(newPosition))
-                    let liquidationOrders = await marginMap.triggerLiquidations(newPosition);
+                    console.log('fully utilized available margin for '+JSON.stringify(newPosition))
+                    if (marginMap.checkMarginMaintainence(position.holderAddress,contractId)){
+                         let liquidationOrders = await marginMap.triggerLiquidations(newPosition);
                     liquidationData.push(...liquidationOrders);
+                        } 
                 }
-            }
         }
 
             // Save the updated margin map
@@ -298,7 +295,7 @@ class Clearing {
         console.log('any liquidations '+liquidationData)
         return liquidationData;
     }
-    
+
     static async getCurrentMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
         // Find the highest block height that is less than or equal to the target block height
         const oracleDataDB = db.getDatabase('oracleData');
@@ -429,37 +426,6 @@ class Clearing {
         pnlChange *= position.isLong ? 1 : -1; // Assuming position.isLong is a boolean indicating position type
 
         return pnlChange;
-    }
-
-    async adjustBalance(holderAddress, pnlChange) {
-        try {
-            // Assuming you have a defined propertyId for the type of balance being adjusted
-            const propertyId = this.getPropertyIdForPnL(); 
-
-            // Fetch the current balance details
-            let balanceDetails = TallyMap.getAddressBalances(holderAddress);
-
-            // Assuming balanceDetails includes the fields 'available' and 'reserved'
-            let available = balanceDetails.available || 0;
-            let reserved = balanceDetails.reserved || 0;
-
-            // Adjust available balance based on P&L change
-            available += pnlChange;
-
-            // Update the balance in TallyMap
-            TallyMap.updateBalance(holderAddress, propertyId, available, reserved);
-            this.balanceChanges.push({
-                blockHeight: this.currentBlockHeight, // Assuming this is set appropriately
-                holderAddress: holderAddress,
-                pnlChange: pnlChange
-            });
-
-            // Optionally, you can save the TallyMap state to the database
-            await TallyMap.save(someBlockHeight); // Replace someBlockHeight with the appropriate block height
-        } catch (error) {
-            console.error('Error adjusting balance for address:', holderAddress, error);
-            throw error;
-        }
     }
 
     async getBalance(holderAddress) {
