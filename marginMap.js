@@ -94,7 +94,7 @@ class MarginMap {
         // Check if there is an existing position for the sender
         let position = this.margins.get(sender);
 
-        console.log('setting initial margin position '+JSON.stringify(position))
+        //console.log('setting initial margin position '+JSON.stringify(position))
 
         if (!position) {
             // If no existing position, initialize a new one
@@ -341,7 +341,7 @@ class MarginMap {
         //if(pnl>0){
             let remainingMargin = new BigNumber(pos.margin)
         //}
-        console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber()));
+        //console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber()));
 
         // Check if maintenance margin is hit, and if yes, pro-rate reduction
             let contractAmount = new BigNumber(contracts);
@@ -414,7 +414,7 @@ class MarginMap {
         // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
         // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
 
-        console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
+        //console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
         this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
       
         return pnl;
