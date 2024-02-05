@@ -22,7 +22,7 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
-      console.log('send payload to decode '+ payload)
+      //console.log('send payload to decode '+ payload)
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
         const address = parts[1];

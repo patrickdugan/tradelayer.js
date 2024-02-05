@@ -413,9 +413,9 @@ const Logic = {
         // Construct the pair key for the Orderbook instance
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
         // Retrieve or create the Orderbook instance for this pair
-        console.log('loading orderbook for pair key '+pairKey)
+        //console.log('loading orderbook for pair key '+pairKey)
         const orderbook = await Orderbook.getOrderbookInstance(pairKey);
-        console.log('load orderbook for pair key '+JSON.stringify(orderbook))
+        //console.log('load orderbook for pair key '+JSON.stringify(orderbook))
 
         const txInfo = await TxUtils.getRawTransaction(txid)
         const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
@@ -455,12 +455,12 @@ const Logic = {
         }
         let orderbook = new Orderbook(key)
         // Handle contract cancellation if only one property ID is provided
-        console.log('in logic function for cancelOrder '+fromAddress + ' '+isContract +' '+offeredPropertyId+' '+desiredPropertyId +' '+cancelAll+ ' '+JSON.stringify(cancelParams))
+        //console.log('in logic function for cancelOrder '+fromAddress + ' '+isContract +' '+offeredPropertyId+' '+desiredPropertyId +' '+cancelAll+ ' '+JSON.stringify(cancelParams))
             if(isContract==true){
                 // Contract cancellation logic here
                 if(cancelAll){
                     cancelledOrders = await orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
-                    console.log('contract cancel all'+JSON.stringify(cancelledOrders))
+                    //console.log('contract cancel all'+JSON.stringify(cancelledOrders))
                 }
                 if(cancelParams.txid){
                     cancelledOrders = await orderbook.cancelContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
@@ -656,7 +656,7 @@ const Logic = {
     async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid,sender) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
-        console.log('checking contract orderbook ' +JSON.stringify(orderbook))
+        //console.log('checking contract orderbook ' +JSON.stringify(orderbook))
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
         return

@@ -81,7 +81,7 @@ class TallyMap {
             }
 
             if(type=='contractTradeSettlement'){
-                console.log('about to return PNL inside tallyMap '+availableChange+ ' '+JSON.stringify(addressObj[propertyId]))
+                //console.log('about to return PNL inside tallyMap '+availableChange+ ' '+JSON.stringify(addressObj[propertyId]))
             }
 
             // Check and update available balance
@@ -133,7 +133,7 @@ class TallyMap {
             await TallyMap.recordTallyMapDelta(address, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
 
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
-            console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
+            //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
         }
 
@@ -240,7 +240,7 @@ class TallyMap {
 
             // Use upsert option
             await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
-            console.log('TallyMap saved successfully.');
+            //console.log('TallyMap saved successfully.');
         } catch (error) {
             console.error('Error saving TallyMap:', error);
         }
@@ -368,7 +368,7 @@ class TallyMap {
         const deltaKey = `${address}-${propertyId}-${newUuid}`;
         const delta = { address, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
         
-        console.log('saving delta ' + JSON.stringify(delta));
+        //console.log('saving delta ' + JSON.stringify(delta));
 
         try {
             // Try to find an existing document based on the key

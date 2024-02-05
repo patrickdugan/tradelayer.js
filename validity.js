@@ -260,7 +260,7 @@ const Validity = {
             params.reason = '';
             params.valid = true;
             let key
-            console.log('validating cancel order '+JSON.stringify(params), sender, txid)
+            //console.log('validating cancel order '+JSON.stringify(params), sender, txid)
             const isAlreadyActivated = await activationInstance.isTxTypeActive(6);
             if (!isAlreadyActivated) {
                 params.valid = false;
@@ -300,7 +300,7 @@ const Validity = {
 
             if (params.isContract) {
                 key= params.offeredPropertyId
-                console.log('cancelling contract order '+JSON.stringify(params) + '')
+                //console.log('cancelling contract order '+JSON.stringify(params) + '')
                 // Check the validity of the contract ID
                 if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
                     const contractExists = await ContractRegistry.getContractInfo(params.offeredPropertyId);
