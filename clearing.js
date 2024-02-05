@@ -1,5 +1,11 @@
 const TallyMap = require('./tally.js')
-const { getAllContracts, hasOpenPositions, fetchPositionsForAdjustment } = require('./contractRegistry.js');
+const ContractList = require('./contractRegistry.js');
+const db = require('./db.js')
+const BigNumber = require('bignumber.js');
+// Access the database where oracle data is stored
+const oracleDataDB = db.getDatabase('oracleData');
+const MarginMap = require('./marginMap.js')
+const Insurance = require('./insurance.js')
 
 class Clearing {
     // ... other methods ...
@@ -10,8 +16,8 @@ class Clearing {
 
     }
 
-    async clearingFunction(blockHeight) {
-        console.log(`Starting clearing operations for block ${blockHeight}`);
+    static async clearingFunction(blockHeight) {
+        //console.log(`Starting clearing operations for block ${blockHeight}`);
 
         // 1. Fee Cache Buy
         //await this.feeCacheBuy();
@@ -33,7 +39,7 @@ class Clearing {
         // 6. Settle trades at block level
         await this.makeSettlement(blockHeight);
 
-        console.log(`Clearing operations completed for block ${blockHeight}`);
+        //console.log(`Clearing operations completed for block ${blockHeight}`);
     }
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
@@ -189,20 +195,20 @@ class Clearing {
 
         const isOracle = await ContractList.isOracleContract(contractId);
         let latestData;
-
-        if (isOracle!=false) {
-            // Access the database where oracle data is stored
-            const oracleDataDB = db.getDatabase('oracleData');
+        //console.log('checking if contract is oracle '+contractId +' '+isOracle)
+        if (isOracle) {
+            let oracleId = await ContractList.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
-                       
-            const latestData = await oracleDataDB.findOneAsync({ oracleId: isOracle });
+            //console.log('oracle id '+oracleId)         
+            const latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
+            //console.log(JSON.stringify(latestData))
             if (latestData) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
                 const latestBlockData = sortedData[0];
                 // Now, latestBlockData contains the document with the highest blockHeight
                 //console.log('Latest Block Data:', latestBlockData);
                 if(latestData.blockHeight==blockHeight){
-                    //console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+                    console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
                     return true
                 }
             } else {
@@ -239,22 +245,19 @@ class Clearing {
                 console.log('new price')
                 // Proceed with processing for this contract
                 console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
-                let collateralId = ContractList.getCollateralId(contract.id)
-                let inverse = ContractList.isInverse(contract.id)
-            // Fetch positions that need adjustment
-                let positions = await Clearing.fetchPositionsForAdjustment(contract.id, blockHeight);
-                console.log('positions in clearing' +JSON.stringify(positions))
-                // Iterate through each position to adjust for profit or loss
-    
+                let collateralId = await ContractList.getCollateralId(contract.id)
+                let inverse = await ContractList.isInverse(contract.id)
+                const notionalValue = await ContractList.getNotionalValue(contract.id)
+                
                 // Update margin maps based on mark prices and current contract positions
-                await Clearing.updateMarginMaps(blockHeight, positions, blockHeight, contract.id, collateralId); //problem child
+                let positions = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
 
                  // Perform additional tasks like loss socialization if needed
-                await Clearing.performAdditionalSettlementTasks(blockHeight, positions);
+                await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id);
 
                 // Save the updated position information
                 await Clearing.savePositions(positions);
-                return [positions, this.balanceChanges];
+                return this.balanceChanges;
             } else {
                 // Skip processing for this contract
                 //console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
@@ -264,168 +267,110 @@ class Clearing {
     }
 
     
-    static async updateMarginMaps(blockHeight, positions, block, contractId, collateralId, inverse) {
+    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notionalValue) {
         let liquidationData = [];
         // Load margin map for the specific contract series
-            let marginMap = await MarginMap.getInstance(position.contractSeriesId);
-        console.log('positions in updateMarginMaps '+JSON.stringify(positions))
+            let marginMap = await MarginMap.getInstance(contractId);
+             // Fetch positions that need adjustment
+                let positions = await marginMap.getAllPositions();
+                //console.log('positions in clearing' +JSON.stringify(positions))
+                // Iterate through each position to adjust for profit or loss
+                let blob = await Clearing.getPriceChange(blockHeight, contractId)
+                console.log(blob.lastPrice, blob.thisPrice)
         for (let position of positions) {
-            
-
+            if(blob.lastPrice==null){
+                    blob.lastPrice= position.avgPrice
+                }
             // Update margin based on PnL change
-            let pnlChange = await Clearing.calculatePnLChange(position, blockHeight);
+            let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse,notionalValue);
             console.log('updatingMarginMaps with pnlChange '+JSON.stringify(position) + ' '+ pnlChange)
-            const newPosition = marginMap.clearMargin(contractId, position.holderAddress, pnlChange, inverse);
+            const newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice,contractId)
             console.log('new Position '+ JSON.stringify(newPosition))
-            
+            let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, pnlChange)
                 // Move funds from available to margin in TallyMap
-                if(TallyMap.hasSufficientBalance(position.holderAddress, propertyId, requiredAmount)){
-                        await TallyMap.updateBalance(position.holderAddress, pnlChange, 0, 0,0);
+                if(balance.hasSufficient==true){
+                        await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
                 }else{
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
-                    if (marginMap.checkMarginMaintainence(position.holderAddress,contractId)){
+                    if (await marginMap.checkMarginMaintainance(position.address,contractId)){
                          let liquidationOrders = await marginMap.triggerLiquidations(newPosition);
                     liquidationData.push(...liquidationOrders);
-                        } 
+                    } 
                 }
         }
 
             // Save the updated margin map
-        await marginMap.save(blockHeight);
+        await marginMap.saveMarginMap(false);
         console.log('any liquidations '+liquidationData)
-        return liquidationData;
+        return positions;
     }
 
-    static async getCurrentMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
-        // Find the highest block height that is less than or equal to the target block height
-        const oracleDataDB = db.getDatabase('oracleData');
-        let entries
-
-          try {
-                let query;
-
-                if (oracleId) {
-                    query = { oracleId: oracleId };
-                } else if (propertyId1 && propertyId2) {
-                    query = { 'propertyId1-propertyId2': `${propertyId1}-${propertyId2}` };
-                } else {
-                    // No valid parameters provided
-                    return null;
-                }
-
-                // Query the database for the latest oracle data based on the specified parameters
-                const entries = await oracleDataDB.findOneAsync(query);
-
-            } catch (error) {
-                console.error('Error fetching data from Oracle DB:', error);
-                throw error;
-            }
-
-            let closestLowerBlockHeight = null;
-            for (const entry of entries) {
-                if (entry.blockHeight <= blockHeight) {
-                    closestLowerBlockHeight = entry.blockHeight;
-                    break;
-                }
-            }
-
-            // If a closest lower block height is found, retrieve the corresponding data
-            if (closestLowerBlockHeight !== null) {
-                const result = await oracleDataDB.findOne({ blockHeight: closestLowerBlockHeight });
-                return result;
-            } else {
-                // No data found for the target block height or lower
-                return null;
-            }
-    }
-
-
-    static async getPreviousMarkPrice(blockHeight, oracleId, propertyId1, propertyId2) {
-        // Logic to fetch the market price for a contract at the previous block height
-        // Example: return await marketPriceDB.findOne({blockHeight: blockHeight - 1});
-        const oracleDataDB = db.getDatabase('oracleData');
-
-         try {
-                let query;
-
-                if (oracleId) {
-                    query = { oracleId: oracleId };
-                } else if (propertyId1 && propertyId2) {
-                    query = { 'propertyId1-propertyId2': `${propertyId1}-${propertyId2}` };
-                } else {
-                    // No valid parameters provided
-                    return null;
-                }
-
-                // Find the 2nd highest block height that is less than the current block height
-                const indexArray = await oracleDataDB.findOneAsync({
-                    $and: [
-                        { blockHeight: { $lt: blockHeight } },
-                        query
-                    ]
-                }).sort({ blockHeight: -1 });
-
-            } catch (error) {
-                console.error('Error fetching data from Oracle DB:', error);
-                throw error;
-            }
-
-        let secondHighestBlockHeight = null;
-        let count = 0;
-        for (const entry of indexArray) {
-            if (entry.blockHeight < blockHeight) {
-                if (count === 1) {
-                    secondHighestBlockHeight = entry.blockHeight;
-                    break;
-                }
-                count++;
-            }
+    static async getPriceChange(blockHeight, contractId){
+        let isOracleContract = await ContractList.isOracleContract(contractId)
+        let oracleId = null
+        let propertyId1 = null
+        let propertyId2 = null
+        let latestData
+        if(isOracleContract){
+            oracleId = await ContractList.getOracleId(contractId)
+            latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
+           
+        }else{
+            let info = await ContractList.getContractInfo(contractId)
+            propertyId1 = info.native.native.onChainData[0]
+            propertyId2 = info.native.native.onChainData[1]
+            latestData = await volumeIndexDB.findOneAsync({propertyId1:propertyId1,propertyId2:propertyId2})
         }
 
-        // If a 2nd highest block height is found, retrieve the corresponding data
-        if (secondHighestBlockHeight !== null) {
-            const result = await oracleDataDB.findOneAsync({ blockHeight: secondHighestBlockHeight });
-            return result;
-        } else {
-            // No data found for the 2nd latest block
-            return null;
-        }
+             console.log(JSON.stringify(latestData))
+                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+                console.log(JSON.stringify(sortedData))
+                const currentMarkPrice = sortedData[0].data.price;
+                console.log(currentMarkPrice)
+                let previousMarkPrice = null
+                
+                if(sortedData.length>1){
+                    previousMarkPrice = sortedData[1].data.price
+                }
+                return {lastprice: previousMarkPrice, thisPrice:currentMarkPrice}
     }
 
-    // Additional functions to be implemented
-    async fetchPositionsForAdjustment(blockHeight) {
-        try {
-            let marginMap = await MarginMap.loadMarginMap(this.seriesId, blockHeight);
-
-            let positions = Array.from(marginMap.margins.entries()).map(([address, positionData]) => ({
-                address,
-                contracts: positionData.contracts, // Ensure this reflects the actual structure of positionData
-                ...positionData
-            }));
-
-            return positions;
-        } catch (error) {
-            console.error('Error fetching positions for adjustment:', error);
-            throw error;
-        }
-    }
-
-    calculatePnLChange(position, blockHeight) {
-        // Retrieve the current and previous mark prices for the block height
-        let currentMarkPrice = this.getCurrentMarkPrice(blockHeight);
-        let previousMarkPrice = this.getPreviousMarkPrice(blockHeight);
-
-        // Calculate the price change per contract
-        let priceChangePerContract = currentMarkPrice - previousMarkPrice;
+    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){
+      
 
         // Calculate P&L change for the position based on the number of contracts
         // Assuming a long position benefits from a price increase and vice versa
-        let pnlChange = position.contracts * priceChangePerContract;
+        let pnl 
 
+        const priceBN = new BigNumber(currentMarkPrice);
+        const avgPriceBN = new BigNumber(previousMarkPrice);
+        const contractsBN = new BigNumber(position.contracts);
+        const notionalValueBN = new BigNumber(notionalValue);
+
+        if (inverse) {
+            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+            pnl = priceBN
+                .minus(1)
+                .dividedBy(avgPriceBN.minus(1))
+                .times(contractsBN)
+                .times(notionalValueBN);
+
+            //console.log('pnl ' + pnl.toNumber());
+        } else {
+            // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
+            pnl = priceBN
+                .minus(avgPriceBN)
+                .times(contractsBN)
+                .times(notionalValueBN);
+
+            //console.log('pnl ' + pnl.toNumber());
+        }
+
+        console.log(priceBN +' '+currentMarkPrice+' '+avgPriceBN+' ' +previousMarkPrice+' '+contractsBN+' '+position.contracts+' '+notionalValueBN+' '+notionalValue)
         // Adjust sign based on whether the position is long or short
-        pnlChange *= position.isLong ? 1 : -1; // Assuming position.isLong is a boolean indicating position type
+        pnl = position.contracts>0 ? pnl : pnl.negated();
 
-        return pnlChange;
+        return pnl.toNumber();
     }
 
     async getBalance(holderAddress) {
@@ -439,20 +384,22 @@ class Clearing {
         }
     }
 
-    async performAdditionalSettlementTasks(blockHeight, positions) {
+    static async performAdditionalSettlementTasks(blockHeight,positions, contractId) {
+ 
         try {
             // Step 1: Calculate total losses
-            const totalLoss = this.getTotalLoss(positions);
+            const totalLoss = Clearing.getTotalLoss(positions);
 
             // Step 2: Check if insurance fund payout is needed
             if (totalLoss > 0) {
                 // Step 3: Apply insurance fund payout
-                const payout = await this.insuranceFund.applyPayout(totalLoss);
+                const insurance = await Insurance.getFund(contractId)
+                const payout = insurance.applyPayout(totalLoss);
 
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
                 if (remainingLoss > 0) {
-                    await this.socializeLoss(remainingLoss, positions);
+                    await Clearing.socializeLoss(remainingLoss, positions);
                 }
             }
         } catch (error) {
@@ -598,53 +545,15 @@ class Clearing {
         return JSON.stringify(auditData);
     }
 
-    async lossSocialization(contractId, collateral, fullAmount) {
-            let count = 0;
-            let zeroPositionAddresses = [];
-
-            // Fetch register data
-            let registerData = await this.fetchRegisterData();
-
-            // Count non-zero positions and identify zero position addresses
-            registerData.forEach(entry => {
-                let position = entry.getRecord(contractId, 'CONTRACT_POSITION');
-                if (position === 0) {
-                    zeroPositionAddresses.push(entry.address);
-                } else {
-                    count++;
-                }
-            });
-
-            if (count === 0) return;
-
-            let fraction = fullAmount / count;
-
-            // Socialize loss among non-zero positions
-            for (const entry of registerData) {
-                if (!zeroPositionAddresses.includes(entry.address)) {
-                    let balanceDetails = TallyMap.getAddressBalances(entry.address);
-                    let available = balanceDetails.find(b => b.propertyId === collateral)?.available || 0;
-                    let amount = Math.min(available, fraction);
-
-                    if (amount > 0) {
-                        TallyMap.updateBalance(entry.address, collateral, -amount, -amount, 0); // Assuming updateBalance deducts from available
-                    }
-                }
-            }
-
-            // Optionally, save the TallyMap state to the database
-            await TallyMap.save(blockHeight); // Replace blockHeight with the appropriate value
-    }
-
-    async getTotalLoss(contractId, notionalSize) {
+    static async getTotalLoss(contractId, notionalSize) {
             let vwap = 0;
             let volume = 0;
             let bankruptcyVWAP = 0;
             let oracleTwap = 0;
 
-            let contractType = await ContractsRegistry.getContractType(contractId);
+            let contractType = await ContractsRegistry.isOracleContract(contractId);
 
-            if (contractType === 'oracle') {
+            if (isOracleContract) {
                 let liquidationData = await ContractsRegistry.fetchLiquidationVolume(contractId);
                 if (!liquidationData) {
                     console.log('No liquidation volume data found for oracle-based contract.');
@@ -654,7 +563,7 @@ class Clearing {
 
                 // Fetch TWAP data from oracle
                 oracleTwap = await Oracles.getTwap(contractId); // Assuming Oracles module provides TWAP data
-            } else if (contractType === 'native') {
+            } else{
                 // Fetch VWAP data for native contracts
                 let vwapData = VolumeIndex.getVwapData(contractId); // Assuming VolumeIndex module provides VWAP data
                 if (!vwapData) {
@@ -663,13 +572,66 @@ class Clearing {
                 }
                 ({ volume, vwap, bankruptcyVWAP } = vwapData);
                 oracleTwap = vwap;
-            } else {
-                console.log('Unknown contract type.');
-                return 0;
             }
 
-            return ((bankruptcyVWAP * notionalSize) / this.COIN) * ((volume * vwap * oracleTwap) / (this.COIN * this.COIN));
+            return ((bankruptcyVWAP * notionalSize) * (volume * vwap * oracleTwap));
     }
+
+    static async socializeLoss(contractId, totalLoss, positions, lastPrice) {
+        try {
+            // Get all open positions for the given contract
+            const openPositions = await this.getAllPositions();
+
+            // Calculate the volume weighted price for every open position
+            const vwaps = await Promise.all(openPositions.map(async (position) => {
+                // Get the market price for the contract (assuming you have a method to retrieve it)
+                const marketPrice = await this.getMarketPrice(contractId);
+
+                // Calculate the volume weighted price for the position
+                const vwap = (position.avgPrice * position.contracts + lastPrice * position.unrealizedPNL) / (position.contracts + position.unrealizedPNL);
+
+                return vwap;
+            }));
+
+            // Calculate the total volume weighted price and total open position uPNL
+            const totalVWAP = vwaps.reduce((sum, vwap) => sum.plus(vwap), new BigNumber(0));
+            const totalOpenUPNL = openPositions.reduce((sum, position) => sum.plus(position.unrealizedPNL), new BigNumber(0));
+
+            // Calculate the percentage of total loss compared to total PNL
+            const lossPercentage = totalLoss.dividedBy(totalOpenUPNL);
+
+            // Reduce positive uPNL for all open positions by the calculated percentage
+            const updatedPositions = openPositions.map((position, index) => {
+                const vwap = new BigNumber(vwaps[index]);
+                const adjustedUPNL = vwap.times(lossPercentage).times(position.contracts);
+
+                // Ensure the adjusted uPNL doesn't exceed the total open position uPNL
+                const newUPNL = BigNumber.minimum(adjustedUPNL, position.unrealizedPNL);
+
+                // Update the position with the adjusted uPNL
+                return {
+                    ...position,
+                    unrealizedPNL: newUPNL.toNumber(),
+                };
+            });
+
+            // Update the positions in the margin map
+            for (const updatedPosition of updatedPositions) {
+                this.margins.set(updatedPosition.address, updatedPosition);
+                await this.recordMarginMapDelta(updatedPosition.address, contractId, 0, 0, 0, -updatedPosition.unrealizedPNL, 0, 'socializeLoss');
+            }
+
+            // Save the updated margin map
+            await this.saveMarginMap(true);
+
+            console.log('Socialized loss successfully.');
+
+        } catch (error) {
+            console.error('Error socializing loss:', error);
+            throw error;
+        }
+    }
+
 
     async fetchAuditData(auditDataKey) {
         // Implement logic to fetch audit data from the database

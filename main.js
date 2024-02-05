@@ -242,7 +242,7 @@ class Main {
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }
-           //Clearing.clearingFunction()
+            await Clearing.clearingFunction(blockHeight)
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 

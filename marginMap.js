@@ -88,6 +88,25 @@ class MarginMap {
         return margin;
     }*/
 
+    async getAllPositions() {
+       
+        const allPositions = [];
+
+        for (const [address, position] of this.margins.entries()) {
+            allPositions.push({
+                address: address,
+                contracts: position.contracts,
+                margin: position.margin,
+                unrealizedPNL: position.unrealizedPNL,
+                avgPrice: position.avgPrice
+                // Add other relevant fields if necessary
+            });
+        }
+
+        return allPositions;
+    }
+
+
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin) {
         //console.log('setting initial margin '+sender, contractId, totalInitialMargin)
@@ -310,7 +329,7 @@ class MarginMap {
      * @param {string} address - The address of the position holder.
      * @param {string} contractId - The ID of the contract.
      */
-    checkMarginMaintenance(address, contractId) {
+    async checkMarginMaintainance(address, contractId) {
         let position = this.margins.get(address);
 
         if (!position) {
@@ -320,8 +339,11 @@ class MarginMap {
 
         const ContractRegistry = require('./contractRegistry.js')
         // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = ContractRegistry.getInitialMargin(contractId);
-        let maintenanceMargin = (position.contracts * initialMargin) / 2;
+        let initialMargin = await ContractRegistry.getInitialMargin(contractId);
+        let initialMarginBN = new BigNumber(initialMargin)
+        let contractsBN = new BigNumber(position.contracts)
+        let maintenanceMarginFactorBN = new BigNumber(0.8)
+        let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).toNumber();
 
         if (position.margin < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
@@ -486,38 +508,33 @@ class MarginMap {
                 const oracleId = await ContractRegistry.getOracleId(contractId);
 
                 // Retrieve the latest oracle data for the previous block
-                oraclePrice = await ContractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1);
+                const oracleData = await ContractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1);
+                let oraclePrice = oracleData.data.price
             }
 
             // Use settlement price based on the oracle data or LIFO Avg. Entry
             const settlementPrice = isOracleContract ? oraclePrice : avgEntry;
 
             // Calculate PnL based on settlement price
-            const pnl = (price - settlementPrice) * contracts;
-
+            const pnl = new BigNumber((price - settlementPrice) * Math.abs(contracts));
+            if (contracts < 0) {
+                pnl.negated(); // Invert the value if contracts is negative
+            }
             // Update margin and unrealized PnL
             //pos.margin -= Math.abs(pnl);
-            pos.unrealizedPl -= pnl;
-            await this.recordMarginMapDelta(address, contractId, 0, contracts, 0, -pnl, 0, 'settlementPNL')
+            pos.unrealizedPNL -= pnl;
+            this.margins.set(address, pos)
+            await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   
             return pnl;
     }
 
-    clear(price, contractId) {
-        for (let [address, pos] of this.margins) {
-            if (pos.contractId === contractId) {
-                let upnl;
-                if (pos.isInverse) {
-                    // For inverse contracts: UPnL = (1/entryPrice - 1/exitPrice) * contracts * notional
-                    upnl = (1 / pos.avgPrice - 1 / price) * pos.contracts * pos.notionalValue;
-                } else {
-                    // For linear contracts: UPnL = (exitPrice - entryPrice) * contracts * notional
-                    upnl = (price - pos.avgPrice) * pos.contracts * pos.notionalValue;
-                }
-
-                pos.unrealizedPl = upnl;
-            }
-        }
+    async clear(position, address, pnlChange, avgPrice,contractId) {
+               
+            position.unrealizedPNL+=pnlChange
+            this.margins.set(address, position)
+            await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice')
+            return position
     }
 
     async triggerLiquidations(contract) {

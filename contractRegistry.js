@@ -377,7 +377,33 @@ class ContractRegistry {
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        return contractInfo && contractInfo.type === 'oracle';
+        //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
+        return contractInfo && contractInfo.native.native === false;
+    }
+
+      // Determine a contract's oracle
+    static async getOracleId(contractId) {
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
+        //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
+        return contractInfo.native.underlyingOracleId;
+    }
+
+    static async getLatestOracleData(oracleId){
+         // Access the database where oracle data is stored
+            const oracleDataDB = db.getDatabase('oracleData');
+            // Query the database for the latest oracle data for the given contract
+                       
+            const latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
+            if (latestData) {
+                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
+                const latestBlockData = sortedData[0];
+
+                return latestBlockData
+            }else{
+                console.log('no oracle data found '+JSON.stringify(latestData))
+                return null
+            }
+
     }
 
     // Calculate the 1-hour funding rate for an oracle contract
