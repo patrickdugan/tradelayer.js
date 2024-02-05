@@ -19,7 +19,7 @@ class MarginMap {
 
     static async loadMarginMap(seriesId) {
         const key = JSON.stringify({ seriesId });
-        console.log('loading margin map for ' + seriesId);
+        //console.log('loading margin map for ' + seriesId);
         // Retrieve the marginMaps database from your Database instance
         const marginMapsDB = db.getDatabase('marginMaps');
 
@@ -31,7 +31,7 @@ class MarginMap {
                 return new MarginMap(seriesId);
             }
 
-            console.log('marginMap parsed from DB ' + JSON.stringify(doc));
+            //console.log('marginMap parsed from DB ' + JSON.stringify(doc));
             const map = new MarginMap(seriesId);
 
             // Parse the value property assuming it's a JSON string
@@ -44,7 +44,7 @@ class MarginMap {
                 console.error('Error parsing margin map value. Expected an array.');
             }
 
-            console.log('returning a map from the file ' + JSON.stringify(map.margins));
+            //console.log('returning a map from the file ' + JSON.stringify(map.margins));
             return map;
         } catch (err) {
             console.error('Error loading margin Map ' + err);
@@ -90,7 +90,7 @@ class MarginMap {
 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin) {
-        console.log('setting initial margin '+sender, contractId, totalInitialMargin)
+        //console.log('setting initial margin '+sender, contractId, totalInitialMargin)
         // Check if there is an existing position for the sender
         let position = this.margins.get(sender);
 
@@ -104,13 +104,13 @@ class MarginMap {
             };
         }
 
-        console.log('margin before '+position.margin)
+        //console.log('margin before '+position.margin)
         // Update the margin for the existing or new position
         position.margin += totalInitialMargin;
-        console.log('margin after '+position.margin)
+        //console.log('margin after '+position.margin)
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
-        console.log('margin should be topped up '+JSON.stringify(position))
+        //console.log('margin should be topped up '+JSON.stringify(position))
         await this.recordMarginMapDelta(sender, contractId, position.contracts, 0, totalInitialMargin, 0, 0, 'initialMargin')
         // Save changes to the database or your storage solution
         await this.saveMarginMap(true);
@@ -124,14 +124,14 @@ class MarginMap {
             const marginMapsDB = db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
             if(isMargin){
-                console.log('updating marginMap with margin '+JSON.stringify(value))
+                //console.log('updating marginMap with margin '+JSON.stringify(value))
             }else{
-                console.log('updating marginMap after match process '+JSON.stringify(value))
+                //console.log('updating marginMap after match process '+JSON.stringify(value))
             }
             // Save the margin map to the database
             await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
 
-            console.log('MarginMap saved successfully.');
+            //console.log('MarginMap saved successfully.');
         } catch (err) {
             console.error('Error saving MarginMap:', err);
             throw err;
@@ -202,7 +202,7 @@ class MarginMap {
     }*/
 
     async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
-        console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
+        //console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         let buyerPosition = await this.updateContractBalances(
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
@@ -233,7 +233,7 @@ class MarginMap {
 
     async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade, close,flip,contractId) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
-        console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
+        //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
         if(close==false&&flip==false){
             if(position.contracts==0){
@@ -249,10 +249,10 @@ class MarginMap {
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
-        console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
+        //console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
         
-        console.log('position now ' + JSON.stringify(position))
+        //console.log('position now ' + JSON.stringify(position))
 
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
@@ -333,8 +333,8 @@ class MarginMap {
     }
    
     async reduceMargin(pos, contracts, pnl, isInverse, contractId, address,side) {
-        console.log('checking position inside reduceMargin ' + JSON.stringify(pos));
-        console.log('checking PNL math in reduceMargin '+pnl+' '+address)
+        //console.log('checking position inside reduceMargin ' + JSON.stringify(pos));
+        //console.log('checking PNL math in reduceMargin '+pnl+' '+address)
         if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
         // Calculate the remaining margin after considering pnl
         //let remainingMargin = new BigNumber(pos.margin).plus(pnl);
@@ -368,11 +368,11 @@ class MarginMap {
 
             // Assign the updated pos.margin
             pos.margin = posMargin.toNumber();    
-            console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
+            //console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
              
         this.margins.set(address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginReduction')
-        console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
+        //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
         await this.saveMarginMap(true);
         return reduction.toNumber();
     }
@@ -381,7 +381,7 @@ class MarginMap {
         if (!pos) return new BigNumber(0);
 
         let pnl;
-        console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
+        //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
 
         const priceBN = new BigNumber(price);
         const avgPriceBN = new BigNumber(avgPrice);
@@ -396,7 +396,7 @@ class MarginMap {
                 .times(contractsBN)
                 .times(notionalValueBN);
 
-            console.log('pnl ' + pnl.toNumber());
+            //console.log('pnl ' + pnl.toNumber());
         } else {
             // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
             pnl = priceBN
@@ -404,7 +404,7 @@ class MarginMap {
                 .times(contractsBN)
                 .times(notionalValueBN);
 
-            console.log('pnl ' + pnl.toNumber());
+            //console.log('pnl ' + pnl.toNumber());
         }
 
         // Adjust the sign based on the isBuy flag
@@ -594,10 +594,10 @@ class MarginMap {
      // Get the position for a specific address
       async getPositionForAddress(address, contractId) {
         let position = this.margins.get(address);
-        console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
+        //console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
         // If the position is not found or margins map is empty, try loading from the database
         if (!position || this.margins.length === 0) {
-            console.log('going into exception for getting Position ')
+            //console.log('going into exception for getting Position ')
             await MarginMap.loadMarginMap(contractId);
             position = this.margins.get(address);
         }

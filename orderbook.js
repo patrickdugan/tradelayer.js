@@ -19,10 +19,10 @@ class Orderbook {
         }
 
          async loadOrCreateOrderBook(key, flag) {
-            console.log('key before the string treatment '+key)
+            //console.log('key before the string treatment '+key)
             const stringKey = typeof key === 'string' ? key : String(key);
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
-             console.log('checking orderbook in this cancel call '+stringKey)
+             //console.log('checking orderbook in this cancel call '+stringKey)
             try{
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
@@ -80,7 +80,7 @@ class Orderbook {
                 sellerTx,
                 buyerTx
             };
-            console.log('saving contract trade ' +JSON.stringify(trade))
+            //console.log('saving contract trade ' +JSON.stringify(trade))
             await this.saveTrade(tradeRecord);
         }
 
@@ -105,9 +105,9 @@ class Orderbook {
                     tradeDoc,
                     { upsert: true }
                 );
-                console.log(`Trade record saved successfully: ${tradeId}`);
+                //console.log(`Trade record saved successfully: ${tradeId}`);
             } catch (error) {
-                console.error(`Error saving trade record: ${tradeId}`, error);
+                //console.error(`Error saving trade record: ${tradeId}`, error);
                 throw error; // Rethrow the error for handling upstream
             }
     }
@@ -122,7 +122,7 @@ class Orderbook {
 
         // Retrieve contract trading history by contractId
         static async getContractTradeHistoryByContractId(contractId) {
-                console.log('loading trade history for '+contractId)
+                //console.log('loading trade history for '+contractId)
                 const tradeDB = dbInstance.getDatabase('tradeHistory');
                 const tradeRecordKey = `contract-${contractId}`;
                 const trades = await tradeDB.findAsync({ key: tradeRecordKey });
@@ -504,7 +504,7 @@ class Orderbook {
             const MarginMap = require('./marginMap.js')
             const tradeHistoryManager = new TradeHistory()
 
-            console.log('processing contract mathces '+JSON.stringify(matches))
+            //console.log('processing contract mathces '+JSON.stringify(matches))
 
             for (const match of matches) {
 
@@ -514,7 +514,7 @@ class Orderbook {
                     }
                     // Load the margin map for the given series ID and block height
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
-                    console.log('checking the marginMap for contractId '+ marginMap )
+                    //console.log('checking the marginMap for contractId '+ marginMap )
                     // Get the existing position sizes for buyer and seller
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                     match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
@@ -542,10 +542,10 @@ class Orderbook {
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.buyOrder.contractId, match.tradePrice);
                         
                         totalMargin = initialMarginPerContract*flipLong
-                        console.log('checking flip logic checking hasSufficientBalance'+match.buyOrder.buyerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
+                        //console.log('checking flip logic checking hasSufficientBalance'+match.buyOrder.buyerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
-                            console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
+                            //console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
                             if (initialMarginPerContract !== 0) {
                                 let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                     .dividedBy(initialMarginPerContract)
@@ -560,17 +560,17 @@ class Orderbook {
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
                         await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, totalMargin);
                         buyerFullyClosed=true
-                        console.log('checking flip logic '+flipLong+' '+match.buyOrder.amount + ' '+Math.abs(match.buyerPosition.contracts)+' total margin to adjust '+totalMargin)
+                        //console.log('checking flip logic '+flipLong+' '+match.buyOrder.amount + ' '+Math.abs(match.buyerPosition.contracts)+' total margin to adjust '+totalMargin)
                     }
                     if(isSellerFlippingPosition){
                         flipShort=match.sellOrder.amount-Math.abs(match.sellerPosition.contracts)
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.sellOrder.contractId, match.tradePrice);
                         totalMargin = initialMarginPerContract*flipLong
-                         console.log('checking flip logic checking hasSufficientBalance'+match.sellOrder.sellerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
+                         //console.log('checking flip logic checking hasSufficientBalance'+match.sellOrder.sellerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
                       
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
-                            console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
+                            //console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
                       
                             let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                 .dividedBy(initialMarginPerContract)
@@ -584,25 +584,25 @@ class Orderbook {
                         await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
                         await marginMap.setInitialMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, totalMargin);
                         sellerFullyClosed=true
-                        console.log('checking flip logic' +flipShort)
+                        //console.log('checking flip logic' +flipShort)
                   }
 
                     if(!isBuyerReducingPosition){
                        // Use the instance method to set the initial margin
                        match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin)
 
-                       console.log('buyer position after moveCollat '+match.buyerPosition)
+                       //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
                     // Update MarginMap for the contract series
                     if(!isSellerReducingPosition){
                         // Use the instance method to set the initial margin
                        match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin)
-                       console.log('sellerPosition after moveCollat '+match.sellerPosition)
+                       //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
 
 
-                    console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
-                    console.log('reviewing Match object before processing '+JSON.stringify(match))
+                    //console.log('checking position for trade processing '+JSON.stringify(match.buyerPosition) +' buyer size '+' seller size '+JSON.stringify(match.sellerPosition))
+                    //console.log('reviewing Match object before processing '+JSON.stringify(match))
                     // Update contract balances for the buyer and seller
                     let close = false
                     let flip = false
@@ -652,9 +652,9 @@ class Orderbook {
 
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                     match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
-                    console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
+                    //console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
 
-                    console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
+                    //console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
 
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
@@ -688,7 +688,7 @@ class Orderbook {
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
                         //{netMargin,mode}   
                         if(reduction !=0){
-                            console.log('reduction about to pass to TallyMap' +reduction)
+                            //console.log('reduction about to pass to TallyMap' +reduction)
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
                         }
                         //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
@@ -735,7 +735,7 @@ class Orderbook {
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
                         //console.log('LIFO '+JSON.stringify(LIFO))
 
-                        console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
+                        //console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
                         const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false,match.sellOrder.contractId);
                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
@@ -904,7 +904,7 @@ class Orderbook {
             for (const order of cancelledOrders) {
                 //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
                 const reserveAmount = parseFloat(order.initMargin)
-                console.log('about to apply changes '+reserveAmount+typeof reserveAmount)
+                //console.log('about to apply changes '+reserveAmount+typeof reserveAmount)
                 await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel');
             }
 
