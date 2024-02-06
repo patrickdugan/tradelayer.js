@@ -6,6 +6,8 @@ const BigNumber = require('bignumber.js');
 const oracleDataDB = db.getDatabase('oracleData');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
+//const VolumeIndex = require('./volumeIndex.js')
+
 
 class Clearing {
     // ... other methods ...
@@ -200,21 +202,25 @@ class Clearing {
             let oracleId = await ContractList.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
             //console.log('oracle id '+oracleId)         
-            const latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
-            //console.log(JSON.stringify(latestData))
-            if (latestData) {
+            const latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            //console.log('is price updated ' +JSON.stringify(latestData))
+            if (latestData.length>0) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
-                const latestBlockData = sortedData[0];
+                const latestBlockData = sortedData[sortedData.length-1];
+                const lastPriceEntry = latestBlockData[latestBlockData.length-1]
+                //console.log('checking data '+sortedData+ ' ok now latest Block data '+latestBlockData+' last price entry '+lastPriceEntry)
                 // Now, latestBlockData contains the document with the highest blockHeight
-                //console.log('Latest Block Data:', latestBlockData);
-                if(latestData.blockHeight==blockHeight){
-                    console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
+                if(blockHeight >=3107880&&blockHeight<=3107903){
+                    console.log('Latest price entry:'+ JSON.stringify(lastPriceEntry)+' '+blockHeight);
+                }
+                if(lastPriceEntry.blockHeight==blockHeight){
+                    console.log('latest data '+lastPriceEntry.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(lastPriceEntry && lastPriceEntry.blockHeight == blockHeight) )
                     return true
                 }
             } else {
                 //console.error('No data found for contractId:', contractId);
             }
-        } else {
+        } /*else {
             // Access the database where volume index data is stored
             const volumeIndexDB = db.getDatabase('volumeIndex');
                         // Query the database for the latest volume index data for the given contract
@@ -232,7 +238,7 @@ class Clearing {
             } else {
                 //console.error('No data found for contractId:', contractId);
             }
-        }
+        }*/
         //console.log('no new data')
         return false; // No updated data for this block height
     }
@@ -255,8 +261,6 @@ class Clearing {
                  // Perform additional tasks like loss socialization if needed
                 await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id);
 
-                // Save the updated position information
-                await Clearing.savePositions(positions);
                 return this.balanceChanges;
             } else {
                 // Skip processing for this contract
@@ -313,7 +317,7 @@ class Clearing {
         let latestData
         if(isOracleContract){
             oracleId = await ContractList.getOracleId(contractId)
-            latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
+            latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
            
         }else{
             let info = await ContractList.getContractInfo(contractId)
@@ -321,17 +325,18 @@ class Clearing {
             propertyId2 = info.native.native.onChainData[1]
             latestData = await volumeIndexDB.findOneAsync({propertyId1:propertyId1,propertyId2:propertyId2})
         }
-
-             console.log(JSON.stringify(latestData))
+            //console.log('is price updated ' +JSON.stringify(latestData))
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
-                console.log(JSON.stringify(sortedData))
-                const currentMarkPrice = sortedData[0].data.price;
-                console.log(currentMarkPrice)
+                const latestBlockData = sortedData[sortedData.length-1];
+                const lastPriceEntry = latestBlockData[latestBlockData.length-1]
+                const currentMarkPrice = lastPriceEntry.data.price;
+            
                 let previousMarkPrice = null
                 
                 if(sortedData.length>1){
-                    previousMarkPrice = sortedData[1].data.price
+                    previousMarkPrice = latestBlockData[latestBlockData.length-2].data.price
                 }
+                    console.log('checking mark price current and last '+currentMarkPrice+' '+previousMarkPrice)
                 return {lastprice: previousMarkPrice, thisPrice:currentMarkPrice}
     }
 
@@ -388,7 +393,7 @@ class Clearing {
  
         try {
             // Step 1: Calculate total losses
-            const totalLoss = Clearing.getTotalLoss(positions);
+            const totalLoss = Clearing.getTotalLoss(positions,contractId);
 
             // Step 2: Check if insurance fund payout is needed
             if (totalLoss > 0) {
@@ -545,16 +550,17 @@ class Clearing {
         return JSON.stringify(auditData);
     }
 
-    static async getTotalLoss(contractId, notionalSize) {
+    static async getTotalLoss(positions, contractId) {
             let vwap = 0;
             let volume = 0;
             let bankruptcyVWAP = 0;
             let oracleTwap = 0;
 
-            let contractType = await ContractsRegistry.isOracleContract(contractId);
+            let isOracleContract = await ContractList.isOracleContract(contractId);
+            let notionalSize = await ContractList.getNotionalValue(contractId)
 
             if (isOracleContract) {
-                let liquidationData = await ContractsRegistry.fetchLiquidationVolume(contractId);
+                let liquidationData = await ContractList.fetchLiquidationVolume(positions, contractId);
                 if (!liquidationData) {
                     console.log('No liquidation volume data found for oracle-based contract.');
                     return 0;
@@ -563,7 +569,7 @@ class Clearing {
 
                 // Fetch TWAP data from oracle
                 oracleTwap = await Oracles.getTwap(contractId); // Assuming Oracles module provides TWAP data
-            } else{
+            } /*else{
                 // Fetch VWAP data for native contracts
                 let vwapData = VolumeIndex.getVwapData(contractId); // Assuming VolumeIndex module provides VWAP data
                 if (!vwapData) {
@@ -572,7 +578,7 @@ class Clearing {
                 }
                 ({ volume, vwap, bankruptcyVWAP } = vwapData);
                 oracleTwap = vwap;
-            }
+            }*/
 
             return ((bankruptcyVWAP * notionalSize) * (volume * vwap * oracleTwap));
     }

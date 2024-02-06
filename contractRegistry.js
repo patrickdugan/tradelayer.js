@@ -220,7 +220,8 @@ class ContractRegistry {
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
-            console.log(`Contract information not found for contract ID: ${contractId}`);
+            console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
+
             return null;
         }
         return doc.data;
