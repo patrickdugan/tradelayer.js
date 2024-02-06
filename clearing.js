@@ -260,7 +260,7 @@ class Clearing {
                 let positions = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
 
                  // Perform additional tasks like loss socialization if needed
-                await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id);
+                await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id,positions.lastMark);
 
                 return this.balanceChanges;
             } else {
@@ -298,7 +298,7 @@ class Clearing {
                 }else{
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
                     if (await marginMap.checkMarginMaintainance(position.address,contractId)){
-                         let liq = await marginMap.triggerLiquidations(newPosition);
+                         let liq = await marginMap.triggerLiquidations(newPosition, blockHeight);
                          if(liq!="err:0 contracts"){
                               const orderbook = Orderbooks.getOrderbookInstance(contractId)
                              orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true)
@@ -310,7 +310,7 @@ class Clearing {
                     } 
                 }
         }
-
+        positions.lastMark = blob.lastPrice
             // Save the updated margin map
         await marginMap.saveMarginMap(false);
         console.log('any liquidations '+liquidationData)
@@ -397,11 +397,11 @@ class Clearing {
         }
     }
 
-    static async performAdditionalSettlementTasks(blockHeight,positions, contractId) {
+    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark) {
  
         try {
             // Step 1: Calculate total losses
-            const totalLoss = Clearing.getTotalLoss(positions,contractId);
+            const totalLoss = Clearing.getTotalLoss(positions,contractId,mark);
 
             // Step 2: Check if insurance fund payout is needed
             if (totalLoss > 0) {
@@ -566,9 +566,9 @@ class Clearing {
 
             let isOracleContract = await ContractList.isOracleContract(contractId);
             let notionalSize = await ContractList.getNotionalValue(contractId)
-
+            let marginMap = await getInstance(contractId)
             if (isOracleContract) {
-                let liquidationData = await ContractList.fetchLiquidationVolume(positions, contractId);
+                let liquidationData = await marginMap.fetchLiquidationVolume(positions, contractId);
                 if (!liquidationData) {
                     console.log('No liquidation volume data found for oracle-based contract.');
                     return 0;

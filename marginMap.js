@@ -579,13 +579,13 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(position) {
+    async triggerLiquidations(position, blockHeight) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
         // Example:
         const liquidationOrder = this.generateLiquidationOrder(position);
-        await this.saveLiquidationOrders(position, liquidationOrders);
+        await this.saveLiquidationOrders(position, liquidationOrder, blockHeight);
 
         return liquidationOrder;
     }
@@ -610,20 +610,21 @@ class MarginMap {
                     contractId: contract.id,
                     size: liquidationSize,
                     price: position.liqPrice,
-                    side: 
-                    type: 'liquidation'
+                    side: side,
+                    bankruptcyPrice: position.bankruptcyPrice
+
                 }
         return liquidationOrder;
     }
 
-    static async saveLiquidationOrders(contract, orders, blockHeight) {
+    static async saveLiquidationOrders(contract, order, blockHeight) {
         try {
             // Access the marginMaps database
-            const marginMapsDB = db.getDatabase('liquidations');
+            const liquidationsDB = db.getDatabase('liquidations');
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contract.id}-${blockHeight}`;
-            const value = { _id: key, orders: orders, blockHeight: blockHeight };
+            const value = { _id: key, order: order, blockHeight: blockHeight };
 
             // Save the liquidation orders in the marginMaps database
             await marginMapsDB.insertAsync(value);
@@ -631,6 +632,62 @@ class MarginMap {
             console.error(`Error saving liquidation orders for contract ${contract.id} at block height ${blockHeight}:`, error);
             throw error;
         }
+    }
+
+    async fetchLiquidationVolume(blockHeight, contractId, mark) {
+
+            const liquidationsDB = db.getDatabase('liquidations');
+        // Fetch liquidations from the database for the given contract and blockHeight
+        const liquidations = await liquidationsDB.find({ contractId: contractId, blockHeight: blockHeight });
+
+        // Count the number of contracts liquidated in the liquidations table
+        let liquidatedContracts = 0;
+        let filledLiqContracts = 0
+        let bankruptcyVWAPPreFill = 0
+        let filledVWAP = 0
+        let avgBankrupcyPrice=0
+        let liquidationOrders = 0
+        let sells = 0
+        let buys = 0
+        liquidations.forEach(liquidation => {
+            liquidationOrders++
+            liquidatedContracts += liquidation.contractCount;
+            bankruptcyVWAPPreFill+= liquidation.size*liquidation.bankruptcyPrice
+            avgBankrupcyPrice += liquidation.bankruptcyPrice
+            if(liquidation.side ==false){
+                sells+=0
+            }else if(liquidation.side==true){
+                buys+=0
+            }
+        });
+        bankruptcyVWAPPreFill= bankruptcyVWAPPreFill/liquidatedContracts //not sure if notional is needed here or cancels out
+        avgBankrupcyPrice= avgBankrupcyPrice/liquidationOrders
+        // Fetch trade history for the given blockHeight and contractId
+        const trades = await tradeHistoryDB.find({ blockHeight: blockHeight, contractId: contractId });
+
+        // Count the number of liquidation orders in the trade history
+        let liquidationTradeMatches = 0;
+        trades.forEach(trade => {
+            if (trade.trade.isLiq === true) {
+                liquidationTradeMatches++;
+                filledLiqContracts += trade.trade.amount
+                filledVWAP+= trade.trade.tradePrice
+            }
+        });
+        filledVWAP= filledVWAP/filledLiqContracts
+
+        // Calculate the unfilled liquidation order contract count
+        const unfilledLiquidationContracts = liquidatedContracts-filledLiqContracts;
+        const lossDelta = bankruptcyVWAPPreFill-filledVWAP
+
+        return {
+            liqTotal: liquidatedContracts,
+            liqOrders: liquidationOrders,
+            unfilled: unfilledLiquidationContracts,
+            bankruptcyVWAPPreFill: bankruptcyVWAPPreFill,
+            filledVWAP: filledVWAP,
+            lossDelta: lossDelta
+        };
     }
 
     needsLiquidation(contract) {
