@@ -14,7 +14,7 @@ class Orderbook {
          // Static async method to get an instance of Orderbook
         static async getOrderbookInstance(orderBookKey) {
             const orderbook = new Orderbook(orderBookKey);
-            await orderbook.loadOrCreateOrderBook(); // Load or create the order book
+            await orderbook.loadOrCreateOrderBook(orderBookKey); // Load or create the order book
             return orderbook;
         }
 
@@ -190,11 +190,15 @@ class Orderbook {
             return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
         }
 
-        async insertOrder(order, orderBookKey, isBuyOrder) {
+        async insertOrder(order, orderBookKey, isBuyOrder, isLiq) {
             if (!this.orderBooks[orderBookKey]) {
                 this.orderBooks[orderBookKey] = { buy: [], sell: [] };
             }
-
+            if(isLiq==true){
+                order.isLiq=true
+            }else if(isLiq==undefined||isLiq==false){
+                order.isLiq=false
+            }
             const side = isBuyOrder ? 'buy' : 'sell';
             const bookSide = this.orderBooks[orderBookKey][side];
 
@@ -396,7 +400,7 @@ class Orderbook {
             }
         }    
 
-        async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender) {
+        async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, isLiq) {
             const ContractRegistry = require('./contractRegistry.js')
             const inverse = ContractRegistry.isInverse(contractId)
             const MarginMap = require('./marginMap.js')
@@ -424,7 +428,7 @@ class Orderbook {
             await this.loadOrCreateOrderBook(orderBookKey);
 
             // Insert the contract order into the order book
-            await this.insertOrder(contractOrder, orderBookKey, side);
+            await this.insertOrder(contractOrder, orderBookKey, side,isLiq);
 
             // Match orders in the derivative contract order book
             var matchResult = await this.matchContractOrders(orderBookKey);
@@ -474,8 +478,8 @@ class Orderbook {
 
                     // Add match to the list
                     matches.push({ 
-                        sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid }, 
-                        buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid },
+                        sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq }, 
+                        buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq },
                         tradePrice 
                     });
 

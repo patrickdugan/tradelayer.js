@@ -6,6 +6,7 @@ const BigNumber = require('bignumber.js');
 const oracleDataDB = db.getDatabase('oracleData');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
+const Orderbooks = require('./orderbook.js')
 //const VolumeIndex = require('./volumeIndex.js')
 
 
@@ -297,8 +298,15 @@ class Clearing {
                 }else{
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
                     if (await marginMap.checkMarginMaintainance(position.address,contractId)){
-                         let liquidationOrders = await marginMap.triggerLiquidations(newPosition);
-                    liquidationData.push(...liquidationOrders);
+                         let liq = await marginMap.triggerLiquidations(newPosition);
+                         if(liq!="err:0 contracts"){
+                              const orderbook = Orderbooks.getOrderbookInstance(contractId)
+                             orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true)
+                            liquidationData.push(...liq);
+                         }else{
+                            throw new Error(console.log(liq))
+                         }
+                       
                     } 
                 }
         }

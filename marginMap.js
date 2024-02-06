@@ -591,21 +591,29 @@ class MarginMap {
     }
 
     generateLiquidationOrder(position) {
-        const liquidationOrders = [];
         const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
 
             const notionalValue = position.contracts * contract.marketPrice;
             const maintenanceMargin = notionalValue * maintenanceMarginFactor;
                 // Liquidate 50% of the position if below maintenance margin
+                let side 
+                if(position.contracts>0){
+                    side = false
+                }else if(position.contracts<0){
+                    side = true
+                }else if(position.contracts==0){
+                    return "err:0 contracts"
+                }
                 const liquidationSize = position.contracts * 0.5;
-                liquidationOrders.push({
+                const liquidationOrder={
                     address,
                     contractId: contract.id,
                     size: liquidationSize,
-                    price: position.liquidationPrice, // Assuming market price for simplicity
+                    price: position.liqPrice,
+                    side: 
                     type: 'liquidation'
-                });
-        return liquidationOrders;
+                }
+        return liquidationOrder;
     }
 
     static async saveLiquidationOrders(contract, orders, blockHeight) {
