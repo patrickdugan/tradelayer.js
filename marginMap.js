@@ -271,13 +271,53 @@ class MarginMap {
         //console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
         
-        //console.log('position now ' + JSON.stringify(position))
+        const ContractList = require('./contractRegistry.js')
+        const TallyMap = require('./tally.js')
 
+        //console.log('position now ' + JSON.stringify(position))
+        const notionalValue = ContractList.getNotionalValue(contractId)
+        const collateralId = ContractList.getCollateralId(contractId)
+        const balances = TallyMap.getTally(address,collateralId)
+        const available = balances.available
+        const liquidationInfo = calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse);
+        console.log(liquidationInfo);
+        positions.liqPrice = liquidationInfo.fiftyPercentLiquidationPrice
+        positions.bankruptcyPrice = liquidationInfo.totalLiquidationPrice
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
       
         return position
         //await this.saveMarginMap();
+    }
+
+    calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse) {
+        const balanceBN = new BigNumber(available);
+        const marginBN = new BigNumber(margin);
+        const contractsBN = new BigNumber(contracts);
+        const notionalValueBN = new BigNumber(notionalValue);
+
+        // Calculate the liquidation price at which available balance is completely depleted
+        const bankruptcyPrice = balanceBN.dividedBy(notionalValueBN);
+
+        // Calculate the liquidation price at which 50% of available balance is depleted
+        const fiftyPercentLiquidationPrice = balanceBN.dividedBy(2).dividedBy(notionalValueBN);
+
+        // Calculate the liquidation price at which available balance and margin are both depleted
+        const totalLiquidationPrice = balanceBN.plus(marginBN).dividedBy(notionalValueBN);
+
+        // Determine the negative PNL required to reach each liquidation price
+        const pnlForBankruptcy = new BigNumber(1).minus(bankruptcyPrice).times(notionalValueBN);
+        const pnlForFiftyPercent = new BigNumber(1).minus(fiftyPercentLiquidationPrice).times(notionalValueBN);
+        const pnlForTotalLiquidation = new BigNumber(1).minus(totalLiquidationPrice).times(notionalValueBN);
+
+        return {
+            bankruptcyPrice,
+            fiftyPercentLiquidationPrice,
+            totalLiquidationPrice,
+            pnlForBankruptcy,
+            pnlForFiftyPercent,
+            pnlForTotalLiquidation
+        };
     }
 
     updateAveragePrice(position, amount, price,contractId) {
@@ -349,8 +389,10 @@ class MarginMap {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
             // Example: this.triggerLiquidation(address, contractId);
+            return true
         } else {
             console.log(`Margin level is adequate for address ${address}.`);
+            return false
         }
     }
    
@@ -537,49 +579,39 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(contract) {
+    async triggerLiquidations(position) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
         // Example:
-        const liquidationOrders = this.generateLiquidationOrders(contract);
-        await this.saveLiquidationOrders(contract, liquidationOrders);
+        const liquidationOrder = this.generateLiquidationOrder(position);
+        await this.saveLiquidationOrders(position, liquidationOrders);
 
-        // Update the contract's state as needed
-        // Example: contract.state = 'liquidating';
-        await ContractsRegistry.updateContractState(contract);
-
-        return liquidationOrders;
+        return liquidationOrder;
     }
 
-    generateLiquidationOrders(contract) {
+    generateLiquidationOrder(position) {
         const liquidationOrders = [];
         const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
 
-        for (const [address, position] of Object.entries(this.margins[contract.id])) {
             const notionalValue = position.contracts * contract.marketPrice;
             const maintenanceMargin = notionalValue * maintenanceMarginFactor;
-
-            if (position.margin < maintenanceMargin) {
                 // Liquidate 50% of the position if below maintenance margin
                 const liquidationSize = position.contracts * 0.5;
                 liquidationOrders.push({
                     address,
                     contractId: contract.id,
                     size: liquidationSize,
-                    price: contract.marketPrice, // Assuming market price for simplicity
+                    price: position.liquidationPrice, // Assuming market price for simplicity
                     type: 'liquidation'
                 });
-            }
-        }
-
         return liquidationOrders;
     }
 
     static async saveLiquidationOrders(contract, orders, blockHeight) {
         try {
             // Access the marginMaps database
-            const marginMapsDB = db.getDatabase('marginMaps');
+            const marginMapsDB = db.getDatabase('liquidations');
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contract.id}-${blockHeight}`;

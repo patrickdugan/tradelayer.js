@@ -30,7 +30,8 @@ class Database {
             'tradeHistory',
             'fundingEvents',
             'vaults',
-            'syntheticTokens'
+            'syntheticTokens',
+            'liquidations'
         ]
 
         // Initialize a NeDB datastore for each category and promisify methods
