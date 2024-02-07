@@ -278,10 +278,11 @@ class MarginMap {
         const TallyMap = require('./tally.js')
 
         //console.log('position now ' + JSON.stringify(position))
-        const notionalValue = ContractList.getNotionalValue(contractId)
-        const collateralId = ContractList.getCollateralId(contractId)
-        const balances = TallyMap.getTally(address,collateralId)
+        const notionalValue = await ContractList.getNotionalValue(contractId)
+        const collateralId = await ContractList.getCollateralId(contractId)
+        const balances = await TallyMap.getTally(address,collateralId)
         const available = balances.available
+        console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse)
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse);
         console.log(liquidationInfo);
         position.liqPrice = liquidationInfo.fiftyPercentLiquidationPrice
@@ -300,19 +301,21 @@ class MarginMap {
         const notionalValueBN = new BigNumber(notionalValue);
 
         // Calculate the liquidation price at which available balance is completely depleted
-        const bankruptcyPrice = balanceBN.dividedBy(notionalValueBN);
-
+        let bankruptcyPrice = balanceBN.dividedBy(notionalValueBN)
+        bankruptcyPrice=bankruptcyPrice.toNumber()
         // Calculate the liquidation price at which 50% of available balance is depleted
-        const fiftyPercentLiquidationPrice = balanceBN.dividedBy(2).dividedBy(notionalValueBN);
-
+        let fiftyPercentLiquidationPrice = balanceBN.dividedBy(2).dividedBy(notionalValueBN);
+        fiftyPercentLiquidationPrice=fiftyPercentLiquidationPrice.toNumber()
         // Calculate the liquidation price at which available balance and margin are both depleted
-        const totalLiquidationPrice = balanceBN.plus(marginBN).dividedBy(notionalValueBN);
-
+        let totalLiquidationPrice = balanceBN.plus(marginBN).dividedBy(notionalValueBN);
+        totalLiquidationPrice=totalLiquidationPrice.toNumber()
         // Determine the negative PNL required to reach each liquidation price
-        const pnlForBankruptcy = new BigNumber(1).minus(bankruptcyPrice).times(notionalValueBN);
-        const pnlForFiftyPercent = new BigNumber(1).minus(fiftyPercentLiquidationPrice).times(notionalValueBN);
-        const pnlForTotalLiquidation = new BigNumber(1).minus(totalLiquidationPrice).times(notionalValueBN);
-
+        let pnlForBankruptcy = new BigNumber(1).minus(bankruptcyPrice).times(notionalValueBN);
+        pnlForBankruptcy=pnlForBankruptcy.toNumber()
+        let pnlForFiftyPercent = new BigNumber(1).minus(fiftyPercentLiquidationPrice).times(notionalValueBN);
+        pnlForFiftyPercent=pnlForFiftyPercent.toNumber()
+        let pnlForTotalLiquidation = new BigNumber(1).minus(totalLiquidationPrice).times(notionalValueBN);
+        pnlForTotalLiquidation=pnlForTotalLiquidation.toNumber()
         return {
             bankruptcyPrice,
             fiftyPercentLiquidationPrice,
