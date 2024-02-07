@@ -295,8 +295,8 @@ class Clearing {
             console.log('new Position '+ JSON.stringify(newPosition))
             let isLiq =false
             if(pnlChange<0){
-                let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.Abs(pnlChange))
-
+                let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange))
+                console.log(JSON.stringify(balance))
                 if(balance.hasSufficient==true){
                         await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
                 }else{
@@ -304,8 +304,8 @@ class Clearing {
                     let totalCollateral = tally.available+tally.margin
                     await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, 0,0,'clearingLoss');
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
-                    if(totalCollateral>Math.Abs(pnlChange)){
-                        let marginDent = Math.Abs(pnlChange)-tally.available
+                    if(totalCollateral>Math.abs(pnlChange)){
+                        let marginDent = Math.abs(pnlChange)-tally.available
                         await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss');
                         await marginMap.updateMargin()    
                         if (await marginMap.checkMarginMaintainance(position.address,contractId)){
@@ -328,11 +328,7 @@ class Clearing {
                 }
             }else{
                   await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
-            } 
-            
-            console.log(JSON.stringify(balance))
-                // Move funds from available to margin in TallyMap
-              
+            }              
         }
         positions.lastMark = blob.lastPrice
             // Save the updated margin map

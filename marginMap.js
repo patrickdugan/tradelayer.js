@@ -256,6 +256,9 @@ class MarginMap {
         //calculating avg. price
         if(close==false&&flip==false){
             if(position.contracts==0){
+                if(position.avgPrice==undefined){
+                    position.avgPrice=0
+                }
                 position.avgPrice=price
             }else{
                 position.avgPrice=this.updateAveragePrice(position,amount,price,contractId)
@@ -335,11 +338,11 @@ class MarginMap {
 
         // Update the position object with the new values
         position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
-        position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
+        //position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
-        this.recordMarginMapDelta(address, contractId,0,0,0,0,(avgPrice.toNumber()-updatedAvgPrice.toNumber()),'newAvgPrice')
+        this.recordMarginMapDelta(position.address, contractId,0,0,0,0,(avgPrice.toNumber()-updatedAvgPrice.toNumber()),'newAvgPrice')
         // Return the updated position object
-        return position;
+        return position.avgPrice;
     }
         
     calculateMarginRequirement(contracts, price, inverse) {
@@ -686,12 +689,12 @@ class MarginMap {
         const lossDelta = bankruptcyVWAPPreFill.minus(filledVWAP);
 
         return {
-            liqTotal: liquidatedContracts.toFixed(),
-            liqOrders: liquidationOrders.toFixed(),
-            unfilled: unfilledLiquidationContracts.toFixed(),
-            bankruptcyVWAPPreFill: bankruptcyVWAPPreFill.toFixed(),
-            filledVWAP: filledVWAP.toFixed(),
-            lossDelta: lossDelta.toFixed()
+            liqTotal: liquidatedContracts.toNumber(),
+            liqOrders: liquidationOrders.toNumber(),
+            unfilled: unfilledLiquidationContracts.toNumber(),
+            bankruptcyVWAPPreFill: bankruptcyVWAPPreFill.toNumber(),
+            filledVWAP: filledVWAP.toNumber(),
+            lossDelta: lossDelta.toNumber()
         };
     }
 
