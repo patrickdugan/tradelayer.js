@@ -394,16 +394,16 @@ const Logic = {
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
       
         // Deduct tokens from sender's available balance
-        TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit');
+        await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit');
 
         // Add tokens to the channel's balance
-        TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive');
+        await TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive');
 
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await tradeChannelManager.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
+        await Channels.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
 
         // Update the channel registry with the committed tokens
-        await tradeChannelManager.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
+        await Channels.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress} for ${commitPurpose}`);
         return;

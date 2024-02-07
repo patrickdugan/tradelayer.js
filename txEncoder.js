@@ -61,10 +61,11 @@ const Encode = {
     },
 
     // Encode Commit Token Transaction
-    encodeCommitToken: (params) => {
+    encodeCommit: (params) => {
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
+            params.channelAddress
         ];
         return payload.join(',');
     },

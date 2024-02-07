@@ -1,6 +1,6 @@
-const {channelsDB} = require('./db.js');
+const dbInstance = require('./db.js');
 
-class TradeChannel {
+class Channels {
     constructor() {
       this.channelsRegistry = new Map();
     }
@@ -37,18 +37,21 @@ class TradeChannel {
     }
 
     async loadChannelsRegistry() {
-        // Load the channels registry from LevelDB
+        // Load the channels registry from NeDB
+        const channelsDB = dbInstance.getDatabase('channels');
         try {
-            const value = await db.get('channelsRegistry');
-            this.channelsRegistry = new Map(JSON.parse(value));
+            const entries = await channelsDB.findAsync({});
+            this.channelsRegistry = new Map(entries.map(entry => [entry._id.split('-')[1], entry.data]));
         } catch (error) {
-            if (error.type === 'NotFoundError') {
+            if (error.message.includes('does not exist')) {
+                // If the collection does not exist, initialize an empty registry
                 this.channelsRegistry = new Map();
             } else {
                 throw error;
             }
         }
     }
+
 
     // Record a token trade with specific key identifiers
     async recordTokenTrade(trade, blockHeight, txid) {
@@ -371,4 +374,4 @@ class TradeChannel {
 
 }
 
-module.exports = TradeChannel;
+module.exports = Channels;

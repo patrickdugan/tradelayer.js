@@ -947,6 +947,42 @@ const TxUtils = {
         }
     },
 
+    async createCommitTransaction(thisAddress, commitParams,txNumber) {
+        try {
+            // Step 1: Create the activation payload
+            // Assuming activation payload format: 'activation:<txTypeToActivate>'
+            var txNumber = 4
+            var payload = 'tl' + txNumber.toString(36);
+            payload += Encode.encodeCommit(commitParams);
+
+
+
+            const minAmountSatoshis = STANDARD_FEE;
+
+            // Select an UTXO to use
+            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(payload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            // Step 3: Sign the transaction
+            const privateKey = await dumpprivkeyAsync(thisAddress);
+            rawTx.sign(privateKey);
+
+            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await sendrawtransactionAsync(serializedTx);
+            
+            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in sendContractTradeTransaction:', error);
+            throw error;
+        }
+    },
+
     createLitecoinMultisigAddress(pubKey1, pubKey2) {
         const publicKeys = [
             new litecore.PublicKey(pubKey1),
