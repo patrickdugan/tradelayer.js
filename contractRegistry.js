@@ -330,8 +330,6 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-  User
-
    static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
@@ -373,7 +371,54 @@ class ContractRegistry {
         return position
     }           
 
+    
+    static async getPriceAtBlock(contractId, blockHeight) {
+        let isOracleContract = await ContractList.isOracleContract(contractId);
+        let oracleId = null;
+        let propertyId1 = null;
+        let propertyId2 = null;
+        let latestData;
 
+        if (isOracleContract) {
+            oracleId = await ContractList.getOracleId(contractId);
+            latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+        } else {
+            let info = await ContractList.getContractInfo(contractId);
+            propertyId1 = info.native.native.onChainData[0];
+            propertyId2 = info.native.native.onChainData[1];
+            latestData = await volumeIndexDB.findOneAsync({ propertyId1: propertyId1, propertyId2: propertyId2 });
+        }
+
+        // Filter data to get updates before the given blockHeight
+        const filteredData = latestData.filter(entry => entry.blockHeight < blockHeight);
+
+        if (filteredData.length === 0) {
+            // No data available before the given blockHeight
+            return null;
+        }
+
+        // Sort filtered data by block height in descending order
+        const sortedData = filteredData.sort((a, b) => b.blockHeight - a.blockHeight);
+        const latestBlockData = sortedData[0]; // Get the latest data before the given blockHeight
+        const lastPriceEntry = latestBlockData[latestBlockData.length - 1];
+        const priceBlockHeight = lastPriceEntry.blockHeight; // Block height of the price data
+
+        // Check if the block height of the price data is less than the provided blockHeight
+        if (priceBlockHeight >= blockHeight) {
+            // If not, find the latest data before the provided blockHeight
+            for (let i = 1; i < sortedData.length; i++) {
+                const blockData = sortedData[i];
+                const blockDataPrice = blockData[blockData.length - 1].blockHeight;
+                if (blockDataPrice < blockHeight) {
+                    const lastPriceEntry = blockData[blockData.length - 1];
+                    return lastPriceEntry.data.price;
+                }
+            }
+            return null; // No valid price data found before the provided blockHeight
+        }
+
+        return lastPriceEntry.data.price;
+    }
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {

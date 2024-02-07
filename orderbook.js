@@ -667,7 +667,7 @@ class Orderbook {
                     // Determine if the trade reduces the position size for buyer or seller
                    
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
-                    
+                    const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     if (isBuyerReducingPosition||isBuyerFlippingPosition) {
@@ -688,9 +688,9 @@ class Orderbook {
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        //console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
+                        console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
                         //{netMargin,mode}   
                         if(reduction !=0){
@@ -741,15 +741,15 @@ class Orderbook {
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
                         //console.log('LIFO '+JSON.stringify(LIFO))
 
-                        //console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
+                        console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
                         const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false,match.sellOrder.contractId);
                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        //console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, match.sellOrder.contractId,currentBlockHeight) 
+                        console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
+                        const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, lastMark, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        //console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
+                        console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false);
                         //{netMargin,mode}   
                         if(reduction !=0){
