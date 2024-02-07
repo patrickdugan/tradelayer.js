@@ -283,9 +283,10 @@ class MarginMap {
         const balances = await TallyMap.getTally(address,collateralId)
         const available = balances.available
         console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse)
-        const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse);
+        const isLong = position.contracts>0? true: false
+        const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log(liquidationInfo);
-        position.liqPrice = liquidationInfo.fiftyPercentLiquidationPrice
+        position.liqPrice = liquidationInfo.liquidationPrice
         position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
@@ -294,35 +295,60 @@ class MarginMap {
         //await this.saveMarginMap();
     }
 
-    calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse) {
+    calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
         const balanceBN = new BigNumber(available);
         const marginBN = new BigNumber(margin);
         const contractsBN = new BigNumber(contracts);
         const notionalValueBN = new BigNumber(notionalValue);
+        const avgPriceBN = new BigNumber(avgPrice)
 
-        // Calculate the liquidation price at which available balance is completely depleted
-        let bankruptcyPrice = balanceBN.dividedBy(notionalValueBN)
-        bankruptcyPrice=bankruptcyPrice.toNumber()
-        // Calculate the liquidation price at which 50% of available balance is depleted
-        let fiftyPercentLiquidationPrice = balanceBN.dividedBy(2).dividedBy(notionalValueBN);
-        fiftyPercentLiquidationPrice=fiftyPercentLiquidationPrice.toNumber()
-        // Calculate the liquidation price at which available balance and margin are both depleted
-        let totalLiquidationPrice = balanceBN.plus(marginBN).dividedBy(notionalValueBN);
-        totalLiquidationPrice=totalLiquidationPrice.toNumber()
-        // Determine the negative PNL required to reach each liquidation price
-        let pnlForBankruptcy = new BigNumber(1).minus(bankruptcyPrice).times(notionalValueBN);
-        pnlForBankruptcy=pnlForBankruptcy.toNumber()
-        let pnlForFiftyPercent = new BigNumber(1).minus(fiftyPercentLiquidationPrice).times(notionalValueBN);
-        pnlForFiftyPercent=pnlForFiftyPercent.toNumber()
-        let pnlForTotalLiquidation = new BigNumber(1).minus(totalLiquidationPrice).times(notionalValueBN);
-        pnlForTotalLiquidation=pnlForTotalLiquidation.toNumber()
+        //inverse long    const liquidationPrice = (quantity * (1 / averageEntryPrice - 1 / liquidationPrice)) / -(accountBalance - orderMargin - (quantity / averageEntryPrice) * maintenanceMarginRate - (quantity * fee) / bankruptcyPrice);
+        //inverese short  const liquidationPrice = (quantity * (1 / liquidationPrice-1 / averageEntryPrice)) / -(accountBalance - orderMargin - (quantity / averageEntryPrice) * maintenanceMarginRate - (quantity * fee) / bankruptcyPrice);
+        const totalCollateralBN = balanceBN.plus(marginBN)
+        const positionNotional = notionalValueBN.times(contractsBN)
+
+        let bankruptcyPrice
+        let liquidationPrice
+
+        if (!isInverse) {
+            // Linear contracts
+            // Calculate liquidation price for long position
+            if(isLong){
+                bankruptcyPrice = (avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional))).times(1.005);
+                liquidationPrice = avgPrice.minus(bankruptcyPrice).times(0.5)
+            }else{
+                bankruptcyPrice = (avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional))).times(0.995);
+                liquidationPrice = avgPrice.plus(bankruptcyPrice).times(0.5)
+            }
+
+        } else {
+            // Inverse contracts
+            // Calculate liquidation price for long inverse position
+            if (isLong) {
+                bankruptcyPrice =  positionNotional.times(1.005).dividedBy(totalCollateralBN);
+
+              liquidationPrice = avgPriceBN.minus(
+                                    avgPriceBN.times(positionNotional).minus(contractsBN.times(avgPriceBN).times(2))
+                                        .minus(bankruptcyPrice.times(contractsBN).times(1.000025).times(avgPriceBN))
+                                ).dividedBy(contractsBN.plus(positionNotional).minus(contractsBN.times(2))).negated();
+          } else {
+                // Calculate liquidation price for short inverse position
+                if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional)) {
+                    bankruptcyPrice = null; // No liquidation price
+                } else {
+                    bankruptcyPrice =  positionNotional.times(0.995).dividedBy(totalCollateralBN);
+                    liquidationPrice = avgPriceBN.plus(
+                                        avgPriceBN.times(positionNotional).minus(contractsBN.times(avgPriceBN).times(2))
+                                            .minus(bankruptcyPrice.times(contractsBN).times(1.000025).times(avgPriceBN))
+                                    ).dividedBy(contractsBN.plus(positionNotional).minus(contractsBN.times(2))).negated();
+
+                                                    }
+          }
+        }
+
         return {
             bankruptcyPrice,
-            fiftyPercentLiquidationPrice,
-            totalLiquidationPrice,
-            pnlForBankruptcy,
-            pnlForFiftyPercent,
-            pnlForTotalLiquidation
+            liquidationPrice
         };
     }
 

@@ -518,6 +518,8 @@ class Orderbook {
                     }
                     // Load the margin map for the given series ID and block height
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
+                    const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
+                    match.inverse = isInverse
                     //console.log('checking the marginMap for contractId '+ marginMap )
                     // Get the existing position sizes for buyer and seller
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
@@ -665,7 +667,7 @@ class Orderbook {
                     // Determine if the trade reduces the position size for buyer or seller
                    
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
-                    const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
+                    
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     if (isBuyerReducingPosition||isBuyerFlippingPosition) {
