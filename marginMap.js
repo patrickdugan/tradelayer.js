@@ -279,10 +279,10 @@ class MarginMap {
         const collateralId = ContractList.getCollateralId(contractId)
         const balances = TallyMap.getTally(address,collateralId)
         const available = balances.available
-        const liquidationInfo = calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse);
+        const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse);
         console.log(liquidationInfo);
-        positions.liqPrice = liquidationInfo.fiftyPercentLiquidationPrice
-        positions.bankruptcyPrice = liquidationInfo.totalLiquidationPrice
+        position.liqPrice = liquidationInfo.fiftyPercentLiquidationPrice
+        position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
       
@@ -385,7 +385,7 @@ class MarginMap {
         let maintenanceMarginFactorBN = new BigNumber(0.8)
         let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).toNumber();
 
-        if (position.margin < maintenanceMargin) {
+        if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
             // Example: this.triggerLiquidation(address, contractId);
@@ -572,7 +572,9 @@ class MarginMap {
     }
 
     async clear(position, address, pnlChange, avgPrice,contractId) {
-               
+            if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
+                position.unrealizedPNL=0
+            }
             position.unrealizedPNL+=pnlChange
             this.margins.set(address, position)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice')
@@ -635,60 +637,64 @@ class MarginMap {
     }
 
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
-
-            const liquidationsDB = db.getDatabase('liquidations');
+        const liquidationsDB = db.getDatabase('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
         const liquidations = await liquidationsDB.find({ contractId: contractId, blockHeight: blockHeight });
 
-        // Count the number of contracts liquidated in the liquidations table
-        let liquidatedContracts = 0;
-        let filledLiqContracts = 0
-        let bankruptcyVWAPPreFill = 0
-        let filledVWAP = 0
-        let avgBankrupcyPrice=0
-        let liquidationOrders = 0
-        let sells = 0
-        let buys = 0
+        // Initialize BigNumber instances
+        let liquidatedContracts = new BigNumber(0);
+        let filledLiqContracts = new BigNumber(0);
+        let bankruptcyVWAPPreFill = new BigNumber(0);
+        let filledVWAP = new BigNumber(0);
+        let avgBankrupcyPrice = new BigNumber(0);
+        let liquidationOrders = new BigNumber(0);
+        let sells = new BigNumber(0);
+        let buys = new BigNumber(0);
+
+        // Calculate values using BigNumber
         liquidations.forEach(liquidation => {
-            liquidationOrders++
-            liquidatedContracts += liquidation.contractCount;
-            bankruptcyVWAPPreFill+= liquidation.size*liquidation.bankruptcyPrice
-            avgBankrupcyPrice += liquidation.bankruptcyPrice
-            if(liquidation.side ==false){
-                sells+=0
-            }else if(liquidation.side==true){
-                buys+=0
+            liquidationOrders = liquidationOrders.plus(1);
+            liquidatedContracts = liquidatedContracts.plus(liquidation.contractCount);
+            bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.plus(new BigNumber(liquidation.size).times(new BigNumber(liquidation.bankruptcyPrice)));
+            avgBankrupcyPrice = avgBankrupcyPrice.plus(new BigNumber(liquidation.bankruptcyPrice));
+            if (liquidation.side == false) {
+                sells = sells.plus(0);
+            } else if (liquidation.side == true) {
+                buys = buys.plus(0);
             }
         });
-        bankruptcyVWAPPreFill= bankruptcyVWAPPreFill/liquidatedContracts //not sure if notional is needed here or cancels out
-        avgBankrupcyPrice= avgBankrupcyPrice/liquidationOrders
+
+        bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.dividedBy(liquidatedContracts);
+        avgBankrupcyPrice = avgBankrupcyPrice.dividedBy(liquidationOrders);
+
         // Fetch trade history for the given blockHeight and contractId
         const trades = await tradeHistoryDB.find({ blockHeight: blockHeight, contractId: contractId });
 
         // Count the number of liquidation orders in the trade history
-        let liquidationTradeMatches = 0;
+        let liquidationTradeMatches = new BigNumber(0);
         trades.forEach(trade => {
             if (trade.trade.isLiq === true) {
-                liquidationTradeMatches++;
-                filledLiqContracts += trade.trade.amount
-                filledVWAP+= trade.trade.tradePrice
+                liquidationTradeMatches = liquidationTradeMatches.plus(1);
+                filledLiqContracts = filledLiqContracts.plus(trade.trade.amount);
+                filledVWAP = filledVWAP.plus(trade.trade.tradePrice);
             }
         });
-        filledVWAP= filledVWAP/filledLiqContracts
+        filledVWAP = filledVWAP.dividedBy(filledLiqContracts);
 
         // Calculate the unfilled liquidation order contract count
-        const unfilledLiquidationContracts = liquidatedContracts-filledLiqContracts;
-        const lossDelta = bankruptcyVWAPPreFill-filledVWAP
+        const unfilledLiquidationContracts = liquidatedContracts.minus(filledLiqContracts);
+        const lossDelta = bankruptcyVWAPPreFill.minus(filledVWAP);
 
         return {
-            liqTotal: liquidatedContracts,
-            liqOrders: liquidationOrders,
-            unfilled: unfilledLiquidationContracts,
-            bankruptcyVWAPPreFill: bankruptcyVWAPPreFill,
-            filledVWAP: filledVWAP,
-            lossDelta: lossDelta
+            liqTotal: liquidatedContracts.toFixed(),
+            liqOrders: liquidationOrders.toFixed(),
+            unfilled: unfilledLiquidationContracts.toFixed(),
+            bankruptcyVWAPPreFill: bankruptcyVWAPPreFill.toFixed(),
+            filledVWAP: filledVWAP.toFixed(),
+            lossDelta: lossDelta.toFixed()
         };
     }
+
 
     needsLiquidation(contract) {
         const maintenanceMarginFactor = 0.05; // Maintenance margin is 5% of the notional value

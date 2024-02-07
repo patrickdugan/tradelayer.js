@@ -213,7 +213,7 @@ class TallyMap {
     static async hasSufficientBalance(senderAddress, propertyId, requiredAmount) {
         try {
             const senderTally = await this.getTally(senderAddress, propertyId);
-            //console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, JSON.stringify(senderTally));
+            console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.available === undefined) {
                 return { hasSufficient: false, reason: 'Error loading tally or tally not found' };

@@ -43,6 +43,7 @@ class Clearing {
         await this.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
+        return
     }
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
@@ -257,18 +258,19 @@ class Clearing {
                 const notionalValue = await ContractList.getNotionalValue(contract.id)
                 
                 // Update margin maps based on mark prices and current contract positions
-                let positions = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
+                let {positions, liquidationData} = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
 
                  // Perform additional tasks like loss socialization if needed
-                await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id,positions.lastMark);
-
-                return this.balanceChanges;
+                if(liquidationData.length>0){
+                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id,positions.lastMark);
+                }
             } else {
                 // Skip processing for this contract
                 //console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
                 continue;
             }
         }
+        return
     }
 
     
@@ -291,13 +293,29 @@ class Clearing {
             console.log('updatingMarginMaps with pnlChange '+JSON.stringify(position) + ' '+ pnlChange)
             const newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice,contractId)
             console.log('new Position '+ JSON.stringify(newPosition))
-            let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, pnlChange)
-                // Move funds from available to margin in TallyMap
+            let isLiq =false
+            if(pnlChange<0){
+                let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.Abs(pnlChange))
+
                 if(balance.hasSufficient==true){
                         await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
                 }else{
+                    let tally = await TallyMap.getTally(position.address, collateralId)
+                    let totalCollateral = tally.available+tally.margin
+                    await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, 0,0,'clearingLoss');
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
-                    if (await marginMap.checkMarginMaintainance(position.address,contractId)){
+                    if(totalCollateral>Math.Abs(pnlChange)){
+                        let marginDent = Math.Abs(pnlChange)-tally.available
+                        await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss');
+                        await marginMap.updateMargin()    
+                        if (await marginMap.checkMarginMaintainance(position.address,contractId)){
+                            isLiq=true
+                        }
+                    }else{
+                        isLiq=true
+                    }
+                   
+                    if(isLiq==true){
                          let liq = await marginMap.triggerLiquidations(newPosition, blockHeight);
                          if(liq!="err:0 contracts"){
                               const orderbook = Orderbooks.getOrderbookInstance(contractId)
@@ -306,15 +324,21 @@ class Clearing {
                          }else{
                             throw new Error(console.log(liq))
                          }
-                       
-                    } 
+                    }
                 }
+            }else{
+                  await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
+            } 
+            
+            console.log(JSON.stringify(balance))
+                // Move funds from available to margin in TallyMap
+              
         }
         positions.lastMark = blob.lastPrice
             // Save the updated margin map
         await marginMap.saveMarginMap(false);
         console.log('any liquidations '+liquidationData)
-        return positions;
+        return {positions,liquidationData};
     }
 
     static async getPriceChange(blockHeight, contractId){
@@ -566,7 +590,7 @@ class Clearing {
 
             let isOracleContract = await ContractList.isOracleContract(contractId);
             let notionalSize = await ContractList.getNotionalValue(contractId)
-            let marginMap = await getInstance(contractId)
+            let marginMap = await MarginMap.getInstance(contractId)
             if (isOracleContract) {
                 let liquidationData = await marginMap.fetchLiquidationVolume(positions, contractId);
                 if (!liquidationData) {
