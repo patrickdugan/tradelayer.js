@@ -152,7 +152,7 @@ const Validity = {
         },
 
         // 3: Trade Token for UTXO
-        validateTradeTokenForUTXO: async (params) => {
+        validateTradeTokenForUTXO: async (sender, params,txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -179,16 +179,11 @@ const Validity = {
         },
 
         // 4: Commit Token
-        validateCommit: async (params, block, txid) => {
+        validateCommit: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
-            if (!TallyMap.isAddressValid(params.sender)) {
-                params.valid = false
-                params.reason += 'Invalid sender address';
-            }
-
-            let hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, params.propertyId, params.amount)
+            let hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
             // Check if the sender has sufficient balance
             if (hasSufficientBalance.hasSufficient==false){
                 params.valid = false

@@ -4,15 +4,12 @@ const Logic = require('./logic.js');
 const litecore = require('bitcore-lib-ltc');
 const TxUtils = require('./txUtils');
 
-function generateNewAddress() {
-    const privateKey = new litecore.PrivateKey(); // Generate a new private key
-    const address = privateKey.toAddress(); // Generate the address from the private key
-    return {
-        address: address.toString(),
-        privateKey: privateKey.toString()
-    };
+let params = {
+	withdrawAll: 0,
+    propertyId:3,
+    amount:15000,
+    channelAddress:'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
 }
-
     //const { address, privateKey } = generateNewAddress();
     //console.log('Generated new address:', address);
 
@@ -21,8 +18,7 @@ function randomNumber(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-var random = randomNumber(10000,20000)
+var random = randomNumber(20000,50000)
 
-    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',4,random,null)
+    TxUtils.createWithdrawalTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',params,4)
 //tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz
-//

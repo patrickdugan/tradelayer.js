@@ -48,7 +48,7 @@ const Decode = {
     decodeTradeTokenForUTXO: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdNumber: parseInt(parts[0], 36),
+            propertyId: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
             satsExpected: parseInt(parts[2], 36)
         };
@@ -58,7 +58,7 @@ const Decode = {
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdNumber: parseInt(parts[0], 36),
+            propertyId: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
             committedAddress: parts[2]
         };
@@ -174,15 +174,18 @@ const Decode = {
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
         return {
-            amountGranted: parseInt(parts[0], 36),
-            addressToGrantTo: parts[1]
+            propertyId: parseInt(parts[0],36),
+            amountGranted: parseInt(parts[1], 36),
+            addressToGrantTo: parts[2]
         };
     },
 
     // Decode Redeem Managed Token Transaction
     decodeRedeemManagedToken: (payload) => {
+      const parts = payload.split(',');
         return {
-            amountDestroyed: parseInt(payload, 36)
+            propertyId: parseInt(parse[0],36),
+            amountDestroyed: parseInt(parts[1], 36)
         };
     },
 
@@ -304,9 +307,10 @@ const Decode = {
   decodeWithdrawal: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
-      amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
-      channelAddress: parts[2],
+      withdrawAll: parts[0],
+      propertyIds: parts[1].split(';').map(id => parseInt(id, 36)),
+      amounts: parts[2].split(';').map(amount => parseInt(amount, 36)),
+      channelAddress: parts[3],
     };
   },
 

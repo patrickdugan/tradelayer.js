@@ -160,6 +160,9 @@ const Types = {
                 break;
             case 3:
                 params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validatevalidateTradeTokenForUTXO(sender, params, txId)
                 break;
             case 4:
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));
@@ -196,9 +199,17 @@ const Types = {
                 break;
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateGrantManagedToken(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 12:
                 params = Decode.decodeRedeemManagedToken(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateRedeemManagedToken(sender, params, txId)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 13:
                 params = Decode.decodeCreateOracle(encodedPayload.substr(index));
@@ -239,9 +250,15 @@ const Types = {
                 break;
             case 19:
                 params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateTradeContractChannel(params, sender, block)
                 break;
             case 20:
                 params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateTradeTokensChannel(params, sender, block)
                 break;
             case 21:
                 params = Decode.decodeWithdrawal(encodedPayload.substr(index));

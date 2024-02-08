@@ -272,8 +272,8 @@ const Encode = {
     // Encode Trade Tokens in Channel Transaction
     encodeTradeTokensChannel: (params) => {
         const payload = [
-            params.propertyid1.toString(36),
-            params.propertyid2.toString(36),
+            params.propertyId1.toString(36),
+            params.propertyId2.toString(36),
             params.amountOffered1.toString(36),
             params.amountDesired2.toString(36),
             params.expiryBlock.toString(36),
@@ -283,9 +283,10 @@ const Encode = {
 
     // Encode Withdrawal Transaction
     encodeWithdrawal: (params) => {
-        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';');
-        const amounts = params.amounts.map(amount => amount.toString(36)).join(';');
-        return [propertyIds, amounts, params.channelAddress].join(',');
+        const withdrawAll = params.withdrawAll
+        const propertyIds = params.propertyIds/*.map(id => id.toString(36)).join(';')*/;
+        const amounts = params.amounts/*.map(amount => amount.toString(36)).join(';')*/;
+        return [withdrawAll, propertyIds, amounts, params.channelAddress].join(',');
     },
 
     // Encode Transfer Transaction
