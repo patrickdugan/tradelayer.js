@@ -47,7 +47,7 @@ const Logic = {
                 await Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
                 break;
             case 4:
-                await Logic.commitToken(params.tallyMap, params.tradeChannelManager, params.senderAddress, params.propertyId, params.tokenAmount, params.commitPurpose, params.transactionTime);
+                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.tokenAmount, params.block);
                 break;
             case 5:
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
@@ -391,7 +391,7 @@ const Logic = {
 		    return txId; // Return the transaction ID of the broadcasted transaction
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
+	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime) {
       
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit');
@@ -403,7 +403,7 @@ const Logic = {
         await Channels.recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime);
 
         // Update the channel registry with the committed tokens
-        await Channels.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn, commitPurpose);
+        await Channels.commitToChannel(channelAddress, propertyId, tokenAmount, channelColumn);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress} for ${commitPurpose}`);
         return;

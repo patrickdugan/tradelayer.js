@@ -60,7 +60,7 @@ const Decode = {
         return {
             propertyId: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
-            committedAddress: parts[2]
+            channelAddress: parts[2]
         };
     },
 

@@ -1,23 +1,23 @@
 const dbInstance = require('./db.js');
 
 class Channels {
-    constructor() {
-      this.channelsRegistry = new Map();
-    }
+      // Initialize channelsRegistry as a static property
+    static channelsRegistry = new Map();
 
-    async addToRegistry(channelAddress, commiterA, commiterB) {
+    
+    static async addToRegistry(channelAddress, commiterA, commiterB) {
         // Add logic to register a new trade channel
-        this.channelsRegistry.set(channelAddress, commiterA, commiterB);
+        this.channelsRegistry.set(channelAddress, { commiterA, commiterB });
         await this.saveChannelsRegistry();
     }
 
-    async removeFromRegistry(channelAddress) {
+    static async removeFromRegistry(channelAddress) {
         // Add logic to remove a trade channel
         this.channelsRegistry.delete(channelAddress);
         await this.saveChannelsRegistry();
     }
 
-    async saveChannelsRegistry() {
+    static async saveChannelsRegistry() {
         // Persist the channels registry to NeDB
         const channelsDB = dbInstance.getDatabase('channels');
         const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
@@ -36,7 +36,7 @@ class Channels {
         }
     }
 
-    async loadChannelsRegistry() {
+    static async loadChannelsRegistry() {
         // Load the channels registry from NeDB
         const channelsDB = dbInstance.getDatabase('channels');
         try {
@@ -54,7 +54,7 @@ class Channels {
 
 
     // Record a token trade with specific key identifiers
-    async recordTokenTrade(trade, blockHeight, txid) {
+    static async recordTokenTrade(trade, blockHeight, txid) {
         const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
         const tradeRecord = {
             key: tradeRecordKey,
@@ -67,7 +67,7 @@ class Channels {
     }
 
     // Record a contract trade with specific key identifiers
-    async recordContractTrade(trade, blockHeight, txid) {
+    static async recordContractTrade(trade, blockHeight, txid) {
         const tradeRecordKey = `contract-${trade.contractId}`;
         const tradeRecord = {
             key: tradeRecordKey,
@@ -79,7 +79,7 @@ class Channels {
         await this.saveTrade(tradeRecord);
     }
 
-    async saveTrade(tradeRecord) {
+    static async saveTrade(tradeRecord) {
         const tradeDB = dbInstance.getDatabase('tradeHistory');
 
         // Use the key provided in the trade record for storage
@@ -106,7 +106,7 @@ class Channels {
     }
 
 
-    async getChannel(channelId) {
+    static async getChannel(channelId) {
         // Ensure the channels registry is loaded
         if (!this.channelsRegistry) {
             await this.loadChannelsRegistry();
@@ -115,7 +115,7 @@ class Channels {
         return this.channelsRegistry.get(channelId);
     }
 
-    async addCommitment(channelId, commitment) {
+    static async addCommitment(channelId, commitment) {
         await this.db.updateAsync(
             { channelId: channelId },
             { $push: { commitments: commitment } },
@@ -123,12 +123,12 @@ class Channels {
         );
     }
 
-    async getCommitments(channelId) {
+    static async getCommitments(channelId) {
         const channel = await this.db.findOneAsync({ channelId: channelId });
         return channel ? channel.commitments : [];
     }
 
-    compareCharacters(charA, charB) {
+    static compareCharacters(charA, charB) {
             if (charA === charB) {
                 return 0; // Characters are equal
             } else {
@@ -145,60 +145,145 @@ class Channels {
             }
     }
 
-    assignColumns(addressA, addressB) {
-          // Compare characters starting from the end of the address strings
-          for (let i = 1; i <= Math.min(addressA.length, addressB.length); i++) {
-              const charA = addressA[addressA.length - i];
-              const charB = addressB[addressB.length - i];
+    static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
+        // Get the channel information from the registry map object
+        const channel = this.channelsRegistry.get(existingChannelAddress);
 
-              const comparison = compareCharacters(charA, charB);
-              if (comparison !== 0) {
-                  return comparison < 0 ? { columnA: addressA, columnB: addressB } : { columnA: addressB, columnB: addressA };
-              }
-          }
+        // Check if there's a commit address
+        if (!channel || !channel.commitAddress) {
+            // If there's no commit address, use default logic
+            return Channels.assignColumnBasedOnLastCharacter(existingChannelAddress, newCommitAddress);
+        }
 
-          // If all characters are the same (which is extremely unlikely), default to original order
-          return { columnA: addressA, columnB: addressB };
+        // Define the characters considered odd
+        const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
+        
+        // Get the last characters of the addresses
+        const existingLastChar = existingChannelAddress[existingChannelAddress.length - 1].toUpperCase();
+        const newLastChar = newCommitAddress[newCommitAddress.length - 1].toUpperCase();
+
+        // Check if the existing address has been assigned to Column A
+        const existingIsOdd = oddCharacters.includes(existingLastChar);
+        const newIsOdd = oddCharacters.includes(newLastChar);
+        let bumpColumn 
+        // Check if both addresses are odd or even
+        if (existingIsOdd === newIsOdd) {
+            // If both addresses are odd or even, compare the last characters
+            if (existingLastChar === newLastChar) {
+                // Compare second-to-last characters
+                const existingSecondLastChar = existingChannelAddress[existingChannelAddress.length - 2].toUpperCase();
+                const newSecondLastChar = newCommitAddress[newCommitAddress.length - 2].toUpperCase();
+
+                // If second-to-last characters are the same, compare third-to-last characters and so on
+                if (existingSecondLastChar === newSecondLastChar) {
+                    for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
+                        const existingChar = existingChannelAddress[existingChannelAddress.length - i].toUpperCase();
+                        const newChar = newCommitAddress[newCommitAddress.length - i].toUpperCase();
+                        if (existingChar !== newChar) {
+                            // If the new address trumps the existing one, bump the existing address
+                            if (existingChar < newChar) {
+                                bumpColumn = existingChar < newChar ? 'A' : 'B'
+                                Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                            }
+                            return existingChar < newChar ? 'B' : 'A'; // Assign to opposite column
+                        }
+                    }
+                } else {
+                    // If the new address trumps the existing one, bump the existing address
+                    if (existingSecondLastChar < newSecondLastChar) {
+                        bumpColumn = existingSecondLastChar < newSecondLastChar ? 'A' : 'B'
+                        Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                    }
+                    return existingSecondLastChar < newSecondLastChar ? 'B' : 'A'; // Assign to opposite column
+                }
+            } else {
+                // If the new address trumps the existing one, bump the existing address
+                if (existingLastChar < newLastChar) {
+                    existingLastChar < newLastChar ? 'A' : 'B';
+                    Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                }
+                return existingLastChar < newLastChar ? 'B' : 'A'; // Assign to opposite column
+            }
+        } else {
+            return existingIsOdd ? 'B' : 'A'; // If they are different, assign to opposite of existing
+        }
     }
+
+    static assignColumnBasedOnLastCharacter(address) {
+        // Get the last character of the address
+        const lastChar = address[address.length - 1];
+        
+        // Define the characters considered odd
+        const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
+
+        // Check if the last character is an odd character
+        const isOdd = oddCharacters.includes(lastChar.toUpperCase());
+
+        // If the last character is odd, assign to Column A, otherwise assign to Column B
+        return isOdd ? 'A' : 'B';
+    }
+
+    static bumpColumnAssignment(channelAddress, existingColumn, newColumn) {
+      // Get the channel information from the registry map object
+      const channel = this.channelsRegistry.get(channelAddress);
+
+      if (!channel) {
+          // If the channel doesn't exist, return without performing any action
+          return;
+      }
+
+      // Get the existing commit address and its corresponding column assignment
+      const existingCommitAddress = existingColumn === 'columnA' ? channel.columnAAddress : channel.columnBAddress;
+
+      // Determine the column to be bumped based on the existing and new column assignments
+      const columnToBump = existingColumn === 'columnA' ? 'columnB' : 'columnA';
+
+      // Update the channel registry map to overwrite the column assignment of the other commit address
+      channel[columnToBump + 'Address'] = existingCommitAddress;
+      channel[columnToBump] = existingColumn;
+
+      // Update the channel registry map with the modified channel information
+      this.channelsRegistry.set(channelAddress, channel);
+  }
 
 
     // New function to process commitments and assign columns
-    async processChannelCommits(tradeChannelManager, channelAddress) {
+    static async processChannelCommits(tradeChannelManager, channelAddress) {
         // Check if both parties have committed
-        if (tradeChannelManager.areBothPartiesCommitted(channelAddress)) {
+        if (Channels.areBothPartiesCommitted(channelAddress)) {
             // Assign columns based on predefined logic
-            const columnAssignments = tradeChannelManager.assignColumns(channelAddress);
-            tradeChannelManager.updateChannelWithColumnAssignments(channelAddress, columnAssignments);
+            const columnAssignments = Channels.assignColumns(channelAddress);
+            Channels.updateChannelWithColumnAssignments(channelAddress, columnAssignments);
 
             console.log(`Columns assigned for channel ${channelAddress}`);
         }
     }
 
-    async recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, commitPurpose, transactionTime) {
-        const commitRecord = {
-            senderAddress,
-            propertyId,
-            tokenAmount,
-            commitPurpose,
-            timestamp: transactionTime,
-            columnAssigned: false // Initially, no column is assigned
-        };
-        // Assuming `this.channels` is a Map storing channel details
-        if (!this.channels.has(channelAddress)) {
-            this.channels.set(channelAddress, { participants: new Set(), commits: [] });
-        }
-        const channel = this.channels.get(channelAddress);
-        channel.participants.add(senderAddress);
-        channel.commits.push(commitRecord);
-  }
+    static async recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, block) {
+          const commitRecord = {
+              senderAddress,
+              propertyId,
+              tokenAmount,
+              commitPurpose,
+              block: transactionTime,
+              columnAssigned: Channels.assignColumnBasedOnAddress(channelAddress,senderAddress)// Initially, no column is assigned
+          };
+          // Assuming `this.channels` is a Map storing channel details
+          if (!this.channelsRegistry.has(channelAddress)) {
+              this.channelsRegistry.set(channelAddress, { participants: new Set(), commits: [] });
+          }
+          const channel = this.channelsRegistry.get(channelAddress);
+          channel.participants.add(senderAddress);
+          channel.commits.push(commitRecord);
+    }
 
-    areBothPartiesCommitted(channelAddress) {
-          const channel = this.channels.get(channelAddress);
+    static areBothPartiesCommitted(channelAddress) {
+          const channel = this.channelsRegistry.get(channelAddress);
           if (!channel) return false; // Channel does not exist
           return channel.participants.size === 2; // True if two unique participants have committed
      }
 
-    adjustChannelBalances(channelAddress, propertyId, amount) {
+    static adjustChannelBalances(channelAddress, propertyId, amount) {
           // Logic to adjust the token balances within a channel
           // This could involve debiting or crediting the committed columns based on the PNL amount
           const channel = this.channelsRegistry.get(channelAddress);
@@ -211,7 +296,7 @@ class Channels {
     }
 
     // Transaction processing functions
-    processWithdrawal(transaction) {
+    static processWithdrawal(transaction) {
       // Process a withdrawal from a trade channel
       const { channelAddress, amount, propertyId } = transaction;
       const channel = this.channelsRegistry.get(channelAddress);
@@ -225,7 +310,7 @@ class Channels {
       this.channelsRegistry.set(channelAddress, channel);
     }
 
-    processTransfer(transaction) {
+    static processTransfer(transaction) {
       // Process a transfer within a trade channel
       const { fromChannel, toChannel, amount, propertyId } = transaction;
       const sourceChannel = this.channelsRegistry.get(fromChannel);
@@ -244,7 +329,7 @@ class Channels {
       this.channelsRegistry.set(toChannel, destinationChannel);
     }
 
-  channelTokenTrade(transaction) {
+   static channelTokenTrade(transaction) {
       const { channelAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, columnAAddress, columnBAddress } = transaction;
       const channel = this.channelsRegistry.get(channelAddress);
 
@@ -265,74 +350,55 @@ class Channels {
 
       // Update channel information
       this.channelsRegistry.set(channelAddress, channel);
-  }
+   }
 
 
-  channelContractTrade(transaction) {
-    const { channelAddress, contractId, amount, price, side } = transaction;
-    const channel = this.channelsRegistry.get(channelAddress);
+   static channelContractTrade(transaction) {
+      const { channelAddress, contractId, amount, price, side } = transaction;
+      const channel = this.channelsRegistry.get(channelAddress);
 
-    if (!channel) {
-      throw new Error('Channel not found');
-    }
-
-    // Assuming channel object has properties like committedAmountA, committedAmountB for margin
-    if (side === 'buy') {
-      // Buyer's margin is debited from column A
-      const buyerMargin = amount * price; // Calculate margin required for the buy side
-      if (channel.committedAmountA < buyerMargin) {
-        throw new Error('Insufficient margin in channel for buyer');
-      }
-      channel.committedAmountA -= buyerMargin;
-      channel.committedAmountB -= buyerMargin;
-      MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'buy');
-      MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
-      TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
-      TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, buyerMargin, 0);
-      TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, buyerMargin, 0);
-    } else {
-      // Seller's margin is debited from column B
-      const sellerMargin = amount * price; // Calculate margin required for the sell side
-      if (channel.committedAmountB < sellerMargin) {
-        throw new Error('Insufficient margin in channel for seller');
-      }
-      channel.committedAmountB -= sellerMargin;
-      channel.committedAmountA -= sellerMargin;
-      MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'buy');
-      MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'sell');
-      TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
-      TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, sellerMargin, 0);
-      TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, sellerMargin, 0);
-    }
-
-    // Update the channel's contract balances
-    // This will likely involve updating margin and position in MarginMap
-    // Assumed MarginMap.updateMargin function handles the logic of updating margins
-    // Example: MarginMap.updateMargin(commitmentAddress, contractId, amount, price, side);
-
-    this.channelsRegistry.set(channelAddress, channel);
-  }
-
-   determineCommitColumn(senderAddress, transactionTime) {
-      // Check if there's an existing channel for this address
-      if (!this.channelsRegistry.has(senderAddress)) {
-          // If not, this is the first commitment, so use column A
-          return 'A';
+      if (!channel) {
+        throw new Error('Channel not found');
       }
 
-      const channel = this.channelsRegistry.get(senderAddress);
-
-      // Check the last commitment time to determine the column
-      if (!channel.lastCommitmentTime || channel.lastCommitmentTime < transactionTime) {
-          // If this is a more recent commitment, switch columns
-          return channel.lastUsedColumn === 'A' ? 'B' : 'A';
+      // Assuming channel object has properties like committedAmountA, committedAmountB for margin
+      if (side === 'buy') {
+        // Buyer's margin is debited from column A
+        const buyerMargin = amount * price; // Calculate margin required for the buy side
+        if (channel.committedAmountA < buyerMargin) {
+          throw new Error('Insufficient margin in channel for buyer');
+        }
+        channel.committedAmountA -= buyerMargin;
+        channel.committedAmountB -= buyerMargin;
+        MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'buy');
+        MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
+        TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
+        TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, buyerMargin, 0);
+        TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, buyerMargin, 0);
       } else {
-          // Otherwise, use the same column as the last commitment
-          return channel.lastUsedColumn;
+        // Seller's margin is debited from column B
+        const sellerMargin = amount * price; // Calculate margin required for the sell side
+        if (channel.committedAmountB < sellerMargin) {
+          throw new Error('Insufficient margin in channel for seller');
+        }
+        channel.committedAmountB -= sellerMargin;
+        channel.committedAmountA -= sellerMargin;
+        MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'buy');
+        MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'sell');
+        TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
+        TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, sellerMargin, 0);
+        TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, sellerMargin, 0);
       }
+
+      // Update the channel's contract balances
+      // This will likely involve updating margin and position in MarginMap
+      // Assumed MarginMap.updateMargin function handles the logic of updating margins
+      // Example: MarginMap.updateMargin(commitmentAddress, contractId, amount, price, side);
+
+      this.channelsRegistry.set(channelAddress, channel);
     }
 
-    updateChannelWithColumnAssignments(channelAddress, columnAssignments) {
+    static updateChannelWithColumnAssignments(channelAddress, columnAssignments) {
         const channel = this.channels.get(channelAddress);
         if (!channel) return; // Exit if channel does not exist
 
@@ -343,13 +409,13 @@ class Channels {
     }
 
 
-    async commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, commitPurpose, transactionTime) {
+   static async commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, blockHeight) {
         if (!this.channelsRegistry.has(senderAddress)) {
             // Initialize a new channel record if it doesn't exist
             this.channelsRegistry.set(senderAddress, {
                 A: {},
                 B: {},
-                lastCommitmentTime: transactionTime,
+                lastCommitmentTime: blockHeight,
                 lastUsedColumn: channelColumn
             });
         }
@@ -369,7 +435,7 @@ class Channels {
         // Save the updated channel information
         await this.saveChannelsRegistry();  // Assuming there's a method to persist the updated registry
 
-        console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress} with purpose: ${commitPurpose}`);
+        console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress}`);
     }
 
 }
