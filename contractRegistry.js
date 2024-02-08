@@ -371,19 +371,19 @@ class ContractRegistry {
         return position
     }           
 
-    
+
     static async getPriceAtBlock(contractId, blockHeight) {
-        let isOracleContract = await ContractList.isOracleContract(contractId);
+        let isOracleContract = await ContractRegistry.isOracleContract(contractId);
         let oracleId = null;
         let propertyId1 = null;
         let propertyId2 = null;
         let latestData;
-
+        let oracleDataDB = db.getDatabase('contractList')
         if (isOracleContract) {
-            oracleId = await ContractList.getOracleId(contractId);
+            oracleId = await ContractRegistry.getOracleId(contractId);
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
         } else {
-            let info = await ContractList.getContractInfo(contractId);
+            let info = await ContractRegistry.getContractInfo(contractId);
             propertyId1 = info.native.native.onChainData[0];
             propertyId2 = info.native.native.onChainData[1];
             latestData = await volumeIndexDB.findOneAsync({ propertyId1: propertyId1, propertyId2: propertyId2 });

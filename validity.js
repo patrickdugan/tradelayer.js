@@ -179,7 +179,7 @@ const Validity = {
         },
 
         // 4: Commit Token
-        validateCommitToken: async (params, block, txid) => {
+        validateCommit: async (params, block, txid) => {
             params.reason = '';
             params.valid = true;
 

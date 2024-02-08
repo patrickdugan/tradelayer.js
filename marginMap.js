@@ -286,8 +286,13 @@ class MarginMap {
         const isLong = position.contracts>0? true: false
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log(liquidationInfo);
-        position.liqPrice = liquidationInfo.liquidationPrice
-        position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice
+        if(liquidationInfo==null){
+            position.liqPrice=null
+            position.bankruptcyPrice=null
+        }else{
+            position.liqPrice = liquidationInfo.liquidationPrice
+            position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice   
+        }
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
       
@@ -309,14 +314,14 @@ class MarginMap {
 
         let bankruptcyPriceBN = new BigNumber(0)
         let liquidationPriceBN = new BigNumber(0)
+
         console.log('inside calc liq price '+isInverse, isLong)
         if (!isInverse) {
             // Linear contracts
             // Calculate liquidation price for long position
             if(isLong){
                 if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional.times(avgPriceBN))){
-                    bankruptcyPriceBN = null
-                    liquidationPrice = null
+                    return null
                 }else{
                    bankruptcyPriceBN = (avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional))).times(1.005);
                    liquidationPriceBN = bankruptcyPriceBN.plus(avgPriceBN.minus(bankruptcyPriceBN).times(0.5))
@@ -341,7 +346,7 @@ class MarginMap {
           } else {
                 // Calculate liquidation price for short inverse position
                 if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional)) {
-                    bankruptcyPriceBN = null; // No liquidation price
+                   return null
                 } else {
                     bankruptcyPriceBN =  positionNotional.times(0.995).dividedBy(totalCollateralBN);
                     liquidationPriceBN = avgPriceBN.plus(
@@ -352,10 +357,9 @@ class MarginMap {
                                                     }
           }
         }
-
         let bankruptcyPrice = bankruptcyPriceBN.toNumber()
         let liquidationPrice = liquidationPriceBN.toNumber()
-
+        
         return {
             bankruptcyPrice,
             liquidationPrice

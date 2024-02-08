@@ -163,6 +163,9 @@ const Types = {
                 break;
             case 4:
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid = txId
+                params = await Validity.validateCommit(sender, params, txId)
                 break;
             case 5:
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
