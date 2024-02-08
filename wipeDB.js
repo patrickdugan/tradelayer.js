@@ -32,6 +32,7 @@ const tradeHistoryDbPath = path.join(__dirname, 'nedb-data', 'tradeHistory.db')
 const oracleDataDbPath = path.join(__dirname, 'nedb-data', 'oracleData.db');
 const marginMapDbPath = path.join(__dirname, 'nedb-data', 'marginMaps.db')
 const tallyMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'tallyMapDelta.db')
+const channelsDbPath = path.join(__dirname, 'nedb-data','channels.db')
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
@@ -47,3 +48,4 @@ clearDatastore(tradeHistoryDbPath, 'tradeHistory')
 clearDatastore(oracleDataDbPath, 'oracleData')
 clearDatastore(marginMapDbPath, 'marginMaps')
 clearDatastore(tallyMapDeltasDbPath, 'tallyMapDelta')
+clearDatastore(channelsDbPath, 'channels')

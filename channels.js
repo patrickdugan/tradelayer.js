@@ -22,7 +22,7 @@ class Channels {
         const channelsDB = dbInstance.getDatabase('channels');
         const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
             return {
-                _id: `channel-${channelId}`, // Unique identifier for each channel
+                _id: `${channelId}`, // Unique identifier for each channel
                 data: channelData
             };
         });
@@ -41,7 +41,10 @@ class Channels {
         const channelsDB = dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
+            //console.log('loading channel DB '+JSON.stringify(entries))
             this.channelsRegistry = new Map(entries.map(entry => [entry._id.split('-')[1], entry.data]));
+            //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
+            return
         } catch (error) {
             if (error.message.includes('does not exist')) {
                 // If the collection does not exist, initialize an empty registry
@@ -115,6 +118,27 @@ class Channels {
         return this.channelsRegistry.get(channelId);
     }
 
+    static async getCommitAddresses(channelAddress) {
+        let channel = this.channelsRegistry.get(channelAddress);
+        console.log('inside getCommitAddresses '+JSON.stringify(channel))
+        if(!channel||channel==undefined||channel==null){
+          console.log('channel not found, loading from db')
+          await Channels.loadChannelsRegistry()
+          channel = this.channelsRegistry.get(channelAddress);
+          console.log('checking channel obj again '+JSON.stringify(channel))
+        }
+        if (channel && channel.participants) {
+            const participants = channel.participants;
+            console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
+            return {
+                commitAddressA: participants.A,
+                commitAddressB: participants.B
+            };
+        } else {
+            return null; // Return null if the channel or participants data is not found
+        }
+    }
+
     static async addCommitment(channelId, commitment) {
         await this.db.updateAsync(
             { channelId: channelId },
@@ -152,73 +176,76 @@ class Channels {
         // Check if there's a commit address
         if (!channel || !channel.commitAddress) {
             // If there's no commit address, use default logic
-            return Channels.assignColumnBasedOnLastCharacter(existingChannelAddress, newCommitAddress);
+            return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
         }
+        let defaultColumn = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+        let lastUsedColumn = channel.data.lastUsedColumn
+        if(defaultColumn==lastUsedColumn){
+          // Define the characters considered odd
+          const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
+          
+          // Get the last characters of the addresses
+          const existingLastChar = existingChannelAddress[existingChannelAddress.length - 1].toUpperCase();
+          const newLastChar = newCommitAddress[newCommitAddress.length - 1].toUpperCase();
 
-        // Define the characters considered odd
-        const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
-        
-        // Get the last characters of the addresses
-        const existingLastChar = existingChannelAddress[existingChannelAddress.length - 1].toUpperCase();
-        const newLastChar = newCommitAddress[newCommitAddress.length - 1].toUpperCase();
+          // Check if the existing address has been assigned to Column A
+          const existingIsOdd = oddCharacters.includes(existingLastChar);
+          const newIsOdd = oddCharacters.includes(newLastChar);
+          let bumpColumn 
+          // Check if both addresses are odd or even
+          if (existingIsOdd === newIsOdd) {
+              // If both addresses are odd or even, compare the last characters
+              if (existingLastChar === newLastChar) {
+                  // Compare second-to-last characters
+                  const existingSecondLastChar = existingChannelAddress[existingChannelAddress.length - 2].toUpperCase();
+                  const newSecondLastChar = newCommitAddress[newCommitAddress.length - 2].toUpperCase();
 
-        // Check if the existing address has been assigned to Column A
-        const existingIsOdd = oddCharacters.includes(existingLastChar);
-        const newIsOdd = oddCharacters.includes(newLastChar);
-        let bumpColumn 
-        // Check if both addresses are odd or even
-        if (existingIsOdd === newIsOdd) {
-            // If both addresses are odd or even, compare the last characters
-            if (existingLastChar === newLastChar) {
-                // Compare second-to-last characters
-                const existingSecondLastChar = existingChannelAddress[existingChannelAddress.length - 2].toUpperCase();
-                const newSecondLastChar = newCommitAddress[newCommitAddress.length - 2].toUpperCase();
-
-                // If second-to-last characters are the same, compare third-to-last characters and so on
-                if (existingSecondLastChar === newSecondLastChar) {
-                    for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
-                        const existingChar = existingChannelAddress[existingChannelAddress.length - i].toUpperCase();
-                        const newChar = newCommitAddress[newCommitAddress.length - i].toUpperCase();
-                        if (existingChar !== newChar) {
-                            // If the new address trumps the existing one, bump the existing address
-                            if (existingChar < newChar) {
-                                bumpColumn = existingChar < newChar ? 'A' : 'B'
-                                Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                            }
-                            return existingChar < newChar ? 'B' : 'A'; // Assign to opposite column
-                        }
-                    }
-                } else {
-                    // If the new address trumps the existing one, bump the existing address
-                    if (existingSecondLastChar < newSecondLastChar) {
-                        bumpColumn = existingSecondLastChar < newSecondLastChar ? 'A' : 'B'
-                        Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                    }
-                    return existingSecondLastChar < newSecondLastChar ? 'B' : 'A'; // Assign to opposite column
-                }
-            } else {
-                // If the new address trumps the existing one, bump the existing address
-                if (existingLastChar < newLastChar) {
-                    existingLastChar < newLastChar ? 'A' : 'B';
-                    Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                }
-                return existingLastChar < newLastChar ? 'B' : 'A'; // Assign to opposite column
-            }
-        } else {
-            return existingIsOdd ? 'B' : 'A'; // If they are different, assign to opposite of existing
+                  // If second-to-last characters are the same, compare third-to-last characters and so on
+                  if (existingSecondLastChar === newSecondLastChar) {
+                      for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
+                          const existingChar = existingChannelAddress[existingChannelAddress.length - i].toUpperCase();
+                          const newChar = newCommitAddress[newCommitAddress.length - i].toUpperCase();
+                          if (existingChar !== newChar) {
+                              // If the new address trumps the existing one, bump the existing address
+                              if (existingChar < newChar) {
+                                  bumpColumn = existingChar < newChar ? 'A' : 'B'
+                                  Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                              }
+                              return existingChar < newChar ? 'B' : 'A'; // Assign to opposite column
+                          }
+                      }
+                  } else {
+                      // If the new address trumps the existing one, bump the existing address
+                      if (existingSecondLastChar < newSecondLastChar) {
+                          bumpColumn = existingSecondLastChar < newSecondLastChar ? 'A' : 'B'
+                          Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                      }
+                      return existingSecondLastChar < newSecondLastChar ? 'B' : 'A'; // Assign to opposite column
+                  }
+              } else {
+                  // If the new address trumps the existing one, bump the existing address
+                  if (existingLastChar < newLastChar) {
+                      existingLastChar < newLastChar ? 'A' : 'B';
+                      Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
+                  }
+                  return existingLastChar < newLastChar ? 'B' : 'A'; // Assign to opposite column
+              }
+          } else {
+              return existingIsOdd ? 'B' : 'A'; // If they are different, assign to opposite of existing
+          }
         }
     }
 
     static assignColumnBasedOnLastCharacter(address) {
         // Get the last character of the address
         const lastChar = address[address.length - 1];
-        
+        console.log('last char in assign column based on last character '+lastChar)
         // Define the characters considered odd
         const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
 
         // Check if the last character is an odd character
         const isOdd = oddCharacters.includes(lastChar.toUpperCase());
-
+        console.log(isOdd)
         // If the last character is odd, assign to Column A, otherwise assign to Column B
         return isOdd ? 'A' : 'B';
     }
@@ -259,22 +286,51 @@ class Channels {
         }
     }
 
-    static async recordPendingCommit(channelAddress, senderAddress, propertyId, tokenAmount, block) {
-          const commitRecord = {
-              senderAddress,
-              propertyId,
-              tokenAmount,
-              commitPurpose,
-              block: transactionTime,
-              columnAssigned: Channels.assignColumnBasedOnAddress(channelAddress,senderAddress)// Initially, no column is assigned
-          };
-          // Assuming `this.channels` is a Map storing channel details
-          if (!this.channelsRegistry.has(channelAddress)) {
-              this.channelsRegistry.set(channelAddress, { participants: new Set(), commits: [] });
-          }
-          const channel = this.channelsRegistry.get(channelAddress);
-          channel.participants.add(senderAddress);
-          channel.commits.push(commitRecord);
+    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, blockHeight) {
+        // Check if the channel exists in the registry
+        if (!this.channelsRegistry.has(channelAddress)) {
+            // Initialize a new channel record if it doesn't exist
+            this.channelsRegistry.set(channelAddress, {
+                participants: {'A':'','B':''},
+                commits: [],
+                A: {},
+                B: {},
+                lastCommitmentTime: blockHeight,
+                lastUsedColumn: null // Initialize lastUsedColumn to null
+            });
+        }
+
+        // Get the channel from the registry
+        const channel = this.channelsRegistry.get(channelAddress);
+
+        // Determine the column for the sender address
+        const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
+
+        // Update the balance in the specified column
+        if (!channel[channelColumn][propertyId]) {
+            channel[channelColumn][propertyId] = 0;
+        }
+        channel[channelColumn][propertyId] += tokenAmount;
+
+        // Add the commit record to the channel
+        const commitRecord = {
+            senderAddress,
+            propertyId,
+            tokenAmount,
+            block: blockHeight,
+            columnAssigned: channelColumn
+        };
+        channel.participants[channelColumn]=senderAddress;
+        channel.commits.push(commitRecord);
+
+        // Update the last commitment time and used column
+        channel.lastCommitmentTime = blockHeight;
+        channel.lastUsedColumn = channelColumn;
+
+        // Save the updated channel information
+        await this.saveChannelsRegistry();
+
+        console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress}`);
     }
 
     static areBothPartiesCommitted(channelAddress) {
@@ -407,37 +463,6 @@ class Channels {
             columnAssigned: true
         }));
     }
-
-
-   static async commitToChannel(senderAddress, propertyId, tokenAmount, channelColumn, blockHeight) {
-        if (!this.channelsRegistry.has(senderAddress)) {
-            // Initialize a new channel record if it doesn't exist
-            this.channelsRegistry.set(senderAddress, {
-                A: {},
-                B: {},
-                lastCommitmentTime: blockHeight,
-                lastUsedColumn: channelColumn
-            });
-        }
-
-        const channel = this.channelsRegistry.get(senderAddress);
-
-        // Update the balance in the specified column
-        if (!channel[channelColumn][propertyId]) {
-            channel[channelColumn][propertyId] = 0;
-        }
-        channel[channelColumn][propertyId] += tokenAmount;
-
-        // Update the last commitment time and used column
-        channel.lastCommitmentTime = transactionTime;
-        channel.lastUsedColumn = channelColumn;
-
-        // Save the updated channel information
-        await this.saveChannelsRegistry();  // Assuming there's a method to persist the updated registry
-
-        console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress}`);
-    }
-
 }
 
 module.exports = Channels;

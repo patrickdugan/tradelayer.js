@@ -8,6 +8,7 @@ const ContractRegistry = require('./contractRegistry.js')
 const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
 const Orderbook = require('./orderbook.js')
+const Channels = require('./channels.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -183,7 +184,8 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
-            let hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
+            let hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
+            console.log('inside validate commit '+JSON.stringify(hasSufficientBalance)+params.amount)
             // Check if the sender has sufficient balance
             if (hasSufficientBalance.hasSufficient==false){
                 params.valid = false
@@ -749,7 +751,7 @@ const Validity = {
         },
 
         // 19: Trade Contract Channel
-        validateTradeContractChannel: async (params, channelRegistry, whitelistRegistry, contractRegistry) => {
+        validateTradeContractChannel: async (sender, params,block) => {
             params.reason = '';
             params.valid = true;
 
@@ -758,11 +760,11 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+            console.log('checking inside validate validateTradeContractChannel '+JSON.stringify(params))
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
+            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
 
-            const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
-            const contractDetails = await contractRegistry.getContractDetails(params.contractId);
-
-            const isAddressAWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(commitAddressA, contractDetails.oracleId) : true;
+            /*const isAddressAWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(commitAddressA, contractDetails.oracleId) : true;
             if (!isAddressAWhitelisted) {
                 params.valid = false;
                 params.reason += 'Commit address A not whitelisted; ';
@@ -772,7 +774,7 @@ const Validity = {
             if (!isAddressBWhitelisted) {
                 params.valid = false;
                 params.reason += 'Commit address B not whitelisted; ';
-            }
+            }*/
 
             return params;
         },
