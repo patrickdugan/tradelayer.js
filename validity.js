@@ -760,9 +760,141 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+
+            const channel = Channels.getChannel(sender)
             console.log('checking inside validate validateTradeContractChannel '+JSON.stringify(params))
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+            const collateralIdString = contractDetails.native.collateralPropertyId.toString()
+            const balanceA = channel.A[collateralIdString]
+            const balanceB = channel.B[collateralIdString]
+            console.log('checking our channel info is correct: A'+balanceA+' B '+balanceB+' commitAddrA '+commitAddressA+' commitAddrB '+commitAddressB)
+            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
+            let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
+
+            const existingPositionA = await marginMap.getPositionForAddress(commitAddressA, params.contractId);
+            const existingPositionB = await marginMap.getPositionForAddress(commitAddressB, params.contractId);
+            // Determine if the trade reduces the position size for buyer or seller
+            let AIsSeller
+            let isBuyerReducingPosition 
+            let isSellerReducingPosition 
+            if(params.columnAIsSeller==true||params.columnAIsSeller==1||params.columnAIsSeller=="1"){
+                AIsSeller==true
+                isBuyerReducingPosition= Boolean(existingPositionB.contracts > 0);
+                isSellerReducingPosition = Boolean(existingPositionA.contracts<0)
+            }else{
+                AIsSeller==false
+                isBuyerReducingPosition= Boolean(existingPositionA.contracts > 0);
+                isSellerReducingPosition = Boolean(existingPositionB.contracts<0)
+            }
+
+                        let enoughMargin
+            if (isBuyerReducingPosition == false && isSellerReducingPosition == false) {
+                // Check if the sender has enough balance for the initial margin
+                enoughMargin = balanceA >= totalInitialMargin && balanceB >= totalInitialMargin;
+                if (enoughMargin == false) {
+                    console.log('Insufficient balance for initial margin');
+                    params.valid = false;
+                    params.reason += "Insufficient balance for initial margin on both sides";
+                }
+            } else if (isBuyerReducingPosition == true && isSellerReducingPosition == false) {
+                if (AIsSeller == true) {
+                    enoughMargin = balanceA >= totalInitialMargin;
+                } else {
+                    enoughMargin = balanceB >= totalInitialMargin;
+                }
+                if (enoughMargin == false) {
+                    console.log('Insufficient balance for initial margin');
+                    params.valid = false;
+                    params.reason += "Insufficient balance for initial margin on sellSide";
+                }
+            } else if (isBuyerReducingPosition == false && isSellerReducingPosition == true) {
+                if (AIsSeller == true) {
+                    enoughMargin = balanceB >= totalInitialMargin;
+                } else {
+                    enoughMargin = balanceA >= totalInitialMargin;
+                }
+                if (enoughMargin == false) {
+                    console.log('Insufficient balance for initial margin');
+                    params.valid = false;
+                    params.reason += "Insufficient balance for initial margin on buySide";
+                }
+            }
+
+
+             let isBuyerFlippingPosition              
+             let isSellerFlippingPosition 
+           
+             if(AIsSeller==true){
+                isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPositionB.contracts)&&existingPositionB.contracts<0)
+                isSellerFlippingPosition = Boolean(params.amount>existingPositionA.contracts&&existingPositionA.contracts>0)           
+             }else{
+                isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPositionA.contracts)&&existingPositionA.contracts<0)
+                isSellerFlippingPosition = Boolean(params.amount>existingPositionB.contracts&&existingPositionB.contracts>0)           
+             }
+
+             let flipLong = 0 
+             let flipShort = 0
+             let AFlipLong
+             let BFlipLong
+             let AFlipShort
+             let BFlipShort
+             let totalInitialMarginFlip = 0 
+             if(isBuyerFlippingPosition&&AIsSeller){
+                flipLong=params.amount-Math.abs(existingPositionB.contracts)
+                totalInitialMarginFlip = BigNumber(initialMarginPerContract).times(flipLong).toNumber();
+                BFlipLong = true
+             }else if(isSellerFlippingPosition&&AIsSeller){
+                flipShort=params.amount-existingPositionA.contracts
+                totalInitialMarginFlip = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
+                AFlipShort = true
+             }else if(isBuyerFlippingPosition&&!AIsSeller){
+                flipLong=params.amount-Math.abs(existingPositionA.contracts)
+                totalInitialMargin = BigNumber(initialMarginPerContract).times(flipLong).toNumber();
+                AFlipLong= true
+             }else if(isSellerFlippingPosition&&!AIsSeller){
+                flipShort=params.amount-existingPositionB.contracts
+                totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
+                BFlipShort=true
+             }
+             let tallyA = TallyMap.getTally(commitAddressA,contractDetails.native.collateralPropertyId)
+             let tallyB = TallyMap.getTally(commitAddressB,contractDetails.native.collateralPropertyId)
+
+             if((balanceA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
+                ||(balanceA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
+                ||(balanceB<(flipLong*initialMarginPerContract)&&BFlipLong==true)
+                ||(balanceB<(flipShort*initialMarginPerContract)&&BFlipShort==true)){
+                    let shortfall
+                    let doubleFlip = Boolean((AFlipLong&&BFlipShort)||(BFlipLong&&AFlipShort))
+                    let shortfall2
+                    if(AFlipLong){
+                        shortfall==flipLong*initialMarginPerContract-(balanceA+tallyA.available)
+                    }
+                    if(AFlipShort){
+                        shortfall==flipShort*initialMarginPerContract-(balanceA+tallyA.available)
+                    }
+                    if(BFlipShort){
+                        if(doubleFlip){
+                            shortfall2=flipLong*initialMarginPerContract-(balanceA+tallyA.available)
+                        }
+                        shortfall==flipShort*initialMarginPerContract-(balanceB+tallyB.available)
+                    }
+                    if(BFlipLong){
+                        if(doubleFlip){
+                            shortfall2=flipShort*initialMarginPerContract-(balanceA+tallyA.available)
+                        }
+                        shortfall==flipLong
+                    }
+                    if(doubleFlip){
+                        shortfall=Math.max(shortfall,shortfall2)
+                    }
+                 let contractUndo = BigNumber(shortfall)
+                                    .dividedBy(initialMarginPerContract)
+                                    .decimalPlaces(0, BigNumber.ROUND_CEIL)
+                                    .toNumber();
+
+                params.amount -= contractUndo;
+             }
 
             /*const isAddressAWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(commitAddressA, contractDetails.oracleId) : true;
             if (!isAddressAWhitelisted) {
