@@ -299,7 +299,8 @@ const Decode = {
       propertyid2: parseInt(parts[1], 36),
       amountOffered1: parseInt(parts[2], 36),
       amountDesired2: parseInt(parts[3], 36),
-      expiryBlock: parseInt(parts[4], 36),
+      columnAIsOfferer: parts[4] === '1',
+      expiryBlock: parseInt(parts[5], 36),
     };
   },
 

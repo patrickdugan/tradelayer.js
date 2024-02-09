@@ -23,7 +23,7 @@ async function executeTransaction() {
     }
 
     var random = randomNumber(20000, 50000);
-
+    console.log('creating contract channel trade - params: '+JSON.stringify(params))
     TxUtils.createChannelContractTradeTransaction('tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk', params, null);
 }
 

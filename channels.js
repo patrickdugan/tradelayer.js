@@ -135,7 +135,7 @@ class Channels {
                 commitAddressB: participants.B
             };
         } else {
-            return null; // Return null if the channel or participants data is not found
+            return {commitAddressA: null,commitAddressB: null}; // Return null if the channel or participants data is not found
         }
     }
 

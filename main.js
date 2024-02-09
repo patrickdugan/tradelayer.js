@@ -214,7 +214,7 @@ class Main {
                 const referenceAddress = txData.value.reference.address; //a bit different from the older protocol, not always in the tx, sometimes in OP_Return
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                //console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
+                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
                 //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))

@@ -246,25 +246,25 @@ const Types = {
                 console.log('initially decoded contract trade params '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeContractOnchain(params, sender, block)
+                params = await Validity.validateTradeContractOnchain(sender,params, block)
                 break;
             case 19:
                 params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeContractChannel(params, sender, block)
+                params = await Validity.validateTradeContractChannel(sender, params, block)
                 break;
             case 20:
                 params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeTokensChannel(params, sender, block)
+                params = await Validity.validateTradeTokensChannel(sender, params, block)
                 break;
             case 21:
                 params = Decode.decodeWithdrawal(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateWithdrawal(params, sender, block)
+                params = await Validity.validateWithdrawal(sender, params, block)
                 break;
             case 22:
                 params = Decode.decodeTransfer(encodedPayload.substr(index));

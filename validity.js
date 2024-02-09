@@ -9,6 +9,7 @@ const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
 const Orderbook = require('./orderbook.js')
 const Channels = require('./channels.js')
+const MarginMap = require('./marginMap.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -674,7 +675,7 @@ const Validity = {
         },
 
         // 18: Trade Contract On-chain
-        validateTradeContractOnchain: async (params, sender, block) => {
+        validateTradeContractOnchain: async (sender,params, block) => {
             params.reason = '';
             params.valid = true;
             console.log('validating contract trade '+JSON.stringify(params))
@@ -761,17 +762,30 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const channel = Channels.getChannel(sender)
+            if(params.expiryBlock<block){
+                params.valid=false
+                params.reason = "Tx confirmed in block later than expiration block"
+                return params
+            }
+
+            const channel = await Channels.getChannel(sender)
             console.log('checking inside validate validateTradeContractChannel '+JSON.stringify(params))
-            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+            if(commitAddressA==null&&commitAddressB==null){
+                params.valid=false
+                params.reason = "Tx sender is not found to be a channel address"
+                return params
+            }
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             const collateralIdString = contractDetails.native.collateralPropertyId.toString()
             const balanceA = channel.A[collateralIdString]
             const balanceB = channel.B[collateralIdString]
             console.log('checking our channel info is correct: A'+balanceA+' B '+balanceB+' commitAddrA '+commitAddressA+' commitAddrB '+commitAddressB)
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
+            
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
-
+            
+            const marginMap = await MarginMap.getInstance(params.contractId)
             const existingPositionA = await marginMap.getPositionForAddress(commitAddressA, params.contractId);
             const existingPositionB = await marginMap.getPositionForAddress(commitAddressB, params.contractId);
             // Determine if the trade reduces the position size for buyer or seller
@@ -857,8 +871,8 @@ const Validity = {
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
                 BFlipShort=true
              }
-             let tallyA = TallyMap.getTally(commitAddressA,contractDetails.native.collateralPropertyId)
-             let tallyB = TallyMap.getTally(commitAddressB,contractDetails.native.collateralPropertyId)
+             let tallyA = await TallyMap.getTally(commitAddressA,contractDetails.native.collateralPropertyId)
+             let tallyB = await TallyMap.getTally(commitAddressB,contractDetails.native.collateralPropertyId)
 
              if((balanceA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
                 ||(balanceA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
@@ -912,7 +926,7 @@ const Validity = {
         },
 
         // 20: Trade Tokens Channel
-        validateTradeTokensChannel: async (params, channelRegistry, whitelistRegistry) => {
+        validateTradeTokensChannel: async (sender, params, block) => {
             params.reason = '';
             params.valid = true;
 
@@ -920,6 +934,14 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+                return params
+            }
+
+
+            if(params.expiryBlock<block){
+                params.valid=false
+                params.reason = "Tx confirmed in block later than expiration block"
+                return params
             }
 
             const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
@@ -928,8 +950,43 @@ const Validity = {
                 params.reason += "Vesting tokens cannot be traded"
             }
 
-            const { commitAddressA, commitAddressB } = channelRegistry.getCommitAddresses(params.channelAddress);
-            const isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, params.propertyId1);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
+            if(commitAddressA==null&&commitAddressB==null){
+                params.valid=false
+                params.reason += "Tx sender is not found to be a channel address"
+                return params
+            }
+            const channel = await Channels.getChannel(sender)
+            let balanceA
+            let balanceB
+            let propertyIdOfferedString = params.propertyIdOffered.toString()
+            let propertyIdDesiredString = params.propertyIdDesired.toString()
+            let sufficientOffered 
+            let sufficientDesired
+            if(params.columnAIsOfferer==true){
+                balanceA = channel.A[propertyIdOfferedString]
+                balanceB = channel.B[propertyIdDesiredString]
+                if(balanceA<params.amountOffered){
+                    params.valid=false
+                    params.reason += "Column A has insufficient balance for amountOffered"
+                }
+                if(balanceB<params.amountDesired){
+                    params.valid=false
+                    params.reason += "Column B has insufficient balance for amountDesired"
+                }
+            }else if(params.columnAIsOfferer==false){
+                balanceA = channel.A[propertyIdOfferedString]
+                balanceB = channel.B[propertyIdDesiredString]
+                if(balanceA<params.amountDesired){
+                    params.valid=false
+                    params.reason += "Column A has insufficient balance for amountDesired"
+                }
+                if(balanceB<params.amountOffered){
+                    params.valid=false
+                    params.reason += "Column B has insufficient balance for amountOffered"
+                }
+            }
+            /*const isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, params.propertyId1);
             if (!isAddressAWhitelisted) {
                 params.valid = false;
                 params.reason += 'Commit address A not whitelisted for property ID 1; ';
@@ -939,7 +996,7 @@ const Validity = {
             if (!isAddressBWhitelisted) {
                 params.valid = false;
                 params.reason += 'Commit address B not whitelisted for property ID 2; ';
-            }
+            }*/
 
             return params;
         },
