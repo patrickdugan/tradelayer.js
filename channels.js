@@ -41,9 +41,9 @@ class Channels {
         const channelsDB = dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
-            //console.log('loading channel DB '+JSON.stringify(entries))
+            console.log('loading channel DB '+JSON.stringify(entries))
             this.channelsRegistry = new Map(entries.map(entry => [entry._id.split('-')[1], entry.data]));
-            //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
+            console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
             return
         } catch (error) {
             if (error.message.includes('does not exist')) {
@@ -111,11 +111,13 @@ class Channels {
 
     static async getChannel(channelId) {
         // Ensure the channels registry is loaded
-        if (!this.channelsRegistry) {
+        let channel = this.channelsRegistry.get(channelId)
+        if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
+            channel = this.channelsRegistry.get(channelId)
         }
 
-        return this.channelsRegistry.get(channelId);
+        return channel
     }
 
     static async getCommitAddresses(channelAddress) {

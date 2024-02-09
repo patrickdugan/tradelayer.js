@@ -14,7 +14,7 @@ async function executeTransaction() {
 	    amountOffered1: 100,
 	    amountDesired2: 50,
 	    expiryBlock:chainTip+10,
-        columnAIsOfferer: 1
+        columnAIsOfferer: 0
 	}
     // Function to generate a random number within a range
     function randomNumber(min, max) {

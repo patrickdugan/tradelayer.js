@@ -276,7 +276,7 @@ const Encode = {
             params.propertyId2.toString(36),
             params.amountOffered1.toString(36),
             params.amountDesired2.toString(36),
-            params.columnAIsOfferer: ? '1':'0',
+            params.columnAIsOfferer ? '1':'0',
             params.expiryBlock.toString(36),
         ];
         return payload.join(',');

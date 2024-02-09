@@ -762,7 +762,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            if(params.expiryBlock<block){
+            if(params.expiryBlock<block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
                 return params
@@ -929,7 +929,7 @@ const Validity = {
         validateTradeTokensChannel: async (sender, params, block) => {
             params.reason = '';
             params.valid = true;
-
+            console.log('inside validateTradeTokensChannel '+JSON.stringify(params))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(20);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -938,7 +938,7 @@ const Validity = {
             }
 
 
-            if(params.expiryBlock<block){
+            if(params.expiryBlock<block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
                 return params
@@ -950,13 +950,14 @@ const Validity = {
                 params.reason += "Vesting tokens cannot be traded"
             }
 
-            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
             if(commitAddressA==null&&commitAddressB==null){
                 params.valid=false
                 params.reason += "Tx sender is not found to be a channel address"
                 return params
             }
             const channel = await Channels.getChannel(sender)
+            console.log('channel returned ' +JSON.stringify(channel))
             let balanceA
             let balanceB
             let propertyIdOfferedString = params.propertyIdOffered.toString()

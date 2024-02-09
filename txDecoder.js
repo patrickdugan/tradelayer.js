@@ -295,10 +295,10 @@ const Decode = {
   decodeTradeTokensChannel: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyid1: parseInt(parts[0], 36),
-      propertyid2: parseInt(parts[1], 36),
-      amountOffered1: parseInt(parts[2], 36),
-      amountDesired2: parseInt(parts[3], 36),
+      propertyIdOffered: parseInt(parts[0], 36),
+      propertyIdDesired: parseInt(parts[1], 36),
+      amountOffered: parseInt(parts[2], 36),
+      amountDesired: parseInt(parts[3], 36),
       columnAIsOfferer: parts[4] === '1',
       expiryBlock: parseInt(parts[5], 36),
     };
