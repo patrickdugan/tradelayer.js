@@ -175,7 +175,7 @@ class Orderbook {
             const matchResult = await orderbook.matchTokenOrders(normalizedOrderBookKey);
             if (matchResult.matches && matchResult.matches.length > 0) {
                 //console.log('Match Result:', matchResult);
-                await this.processTokenMatches(matchResult.matches, blockHeight, txid);
+                await this.processTokenMatches(matchResult.matches, blockHeight, txid, false);
             }else{console.log('No Matches for ' +txid)}
             //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
@@ -281,7 +281,7 @@ class Orderbook {
                     return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
-        async processTokenMatches(matches, blockHeight, txid) {
+        async processTokenMatches(matches, blockHeight, txid, channel) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches) || matches.length === 0) {
                 //console.log('No valid matches to process');
@@ -351,39 +351,60 @@ class Orderbook {
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
                 }
 
-                // Debit the traded amount from the seller's reserve 
                 await TallyMap.updateBalance(
-                    match.sellOrder.sender,
-                    match.sellOrder.offeredPropertyId,
-                    0,  // Credit traded amount of Token B to available
-                    -match.amountOfTokenA, // Debit the same amount from reserve
-                    0, 0,'tokenTrade'
-                );
-                //and credit the opposite consideration to available
-
-                await TallyMap.updateBalance(
-                    match.sellOrder.sender,
-                    match.sellOrder.desiredPropertyId,
-                    match.amountOfTokenB,  // Credit traded amount of Token B to available
-                    0, // Debit the same amount from reserve
-                    0, 0,'tokenTrade' 
+                        match.sellOrder.sender,
+                        match.sellOrder.desiredPropertyId,
+                        match.amountOfTokenB,  // Credit traded amount of Token B to available
+                        0, // Debit the same amount from reserve
+                        0, 0,'tokenTrade' 
                 );
 
-                // Update balance for the buyer
-                // Debit the traded amount from the buyer's reserve and credit it to available
-                await TallyMap.updateBalance(
-                    match.buyOrder.sender,
-                    match.buyOrder.offeredPropertyId,
-                    0,  // Credit traded amount of Token B to available
-                    -match.amountOfTokenB, // Debit the same amount from reserve
-                    0, 0,'tokenTrade' );
 
                 await TallyMap.updateBalance(
-                    match.buyOrder.sender,
-                    match.buyOrder.desiredPropertyId,
-                    match.amountOfTokenA,  // Credit traded amount of Token B to available
-                    0, // Debit the same amount from reserve
-                    0, 0,'tokenTrade' );
+                        match.buyOrder.sender,
+                        match.buyOrder.desiredPropertyId,
+                        match.amountOfTokenA,  // Credit traded amount of Token B to available
+                        0, // Debit the same amount from reserve
+                        0, 0,'tokenTrade' );
+
+                if(channel==true){
+
+                    await TallyMap.updateBalance(
+                        match.channelAddress,
+                        match.sellOrder.offeredPropertyId,
+                        0,  // Credit traded amount of Token B to available
+                        -match.amountOfTokenA, // Debit the same amount from reserve
+                        0, 0,'tokenTrade'
+                    );
+
+                    await TallyMap.updateBalance(
+                        match.channelAddress,
+                        match.buyOrder.offeredPropertyId,
+                        0,  // Credit traded amount of Token B to available
+                        -match.amountOfTokenB, // Debit the same amount from reserve
+                        0, 0,'tokenTrade' );
+
+                }else{
+                    // Debit the traded amount from the seller's reserve 
+                    await TallyMap.updateBalance(
+                        match.sellOrder.sender,
+                        match.sellOrder.offeredPropertyId,
+                        0,  // Credit traded amount of Token B to available
+                        -match.amountOfTokenA, // Debit the same amount from reserve
+                        0, 0,'tokenTrade'
+                    );
+                    //and credit the opposite consideration to available
+
+                    // Update balance for the buyer
+                    // Debit the traded amount from the buyer's reserve and credit it to available
+                    await TallyMap.updateBalance(
+                        match.buyOrder.sender,
+                        match.buyOrder.offeredPropertyId,
+                        0,  // Credit traded amount of Token B to available
+                        -match.amountOfTokenB, // Debit the same amount from reserve
+                        0, 0,'tokenTrade' );
+
+                }
 
                   // Construct a trade object for recording
                 const trade = {
@@ -434,7 +455,7 @@ class Orderbook {
             var matchResult = await this.matchContractOrders(orderBookKey);
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
-                await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse)
+                await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse,false)
             }
            
             //console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.matches)
@@ -498,7 +519,7 @@ class Orderbook {
             return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
-        async processContractMatches(matches, currentBlockHeight, inverse) {
+        async processContractMatches(matches, currentBlockHeight, inverse, channel) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches)) {
                 // Handle the non-iterable case, e.g., log an error, initialize as an empty array, etc.
@@ -562,6 +583,7 @@ class Orderbook {
                                 totalMargin = BigNumber(initialMarginPerContract).times(match.buyOrder.amount).toNumber();
                             }
                         }
+
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin');
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
                         await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, totalMargin);
@@ -595,14 +617,13 @@ class Orderbook {
 
                     if(!isBuyerReducingPosition){
                        // Use the instance method to set the initial margin
-                       match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin)
-
+                       match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel)
                        //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
                     // Update MarginMap for the contract series
                     if(!isSellerReducingPosition){
                         // Use the instance method to set the initial margin
-                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin)
+                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel
                        //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
 
@@ -652,7 +673,8 @@ class Orderbook {
                         buyerFullClose: buyerFullyClosed,
                         sellerFullClose: sellerFullyClosed,
                         flipLong: flipLong,
-                        flipShort: flipShort
+                        flipShort: flipShort,
+                        channel: channel
                         // other relevant trade details...
                     };
 
@@ -693,7 +715,7 @@ class Orderbook {
                         console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
                         //{netMargin,mode}   
-                        if(reduction !=0){
+                        if(reduction !=0&&channel==false){
                             //console.log('reduction about to pass to TallyMap' +reduction)
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
                         }

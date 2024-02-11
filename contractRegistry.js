@@ -330,7 +330,7 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin) {
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
@@ -344,11 +344,11 @@ class ContractRegistry {
         // Move collateral to reservd position
                     let contractUndo = 0
                     let excessMargin
-            if(orderPrice>price&&side==true&&excessMargin!=0){
+            if(orderPrice>price&&side==true&&excessMargin!=0&&channel==false){
                     excessMargin = initMargin -totalInitialMargin
                     //contract was bid higher than the fill, the initMargin in reserve is too high and will be returned to available
                      await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin,0, 0, 'returnExcessMargin');
-            }else if(orderPrice<price&&side==false&&excessMargin!=0){
+            }else if(orderPrice<price&&side==false&&excessMargin!=0&&channel==false){
                     excessMargin = totalInitialMargin-initMargin
                     const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, excessMargin);
                     if(hasSufficientBalance.hasSufficient==false){

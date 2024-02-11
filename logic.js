@@ -89,13 +89,13 @@ const Logic = {
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
                 break;
             case 18:
-                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.contractsRegistry, params.block, params.txid, params.senderAddress);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress);
                 break;
             case 19:
-                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.tradeChannelManager);
+                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.sender, params.block,params.txid);
                 break;
             case 20:
-                await Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.channelAddress, params.TradeChannel, params.TallyMap);
+                await Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.columnAIsOfferer, params.sender, params.block,params.txid);
                 break;
             case 21:
                 await Logic.withdrawal(params.channelAddress, params.propertyId, params.amount);
@@ -659,46 +659,91 @@ const Logic = {
         return
 	},
 
-    async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, tradeChannelManager) {
+    async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, channelAddress, block, txid) {
 	    if (!contractId || !price || !amount || !tradeChannelManager) {
 	        throw new Error('Missing required parameters');
 	    }
 
+        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+
+
+        let buyerAddress
+        let sellerAddress
+        if(columnAIsSeller){
+            sellerAddres=commitAddressA
+            buyerAddress=commitAddressB
+        }else{
+            sellerAddres=commitAddressB
+            buyerAddress=commitAddressA
+        }
+        let sellSide = false
+        let buySide = true
+        const isInverse = ContractRegistry.isInverse(contractId)
+        const sellOrder = { contractId, amount, price, block, sellSide, initMargin, sellerAddress, txid };
+        const buyOrder = { contractId, amount, price, block, buySide, initMargin, buyerAddress, txid };
+
+        let match = { 
+                        sellOrder,
+                        buyOrder,
+                        tradePrice,
+                        channelAddress 
+                    }
+        let matches = []
+        matches.push(match)
 	    // Trade the contract within a channel
-	    await tradeChannelManager.tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance);
+        Orderbook.processContractMatches(matches,block,txid,true)
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
 	},
 
-	async tradeTokensChannel(propertyId1, propertyId2, amountOffered1, amountDesired2, expiryBlock, channelAddress, TradeChannel, TallyMap) {
-		    // Check if the trade channel exists and is valid
-		    const channelExists = TradeChannel.isChannelValid(channelAddress);
-		    if (!channelExists) {
-		        throw new Error("Invalid trade channel address");
-		    }
+	async tradeTokensChannel(propertyId1, propertyId2, amountOffered1, amountDesired2, expiryBlock, columnAIsOfferer, channelAddress, block, txid) {
+		
+        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
 
-		    // Verify if the trade is within the expiry block
-		    const currentBlock = TxIndex.fetchChainTip();
-		    if (currentBlock > expiryBlock) {
-		        throw new Error("Trade expired");
-		    }
+        let buyerAddress
+        let sellerAddress
+        if(columnAIsOfferer){
+            sellerAddres=commitAddressB
+            buyerAddress=commitAddressA
+        }else{
+            sellerAddres=commitAddressA
+            buyerAddress=commitAddressB
+        }
 
-		    // Verify sufficient balances in the channel columns
-		    const balanceA = TallyMap.getBalance(channelAddress, propertyId1, 'columnA');
-		    const balanceB = TallyMap.getBalance(channelAddress, propertyId2, 'columnB');
-		    if (balanceA < amountOffered1 || balanceB < amountDesired2) {
-		        throw new Error("Insufficient balance in trade channel");
-		    }
+        const sellOrder = {
+            offeredPropertyId:offeredPropertyId,
+            desiredPropertyId:desiredPropertyId,
+            amountOffered:amountOffered,
+            amountExpected:amountExpected,
+            blockTime: confirmedBlock,
+            sender: sellerAddress
+        };
+
+        const buyOrder = {
+            offeredPropertyId:offeredPropertyId,
+            desiredPropertyId:desiredPropertyId,
+            amountOffered:amountOffered,
+            amountExpected:amountExpected,
+            blockTime: confirmedBlock,
+            sender: buyerAddress
+        };
+
+        const amountOffered1 = new BigNumber('1000');
+        const amountDesired2 = new BigNumber('2000');
+
+        // Calculate tradePrice
+        const tradePrice = amountOffered1.dividedBy(amountDesired2);
+
+        let match = { sellOrder, buyOrder, 
+                    amountOfTokenA: amountOfTokenA.toNumber(), 
+                    amountOfTokenB: amountOfTokenB.toNumber(),
+                    tradePrice: tradePrice.toNumber(),
+                    channel: channelAddress 
+                    }
+        let matches = []
+        matches.push(match)
 
 		    // Update balances in the channel columns and commitment addresses
-		    TallyMap.updateBalance(channelAddress, propertyId1, -amountOffered1, 'columnA');
-		    TallyMap.updateBalance(/* Commitment Address B ,*/ propertyId1, amountOffered1, 'available');
-
-		    TallyMap.updateBalance(channelAddress, propertyId2, -amountDesired2, 'columnB');
-		    TallyMap.updateBalance(/* Commitment Address A ,*/ propertyId2, amountDesired2, 'available');
-
-		    // Lock the trade in the channel
-		    await TradeChannel.lockTrade(channelAddress, propertyId1, propertyId2, amountOffered1, amountDesired2);
-
+		    Orderbook.processTokenMatches(matches, block, txid,true)
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 
