@@ -299,7 +299,7 @@ class Orderbook {
                 const buyOrderAddress = match.buyOrder.sender;
                 const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
                 const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
-                
+                console.log('checking params in process token match '+buyOrderPropertyId+' '+sellOrderPropertyId)
                 if(match.sellOrder.blockTime<blockHeight){
                     match.sellOrder.isNew = false
                     match.buyOrder.isNew = true
@@ -314,10 +314,13 @@ class Orderbook {
                 let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange = 0
                 let amountToTradeA = new BigNumber(match.amountOfTokenA)
                 let amountToTradeB = new BigNumber(match.amountOfTokenB)
-
+                if(channel==true){
+                    amountToTradeA = new BigNumber(match.sellOrder.amountOffered)
+                    amountToTradeB = new BigNumber(match.buyOrder.amountExpected)
+                }
                 console.log('amountTo Trade A and B '+ amountToTradeA + ' '+ amountToTradeB + ' '+ 'match values '+ match.amountOfTokenA + ' '+ match.amountOfTokenB)
                 // Determine order roles and calculate fees
-                if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
+                if ((match.sellOrder.blockTime < match.buyOrder.blockTime)&&channel==false) {
                     match.sellOrder.orderRole = 'maker';
                     match.buyOrder.orderRole = 'taker';
                     takerFee = amountToTradeB.times(0.0002);
@@ -332,7 +335,7 @@ class Orderbook {
                     //console.log('sell order amount change ' +sellOrderAmountChange)
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
 
-                } else if (match.buyOrder.blockTime < match.sellOrder.blockTime) {
+                } else if((match.buyOrder.blockTime < match.sellOrder.blockTime)&&channel==false){
                     match.buyOrder.orderRole = 'maker';
                     match.sellOrder.orderRole = 'taker';
                     takerFee = amountToTradeA.times(0.0002);
@@ -341,7 +344,7 @@ class Orderbook {
                     await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
                     sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
-                } else if (match.buyOrder.blockTime == match.sellOrder.blockTime) {
+                } else if ((match.buyOrder.blockTime == match.sellOrder.blockTime)||channel==true){
                     match.buyOrder.orderRole = 'split';
                     match.sellOrder.orderRole = 'split';
                     var takerFeeA = amountToTradeA.times(0.0001);
@@ -351,7 +354,7 @@ class Orderbook {
                     sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber();
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
                 }
-
+                console.log('about to update tallymap in process token trade '+match.sellOrder.sender +' '+match.buyOrder.sender +' '+match.channel)
                 await TallyMap.updateBalance(
                         match.sellOrder.sender,
                         match.sellOrder.desiredPropertyId,
@@ -371,7 +374,7 @@ class Orderbook {
                 if(channel==true){
 
                     await TallyMap.updateBalance(
-                        match.channelAddress,
+                        match.channel,
                         match.sellOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenA, // Debit the same amount from reserve
@@ -379,7 +382,7 @@ class Orderbook {
                     );
 
                     await TallyMap.updateBalance(
-                        match.channelAddress,
+                        match.channel,
                         match.buyOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenB, // Debit the same amount from reserve

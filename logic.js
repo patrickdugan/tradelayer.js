@@ -93,14 +93,14 @@ const Logic = {
                 await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress);
                 break;
             case 19:
-                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.sender, params.block,params.txid);
+                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid);
                 break;
             case 20:
-                await Logic.tradeTokensChannel(params.propertyId1, params.propertyId2, params.amountOffered1, params.amountDesired2, params.expiryBlock, params.columnAIsOfferer, params.sender, params.block,params.txid);
+                await Logic.tradeTokensChannel(params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountDesired, params.expiryBlock, params.columnAIsOfferer, params.senderAddress, params.block,params.txid);
                 break;
             case 21:
-                await Logic.withdrawal(params.channelAddress, params.propertyId, params.amount);
-                break;
+                await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, block);
+                break;        
             case 22:
                 await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
                 break;
@@ -696,9 +696,10 @@ const Logic = {
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
 	},
 
-	async tradeTokensChannel(offeredPropertyId, desiredPropertyId, amountOffered, amountDesired, expiryBlock, columnAIsOfferer, channelAddress, block, txid) {
-		
+	async tradeTokensChannel(offeredPropertyId, desiredPropertyId, amountOffered, amountDesired, expiryBlock, columnAIsOfferer, channelAddress, block, txid){
+
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+        console.log('inside tokens channel '+commitAddressA+' '+commitAddressB+' channel addr '+channelAddress)
         const key = `${offeredPropertyId}-${desiredPropertyId}`
         const orderbook = await Orderbook.getOrderbookInstance(key)
         let buyerAddress
@@ -735,7 +736,7 @@ const Logic = {
         // Calculate tradePrice
         const tradePrice = amountOfferedBN.dividedBy(amountDesiredBN);
 
-        let match = { sellOrder, buyOrder, 
+        let match = {sellOrder: sellOrder, buyOrder: buyOrder, 
                     amountOfTokenA: amountOfferedBN.toNumber(), 
                     amountOfTokenB: amountDesiredBN.toNumber(),
                     tradePrice: tradePrice.toNumber(),
@@ -745,6 +746,7 @@ const Logic = {
         matches.push(match)
 
 		    // Update balances in the channel columns and commitment addresses
+            console.log('about to process token match in channel '+JSON.stringify(matches),block)
 		    await orderbook.processTokenMatches(matches, block, txid,true)
 		    return `Trade executed in channel ${channelAddress}`;
 	},
@@ -755,9 +757,7 @@ const Logic = {
 
 		    // Assuming channel object has a map of property balances
 		  
-
-		    // Deduct the amount from the channel balance
-		    channel.balances[propertyId] -= amount;
+            Channels.addToWithdrawalQueue(block, sender, amount, channelAddress,propertyId, withdrawAll)
 
 		    // Logic to transfer the amount back to the user's main account
 		    // This could involve interacting with TallyMap or another account balance module
