@@ -309,7 +309,7 @@ const Decode = {
     const parts = payload.split(',');
     return {
       withdrawAll: parts[0],
-      propertyIds: parts[1].split(';').map(id => parseInt(id, 36)),
+      propertyId: parts[1],
       amounts: parts[2].split(';').map(amount => parseInt(amount, 36)),
       channelAddress: parts[3],
     };

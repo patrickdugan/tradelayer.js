@@ -1,9 +1,11 @@
 const dbInstance = require('./db.js');
+const TallyMap = require('./tally.js')
 
 class Channels {
       // Initialize channelsRegistry as a static property
     static channelsRegistry = new Map();
-
+    static this.pendingWithdrawals = []; // Array to store pending withdrawal objects
+   
     
     static async addToRegistry(channelAddress, commiterA, commiterB) {
         // Add logic to register a new trade channel
@@ -55,6 +57,23 @@ class Channels {
         }
     }
 
+     // Function to save pending withdrawal object to the database
+    async savePendingWithdrawalToDB(withdrawalObj) {
+        const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
+        const channelsDB = dbInstance.getDatabase('channels');
+        await channelsDB.updateAsync(
+            { _id: withdrawalKey },
+            { $set: { data: withdrawalObj } },
+            { upsert: true }
+        );
+    }
+
+    // Function to load pending withdrawals from the database
+    async loadPendingWithdrawalsFromDB(key) {
+        const channelsDB = dbInstance.getDatabase('channels');
+        const entries = await channelsDB.findAsync({});
+        return entries.map(entry => entry.data);
+    }
 
     // Record a token trade with specific key identifiers
     static async recordTokenTrade(trade, blockHeight, txid) {
@@ -294,6 +313,7 @@ class Channels {
             // Initialize a new channel record if it doesn't exist
             this.channelsRegistry.set(channelAddress, {
                 participants: {'A':'','B':''},
+                channel: channelAddress
                 commits: [],
                 A: {},
                 B: {},
@@ -330,6 +350,7 @@ class Channels {
         channel.lastUsedColumn = channelColumn;
 
         // Save the updated channel information
+        this.channelsRegistry.set(channelAddress,channel)
         await this.saveChannelsRegistry();
 
         console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress}`);
@@ -341,22 +362,94 @@ class Channels {
           return channel.participants.size === 2; // True if two unique participants have committed
      }
 
-    static adjustChannelBalances(channelAddress, propertyId, amount) {
+      // Function to add a pending withdrawal object to the array
+    static async addToWithdrawalQueue(blockHeight, senderAddress, amount, channelAddress,propertyId, withdrawAll) {
+        const withdrawalObj = {
+            withdrawAll: withdrawAll
+            blockHeight: blockHeight,
+            senderAddress: senderAddress,
+            amount: amount,
+            channel: channelAddress,
+            propertyId: propertyId
+        };
+        this.pendingWithdrawals.push(withdrawalObj);
+        await this.savePendingWithdrawalToDB(withdrawalObj);
+    }
+
+    // Function to process withdrawals
+    static async processWithdrawals(block) {
+        if (this.pendingWithdrawals.length === 0) {
+            // Load pending withdrawals from the database if the array is empty
+            const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
+            if (pendingWithdrawalsFromDB.length === 0) {
+                return; // No pending withdrawals to process
+            } else {
+                // Merge loaded pending withdrawals with existing array
+                this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
+            }
+        }
+
+        // Process pending withdrawals
+        for (let i = 0; i < this.pendingWithdrawals.length; i++) {
+            const withdrawal = this.pendingWithdrawals[i];
+            const { blockHeight, senderAddress, amount, channel, propertyId } = withdrawal;
+            const currentBlockHeight = getCurrentBlockHeight(); // Function to get current block height
+
+            // Check if it's time to process this withdrawal
+            if (block >= blockHeight + 7) {
+                // Check if sender has sufficient balance for withdrawal
+                let thisChannel = this.getChannel(channel)
+                let column
+                if(thisChannel.participants.A==senderAddress){
+                  column = "A"
+                }else if(thisChannel.participant.B==senderAddress){
+                  column = "B"
+                }else{
+                  console.log('sender not found on channel '+senderAddress + ' '+channel)
+                  continue
+                }
+                let balance
+                if(column=="A"){
+                  balance = thisChannel.A[propertyId]
+                }else if(column=="B"){
+                  balance = thisChannel.B[propertyId]
+                }
+                if (balance >= amount) {
+                    if(!withdrawAll){
+                        await this.processWithdrawal(senderAddress,thisChannel,amount,propertyId,column)
+                    }else if(withdrawalAll==true){
+                        await this.processWithdrawalAll(senderAddress,thisChannel,column)
+                    }
+                  
+                    // Remove processed withdrawal from the array
+                    this.pendingWithdrawals.splice(i, 1);
+                    i--; // Adjust index after removal
+                } else {
+                    // Insufficient balance, eject the withdrawal from the queue
+                    console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
+                    this.pendingWithdrawals.splice(i, 1);
+                    i--; // Adjust index after removal
+                }
+            }
+        }
+    }
+
+    static adjustChannelBalances(channelAddress, propertyId, amount, column) {
           // Logic to adjust the token balances within a channel
           // This could involve debiting or crediting the committed columns based on the PNL amount
           const channel = this.channelsRegistry.get(channelAddress);
+          channel[column][propertyId]+=amount
           if (!channel) {
               throw new Error('Trade channel not found');
           }
-
+           this.channelsRegistry.set(channelAddress, channel)
           // Example logic to adjust balances
           // Update the channel's token balances as needed
     }
 
     // Transaction processing functions
-    static processWithdrawal(transaction) {
+    static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
       // Process a withdrawal from a trade channel
-      const { channelAddress, amount, propertyId } = transaction;
       const channel = this.channelsRegistry.get(channelAddress);
       if (!channel) {
         throw new Error('Channel not found');
@@ -364,13 +457,22 @@ class Channels {
 
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
-      channel.balances[propertyId] -= amount;
+      channel.[column][propertyId] -= amount;
+      await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull')
+      await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete')
       this.channelsRegistry.set(channelAddress, channel);
     }
 
+    static async processWithdrawalAll(senderAddress, thisChannel, column) {
+        for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
+            await this.processWithdrawal(senderAddress, thisChannel.channel, amount, parseInt(propertyId), column);
+        }
+    }
+
+
     static processTransfer(transaction) {
       // Process a transfer within a trade channel
-      const { fromChannel, toChannel, amount, propertyId } = transaction;
+      const { fromChannel, toChannel, amount, propertyId, transferorIsColumnA, destinationColumn } = transaction;
       const sourceChannel = this.channelsRegistry.get(fromChannel);
       const destinationChannel = this.channelsRegistry.get(toChannel);
 
@@ -380,80 +482,22 @@ class Channels {
 
       // Update balances and logic for transfer
       // Example logic, replace with actual business logic
-      sourceChannel.balances[propertyId] -= amount;
-      destinationChannel.balances[propertyId] += amount;
-
+      if(transferorIsColumnA&&destinationColumn=='A'){
+          sourceChannel.A[propertyId] -= amount;
+          destinationChannel.A[propertyId] += amount;
+      }else if(transferorIsColumnA&&destinationColumn=='B'){
+          sourceChannel.A[propertyId] -= amount;
+          destinationChannel.B[propertyId] += amount;
+      }else if(!transferorIsColumnA&&destinationColumn=='A'){
+          sourceChannel.B[propertyId] -= amount
+          destinationChannel.A +=amount
+      }else if(!transferorIsColumnA&&destinationColumn=='B'){
+          sourceChannel.A[propertyId] -= amount
+          destinationChannel.B +=amount
+      }
+     
       this.channelsRegistry.set(fromChannel, sourceChannel);
       this.channelsRegistry.set(toChannel, destinationChannel);
-    }
-
-   static channelTokenTrade(transaction) {
-      const { channelAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, columnAAddress, columnBAddress } = transaction;
-      const channel = this.channelsRegistry.get(channelAddress);
-
-      if (!channel) {
-          throw new Error('Channel not found');
-      }
-
-      // Logic to process token trade and update balances
-      if (channel.columnA === columnAAddress) {
-          // Column A is the offerer
-          TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, -amountOffered, 0,0);
-          TallyMap.updateBalance(columnBAddress, desiredPropertyId, 0, amountExpected, 0,0);
-      } else {
-          // Column B is the offerer
-          TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, -amountOffered, 0, 0);
-          TallyMap.updateBalance(columnAAddress, desiredPropertyId, 0, amountExpected, 0, 0);
-      }
-
-      // Update channel information
-      this.channelsRegistry.set(channelAddress, channel);
-   }
-
-
-   static channelContractTrade(transaction) {
-      const { channelAddress, contractId, amount, price, side } = transaction;
-      const channel = this.channelsRegistry.get(channelAddress);
-
-      if (!channel) {
-        throw new Error('Channel not found');
-      }
-
-      // Assuming channel object has properties like committedAmountA, committedAmountB for margin
-      if (side === 'buy') {
-        // Buyer's margin is debited from column A
-        const buyerMargin = amount * price; // Calculate margin required for the buy side
-        if (channel.committedAmountA < buyerMargin) {
-          throw new Error('Insufficient margin in channel for buyer');
-        }
-        channel.committedAmountA -= buyerMargin;
-        channel.committedAmountB -= buyerMargin;
-        MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'buy');
-        MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'sell');
-        TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
-        TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, buyerMargin, 0);
-        TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, buyerMargin, 0);
-      } else {
-        // Seller's margin is debited from column B
-        const sellerMargin = amount * price; // Calculate margin required for the sell side
-        if (channel.committedAmountB < sellerMargin) {
-          throw new Error('Insufficient margin in channel for seller');
-        }
-        channel.committedAmountB -= sellerMargin;
-        channel.committedAmountA -= sellerMargin;
-        MarginMap.updateMargin(channel.commitmentAddressB, contractId, amount, price, 'buy');
-        MarginMap.updateMargin(channel.commitmentAddressA, contractId, amount, price, 'sell');
-        TallyMap.updateBalance(channelAddress, offeredPropertyId, 0, 0, -buyerMargin*2,0);
-        TallyMap.updateBalance(channel.commitmentAddressA, desiredPropertyId, 0, 0, sellerMargin, 0);
-        TallyMap.updateBalance(channel.commitmentAddressB, desiredPropertyId, 0, 0, sellerMargin, 0);
-      }
-
-      // Update the channel's contract balances
-      // This will likely involve updating margin and position in MarginMap
-      // Assumed MarginMap.updateMargin function handles the logic of updating margins
-      // Example: MarginMap.updateMargin(commitmentAddress, contractId, amount, price, side);
-
-      this.channelsRegistry.set(channelAddress, channel);
     }
 
     static updateChannelWithColumnAssignments(channelAddress, columnAssignments) {

@@ -431,7 +431,7 @@ const Logic = {
         console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
-        await orderbook.addTokenOrder(order, blockHeight, txid, false);
+        await orderbook.addTokenOrder(order, blockHeight, txid);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);
@@ -745,20 +745,17 @@ const Logic = {
         matches.push(match)
 
 		    // Update balances in the channel columns and commitment addresses
-		    await orderbook.addTokenOrder(matches, block, txid,true)
+		    await orderbook.processTokenMatches(matches, block, txid,true)
+            await 
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 
-	withdrawal(channelAddress, propertyId, amount) {
+	withdrawal(withdrawalAll, channelAddress, propertyId, amount, sender, block) {
 		    const channel = this.channelsRegistry.get(channelAddress);
-		    if (!channel) {
-		        throw new Error('Channel not found');
-		    }
+	
 
 		    // Assuming channel object has a map of property balances
-		    if (!channel.balances[propertyId] || channel.balances[propertyId] < amount) {
-		        throw new Error('Insufficient balance for withdrawal');
-		    }
+		  
 
 		    // Deduct the amount from the channel balance
 		    channel.balances[propertyId] -= amount;

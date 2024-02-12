@@ -147,11 +147,8 @@ class Orderbook {
         }
 
         // Adds a token order to the order book
-        async addTokenOrder(order, blockHeight, txid, channelMatch) {
-            if(channelMatch!=false){
-                   await this.processTokenMatches(channelMatch, blockHeight, txid, true);
-                   return
-            }
+        async addTokenOrder(order, blockHeight, txid) {
+         
             const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
             await TallyMap.updateBalance(order.sender, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder');
             

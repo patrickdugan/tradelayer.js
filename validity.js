@@ -1003,7 +1003,7 @@ const Validity = {
         },
 
         // 21: Withdrawal
-        validateWithdrawal: async (params, sender, block) => {
+        validateWithdrawal: async (sender, params, block) => {
             params.reason = '';
             params.valid = true;
 
@@ -1013,22 +1013,33 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-            if (!isValidChannel) {
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
+          
+            if (!commitAddressA||!commitAddressB) {
                 params.valid = false;
-                params.reason += 'Invalid channel; ';
+                params.reason += 'Channel not instantiated; ';
+                return params
             }
 
-            const isAuthorizedSender = channelRegistry.isAuthorizedSender(params.channelAddress, params.senderAddress);
-            if (!isAuthorizedSender) {
+            const channel = await Channels.getChannel(params.channelAddress)
+            let isColumnA
+            let balance 
+            if (sender!=channel.participants.A||channel.participants.B) {
                 params.valid = false;
                 params.reason += 'Sender not authorized for the channel; ';
+            }else{
+                if(channel==channel.participants.A){
+                    isColumnA=true
+                    balance=channel.A[params.propertyId]
+                }else if(channel==channel.participants.B){
+                    isColumnA=false
+                    balance=channel.B[params.propertyId]
+                }
             }
-
-            const hasSufficientFunds = tallyMap.hasSufficientBalance(params.channelAddress, params.propertyId, params.amount);
-            if (hasSufficientFunds.hasSufficient==false) {
-                params.valid = false;
-                params.reason += 'Insufficient funds for withdrawal; ';
+            
+            if (balance < amount) {
+                 params.valid = false;
+                params.reason += 'Insufficient balance for withdrawal; ';
             }
 
             return params;

@@ -285,7 +285,7 @@ const Encode = {
     // Encode Withdrawal Transaction
     encodeWithdrawal: (params) => {
         const withdrawAll = params.withdrawAll
-        const propertyIds = params.propertyIds/*.map(id => id.toString(36)).join(';')*/;
+        const propertyIds = params.propertyId/*.map(id => id.toString(36)).join(';')*/;
         const amounts = params.amounts/*.map(amount => amount.toString(36)).join(';')*/;
         return [withdrawAll, propertyIds, amounts, params.channelAddress].join(',');
     },

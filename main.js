@@ -243,6 +243,7 @@ class Main {
                 // Additional processing for each transaction
             }
             await Clearing.clearingFunction(blockHeight)
+            await Channels.processWithdrawals(blockHeight)
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
 
