@@ -4,7 +4,7 @@ const TallyMap = require('./tally.js')
 class Channels {
       // Initialize channelsRegistry as a static property
     static channelsRegistry = new Map();
-    static this.pendingWithdrawals = []; // Array to store pending withdrawal objects
+    static pendingWithdrawals = []; // Array to store pending withdrawal objects
    
     
     static async addToRegistry(channelAddress, commiterA, commiterB) {
@@ -58,7 +58,7 @@ class Channels {
     }
 
      // Function to save pending withdrawal object to the database
-    async savePendingWithdrawalToDB(withdrawalObj) {
+    static async savePendingWithdrawalToDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
         const channelsDB = dbInstance.getDatabase('channels');
         await channelsDB.updateAsync(
@@ -69,7 +69,7 @@ class Channels {
     }
 
     // Function to load pending withdrawals from the database
-    async loadPendingWithdrawalsFromDB(key) {
+    static async loadPendingWithdrawalsFromDB() {
         const channelsDB = dbInstance.getDatabase('channels');
         const entries = await channelsDB.findAsync({});
         return entries.map(entry => entry.data);
@@ -313,7 +313,7 @@ class Channels {
             // Initialize a new channel record if it doesn't exist
             this.channelsRegistry.set(channelAddress, {
                 participants: {'A':'','B':''},
-                channel: channelAddress
+                channel: channelAddress,
                 commits: [],
                 A: {},
                 B: {},
@@ -365,7 +365,7 @@ class Channels {
       // Function to add a pending withdrawal object to the array
     static async addToWithdrawalQueue(blockHeight, senderAddress, amount, channelAddress,propertyId, withdrawAll) {
         const withdrawalObj = {
-            withdrawAll: withdrawAll
+            withdrawAll: withdrawAll,
             blockHeight: blockHeight,
             senderAddress: senderAddress,
             amount: amount,
@@ -393,7 +393,7 @@ class Channels {
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
             const { blockHeight, senderAddress, amount, channel, propertyId } = withdrawal;
-            const currentBlockHeight = getCurrentBlockHeight(); // Function to get current block height
+            // Function to get current block height
 
             // Check if it's time to process this withdrawal
             if (block >= blockHeight + 7) {
@@ -449,18 +449,12 @@ class Channels {
 
     // Transaction processing functions
     static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
-      // Process a withdrawal from a trade channel
-      const channel = this.channelsRegistry.get(channelAddress);
-      if (!channel) {
-        throw new Error('Channel not found');
-      }
-
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
-      channel.[column][propertyId] -= amount;
+      channel[column][propertyId] -= amount;
       await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull')
       await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete')
-      this.channelsRegistry.set(channelAddress, channel);
+      this.channelsRegistry.set(channel.channel, channel);
     }
 
     static async processWithdrawalAll(senderAddress, thisChannel, column) {

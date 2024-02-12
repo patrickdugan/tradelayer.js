@@ -746,7 +746,6 @@ const Logic = {
 
 		    // Update balances in the channel columns and commitment addresses
 		    await orderbook.processTokenMatches(matches, block, txid,true)
-            await 
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 

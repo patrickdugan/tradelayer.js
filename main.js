@@ -25,6 +25,7 @@ const TradeChannel = require('./channels.js'); // Manages Trade Channels
 const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const Clearing = require('./clearing.js')
+const Channels = require('./channels.js')
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 const Consensus = require('./consensus.js'); // Functions for handling consensus
