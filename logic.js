@@ -27,6 +27,7 @@ const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
+const BigNumber = require('bignumber.js')
 // logic.js
 const Logic = {
 
@@ -430,7 +431,7 @@ const Logic = {
         console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
-        await orderbook.addTokenOrder(order, blockHeight, txid);
+        await orderbook.addTokenOrder(order, blockHeight, txid, false);
 
         // Log the order placement for record-keeping
         console.log(`Order placed: ${JSON.stringify(order)}`);
@@ -650,11 +651,11 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, contractsRegistry, blockTime, txid,sender) {
+    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         //console.log('checking contract orderbook ' +JSON.stringify(orderbook))
-	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender);
+	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
         return
 	},
@@ -665,7 +666,7 @@ const Logic = {
 	    }
 
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
-
+        const orderbook = await Orderbook.getOrderbookInstance(contractId)
 
         let buyerAddress
         let sellerAddress
@@ -685,20 +686,21 @@ const Logic = {
         let match = { 
                         sellOrder,
                         buyOrder,
-                        tradePrice,
+                        price,
                         channelAddress 
                     }
         let matches = []
         matches.push(match)
 	    // Trade the contract within a channel
-        Orderbook.processContractMatches(matches,block,txid,true)
+        await orderbook.processContractMatches(matches,block,txid,true)
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
 	},
 
-	async tradeTokensChannel(propertyId1, propertyId2, amountOffered1, amountDesired2, expiryBlock, columnAIsOfferer, channelAddress, block, txid) {
+	async tradeTokensChannel(offeredPropertyId, desiredPropertyId, amountOffered, amountDesired, expiryBlock, columnAIsOfferer, channelAddress, block, txid) {
 		
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
-
+        const key = `${offeredPropertyId}-${desiredPropertyId}`
+        const orderbook = await Orderbook.getOrderbookInstance(key)
         let buyerAddress
         let sellerAddress
         if(columnAIsOfferer){
@@ -713,8 +715,8 @@ const Logic = {
             offeredPropertyId:offeredPropertyId,
             desiredPropertyId:desiredPropertyId,
             amountOffered:amountOffered,
-            amountExpected:amountExpected,
-            blockTime: confirmedBlock,
+            amountExpected:amountDesired,
+            blockTime: block,
             sender: sellerAddress
         };
 
@@ -722,20 +724,20 @@ const Logic = {
             offeredPropertyId:offeredPropertyId,
             desiredPropertyId:desiredPropertyId,
             amountOffered:amountOffered,
-            amountExpected:amountExpected,
-            blockTime: confirmedBlock,
+            amountExpected:amountDesired,
+            blockTime: block,
             sender: buyerAddress
         };
 
-        const amountOffered1 = new BigNumber('1000');
-        const amountDesired2 = new BigNumber('2000');
+        const amountOfferedBN = new BigNumber(amountOffered);
+        const amountDesiredBN = new BigNumber(amountDesired);
 
         // Calculate tradePrice
-        const tradePrice = amountOffered1.dividedBy(amountDesired2);
+        const tradePrice = amountOfferedBN.dividedBy(amountDesiredBN);
 
         let match = { sellOrder, buyOrder, 
-                    amountOfTokenA: amountOfTokenA.toNumber(), 
-                    amountOfTokenB: amountOfTokenB.toNumber(),
+                    amountOfTokenA: amountOfferedBN.toNumber(), 
+                    amountOfTokenB: amountDesiredBN.toNumber(),
                     tradePrice: tradePrice.toNumber(),
                     channel: channelAddress 
                     }
@@ -743,7 +745,7 @@ const Logic = {
         matches.push(match)
 
 		    // Update balances in the channel columns and commitment addresses
-		    Orderbook.processTokenMatches(matches, block, txid,true)
+		    await orderbook.addTokenOrder(matches, block, txid,true)
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 

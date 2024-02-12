@@ -324,13 +324,13 @@ class ContractRegistry {
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         //console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        //console.log('Total Initial Margin to reserve ' +totalInitialMargin)
+        console.log('Total Initial Margin to reserve ' +totalInitialMargin+' '+sender+' '+collateralPropertyId)
         // Move collateral to reservd position
         await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin');
         return totalInitialMargin
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel) {
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr) {
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
@@ -365,8 +365,12 @@ class ContractRegistry {
                        await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin');  
                     }  
             }
-
-        await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
+        if(channel==false){
+             await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
+        }else if(channel==true){
+            await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin');
+            await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin');
+        }  
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
         return position
     }           

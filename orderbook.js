@@ -147,7 +147,11 @@ class Orderbook {
         }
 
         // Adds a token order to the order book
-        async addTokenOrder(order, blockHeight, txid) {
+        async addTokenOrder(order, blockHeight, txid, channelMatch) {
+            if(channelMatch!=false){
+                   await this.processTokenMatches(channelMatch, blockHeight, txid, true);
+                   return
+            }
             const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
             await TallyMap.updateBalance(order.sender, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder');
             
@@ -623,7 +627,7 @@ class Orderbook {
                     // Update MarginMap for the contract series
                     if(!isSellerReducingPosition){
                         // Use the instance method to set the initial margin
-                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel
+                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel)
                        //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
 
