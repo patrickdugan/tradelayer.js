@@ -620,15 +620,24 @@ class Orderbook {
                   }
 
                     if(!isBuyerReducingPosition){
-                       // Use the instance method to set the initial margin
-                       match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel)
-                       //console.log('buyer position after moveCollat '+match.buyerPosition)
+                        if(channel==false){
+                            // Use the instance method to set the initial margin
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel)
+                        }else if(channel==true){
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress)
+                  
+                         }
+                        //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
                     // Update MarginMap for the contract series
                     if(!isSellerReducingPosition){
-                        // Use the instance method to set the initial margin
-                       match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel)
-                       //console.log('sellerPosition after moveCollat '+match.sellerPosition)
+                        if(channel==false){
+                            // Use the instance method to set the initial margin
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel)
+                         }else if(channel==true){
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress)
+                         }
+                        //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
 
 

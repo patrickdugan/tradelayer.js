@@ -254,6 +254,7 @@ class MarginMap {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
+        console.log('inside updateContractBalances '+close +' '+flip+' position '+position.contracts+' avg. price '+position.avgPrice)
         if(close==false&&flip==false){
             if(position.contracts==0){
                 if(position.avgPrice==undefined){

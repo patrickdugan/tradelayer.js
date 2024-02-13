@@ -287,6 +287,7 @@ const Encode = {
         const withdrawAll = params.withdrawAll
         const propertyIds = params.propertyId/*.map(id => id.toString(36)).join(';')*/;
         const amounts = params.amounts/*.map(amount => amount.toString(36)).join(';')*/;
+        const column = params.column //0 is A, 1 is B
         return [withdrawAll, propertyIds, amounts, params.channelAddress].join(',');
     },
 

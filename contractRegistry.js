@@ -340,7 +340,7 @@ class ContractRegistry {
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         //console.log('collateralPropertyId '+collateralPropertyId)
         let totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
-        //console.log('Total Initial Margin ' +totalInitialMargin)
+        console.log('Total Initial Margin ' +totalInitialMargin+' '+amount+' '+initialMarginPerContract+ ' '+initMargin+' '+price)
         // Move collateral to reservd position
                     let contractUndo = 0
                     let excessMargin
@@ -368,6 +368,7 @@ class ContractRegistry {
         if(channel==false){
              await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin');
         }else if(channel==true){
+            console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
             await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin');
             await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin');
         }  

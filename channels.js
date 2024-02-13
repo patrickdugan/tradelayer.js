@@ -44,7 +44,7 @@ class Channels {
         try {
             const entries = await channelsDB.findAsync({});
             console.log('loading channel DB '+JSON.stringify(entries))
-            this.channelsRegistry = new Map(entries.map(entry => [entry._id.split('-')[1], entry.data]));
+            this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
             console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
             return
         } catch (error) {
@@ -71,9 +71,10 @@ class Channels {
     // Function to load pending withdrawals from the database
     static async loadPendingWithdrawalsFromDB() {
         const channelsDB = dbInstance.getDatabase('channels');
-        const entries = await channelsDB.findAsync({});
+        const entries = await channelsDB.findAsync({ _id: { $regex: /^withdrawal-/ } });
         return entries.map(entry => entry.data);
     }
+
 
     // Record a token trade with specific key identifiers
     static async recordTokenTrade(trade, blockHeight, txid) {
@@ -131,9 +132,12 @@ class Channels {
     static async getChannel(channelId) {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
+        console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
+            console.log()
             channel = this.channelsRegistry.get(channelId)
+            console.log('in getChannel 2nd hit '+JSON.stringify(channel));
         }
 
         return channel
@@ -141,7 +145,7 @@ class Channels {
 
     static async getCommitAddresses(channelAddress) {
         let channel = this.channelsRegistry.get(channelAddress);
-        console.log('inside getCommitAddresses '+JSON.stringify(channel))
+        console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
         if(!channel||channel==undefined||channel==null){
           console.log('channel not found, loading from db')
           await Channels.loadChannelsRegistry()
@@ -381,6 +385,9 @@ class Channels {
         if (this.pendingWithdrawals.length === 0) {
             // Load pending withdrawals from the database if the array is empty
             const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
+            if(pendingWithdrawalsFromDB.length!=0){
+               console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
+                }
             if (pendingWithdrawalsFromDB.length === 0) {
                 return; // No pending withdrawals to process
             } else {
@@ -388,17 +395,25 @@ class Channels {
                 this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
             }
         }
-
+        console.log('about to process withdrawals '+block)
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
-            const { blockHeight, senderAddress, amount, channel, propertyId } = withdrawal;
+            console.log('inside process withdrawals '+JSON.stringify(withdrawal))
+            const { blockHeight, senderAddress, amount, channel, propertyId, withdrawAll } = withdrawal;
+            let thisChannel = this.getChannel(channel)
+
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
             if (block >= blockHeight + 7) {
+                    if(withdrawAll==true){
+                        await this.processWithdrawalAll(senderAddress,thisChannel,column)
+                        continue
+                    }
                 // Check if sender has sufficient balance for withdrawal
-                let thisChannel = this.getChannel(channel)
+                
+                console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
                 let column
                 if(thisChannel.participants.A==senderAddress){
                   column = "A"

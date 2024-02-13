@@ -99,7 +99,7 @@ const Logic = {
                 await Logic.tradeTokensChannel(params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountDesired, params.expiryBlock, params.columnAIsOfferer, params.senderAddress, params.block,params.txid);
                 break;
             case 21:
-                await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, block);
+                await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
                 await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
@@ -661,13 +661,12 @@ const Logic = {
 	},
 
     async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, channelAddress, block, txid) {
-	    if (!contractId || !price || !amount || !tradeChannelManager) {
-	        throw new Error('Missing required parameters');
-	    }
-
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
         const orderbook = await Orderbook.getOrderbookInstance(contractId)
-
+        const initMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
+        const initMarginBN= new BigNumber(initMarginPerContract)
+        const amountBN = new BigNumber(amount)
+        const initMargin = amountBN.times(initMarginBN).toNumber()
         let buyerAddress
         let sellerAddress
         if(columnAIsSeller){
@@ -751,18 +750,14 @@ const Logic = {
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 
-	withdrawal(withdrawalAll, channelAddress, propertyId, amount, sender, block) {
-		    const channel = this.channelsRegistry.get(channelAddress);
+	withdrawal(withdrawAll, channelAddress, propertyId, amount, sender, block, columnIsB) {
+		    const channel = Channels.getChannel(channelAddress);
 	
-
 		    // Assuming channel object has a map of property balances
 		  
-            Channels.addToWithdrawalQueue(block, sender, amount, channelAddress,propertyId, withdrawAll)
+            Channels.addToWithdrawalQueue(block, sender, amount, channelAddress,propertyId, withdrawAll, columnIsB)
 
-		    // Logic to transfer the amount back to the user's main account
-		    // This could involve interacting with TallyMap or another account balance module
-
-		    this.channelsRegistry.set(channelAddress, channel);
+            return
 	},
 
 

@@ -1013,9 +1013,15 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
+            if(params.withdrawAll!=true&&(params.propertyId==null||params.amount==null)){
+                params.valid=false
+                params.reason += 'propertyId or amount not specified while withdrawAll is false'
+       
+            }
+
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
           
-            if (!commitAddressA||!commitAddressB) {
+            if (!commitAddressA&&!commitAddressB) {
                 params.valid = false;
                 params.reason += 'Channel not instantiated; ';
                 return params
@@ -1024,20 +1030,34 @@ const Validity = {
             const channel = await Channels.getChannel(params.channelAddress)
             let isColumnA
             let balance 
-            if (sender!=channel.participants.A||channel.participants.B) {
+            console.log('inside validate withdrawal '+sender+' '+Boolean(sender==channel.participants.A)+Boolean(sender==channel.participants.B))
+            if (sender!=channel.participants.A&&sender!=channel.participants.B) {
                 params.valid = false;
-                params.reason += 'Sender not authorized for the channel; ';
+                params.reason += 'Sender not authorized for the channel';
             }else{
-                if(channel==channel.participants.A){
+                if(sender==channel.participants.A){
                     isColumnA=true
                     balance=channel.A[params.propertyId]
-                }else if(channel==channel.participants.B){
+                    if(column==1){
+                        params.valid = false;
+                        params.reason += 'Sender does not match with column';
+                    }
+                }else if(sender==channel.participants.B){
                     isColumnA=false
                     balance=channel.B[params.propertyId]
+                    if(column==0){
+                        params.valid = false;
+                        params.reason += 'Sender does not match with column';
+                    }
                 }
             }
+
+             if(params.columnIsB!=true||params.columnIsB!=false){
+                params.valid = false
+                params.reason+='column parameter not specified'
+            }
             
-            if (balance < amount) {
+            if (balance < params.amount) {
                  params.valid = false;
                 params.reason += 'Insufficient balance for withdrawal; ';
             }
