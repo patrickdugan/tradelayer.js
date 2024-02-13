@@ -1038,21 +1038,22 @@ const Validity = {
                 if(sender==channel.participants.A){
                     isColumnA=true
                     balance=channel.A[params.propertyId]
-                    if(column==1){
+                    if(params.column==1){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }
                 }else if(sender==channel.participants.B){
                     isColumnA=false
                     balance=channel.B[params.propertyId]
-                    if(column==0){
+                    if(params.column==0){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }
                 }
             }
-
-             if(params.columnIsB!=true||params.columnIsB!=false){
+            //if column is true then it's column B because 0 comes before 1 and A before B
+            console.log('inside validate withdrawal '+params.column +'isColumnA '+isColumnA+' balance '+balance+' withdraw amount '+params.amount)
+             if(params.column==undefined){
                 params.valid = false
                 params.reason+='column parameter not specified'
             }

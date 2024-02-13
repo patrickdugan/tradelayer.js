@@ -311,7 +311,7 @@ const Decode = {
       withdrawAll: parts[0]==="1",
       propertyId: parseInt(parts[1],36),
       amount: parseInt(parts[2],36),
-      columnIsB: parts[3]==="1",
+      column: parts[3]==="1",
       channelAddress: parts[4],
     };
   },

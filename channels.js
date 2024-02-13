@@ -133,9 +133,9 @@ class Channels {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
         console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
+        console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
-            console.log()
             channel = this.channelsRegistry.get(channelId)
             console.log('in getChannel 2nd hit '+JSON.stringify(channel));
         }
@@ -367,21 +367,28 @@ class Channels {
      }
 
       // Function to add a pending withdrawal object to the array
-    static async addToWithdrawalQueue(blockHeight, senderAddress, amount, channelAddress,propertyId, withdrawAll) {
+    static async addToWithdrawalQueue(blockHeight, senderAddress, amount, channelAddress,propertyId, withdrawAll, column) {
+        if(column==false){
+          column ="A"
+        }else if(column == true){
+          column ="B"
+        }
+
         const withdrawalObj = {
             withdrawAll: withdrawAll,
             blockHeight: blockHeight,
             senderAddress: senderAddress,
             amount: amount,
             channel: channelAddress,
-            propertyId: propertyId
+            propertyId: propertyId,
+            column: column
         };
         this.pendingWithdrawals.push(withdrawalObj);
         await this.savePendingWithdrawalToDB(withdrawalObj);
     }
 
     // Function to process withdrawals
-    static async processWithdrawals(block) {
+    static async processWithdrawals(blockHeight) {
         if (this.pendingWithdrawals.length === 0) {
             // Load pending withdrawals from the database if the array is empty
             const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
@@ -395,20 +402,22 @@ class Channels {
                 this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
             }
         }
-        console.log('about to process withdrawals '+block)
+        console.log('about to process withdrawals '+blockHeight)
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
             console.log('inside process withdrawals '+JSON.stringify(withdrawal))
-            const { blockHeight, senderAddress, amount, channel, propertyId, withdrawAll } = withdrawal;
-            let thisChannel = this.getChannel(channel)
-
+            const { block, senderAddress, amount, channel, propertyId, withdrawAll } = withdrawal;
+            console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
+            let thisChannel = await this.getChannel(channel)
+            console.log('checking thisChannel in withdraw '+JSON.stringify(thisChannel))
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
-            if (block >= blockHeight + 7) {
+            console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
+            if (blockHeight >= withdrawal.blockHeight + 7) {
                     if(withdrawAll==true){
-                        await this.processWithdrawalAll(senderAddress,thisChannel,column)
+                        await this.processWithdrawAll(senderAddress,thisChannel,column)
                         continue
                     }
                 // Check if sender has sufficient balance for withdrawal
@@ -466,14 +475,17 @@ class Channels {
     static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
+      console.log('in processWithdrawal '+channel[column][propertyId])
       channel[column][propertyId] -= amount;
+      console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
       await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull')
       await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete')
       this.channelsRegistry.set(channel.channel, channel);
     }
 
-    static async processWithdrawalAll(senderAddress, thisChannel, column) {
+    static async processWithdrawAll(senderAddress, thisChannel, column) {
         for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
+          console.log('in process withdraw all '+senderAddress,thisChannel.channel, amount, propertyId, column)
             await this.processWithdrawal(senderAddress, thisChannel.channel, amount, parseInt(propertyId), column);
         }
     }

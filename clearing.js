@@ -283,9 +283,10 @@ class Clearing {
                 //console.log('positions in clearing' +JSON.stringify(positions))
                 // Iterate through each position to adjust for profit or loss
                 let blob = await Clearing.getPriceChange(blockHeight, contractId)
-                console.log(blob.lastPrice, blob.thisPrice)
+                console.log('clearing price difference '+blob.lastPrice +' '+ blob.thisPrice)
         for (let position of positions) {
             if(blob.lastPrice==null){
+                    console.log('last price was null what about avg price? '+position.avgPrice)
                     blob.lastPrice= position.avgPrice
                 }
             // Update margin based on PnL change
