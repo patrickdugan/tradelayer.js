@@ -431,6 +431,7 @@ class TallyMap {
             return 0;
         }
         const addressObj = instance.addresses.get(address);
+        console.log('inside getTally '+JSON.stringify(addressObj))
         if (!addressObj[propertyId]) {
             //console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
             return 0;

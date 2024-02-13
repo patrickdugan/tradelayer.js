@@ -651,7 +651,9 @@ class Orderbook {
                     }else if(isBuyerFlippingPosition==true||isSellerFlippingPosition==true){
                         flip=true
                     }
-
+                    if(channel==true){
+                        console.log('checking match obj before calling update contract balances '+JSON.stringify(match))
+                    }
                     let positions = await marginMap.updateContractBalancesWithMatch(match, false, close,flip)
                     let sellerClosed = 0
                     let buyerClosed = 0

@@ -670,10 +670,10 @@ const Logic = {
         let buyerAddress
         let sellerAddress
         if(columnAIsSeller){
-            sellerAddres=commitAddressA
+            sellerAddress=commitAddressA
             buyerAddress=commitAddressB
         }else{
-            sellerAddres=commitAddressB
+            sellerAddress=commitAddressB
             buyerAddress=commitAddressA
         }
         let sellSide = false
@@ -686,7 +686,8 @@ const Logic = {
                         sellOrder,
                         buyOrder,
                         price,
-                        channelAddress 
+                        channelAddress,
+                        tradePrice: price 
                     }
         let matches = []
         matches.push(match)
