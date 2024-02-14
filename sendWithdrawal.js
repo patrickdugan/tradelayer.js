@@ -5,9 +5,9 @@ const litecore = require('bitcore-lib-ltc');
 const TxUtils = require('./txUtils');
 
 let params = {
-	withdrawAll: 0,
-    propertyId: 3,
-    amount:100,
+	withdrawAll: 1,
+    propertyId: 4,
+    amount:1000,
     column: 1,
     channelAddress:'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
 }

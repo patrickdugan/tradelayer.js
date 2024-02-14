@@ -130,8 +130,11 @@ class TallyMap {
 
             // Update the total amount
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
-            await TallyMap.recordTallyMapDelta(address, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
+            if(availableChange==0&&reservedChange==0&&marginChange==0&&vestingChange==0){
 
+            }else{
+                await TallyMap.recordTallyMapDelta(address, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
+            }
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database

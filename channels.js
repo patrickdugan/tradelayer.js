@@ -410,7 +410,7 @@ class Channels {
             const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
             console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
             let thisChannel = await this.getChannel(channel)
-            console.log('checking thisChannel in withdraw '+JSON.stringify(thisChannel))
+            //console.log('checking thisChannel in withdraw '+JSON.stringify(thisChannel))
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
@@ -475,7 +475,7 @@ class Channels {
     static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
-      console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
+      //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       console.log('in processWithdrawal '+channel[column][propertyId])
       channel[column][propertyId] -= amount;
       console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
@@ -486,7 +486,7 @@ class Channels {
 
     static async processWithdrawAll(senderAddress, thisChannel, column) {
         for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
-          console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
+          //console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
             await this.processWithdrawal(senderAddress, thisChannel, amount, parseInt(propertyId), column);
         }
     }

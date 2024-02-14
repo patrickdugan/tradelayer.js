@@ -1038,14 +1038,15 @@ const Validity = {
                 if(sender==channel.participants.A){
                     isColumnA=true
                     balance=channel.A[params.propertyId]
-                    if(params.column==1){
+                    if(params.column==false){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }
                 }else if(sender==channel.participants.B){
+                    console.log('checking this column disqualification logic works '+params.column)
                     isColumnA=false
                     balance=channel.B[params.propertyId]
-                    if(params.column==0){
+                    if(params.column==false){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }

@@ -4,3 +4,4 @@
 {"_id":"oracle-1-3107901","oracleId":1,"data":{"price":45800,"blockHeight":3107901},"blockHeight":3107901}
 {"_id":"oracle-1-3107902","oracleId":1,"data":{"price":45800,"blockHeight":3107902},"blockHeight":3107902}
 {"_id":"oracle-1-3107903","oracleId":1,"data":{"price":40200,"blockHeight":3107903},"blockHeight":3107903}
+{"_id":"oracle-1-3150914","oracleId":1,"data":{"price":44000,"blockHeight":3150914},"blockHeight":3150914}
