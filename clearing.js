@@ -7,6 +7,7 @@ const oracleDataDB = db.getDatabase('oracleData');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
+const Channels = require('./channels.js')
 //const VolumeIndex = require('./volumeIndex.js')
 
 
@@ -37,7 +38,7 @@ class Clearing {
         //await this.createChannelsForNewTrades(blockHeight);
 
         // 5. Set channels as closed if needed
-        //await this.closeChannelsIfNeeded();
+        await Channels.removeEmptyChannels();
 
         // 6. Settle trades at block level
         await this.makeSettlement(blockHeight);
@@ -174,24 +175,6 @@ class Clearing {
             console.error('Error loading clearing deltas:', error);
             throw error;
         }
-    }
-
-    async closeChannelsIfNeeded() {
-        console.log('Closing channels if needed');
-
-        // Fetch all active channels
-        let channels = await this.getActiveChannels();
-
-        // Check each channel for closing conditions
-        channels.forEach(channel => {
-            if (this.shouldCloseChannel(channel)) {
-                channel.close();
-                // Perform any additional clean-up or notifications required
-            }
-        });
-
-        // Save the updated state of channels
-        await this.saveChannels(channels);
     }
 
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {

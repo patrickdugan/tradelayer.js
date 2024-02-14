@@ -38,14 +38,15 @@ class Channels {
         }
     }
 
-    static async loadChannelsRegistry() {
+    static async loadChannelsRegistry(retrieve) {
         // Load the channels registry from NeDB
         const channelsDB = dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
-            console.log('loading channel DB '+JSON.stringify(entries))
+            //console.log('loading channel DB '+JSON.stringify(entries))
             this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
-            console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
+            //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
+            if(retrieve==true)
             return
         } catch (error) {
             if (error.message.includes('does not exist')) {
@@ -60,8 +61,8 @@ class Channels {
      // Function to save pending withdrawal object to the database
     static async savePendingWithdrawalToDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
-        const channelsDB = dbInstance.getDatabase('channels');
-        await channelsDB.updateAsync(
+        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        await withdrawalDB.updateAsync(
             { _id: withdrawalKey },
             { $set: { data: withdrawalObj } },
             { upsert: true }
@@ -70,11 +71,18 @@ class Channels {
 
     // Function to load pending withdrawals from the database
     static async loadPendingWithdrawalsFromDB() {
-        const channelsDB = dbInstance.getDatabase('channels');
-        const entries = await channelsDB.findAsync({ _id: { $regex: /^withdrawal-/ } });
+        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        const entries = await withdrawalDB.findAsync({ _id: { $regex: /^withdrawal-/ } });
         return entries.map(entry => entry.data);
     }
 
+    static async removePendingWithdrawalFromDB(withdrawalObj) {
+        const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
+        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        
+        // Remove the withdrawal from the database
+        await withdrawalDB.removeAsync({ _id: withdrawalKey });
+    }
 
     // Record a token trade with specific key identifiers
     static async recordTokenTrade(trade, blockHeight, txid) {
@@ -132,12 +140,12 @@ class Channels {
     static async getChannel(channelId) {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
-        console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
+        //console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
         console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
             channel = this.channelsRegistry.get(channelId)
-            console.log('in getChannel 2nd hit '+JSON.stringify(channel));
+            //console.log('in getChannel 2nd hit '+JSON.stringify(channel));
         }
 
         return channel
@@ -145,16 +153,16 @@ class Channels {
 
     static async getCommitAddresses(channelAddress) {
         let channel = this.channelsRegistry.get(channelAddress);
-        console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
+        //console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
         if(!channel||channel==undefined||channel==null){
           console.log('channel not found, loading from db')
           await Channels.loadChannelsRegistry()
           channel = this.channelsRegistry.get(channelAddress);
-          console.log('checking channel obj again '+JSON.stringify(channel))
+          //console.log('checking channel obj again '+JSON.stringify(channel))
         }
         if (channel && channel.participants) {
             const participants = channel.participants;
-            console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
+            //console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
             return {
                 commitAddressA: participants.A,
                 commitAddressB: participants.B
@@ -307,7 +315,7 @@ class Channels {
             const columnAssignments = Channels.assignColumns(channelAddress);
             Channels.updateChannelWithColumnAssignments(channelAddress, columnAssignments);
 
-            console.log(`Columns assigned for channel ${channelAddress}`);
+            //console.log(`Columns assigned for channel ${channelAddress}`);
         }
     }
 
@@ -393,7 +401,7 @@ class Channels {
             // Load pending withdrawals from the database if the array is empty
             const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
             if(pendingWithdrawalsFromDB.length!=0){
-               console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
+               //console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
                 }
             if (pendingWithdrawalsFromDB.length === 0) {
                 return; // No pending withdrawals to process
@@ -410,6 +418,12 @@ class Channels {
             const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
             console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
             let thisChannel = await this.getChannel(channel)
+            if(thisChannel==undefined){
+              console.log('channel has been removed for 0 balances '+channel)
+                this.pendingWithdrawals.splice(i, 1);
+                i--;
+                await this.removePendingWithdrawalFromDB(withdrawal)
+            }
             //console.log('checking thisChannel in withdraw '+JSON.stringify(thisChannel))
             // Function to get current block height
 
@@ -430,7 +444,6 @@ class Channels {
                 }
                     if(withdrawAll==true){
                         await this.processWithdrawAll(senderAddress,thisChannel,column)
-                        continue
                     }
                 let balance
                 if(column=="A"){
@@ -441,22 +454,72 @@ class Channels {
                 if (balance >= amount) {
                     if(!withdrawAll){
                         await this.processWithdrawal(senderAddress,thisChannel,amount,propertyId,column)
-                    }else if(withdrawalAll==true){
-                        await this.processWithdrawalAll(senderAddress,thisChannel,column)
                     }
                   
                     // Remove processed withdrawal from the array
                     this.pendingWithdrawals.splice(i, 1);
                     i--; // Adjust index after removal
+                    await this.removePendingWithdrawalFromDB(withdrawal)
                 } else {
                     // Insufficient balance, eject the withdrawal from the queue
                     console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
                     this.pendingWithdrawals.splice(i, 1);
                     i--; // Adjust index after removal
+                    await this.removePendingWithdrawalFromDB(withdrawal)
                 }
+            }       
+        }
+        await this.saveChannelsRegistry()
+        return 
+    }
+
+    static async removeEmptyChannels() {
+        for (const [channelAddress, channelData] of this.channelsRegistry.entries()) {
+            
+            const empty = await this.isChannelEmpty(channelData);
+            //console.log('inside remove Empty Channels '+channelAddress+' '+empty+' ' +JSON.stringify(channelData))
+            if (empty) {
+                this.channelsRegistry.delete(channelAddress);
+                console.log(`Removed empty channel: ${channelAddress}`);
+                await this.removeChannelFromDB()
             }
         }
     }
+
+    static async isChannelEmpty(thisChannel) {
+        if (!thisChannel || !thisChannel.participants) {
+            return true; // Assuming channel is empty if it doesn't exist or has no participants
+        }
+
+        const participantA = thisChannel.A || {};
+        const participantB = thisChannel.B || {};
+        console.log('inside isChannelEmpty '+JSON.stringify(participantA)+' '+ JSON.stringify(participantB))
+      
+        // Check if all properties in A and B are 0
+        for (const propertyId in participantA) {
+          console.log(participantA[propertyId], Boolean(participantA[propertyId]!==0), Boolean(participantA[propertyId]==0))
+            if (participantA[propertyId] !== 0) {
+                return false; // Not empty if any property in participantA is not 0
+            }
+        }
+        for (const propertyId in participantB) {
+              console.log(participantA[propertyId],Boolean(participantB[propertyId]!==0), Boolean(participantB[propertyId]==0))
+            if (participantB[propertyId] !== 0) {
+                return false; // Not empty if any property in participantB is not 0
+            }
+        }
+        return true; // Empty if all properties in A and B are 0
+    }
+
+    static async removeChannelFromDB(channelAddress) {
+      const channelsDB = dbInstance.getDatabase('channels');
+      const withdrawalKey = `${channelAddress}`;
+      
+      // Remove the channel entry from the database
+      await channelsDB.removeAsync({ _id: withdrawalKey });
+  }
+
+
 
     static adjustChannelBalances(channelAddress, propertyId, amount, column) {
           // Logic to adjust the token balances within a channel
@@ -476,9 +539,9 @@ class Channels {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
-      console.log('in processWithdrawal '+channel[column][propertyId])
+      //console.log('in processWithdrawal '+channel[column][propertyId])
       channel[column][propertyId] -= amount;
-      console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
+      //console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
       await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull')
       await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete')
       this.channelsRegistry.set(channel.channel, channel);

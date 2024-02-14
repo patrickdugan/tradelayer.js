@@ -23,6 +23,7 @@ class Database {
             'persistence',
             'volumeIndex',
             'channels',
+            'withdrawQueue',
             'activations',
             'insurance',
             'orderBooks',
