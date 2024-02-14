@@ -407,7 +407,7 @@ class Channels {
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
             console.log('inside process withdrawals '+JSON.stringify(withdrawal))
-            const { block, senderAddress, amount, channel, propertyId, withdrawAll } = withdrawal;
+            const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
             console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
             let thisChannel = await this.getChannel(channel)
             console.log('checking thisChannel in withdraw '+JSON.stringify(thisChannel))
@@ -416,22 +416,22 @@ class Channels {
             // Check if it's time to process this withdrawal
             console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
             if (blockHeight >= withdrawal.blockHeight + 7) {
-                    if(withdrawAll==true){
-                        await this.processWithdrawAll(senderAddress,thisChannel,column)
-                        continue
-                    }
                 // Check if sender has sufficient balance for withdrawal
                 
                 console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
                 let column
                 if(thisChannel.participants.A==senderAddress){
                   column = "A"
-                }else if(thisChannel.participant.B==senderAddress){
+                }else if(thisChannel.participants.B==senderAddress){
                   column = "B"
                 }else{
                   console.log('sender not found on channel '+senderAddress + ' '+channel)
                   continue
                 }
+                    if(withdrawAll==true){
+                        await this.processWithdrawAll(senderAddress,thisChannel,column)
+                        continue
+                    }
                 let balance
                 if(column=="A"){
                   balance = thisChannel.A[propertyId]
@@ -475,6 +475,7 @@ class Channels {
     static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
+      console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       console.log('in processWithdrawal '+channel[column][propertyId])
       channel[column][propertyId] -= amount;
       console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
@@ -485,8 +486,8 @@ class Channels {
 
     static async processWithdrawAll(senderAddress, thisChannel, column) {
         for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
-          console.log('in process withdraw all '+senderAddress,thisChannel.channel, amount, propertyId, column)
-            await this.processWithdrawal(senderAddress, thisChannel.channel, amount, parseInt(propertyId), column);
+          console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
+            await this.processWithdrawal(senderAddress, thisChannel, amount, parseInt(propertyId), column);
         }
     }
 
