@@ -141,7 +141,7 @@ class Channels {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
         //console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
-        console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
+        //console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
             channel = this.channelsRegistry.get(channelId)
@@ -410,16 +410,16 @@ class Channels {
                 this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
             }
         }
-        console.log('about to process withdrawals '+blockHeight)
+        //console.log('about to process withdrawals '+blockHeight)
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
-            console.log('inside process withdrawals '+JSON.stringify(withdrawal))
+            //console.log('inside process withdrawals '+JSON.stringify(withdrawal))
             const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
-            console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
+            //console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
             let thisChannel = await this.getChannel(channel)
             if(thisChannel==undefined){
-              console.log('channel has been removed for 0 balances '+channel)
+              //console.log('channel has been removed for 0 balances '+channel)
                 this.pendingWithdrawals.splice(i, 1);
                 i--;
                 await this.removePendingWithdrawalFromDB(withdrawal)
@@ -428,18 +428,18 @@ class Channels {
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
-            console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
+            //console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
             if (blockHeight >= withdrawal.blockHeight + 7) {
                 // Check if sender has sufficient balance for withdrawal
                 
-                console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
+                //console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
                 let column
                 if(thisChannel.participants.A==senderAddress){
                   column = "A"
                 }else if(thisChannel.participants.B==senderAddress){
                   column = "B"
                 }else{
-                  console.log('sender not found on channel '+senderAddress + ' '+channel)
+                  //console.log('sender not found on channel '+senderAddress + ' '+channel)
                   continue
                 }
                     if(withdrawAll==true){
@@ -462,7 +462,7 @@ class Channels {
                     await this.removePendingWithdrawalFromDB(withdrawal)
                 } else {
                     // Insufficient balance, eject the withdrawal from the queue
-                    console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
+                    //console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
                     this.pendingWithdrawals.splice(i, 1);
                     i--; // Adjust index after removal
                     await this.removePendingWithdrawalFromDB(withdrawal)
@@ -480,7 +480,7 @@ class Channels {
             //console.log('inside remove Empty Channels '+channelAddress+' '+empty+' ' +JSON.stringify(channelData))
             if (empty) {
                 this.channelsRegistry.delete(channelAddress);
-                console.log(`Removed empty channel: ${channelAddress}`);
+                //console.log(`Removed empty channel: ${channelAddress}`);
                 await this.removeChannelFromDB()
             }
         }
@@ -493,17 +493,17 @@ class Channels {
 
         const participantA = thisChannel.A || {};
         const participantB = thisChannel.B || {};
-        console.log('inside isChannelEmpty '+JSON.stringify(participantA)+' '+ JSON.stringify(participantB))
+        //console.log('inside isChannelEmpty '+JSON.stringify(participantA)+' '+ JSON.stringify(participantB))
       
         // Check if all properties in A and B are 0
         for (const propertyId in participantA) {
-          console.log(participantA[propertyId], Boolean(participantA[propertyId]!==0), Boolean(participantA[propertyId]==0))
+          //console.log(participantA[propertyId], Boolean(participantA[propertyId]!==0), Boolean(participantA[propertyId]==0))
             if (participantA[propertyId] !== 0) {
                 return false; // Not empty if any property in participantA is not 0
             }
         }
         for (const propertyId in participantB) {
-              console.log(participantA[propertyId],Boolean(participantB[propertyId]!==0), Boolean(participantB[propertyId]==0))
+              //console.log(participantA[propertyId],Boolean(participantB[propertyId]!==0), Boolean(participantB[propertyId]==0))
             if (participantB[propertyId] !== 0) {
                 return false; // Not empty if any property in participantB is not 0
             }

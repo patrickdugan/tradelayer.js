@@ -81,7 +81,11 @@ class TxIndex {
             //chainTip = await this.fetchChainTip();
         }
         console.log('indexed to chaintip');
-        
+        this.saveMaxHeight(chainTip)
+                console.log('built index');
+    }
+
+    static async saveMaxHeight(chainTip){
         // Use the correct NeDB method to insert or update the 'indexExists' document
          // After processing the block, update 'MaxHeight'
             try {
@@ -106,8 +110,6 @@ class TxIndex {
                 console.error('Error setting the index flag:', error);
                 throw error;
             }
-
-                console.log('built index');
     }
 
 
@@ -157,6 +159,7 @@ class TxIndex {
                 }      
             }
         }
+        return
     }
 
     static async fetchTransactionData(txId) {

@@ -697,7 +697,7 @@ class Orderbook {
                     match.sellerPosition = positions.sp
                     //console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
 
-                    console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
+                    //console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
 
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
@@ -727,7 +727,7 @@ class Orderbook {
                         
                         const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        console.log('position before going into reduce Margin '+JSON.stringify(match.buyerPosition))
+                        console.log('position before going into reduce Margin '+accountingPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){

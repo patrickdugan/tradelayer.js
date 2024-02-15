@@ -1038,7 +1038,8 @@ const Validity = {
                 if(sender==channel.participants.A){
                     isColumnA=true
                     balance=channel.A[params.propertyId]
-                    if(params.column==false){
+                    console.log('column ' +params.column)
+                    if(params.column==true){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }

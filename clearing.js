@@ -26,21 +26,10 @@ class Clearing {
         // 1. Fee Cache Buy
         //await this.feeCacheBuy();
 
-        // 2. Update last exchange block in channels
-        //await this.updateLastExchangeBlock(blockHeight);
-
-        // 3. Calculate and update UPNL (Unrealized Profit and Loss)
-        //await this.calculateAndUpdateUPNL(blockHeight);
-
-        //await this.processLiquidationsAndMarginAdjustments(blockHeight)
-
-        // 4. Create channels for new trades
-        //await this.createChannelsForNewTrades(blockHeight);
-
-        // 5. Set channels as closed if needed
+        // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels();
 
-        // 6. Settle trades at block level
+        // 3. Settle trades at block level
         await this.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
@@ -84,46 +73,6 @@ class Clearing {
     }
 
 
-    async calculateAndUpdateUPNL(blockHeight) {
-        console.log('Calculating and updating UPNL for all contracts at block:', blockHeight);
-        
-        const contracts = await getAllContracts(); // Fetch all contracts
-        for (const contract of contracts) {
-            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
-            const marketPrice = await marginMap.getMarketPrice(contract);
-
-            marginMap.clear(marketPrice, contract.seriesId); // Update UPnL for each position in the margin map
-
-            await marginMap.saveMarginMap(blockHeight); // Save the updated margin map
-        }
-    }
-
-    async processLiquidationsAndMarginAdjustments(blockHeight) {
-        console.log(`Processing liquidations and margin adjustments for block ${blockHeight}`);
-
-        const contracts = await getAllContracts(); // Fetch all contracts
-        for (const contract of contracts) {
-            const marginMap = await MarginMap.loadMarginMap(contract.seriesId, blockHeight);
-            
-            // Check for and process liquidations
-            if (marginMap.needsLiquidation(contract)) {
-                const liquidationOrders = await MarginMap.triggerLiquidations(contract);
-                // Process liquidation orders as needed
-            }
-
-            // Adjust margins based on the updated UPnL
-            const positions = await fetchPositionsForAdjustment(contract.seriesId, blockHeight);
-            for (const position of positions) {
-                const pnlChange = marginMap.calculatePnLChange(position, blockHeight);
-                if (pnlChange !== 0) {
-                    await adjustBalance(position.holderAddress, pnlChange);
-                }
-            }
-
-            await marginMap.saveMarginMap(blockHeight);
-        }
-    }
-
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
         try {
@@ -136,22 +85,6 @@ class Clearing {
             }
             throw error; // Rethrow other types of errors
         }
-    }
-
-
-
-    async createChannelsForNewTrades(blockHeight) {
-        //console.log('Creating channels for new trades');
-
-        // Fetch new trades from the block
-        let newTrades = await this.fetchNewTrades(blockHeight);
-
-        // Create channels for each new trade
-        newTrades.forEach(trade => {
-            let channel = this.createChannelForTrade(trade);
-            // Save the new channel
-            this.saveChannel(channel);
-        });
     }
 
         /**

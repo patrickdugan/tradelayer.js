@@ -259,7 +259,10 @@ class Main {
                 { $set: { value: maxProcessedHeight } },
                 { upsert: true }
             );
-            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);}
+            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+            }else{
+                console.log('realtime mode update '+maxProcessedHeight)
+            }
         } catch (error) {
             console.error('Error updating MaxProcessedHeight:', error);
             throw error; // or handle the error as needed
@@ -272,18 +275,12 @@ class Main {
         }else{return maxProcessedHeight}
     }
 
-
-    calculateDelta() {
-        // Logic to calculate the changes (delta) made to TallyMap
-    }
-
-
     async syncIfNecessary() {
         const blockLag = await this.checkBlockLag();
         /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
         }else if (blockLag === 0) {*/
-            this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus); // Start processing new blocks as they come
+            this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus, blockLag.chainTip); // Start processing new blocks as they come
         //}
     }
 
@@ -296,18 +293,17 @@ class Main {
     }
 
 
-    async processIncomingBlocks(lag, maxConsensusBlock) {
+    async processIncomingBlocks(lag, maxConsensusBlock, chainTip) {
         // Continuously loop through incoming blocks and process them
         let latestProcessedBlock = maxConsensusBlock
         console.log('entering real-time mode '+latestProcessedBlock)
-
+        let lagObj
         while (true) {
             /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
             }*/
-            const latestBlock = await this.getBlockCountAsync()
             //console.log(latestBlock)
-            for (let blockNumber = latestProcessedBlock + 1; blockNumber <= latestBlock; blockNumber++) {
+            for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber);
                 latestProcessedBlock = blockNumber;
@@ -318,6 +314,12 @@ class Main {
             });*/
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
+            console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
+            lagObj = await this.checkBlockLag()
+            lag = lagObj.lag
+            chainTip= lagObj.chainTip
+            latestProcessedBlock = lagObj.maxConsensusBlock
+            TxIndex.saveMaxHeight(latestProcessedBlock)
         }
     }
 
@@ -330,6 +332,7 @@ class Main {
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
+        return
     }
 
      async shutdown() {
@@ -359,8 +362,9 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             await TxIndex.processBlockData(blockData, blockHeight);
+            console.log('about to call construct consensus in block '+blockHeight)
             await this.constructConsensusFromIndex(blockHeight,true)
-            //console.log(`Processed block ${blockHeight} successfully.`);
+            console.log(`Processed block ${blockHeight} successfully.`);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
@@ -410,44 +414,6 @@ class Main {
      * @param {string} propertyId - The identifier of the property or token.
      * @param {string} transactionType - The type of transaction (e.g., "send", "receive").
      */
-
-    async processConfirmedWithdrawals() {
-        console.log('Checking for confirmed withdrawals...');
-
-        const currentBlockHeight = await this.getCurrentBlockHeight();
-        const withdrawalsToProcess = await this.getConfirmedWithdrawals(currentBlockHeight);
-
-        for (const withdrawal of withdrawalsToProcess) {
-            if (currentBlockHeight - withdrawal.blockConfirmed >= 8) {
-                console.log(`Processing withdrawal for ${withdrawal.channelAddress}`);
-                // Process the transfer logic here
-                // This might involve interacting with the TradeChannel module
-                // and updating the respective balances or state
-                await this.tradeChannel.processTransfer(withdrawal);
-            }
-        }
-    }
-
-    async getConfirmedWithdrawals(currentBlockHeight) {
-        // Assuming `db` is your database instance configured to interact with your blockchain data
-        // The range would be from currentBlockHeight - 8 to currentBlockHeight
-        const confirmedWithdrawals = await db.getConfirmedWithdrawals(currentBlockHeight - 8, currentBlockHeight);
-        return confirmedWithdrawals;
-    }
-
-    async processWithdrawals(currentBlockHeight) {
-      const confirmedWithdrawals = await this.getConfirmedWithdrawals(currentBlockHeight);
-      for (const withdrawalTx of confirmedWithdrawals) {
-          const isValid = await this.validateWithdrawal(withdrawalTx);
-          if (isValid) {
-              // Process the valid withdrawal
-              // This could involve transferring the tokens from the trade channel to the user's address
-          } else {
-              // Handle invalid withdrawal, e.g., logging, notifying the user, etc.
-          }
-      }
-    }
-
  
     async loadMaxProcessedHeight() {
         const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database

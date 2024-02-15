@@ -5,10 +5,10 @@ const litecore = require('bitcore-lib-ltc');
 const TxUtils = require('./txUtils');
 
 let params = {
-	withdrawAll: 1,
-    propertyId: 4,
-    amount:1000,
-    column: 1,
+	withdrawAll: 0,
+    propertyId: 3,
+    amount:500,
+    column: 0,
     channelAddress:'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
 }
     //const { address, privateKey } = generateNewAddress();
@@ -21,6 +21,6 @@ function randomNumber(min, max) {
 
 var random = randomNumber(20000,50000)
 
-    TxUtils.createWithdrawalTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',params,4)
+    TxUtils.createWithdrawalTransaction('tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',params,4)
 //tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz
 //tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8
