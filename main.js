@@ -175,9 +175,7 @@ class Main {
    async constructConsensusFromIndex(startHeight, realtime) {
 
         let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
-        if(realtime!=true){
-          console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
-        }
+        let blockHeight
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
         const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
@@ -185,13 +183,21 @@ class Main {
         const tallyMapInstance = TallyMap.getInstance();
         const lastConsensusHeight = await this.loadMaxProcessedHeight();
 
+        if(realtime!=true){
+            blockHeight = startHeight
+          console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
+        }else{
+            blockHeight = lastConsensusHeight
+            currentBlockHeight = startHeight
+        }
+       
         // Apply deltas from the last known block height to the current block height
         //await tallyMapInstance.applyDeltasSinceLastHeight(lastHeight);
 
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
         //console.log('loaded txIndex '+JSON.stringify(allTxData))
-        for (let blockHeight = startHeight; blockHeight <= currentBlockHeight; blockHeight++) {
+        for (blockHeight; blockHeight <= currentBlockHeight; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-${blockHeight}-`));
@@ -253,20 +259,7 @@ class Main {
         await tallyMapInstance.saveDeltaToDB(currentBlockHeight, delta);
         await setMaxConsensusHeightInDB(currentBlockHeight);*/
 
-        try {
-            await db.getDatabase('consensus').updateAsync(
-                { _id: 'MaxProcessedHeight' },
-                { $set: { value: maxProcessedHeight } },
-                { upsert: true }
-            );
-            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
-            }else{
-                console.log('realtime mode update '+maxProcessedHeight)
-            }
-        } catch (error) {
-            console.error('Error updating MaxProcessedHeight:', error);
-            throw error; // or handle the error as needed
-        }
+        await this.saveMaxProcessedHeight(maxProcessedHeight, realtime)
 
         //insert save of maxProcessedHeight in consensus sub-DB
 
@@ -363,8 +356,8 @@ class Main {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             await TxIndex.processBlockData(blockData, blockHeight);
             console.log('about to call construct consensus in block '+blockHeight)
-            await this.constructConsensusFromIndex(blockHeight,true)
-            console.log(`Processed block ${blockHeight} successfully.`);
+            let maxConsensus = await this.constructConsensusFromIndex(blockHeight,true)
+            console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
@@ -407,13 +400,22 @@ class Main {
         // This could involve reverting to a previous state, re-processing blocks, etc.
     }
 
-    /**
-     * Updates the tally map based on the given transaction.
-     * @param {string} address - The address whose tally is to be updated.
-     * @param {number} amount - The amount by which to update the tally.
-     * @param {string} propertyId - The identifier of the property or token.
-     * @param {string} transactionType - The type of transaction (e.g., "send", "receive").
-     */
+    async saveMaxProcessedHeight(maxProcessedHeight, realtime){ 
+        try {
+            await db.getDatabase('consensus').updateAsync(
+                { _id: 'MaxProcessedHeight' },
+                { $set: { value: maxProcessedHeight } },
+                { upsert: true }
+            );
+            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+            }else{
+                console.log('realtime mode update '+maxProcessedHeight)
+            }
+        } catch (error) {
+            console.error('Error updating MaxProcessedHeight:', error);
+            throw error; // or handle the error as needed
+        }
+    }
  
     async loadMaxProcessedHeight() {
         const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
