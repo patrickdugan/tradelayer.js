@@ -174,7 +174,7 @@ class Main {
 
    async constructConsensusFromIndex(startHeight, realtime) {
 
-        //let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+        let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
         let blockHeight
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
@@ -185,21 +185,24 @@ class Main {
 
         // Fetch all transaction data
         const allTxData = await txIndexDB.findAsync({});
-        console.log('allTxData length '+allTxData.length)
+        //console.log('allTxData length '+allTxData.length)
          const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-`));
-        console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
+        //console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
         let lastEntry = txDataSet[txDataSet.length-1]
         const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
-        const lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
+        let lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
 
 
         if(realtime!=true){
             blockHeight = startHeight
           console.log('construct Consensus from Index max indexed block '+lastIndexBlock, 'start height '+startHeight)
-        }else{
+        }else if(realtime==true){
             blockHeight = lastConsensusHeight
-            currentBlockHeight = startHeight
+            if(lastIndexBlock != startHeight){
+                console.log('rt mode '+lastIndexBlock+' '+startHeight)
+                lastIndexBlock=startHeight
+            }
         }
        
         // Apply deltas from the last known block height to the current block height
@@ -209,10 +212,6 @@ class Main {
         //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
         //console.log(blockHeight, currentBlockHeight, realtime)
         for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
-            // Filter transactions for the current block height
-            const txDataSet = allTxData.filter(txData => 
-                txData._id.startsWith(`tx-${blockHeight}-`));
-              //console.log(txDataSet)
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
@@ -220,7 +219,7 @@ class Main {
                 if (await Consensus.checkIfTxProcessed(txId)) {
                     continue; // Skip this transaction if it's already processed
                 }
-                //console.log(txId, typeof txId);
+                console.log('checking txdata in the main loop '+JSON.stringify(txData));
                 var payload = txData.value.payload;
                 //console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
@@ -249,14 +248,18 @@ class Main {
                       }
                 }
                //console.log('decoded params with validity' +JSON.stringify(decodedParams))
+               let saveHeight 
+               if(realtime==true){
+                saveHeight=startHeight
+               }
                if(decodedParams.valid==true){
                   await Consensus.markTxAsProcessed(txId);
-                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId)
+                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId+'blockHeight '+blockHeight)
                   await Logic.typeSwitch(type, decodedParams);
-                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                 }else{
                   await Consensus.markTxAsProcessed(txId);
-                  await TxIndex.upsertTxValidityAndReason(txId, type, blockHeight, decodedParams.valid, decodedParams.reason);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
             }

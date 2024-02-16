@@ -308,21 +308,32 @@ class TxIndex {
         });
     }
 
-    static async upsertTxValidityAndReason(txId, type, blockHeight, isValid, reason) {
-        const indexKey = `tx-${blockHeight}-${txId}`;
-        
+  static async upsertTxValidityAndReason(txId, type, isValid, reason) {
         try {
-            // Assuming the database instance is accessible as `db`
-            await db.getDatabase('txIndex').update(
-                { _id: indexKey },
-                { $set: { type:type, valid: isValid, reason: reason }},
-                { upsert: true }
-            );
-            //console.log(`Transaction ${indexKey} validity updated in txIndex.`);
+            const txIndexDB = db.getDatabase('txIndex');
+            
+            // Fetch all entries with _id starting with "tx"
+            const allTxData = await txIndexDB.findAsync({ _id: { $regex: /^tx/ } });
+            
+            // Filter for the entry ending with the specified txId
+            const txData = allTxData.find(txData => txData._id.endsWith(`-${txId}`));
+            
+            // If the entry is found, update it; otherwise, create a new one
+            if (txData) {
+                await txIndexDB.updateAsync(
+                    { _id: txData._id },
+                    { $set: { type: type, valid: isValid, reason: reason } },
+                    { upsert: true }
+                );
+                console.log(`Transaction ${txData._id} validity updated in txIndex.`);
+            } else {
+                console.error(`No entry found for transaction ${txId} in txIndex.`);
+            }
         } catch (error) {
-            console.error(`Error updating transaction ${indexKey} in txIndex:`, error);
+            console.error(`Error updating transaction ${txId} in txIndex:`, error);
         }
     }
+
 
 
     static async clearTxIndex() {
