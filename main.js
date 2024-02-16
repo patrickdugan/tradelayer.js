@@ -189,10 +189,15 @@ class Main {
          const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-`));
         //console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
-        let lastEntry = txDataSet[txDataSet.length-1]
-        const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
-        let lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
-
+        
+        console.log('lastIndexBlock '+lastIndexBlock)
+              let lastEntry = txDataSet[txDataSet.length-1]
+                const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
+                
+                lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
+                console.log('again lastIndexBlock ')
+        
+      
 
         if(realtime!=true){
             blockHeight = startHeight
@@ -212,14 +217,21 @@ class Main {
         //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
         //console.log(blockHeight, currentBlockHeight, realtime)
         for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
+
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
+                const txBlockHeight = parseInt(txData._id.split('-')[1]); // Extract the block height from txData
+
+                if (txBlockHeight !== blockHeight) {
+                    continue; // Skip transactions not belonging to the current block height
+                }
                  // Check if the transaction has already been processed
                 if (await Consensus.checkIfTxProcessed(txId)) {
                     continue; // Skip this transaction if it's already processed
                 }
-                console.log('checking txdata in the main loop '+JSON.stringify(txData));
+               
+
                 var payload = txData.value.payload;
                 //console.log('reading payload in consensus builder '+payload)
                 const marker = txData.value.marker
@@ -231,7 +243,7 @@ class Main {
                 const referenceAddress = txData.value.reference.address; //a bit different from the older protocol, not always in the tx, sometimes in OP_Return
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
-                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress)
+                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress+blockHeight)
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
                 //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
