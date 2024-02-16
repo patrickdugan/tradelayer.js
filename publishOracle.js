@@ -16,7 +16,7 @@ async function fetchBTCPrice() {
 
 async function publishBTCPrice() {
     const btcPrice = await fetchBTCPrice();
-    const contractParams = {oracleid: 1, price: 52150}; // Format as required
+    const contractParams = {oracleid: 1, price: 51950}; // Format as required
     const thisAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; // Your address
     await publishDataTransaction(thisAddress, contractParams);
 }

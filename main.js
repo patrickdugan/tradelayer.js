@@ -189,13 +189,11 @@ class Main {
          const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-`));
         //console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
-        
-        console.log('lastIndexBlock '+lastIndexBlock)
               let lastEntry = txDataSet[txDataSet.length-1]
                 const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
                 
                 lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
-                console.log('again lastIndexBlock ')
+                console.log('again lastIndexBlock '+lastIndexBlock)
         
       
 
@@ -321,7 +319,9 @@ class Main {
             /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
             }*/
-            //console.log(latestBlock)
+            chainTip = await this.getBlockCountAsync()
+            console.log('latest block '+chainTip)
+
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber);
@@ -334,11 +334,7 @@ class Main {
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
-            lagObj = await this.checkBlockLag()
-            lag = lagObj.lag
-            chainTip= lagObj.chainTip
-            latestProcessedBlock = lagObj.maxConsensusBlock
-            TxIndex.saveMaxHeight(latestProcessedBlock)
+            await TxIndex.saveMaxHeight(latestProcessedBlock)
         }
     }
 
@@ -450,7 +446,7 @@ class Main {
             const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
             if (maxProcessedHeightDoc) {
                 const maxProcessedHeight = maxProcessedHeightDoc.value;
-                //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
+                console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
                 return maxProcessedHeight; // Return the retrieved value
             } else {
                 console.log('MaxProcessedHeight not found in the database.');

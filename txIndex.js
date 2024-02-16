@@ -88,16 +88,16 @@ class TxIndex {
     static async saveMaxHeight(chainTip){
         // Use the correct NeDB method to insert or update the 'indexExists' document
          // After processing the block, update 'MaxHeight'
-            try {
-                await db.getDatabase('txIndex').updateAsync(
-                    { _id: 'MaxHeight' },
-                    { _id: 'MaxHeight', value: chainTip },
-                    { upsert: true }
-                );
-            } catch (error) {
-                console.error('Error updating MaxHeight:', error);
-                throw error;
-            }
+         //console.log('saving MaxHeight '+chainTip)
+         if(chainTip==undefined||chainTip==null){
+            console.log('no value to save, returning from saveMaxHeight ')
+            return
+         }
+            await db.getDatabase('txIndex').updateAsync(
+                { _id: 'MaxHeight' }, // Query
+                { $set: { value: chainTip } }, // Update
+                { upsert: true } // Options
+            );
 
             try {
                 await db.getDatabase('txIndex').updateAsync(
@@ -111,7 +111,6 @@ class TxIndex {
                 throw error;
             }
     }
-
 
     static async fetchChainTip() {
         return new Promise((resolve, reject) => {
@@ -156,7 +155,8 @@ class TxIndex {
                     await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
-                }      
+                }
+                await this.saveMaxHeight(blockHeight)      
             }
         }
         return
