@@ -307,7 +307,7 @@ class Main {
             });*/
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
-            console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
+            //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
             lagObj = await this.checkBlockLag()
             lag = lagObj.lag
             chainTip= lagObj.chainTip
@@ -355,9 +355,9 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             await TxIndex.processBlockData(blockData, blockHeight);
-            console.log('about to call construct consensus in block '+blockHeight)
+            //console.log('about to call construct consensus in block '+blockHeight)
             let maxConsensus = await this.constructConsensusFromIndex(blockHeight,true)
-            console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
+            //console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }

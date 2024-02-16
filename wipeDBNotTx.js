@@ -33,6 +33,8 @@ const marginMapDbPath = path.join(__dirname, 'nedb-data', 'marginMaps.db')
 const tallyMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'tallyMapDelta.db')
 const marginMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'marginMapDelta.db')
 const channelsDbPath = path.join(__dirname, 'nedb-data','channels.db')
+const withdrawalQueueDbPath = path.join(__dirname, 'nedb-data','withdrawalQueue.db')
+
 
 // Clear entries from each database
 clearDatastore(propertyListDbPath, 'propertyList');
@@ -49,3 +51,4 @@ clearDatastore(marginMapDbPath, 'marginMaps')
 clearDatastore(tallyMapDeltasDbPath, 'tallyMapDelta')
 clearDatastore(marginMapDeltasDbPath, 'marginMapDelta')
 clearDatastore(channelsDbPath, 'channels')
+clearDatastore(withdrawalQueueDbPath, 'withdrawalQueue')

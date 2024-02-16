@@ -105,7 +105,7 @@ class TxIndex {
                     { _id: 'indexExists', value: true },
                     { upsert: true } // This option ensures that the document is inserted if it doesn't exist or updated if it does.
                 );
-                console.log('Index flag set successfully.');
+                //console.log('Index flag set successfully.');
             } catch (error) {
                 console.error('Error setting the index flag:', error);
                 throw error;
