@@ -159,12 +159,12 @@ class Main {
         try {
             //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
             const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
-            return this.constructConsensusFromIndex(startHeight);
+            return this.constructConsensusFromIndex(startHeight, false);
         } catch (error) {
             if (error.type === 'NotFoundError') {
                 // If no saved state, start constructing consensus from genesis block
                 console.log("no consensus found")
-                return this.constructConsensusFromIndex(genesisBlockHeight);
+                return this.constructConsensusFromIndex(genesisBlockHeight, false);
             } else {
                 console.error('Error loading consensus state:', error);
                 throw error;
@@ -174,7 +174,7 @@ class Main {
 
    async constructConsensusFromIndex(startHeight, realtime) {
 
-        let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
+        //let currentBlockHeight = await TxIndex.findMaxIndexedBlock();
         let blockHeight
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
@@ -183,9 +183,20 @@ class Main {
         const tallyMapInstance = TallyMap.getInstance();
         const lastConsensusHeight = await this.loadMaxProcessedHeight();
 
+        // Fetch all transaction data
+        const allTxData = await txIndexDB.findAsync({});
+        console.log('allTxData length '+allTxData.length)
+         const txDataSet = allTxData.filter(txData => 
+                txData._id.startsWith(`tx-`));
+        console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
+        let lastEntry = txDataSet[txDataSet.length-1]
+        const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
+        const lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
+
+
         if(realtime!=true){
             blockHeight = startHeight
-          console.log('construct Consensus from Index max indexed block '+currentBlockHeight, 'start height '+startHeight)
+          console.log('construct Consensus from Index max indexed block '+lastIndexBlock, 'start height '+startHeight)
         }else{
             blockHeight = lastConsensusHeight
             currentBlockHeight = startHeight
@@ -194,10 +205,10 @@ class Main {
         // Apply deltas from the last known block height to the current block height
         //await tallyMapInstance.applyDeltasSinceLastHeight(lastHeight);
 
-        // Fetch all transaction data
-        const allTxData = await txIndexDB.findAsync({});
-        //console.log('loaded txIndex '+JSON.stringify(allTxData))
-        for (blockHeight; blockHeight <= currentBlockHeight; blockHeight++) {
+        
+        //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
+        //console.log(blockHeight, currentBlockHeight, realtime)
+        for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
             // Filter transactions for the current block height
             const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-${blockHeight}-`));
@@ -354,7 +365,7 @@ class Main {
     async blockHandlerMid(blockHash, blockHeight) {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
-            await TxIndex.processBlockData(blockData, blockHeight);
+            await TxIndex.processBlockData(blockData, blockHeight, true);
             //console.log('about to call construct consensus in block '+blockHeight)
             let maxConsensus = await this.constructConsensusFromIndex(blockHeight,true)
             //console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
@@ -409,7 +420,7 @@ class Main {
             );
             if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
             }else{
-                console.log('realtime mode update '+maxProcessedHeight)
+                //console.log('realtime mode update '+maxProcessedHeight)
             }
         } catch (error) {
             console.error('Error updating MaxProcessedHeight:', error);

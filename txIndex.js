@@ -77,11 +77,11 @@ class TxIndex {
             if(height%1000==1){console.log('indexed to '+height)};
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)
-            await this.processBlockData(blockData, height);
+            await this.processBlockData(blockData, height,false);
             //chainTip = await this.fetchChainTip();
         }
         console.log('indexed to chaintip');
-        this.saveMaxHeight(chainTip)
+        await this.saveMaxHeight(chainTip)
                 console.log('built index');
     }
 
@@ -90,7 +90,6 @@ class TxIndex {
          // After processing the block, update 'MaxHeight'
             try {
                 await db.getDatabase('txIndex').updateAsync(
-                    { _id: 'MaxHeight' },
                     { _id: 'MaxHeight', value: chainTip },
                     { upsert: true }
                 );
@@ -143,7 +142,7 @@ class TxIndex {
         });
     }
 
-    static async processBlockData(blockData, blockHeight) {
+    static async processBlockData(blockData, blockHeight, realtime) {
             const txIndexDB = db.getDatabase('txIndex');
         for (const txId of blockData.tx) {
             const txHex = await TxIndex.fetchTransactionData(txId);
@@ -158,6 +157,9 @@ class TxIndex {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
                 }      
             }
+        }
+        if(realtime==true){
+            await this.saveMaxHeight(blockHeight)
         }
         return
     }
@@ -387,7 +389,7 @@ class TxIndex {
 
             if (maxHeightDoc) {
                 return maxHeightDoc.value;
-            } else {
+            } else if(maxHeightDoc==undefined){
                 // Handle the case where MaxHeight hasn't been set yet
                 //console.log('MaxHeight not found in txIndexDB.');
                 return 3082500; // or an appropriate default/fallback value
@@ -397,6 +399,35 @@ class TxIndex {
             throw err;
         }
     }
+
+    /*static async findMaxIndexedBlock() {
+        try {
+            const txIndexDB = db.getDatabase('txIndex');
+            const entries = await txIndexDB.findAsync({}, { sort: { _id: -1 } });
+            if (entries.length > 0) {
+                // Extract the block height from the most recent entry
+                const lastEntry = entries[entries.lenght-1];
+
+                console.log('looking for recent tx index entries for max block '+JSON.stringify(lastEntry))
+                const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
+                if (blockHeightMatch && blockHeightMatch.length > 1) {
+                    const blockHeight = parseInt(blockHeightMatch[1]);
+                    if (!isNaN(blockHeight)) {
+                        return blockHeight;
+                    }
+                }
+            }
+
+            // Handle the case where no entries are found or block height extraction fails
+            console.log('No recent entries found in txIndexDB.');
+            return 3082500; // or an appropriate default/fallback value
+        } catch (err) {
+            console.error('Error finding MaxIndexedBlock:', err);
+            throw err;
+        }
+    }*/
+
+
 
     /**
      * Retrieves and deserializes data for a given transaction ID from the txIndex database.

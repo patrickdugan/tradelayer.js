@@ -392,6 +392,9 @@ class Channels {
             column: column
         };
         this.pendingWithdrawals.push(withdrawalObj);
+        if(propertyId==4&&amount==1000&&senderAddress=='tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'){
+            console.log('checking about specific withdrawal '+JSON.stringify(withdrawalObj))
+        }
         await this.savePendingWithdrawalToDB(withdrawalObj);
     }
 
@@ -416,10 +419,16 @@ class Channels {
             const withdrawal = this.pendingWithdrawals[i];
             //console.log('inside process withdrawals '+JSON.stringify(withdrawal))
             const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
-            //console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
+            if(propertyId==4&&amount==1000&&senderAddress=='tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'){
+                console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
+
+            }         
+
             let thisChannel = await this.getChannel(channel)
             if(thisChannel==undefined){
-              //console.log('channel has been removed for 0 balances '+channel)
+              if(propertyId==4&&amount==1000&&senderAddress=='tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'){
+                console.log('channel has been removed for 0 balances '+channel)
+              }
                 this.pendingWithdrawals.splice(i, 1);
                 i--;
                 await this.removePendingWithdrawalFromDB(withdrawal)
