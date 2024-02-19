@@ -193,7 +193,7 @@ class Main {
                 const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
                 
                 lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
-                console.log('again lastIndexBlock '+lastIndexBlock)
+                //console.log('again lastIndexBlock '+lastIndexBlock)
         
       
 
@@ -203,7 +203,7 @@ class Main {
         }else if(realtime==true){
             blockHeight = lastConsensusHeight
             if(lastIndexBlock != startHeight){
-                console.log('rt mode '+lastIndexBlock+' '+startHeight)
+                //console.log('rt mode '+lastIndexBlock+' '+startHeight)
                 lastIndexBlock=startHeight
             }
         }
@@ -320,7 +320,7 @@ class Main {
                 break; // Break the loop if shutdown is requested
             }*/
             chainTip = await this.getBlockCountAsync()
-            console.log('latest block '+chainTip)
+            //console.log('latest block '+chainTip)
 
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
@@ -446,7 +446,7 @@ class Main {
             const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
             if (maxProcessedHeightDoc) {
                 const maxProcessedHeight = maxProcessedHeightDoc.value;
-                console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
+                //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
                 return maxProcessedHeight; // Return the retrieved value
             } else {
                 console.log('MaxProcessedHeight not found in the database.');

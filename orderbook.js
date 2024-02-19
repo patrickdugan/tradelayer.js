@@ -150,7 +150,7 @@ class Orderbook {
         async addTokenOrder(order, blockHeight, txid) {
          
             const TallyMap = require('./tally.js'); //lazy load so we can move available to reserved for this order
-            await TallyMap.updateBalance(order.sender, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder');
+            await TallyMap.updateBalance(order.sender, order.offeredPropertyId, -order.amountOffered, order.amountOffered, 0, 0,'tokenOrder',blockHeight);
             
             // Determine the correct orderbook key
             const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
@@ -360,7 +360,7 @@ class Orderbook {
                         match.sellOrder.desiredPropertyId,
                         match.amountOfTokenB,  // Credit traded amount of Token B to available
                         0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade' 
+                        0, 0,'tokenTrade',blockHeight 
                 );
 
 
@@ -369,7 +369,7 @@ class Orderbook {
                         match.buyOrder.desiredPropertyId,
                         match.amountOfTokenA,  // Credit traded amount of Token B to available
                         0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade' );
+                        0, 0,'tokenTrade',blockHeight);
 
                 if(channel==true){
 
@@ -378,7 +378,7 @@ class Orderbook {
                         match.sellOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenA, // Debit the same amount from reserve
-                        0, 0,'tokenTrade'
+                        0, 0,'tokenTrade',blockHeight
                     );
 
                     await TallyMap.updateBalance(
@@ -386,7 +386,7 @@ class Orderbook {
                         match.buyOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenB, // Debit the same amount from reserve
-                        0, 0,'tokenTrade' );
+                        0, 0,'tokenTrade',blockHeight);
 
                 }else{
                     // Debit the traded amount from the seller's reserve 
@@ -395,7 +395,7 @@ class Orderbook {
                         match.sellOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenA, // Debit the same amount from reserve
-                        0, 0,'tokenTrade'
+                        0, 0,'tokenTrade',blockHeight
                     );
                     //and credit the opposite consideration to available
 
@@ -406,7 +406,7 @@ class Orderbook {
                         match.buyOrder.offeredPropertyId,
                         0,  // Credit traded amount of Token B to available
                         -match.amountOfTokenB, // Debit the same amount from reserve
-                        0, 0,'tokenTrade' );
+                        0, 0,'tokenTrade',blockHeight );
 
                 }
 
@@ -440,7 +440,7 @@ class Orderbook {
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
                 //we're increasing or creating a new position so locking up init margin in the reserve column on TallyMap
                 //console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
-                initMargin = await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price) //first we line up the capital
+                initMargin = await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price,blockTime) //first we line up the capital
             }
 
             // Create a contract order object with the sell parameter
@@ -588,8 +588,8 @@ class Orderbook {
                             }
                         }
 
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin');
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin',currentBlockHeight);
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin',currentBlockHeight);
                         await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, totalMargin);
                         buyerFullyClosed=true
                         //console.log('checking flip logic '+flipLong+' '+match.buyOrder.amount + ' '+Math.abs(match.buyerPosition.contracts)+' total margin to adjust '+totalMargin)
@@ -612,8 +612,8 @@ class Orderbook {
                             flipShort -= contractUndo;
                             totalMargin = BigNumber(initialMarginPerContract).times(match.sellOrder.amount).toNumber();
                         }
-                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin');
-                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin');
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, -totalMargin, totalMargin, 0, 0, 'contractReserveInitMargin',currentBlockHeight);
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -totalMargin, totalMargin, 0, 'contractTradeInitMargin',currentBlockHeight);
                         await marginMap.setInitialMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, totalMargin);
                         sellerFullyClosed=true
                         //console.log('checking flip logic' +flipShort)
@@ -622,10 +622,9 @@ class Orderbook {
                     if(!isBuyerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel)
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,currentBlockHeight)
                         }else if(channel==true){
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress)
-                  
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress,currentBlockHeight)                  
                          }
                         //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
@@ -633,9 +632,9 @@ class Orderbook {
                     if(!isSellerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,currentBlockHeight)
                          }else if(channel==true){
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress,currentBlockHeight)
                          }
                         //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
@@ -732,7 +731,7 @@ class Orderbook {
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){
                             //console.log('reduction about to pass to TallyMap' +reduction)
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         }
                         //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
@@ -745,7 +744,7 @@ class Orderbook {
                         //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                         //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement');
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
                         } 
                         if(reduction.mode=='shortfall'){
                             //check the address available balance for the neg. balance
@@ -790,7 +789,7 @@ class Orderbook {
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false);
                         //{netMargin,mode}   
                         if(reduction !=0){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn')              
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
                         //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
@@ -799,7 +798,7 @@ class Orderbook {
                         //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                         //unusual edge case but we're covering it here 'maint'
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0, 0, 'contractTradeSettlement');
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0, 0, 'contractTradeSettlement',currentBlockHeight);
                         } 
                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: accountingPNL, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
@@ -934,7 +933,7 @@ class Orderbook {
             return false;
         }
 
-        async cancelAllContractOrders(fromAddress, offeredPropertyId) {
+        async cancelAllContractOrders(fromAddress, offeredPropertyId,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel all contract orders
             // Retrieve relevant order details and calculate margin reserved amounts
@@ -948,14 +947,14 @@ class Orderbook {
                 //console.log('applying reserve changes for cancelled order '+JSON.stringify(order))
                 const reserveAmount = parseFloat(order.initMargin)
                 //console.log('about to apply changes '+reserveAmount+typeof reserveAmount)
-                await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel');
+                await TallyMap.updateBalance(fromAddress, collateralPropertyId, +reserveAmount, -reserveAmount,0,0,'contractCancel',block);
             }
 
             // Return the details of the cancelled orders
             return cancelledOrders;
         }
 
-        async cancelContractOrderByTxid (fromAddress, offeredPropertyId, txid) {
+        async cancelContractOrderByTxid (fromAddress, offeredPropertyId, txid,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel a specific contract order by txid
             // Retrieve order details and calculate margin reserved amount
@@ -968,13 +967,13 @@ class Orderbook {
             const reserveAmount = cancelledOrder[0].initMargin
             const collateralPropertyId = await ContractRegistry.getCollateralId(offeredPropertyId)
             //console.log('about to move reserve back to available cancelling contract order by txid '+reserveAmount +' '+collateralPropertyId)
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0,'contractCancel');
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0,'contractCancel',block);
 
             // Return the details of the cancelled order
             return cancelledOrder;
         }
 
-        async cancelContractBuyOrdersByPrice(fromAddress, offeredPropertyId, price, buy) {
+        async cancelContractBuyOrdersByPrice(fromAddress, offeredPropertyId, price, buy,block) {
             const TallyMap = require('./tally.js')
             const criteria = { price: price, buy: false }; // Criteria to cancel sell orders by price
             const key = offeredPropertyId
@@ -984,14 +983,14 @@ class Orderbook {
 
             for (const order of cancelledOrders) {
                 const reserveAmount = order.initMargin 
-                await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0,'contractCancel');
+                await TallyMap.updateBalance(fromAddress, collateralPropertyId, reserveAmount, -reserveAmount,0,0,'contractCancel',block);
             }
 
             // Return the details of the cancelled orders
             return cancelledOrders;
         }
 
-        async cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId) {
+        async cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel all token orders
             // Retrieve relevant order details and calculate margin reserved amounts
@@ -1003,27 +1002,27 @@ class Orderbook {
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
                 //console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
-                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
+                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
             }
 
             // Return the details of the cancelled orders
             return cancelledOrders;
         }
 
-        async cancelTokenOrderByTxid(fromAddress, offeredPropertyId, desiredPropertyId, txid) {
+        async cancelTokenOrderByTxid(fromAddress, offeredPropertyId, desiredPropertyId, txid,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel a specific token order by txid
             // Retrieve order details and calculate margin reserved amount
             const key =  offeredPropertyId+'-'+desiredPropertyId
             const cancelledOrder = await this.cancelOrdersByCriteria(fromAddress, key, {txid:txid});
             const reserveAmount = order.amountOffered;
-            await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
+            await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
 
             // Return the details of the cancelled order
             return cancelledOrder;
         }
 
-        async cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price) {
+        async cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel token buy orders by price
             // Retrieve relevant buy orders and calculate margin reserved amounts
@@ -1032,14 +1031,14 @@ class Orderbook {
 
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
-                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
+                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
             }
 
             // Return the details of the cancelled orders
             return cancelledOrders;
         }
 
-        async cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price) {
+        async cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, price,block) {
             const TallyMap = require('./tally.js')
             // Logic to cancel token sell orders by price
             // Retrieve relevant sell orders and calculate margin reserved amounts
@@ -1048,7 +1047,7 @@ class Orderbook {
 
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
-                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel');
+                await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
             }
 
             // Return the details of the cancelled orders

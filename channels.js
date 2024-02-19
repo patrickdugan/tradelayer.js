@@ -443,7 +443,7 @@ class Channels {
                   continue
                 }
                     if(withdrawAll==true){
-                        await this.processWithdrawAll(senderAddress,thisChannel,column)
+                        await this.processWithdrawAll(senderAddress,thisChannel,column,blockHeight)
                     }
                 let balance
                 if(column=="A"){
@@ -453,7 +453,7 @@ class Channels {
                 }
                 if (balance >= amount) {
                     if(!withdrawAll){
-                        await this.processWithdrawal(senderAddress,thisChannel,amount,propertyId,column)
+                        await this.processWithdrawal(senderAddress,thisChannel,amount,propertyId,column,blockHeight)
                     }
                   
                     // Remove processed withdrawal from the array
@@ -535,22 +535,22 @@ class Channels {
     }
 
     // Transaction processing functions
-    static async processWithdrawal(senderAddress,channel,amount,propertyId,column) {
+    static async processWithdrawal(senderAddress,channel,amount,propertyId,column,block) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       //console.log('in processWithdrawal '+channel[column][propertyId])
       channel[column][propertyId] -= amount;
       //console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
-      await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull')
-      await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete')
+      await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull',block)
+      await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete',block)
       this.channelsRegistry.set(channel.channel, channel);
     }
 
-    static async processWithdrawAll(senderAddress, thisChannel, column) {
+    static async processWithdrawAll(senderAddress, thisChannel, column,blockHeight) {
         for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
           //console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
-            await this.processWithdrawal(senderAddress, thisChannel, amount, parseInt(propertyId), column);
+            await this.processWithdrawal(senderAddress, thisChannel, amount, parseInt(propertyId), column,blockHeight);
         }
     }
 

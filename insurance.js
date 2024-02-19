@@ -101,6 +101,10 @@ class InsuranceFund {
         // ... Remaining code unchanged ...
     }
 
+    async calcPayout(totalLoss){
+
+    }
+
     // ... Rest of your class methods ...
 }
 

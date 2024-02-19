@@ -215,15 +215,15 @@ class Clearing {
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange))
                 console.log(JSON.stringify(balance))
                 if(balance.hasSufficient==true){
-                        await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
+                        await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing', blockHeight);
                 }else{
                     let tally = await TallyMap.getTally(position.address, collateralId)
                     let totalCollateral = tally.available+tally.margin
-                    await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, 0,0,'clearingLoss');
+                    await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, 0,0,'clearingLoss', blockHeight);
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
                     if(totalCollateral>Math.abs(pnlChange)){
                         let marginDent = Math.abs(pnlChange)-tally.available
-                        await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss');
+                        await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss', blockHeight);
                         await marginMap.updateMargin()    
                         if (await marginMap.checkMarginMaintainance(position.address,contractId)){
                             isLiq=true
@@ -244,7 +244,7 @@ class Clearing {
                     }
                 }
             }else{
-                  await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing');
+                  await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing',blockHeight);
             }              
         }
         positions.lastMark = blob.lastPrice
@@ -344,8 +344,10 @@ class Clearing {
             if (totalLoss > 0) {
                 // Step 3: Apply insurance fund payout
                 const insurance = await Insurance.getFund(contractId)
-                const payout = insurance.applyPayout(totalLoss);
-
+                const payout = insurance.calcPayout(totalLoss);
+                //insert function to pro-rate payout to all positions
+                //const map = await MarginMap.getInstance(contractId)
+                //map.applyInsurancePayout(payout,blockHeight)
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
                 if (remainingLoss > 0) {

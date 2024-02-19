@@ -169,6 +169,46 @@ class PropertyManager {
         return propertyInfo && propertyInfo.type === 5;
     }
 
+    async grantTokens(propertyId, recipient, amount,block) {
+        const propertyData = await this.getPropertyData(propertyId);
+        if (!propertyData) {
+            throw new Error(`Property with ID ${propertyId} not found.`);
+        }
+
+        // Update managed supply
+        propertyData.totalInCirculation += amount;
+
+        // Update tally map to credit the amount to recipient
+        await TallyMap.credit(recipient, propertyId, amount,0,0,0,'grantToken',block);
+
+        // Save changes
+        await this.save();
+        console.log(`Granted ${amount} managed tokens to ${recipient} for property ${propertyId}.`);
+    }
+
+    async redeemTokens(propertyId, recipient, amount,block) {
+        const propertyData = await this.getPropertyData(propertyId);
+        if (!propertyData) {
+            throw new Error(`Property with ID ${propertyId} not found.`);
+        }
+
+        // Ensure enough managed tokens available for redemption
+        if (propertyData.totalInCirculation < amount) {
+            throw new Error(`Insufficient managed tokens for redemption for property ${propertyId}.`);
+        }
+
+        // Update managed supply
+        propertyData.totalInCirculation -= amount;
+
+        // Update tally map to debit the amount from recipient
+        await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'redeemToken',block);
+
+        // Save changes
+        await this.save();
+        console.log(`Redeemed ${amount} managed tokens from ${recipient} for property ${propertyId}.`);
+    }
+
+
     // ... other methods like verifyIfManaged, updateAdmin ...
 }
 

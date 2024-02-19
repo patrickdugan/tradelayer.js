@@ -42,7 +42,7 @@ class TallyMap {
         }
     }
 
-    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type) {
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block) {
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
@@ -75,7 +75,7 @@ class TallyMap {
                 instance.addresses.set(address, {});
             }
             const addressObj = instance.addresses.get(address);
-            //console.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
+            //saveconsole.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
             if (!addressObj[propertyId]) {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
             }
@@ -133,7 +133,7 @@ class TallyMap {
             if(availableChange==0&&reservedChange==0&&marginChange==0&&vestingChange==0){
 
             }else{
-                await TallyMap.recordTallyMapDelta(address, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
+                await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
             }
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -365,11 +365,11 @@ class TallyMap {
     }
 
     // Function to record a delta
-     static async recordTallyMapDelta(address, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
+     static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
         const db = dbInstance.getDatabase('tallyMapDelta');
         const deltaKey = `${address}-${propertyId}-${newUuid}`;
-        const delta = { address, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
+        const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
         
         //console.log('saving delta ' + JSON.stringify(delta));
 

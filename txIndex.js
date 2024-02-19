@@ -90,7 +90,7 @@ class TxIndex {
          // After processing the block, update 'MaxHeight'
          //console.log('saving MaxHeight '+chainTip)
          if(chainTip==undefined||chainTip==null){
-            console.log('no value to save, returning from saveMaxHeight ')
+            //console.log('no value to save, returning from saveMaxHeight ')
             return
          }
             await db.getDatabase('txIndex').updateAsync(

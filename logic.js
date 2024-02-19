@@ -39,13 +39,13 @@ const Logic = {
                 await Logic.activateTradeLayer(params.txTypeToActivate, params.block);
                 break;
             case 1:
-                await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT);
+                await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT, params.block);
                 break;
             case 2:
-                await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts);
+                await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
                 break;
             case 3:
-                await Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network);
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network, params.block);
                 break;
             case 4:
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
@@ -54,40 +54,40 @@ const Logic = {
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
                 break;
             case 6:
-                await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams);
+                await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
                 break;
            case 7:
-                await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress);
+                await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress, params.block);
                 break;
             case 8:
-                await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries);
+                await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries, params.block);
                 break;
             case 9:
-                await Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                await Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
                 break;
             case 10:
-                await Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry);
+                await Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
                 break;
             case 11:
-                await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager);
+                await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager, params.senderAddress, params.block);
                 break;
             case 12:
-                await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager);
+                await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager, params.senderAddress, params.block);
                 break;
             case 13:
-                await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry);
+                await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry, params.block);
                 break;
             case 14:
                 await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.block);
                 break;
             case 15:
-                await Logic.closeOracle(params.oracleId, params.oracleRegistry);
+                await Logic.closeOracle(params.oracleId, params.oracleRegistry, params.block);
                 break;
             case 16:
                 await Logic.createContractSeries(params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
-                await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry);
+                await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,, params.block);
                 break;
             case 18:
                 await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress);
@@ -102,34 +102,34 @@ const Logic = {
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
-                await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount);
+                await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount, params.block);
                 break;
             case 23:
-                await Logic.settleChannelPNL(params.channelAddress, params.txParams);
+                await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
                 break;
             case 24:
-                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount);
+                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress params.block);
                 break;
             case 25:
-                await Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount);
+                await Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress, params.block);
                 break;
             case 26:
-                await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount);
+                await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount, params.block);
                 break;
             case 27:
-                await Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle);
+                await Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle, params.block);
                 break;
             case 28:
-                await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock);
+                await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock, params.block);
                 break;
             case 29:
-                await Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight);
+                await Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight, params.block);
                 break;
             case 30:
-                await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce);
+                await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce, params.block);
                 break;
             case 31:
-                await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof);
+                await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);
                 break;
             case 32:
                 Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
@@ -161,7 +161,7 @@ const Logic = {
  
     },
 
-    async tokenIssue(sender, initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
         const propertyManager = PropertyManager.getInstance();
 
         // Determine the type of the token based on whether it's managed or an NFT
@@ -180,7 +180,7 @@ const Logic = {
         try {
             var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
-            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance');
+            await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance',block);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
         } catch (error) {
             console.error('Error creating token:', error);
@@ -189,7 +189,7 @@ const Logic = {
     },
 
 
-    async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts) {
+    async sendToken(sendAll, senderAddress, recipientAddresses, propertyIdNumbers, amounts,block) {
         console.log('send logic parameters '+sendAll + ' '+ senderAddress + ' '+ recipientAddresses + ' ' + propertyIdNumbers + ' '+ amounts)
         if (sendAll) {
             // Handle sending all available balances
@@ -211,7 +211,7 @@ const Logic = {
                     const amount = amounts[i];
                     const recipientAddress = recipientAddresses[i];
 
-                    await processSend(senderAddress, recipientAddress, propertyId, amount);
+                    await processSend(senderAddress, recipientAddress, propertyId, amount,block);
                 }
             } else {
                 // Special handling for TLVEST (Property ID 2)
@@ -230,11 +230,11 @@ const Logic = {
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
 
-                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend');
-                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingReceive');
+                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend',block);
+                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingReceive',block);
 
-                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag');
-                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow');
+                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
+                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send')
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
@@ -247,7 +247,7 @@ const Logic = {
         return console.log('sent')
     },
 
-    async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts){
+    async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts,block){
         // Get TLVEST and TL balances for the sender
         
         const BigNumber = require('bignumber.js');
@@ -264,11 +264,11 @@ const Logic = {
 
         // Calculate the amount of TL to move from vesting to available
         const tlVestingMovement = calculateVestingMovement(amounts, tlVestTally,tlTally)
-        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend');
-        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingSend');
+        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend',block);
+        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingSend',block);
 
-        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag');
-        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow');
+        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
+        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
         return
     },
 
@@ -347,21 +347,21 @@ const Logic = {
     },
 
     // Helper function to process a single send operation
-	async processSend(senderAddress, recipientAddress, propertyId, amount) {
+	async processSend(senderAddress, recipientAddress, propertyId, amount,block) {
 
 	    const availableBalance = tallyMap.getAvailableBalance(senderAddress, propertyId);
 	    if (availableBalance < amount) {
 	        throw new Error('Insufficient available balance for transaction.');
 	    }
 
-	    await TallyMap.updateAvailableBalance(senderAddress, propertyId, -amount);
-	    await TallyMap.updateAvailableBalance(recipientAddress, propertyId, amount);
+	    await TallyMap.updateBalance(senderAddress, propertyId, -amount,0,0,0,'multi-send',block);
+	    await TallyMap.updateBalance(recipientAddress, propertyId, amount,0,0,0,'multi-send',block);
 	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
         return
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, utxoAmount, transactionFee, network) {
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, utxoAmount, transactionFee, network,block) {
 		    // Step 1: Construct the token part of the transaction
 		    // Deduct the token amount from the sender's balance and credit to the receiver
 		    // This would involve interacting with your token management system
@@ -392,13 +392,13 @@ const Logic = {
 		    return txId; // Return the transaction ID of the broadcasted transaction
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime) {
+	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {
       
         // Deduct tokens from sender's available balance
-        await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit');
+        await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 
         // Add tokens to the channel's balance
-        await TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive');
+        await TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive',block);
 
         // Determine which column (A or B) to assign the tokens in the channel registry
         await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, transactionTime);
@@ -443,7 +443,7 @@ const Logic = {
         return order;
     },
 
-	async cancelOrder(fromAddress, isContract, offeredPropertyId, desiredPropertyId, cancelAll, cancelParams) {
+	async cancelOrder(fromAddress, isContract, offeredPropertyId, desiredPropertyId, cancelAll, cancelParams,block) {
         let cancelledOrders = [];
         let key
         if(isContract==true){
@@ -457,18 +457,18 @@ const Logic = {
             if(isContract==true){
                 // Contract cancellation logic here
                 if(cancelAll){
-                    cancelledOrders = await orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId)
+                    cancelledOrders = await orderbook.cancelAllContractOrders(fromAddress,offeredPropertyId,block)
                     //console.log('contract cancel all'+JSON.stringify(cancelledOrders))
                 }
                 if(cancelParams.txid){
-                    cancelledOrders = await orderbook.cancelContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid)
+                    cancelledOrders = await orderbook.cancelContractOrderByTxid(fromAddress,offeredPropertyId,cancelParams.txid,block)
                 }
                 if(cancelParams.price){
                     if(cancelParams.buy){
-                       cancelledOrders = await orderbook.cancelContractBuyOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.buy)
+                       cancelledOrders = await orderbook.cancelContractBuyOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.buy,block)
                     }
                     if(cancelParams.sell){
-                       cancelledOrders = await orderbook.cancelContractSellOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.sell)
+                       cancelledOrders = await orderbook.cancelContractSellOrdersByPrice(fromAddress,offeredPropertyId,cancelParams.price,cancelParams.sell,block)
                     }
                 }
                 await orderbook.saveOrderBook(`${offeredPropertyId}`);
@@ -476,21 +476,21 @@ const Logic = {
 
             if(isContract==false){
                 if (cancelAll && offeredPropertyId && desiredPropertyId) {
-                            cancelledOrders = await orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId);
+                            cancelledOrders = await orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId,block);
                 }
                  // Cancel a specific order by txid
                 if (cancelParams.txid) {
-                    cancelledOrders = await orderbook.cancelTokenOrdersByTxid(fromAddress,offeredPropertyId,desiredPropertyId, cancelParams.txid);
+                    cancelledOrders = await orderbook.cancelTokenOrdersByTxid(fromAddress,offeredPropertyId,desiredPropertyId, cancelParams.txid,block);
                 } 
 
                 // Cancel orders by price or order type
                 if (cancelParams.price || cancelParams.orderType) {
                     if (cancelParams.price) {
                         // Cancel sell orders greater than or equal to the price
-                        cancelledOrders = await orderbook.cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, cancelParams.price);
+                        cancelledOrders = await orderbook.cancelTokenSellOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, cancelParams.price,block);
                         
                         // Cancel buy orders less than or equal to the price
-                        cancelledOrders = await orderbook.cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, cancelParams.price);
+                        cancelledOrders = await orderbook.cancelTokenBuyOrdersByPrice(fromAddress, offeredPropertyId, desiredPropertyId, cancelParams.price,block);
                     }
                     // Add more conditions based on your cancel params if needed
                 }  
@@ -580,7 +580,7 @@ const Logic = {
         return
 	},
 
-    async grantManagedToken(propertyId, amount, recipientAddress, propertyManager) {
+    async grantManagedToken(propertyId, amount, recipientAddress, propertyManager,block) {
 
 	    // Verify if the property is a managed type
 	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
@@ -589,12 +589,12 @@ const Logic = {
 	    }
 
 	    // Logic to grant tokens to the recipient
-	    await propertyManager.grantTokens(propertyId, recipientAddress, amount);
+	    await PropertyManager.grantTokens(propertyId, recipientAddress, amount,block);
 	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
         return
 	},
 
-	async redeemManagedToken(propertyId, amount, propertyManager) {
+	async redeemManagedToken(propertyId, amount, address,block) {
 
 	    // Verify if the property is a managed type
 	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
@@ -603,12 +603,12 @@ const Logic = {
 	    }
 
 	    // Logic to redeem tokens from the admin's balance
-	    await propertyManager.redeemTokens(propertyId, amount);
+	    await PropertyManager.redeemTokens(address, propertyId, amount,block);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
         return
 	},
 
-    async createOracle(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry) {
+    async createOracle(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry,block) {
 
 	    // Create a new oracle
 	    const oracleId = await OracleList.createOracle({adminAddress, ticker, url, backupAddress, whitelists, lag});
@@ -624,7 +624,7 @@ const Logic = {
         return
 	},
 
-	async closeOracle(oracleId, oracleRegistry) {
+	async closeOracle(oracleId, oracleRegistry,block) {
 
 	    // Close the specified oracle
 	    await oracleRegistry.closeOracle(oracleId);
@@ -641,13 +641,13 @@ const Logic = {
 	    return futureContractSeriesId;
 	},
 
-    async exerciseDerivative(contractId, amount, contractsRegistry) {
+    async exerciseDerivative(contractId, amount, contractsRegistry,block) {
 	    if (!contractId || !amount || !contractsRegistry) {
 	        throw new Error('Missing required parameters');
 	    }
 
 	    // Exercise the derivative contract
-	    await contractsRegistry.exerciseDerivative(contractId, amount);
+	    await ContractRegistry.exerciseDerivative(contractId, amount);
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
@@ -762,7 +762,7 @@ const Logic = {
 	},
 
 
-	transfer(fromChannelAddress, toChannelAddress, propertyId, amount) {
+	transfer(fromChannelAddress, toChannelAddress, propertyId, amount,block) {
 		    const fromChannel = this.channelsRegistry.get(fromChannelAddress);
 		    const toChannel = this.channelsRegistry.get(toChannelAddress);
 
@@ -784,7 +784,7 @@ const Logic = {
 		},
 
 
-	settleChannelPNL(channelAddress, txParams) {
+	settleChannelPNL(channelAddress, txParams,block) {
 		    const {
 		        txidNeutralized,
 		        contractId,
@@ -834,22 +834,22 @@ const Logic = {
 		    console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
 		},
 
-		exerciseDerivative(txParams) {
+		exerciseDerivative(txParams,block) {
 		    const { contractId, exerciseType, propertyId, amount } = txParams;
 
 		    switch (exerciseType) {
 		        case 'deliverContract':
-		            this.deliverContract(contractId, propertyId, amount);
+		            this.deliverContract(contractId, propertyId, amount,block);
 		            break;
 		        case 'optionExercise':
-		            this.handleOptionExercise(contractId, propertyId, amount);
+		            this.handleOptionExercise(contractId, propertyId, amount,block);
 		            break;
 		        default:
 		            throw new Error('Invalid exercise type');
 		    }
 		},
 
-		deliverContract(contractId, propertyId, amount) {
+		deliverContract(contractId, propertyId, amount,block) {
 		    // Logic for contract delivery
 		    // This would involve transferring tokens from the contract to the exercising party
 		    // Eliminate the contract positions
@@ -872,7 +872,7 @@ const Logic = {
 		    this.removeContract(contractId);
 		},
 
-		handleOptionExercise(contractId, propertyId1, propertyId2, numberOfContracts) {
+		handleOptionExercise(contractId, propertyId1, propertyId2, numberOfContracts, block) {
 		    // Logic for handling option exercise
 		    // Notional value of the contract is based on the strike price
 		    // Eliminate the contract positions
@@ -905,7 +905,7 @@ const Logic = {
 		    this.removeContract(contractId);
 		},
 
-		async mintSynthetic(propertyId, contractId, amount) {
+		async mintSynthetic(propertyId, contractId, amount,address, block) {
 		    // Check if it's the first instance of this synthetic token
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
 		    let vaultId;
@@ -918,13 +918,13 @@ const Logic = {
 		    }
 
 		    // Issue the synthetic token
-		    propertyManager.addProperty(syntheticTokenId, `Synth-${propertyId}-${contractId}`, amount, 'Synthetic');
-
+		    PropertyManager.addProperty(syntheticTokenId, `Synth-${propertyId}-${contractId}`, amount, 'Synthetic');
+            TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 		},
 
-		async redeemSynthetic(propertyId, contractId, amount) {
+		async redeemSynthetic(propertyId, contractId, amount,address,block) {
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
 		    const vaultId = synthRegistry.getVaultId(syntheticTokenId);
 
@@ -939,20 +939,21 @@ const Logic = {
 		    }
 
 		    synthRegistry.updateVault(vaultId, -amount);
-
+            MarginMap.getInstance(contractId)
 		    // Update margin and contract balances in MarginMap
 		    marginMap.updateMarginBalance(vault.address, propertyId, -amount);
 		    marginMap.updateContractBalance(vault.address, contractId, -amount);
 
 		    // Update synthetic token property
-		    propertyManager.updatePropertyBalance(syntheticTokenId, -amount);
+		    PropertyManager.updatePropertyBalance(syntheticTokenId, -amount);
+            TallyMap.updateBalance(address, syntheticTokenId,-amount,0,0,0,'redeemSynth',block)
 
 		    // Log the redemption of the synthetic token
 		    console.log(`Redeemed ${amount} of synthetic token ${syntheticTokenId}`);
 		},
 
 	// payToTokens: Distributes propertyIdUsed tokens to holders of propertyIdTarget tokens
-	async payToTokens(tallyMap, propertyIdTarget, propertyIdUsed, amount) {
+	async payToTokens(propertyIdTarget, propertyIdUsed, amount,address,block) {
 	    // Check if enough tokens of propertyIdUsed are available for distribution
 	    const totalAvailable = tallyMap.totalTokens(propertyIdUsed);
 	    if (totalAvailable < amount) {
@@ -977,7 +978,7 @@ const Logic = {
 	            // Distribute if the payout is significant (>= 0.00000001)
 	            if (payout.isGreaterThanOrEqualTo(new BigNumber('0.00000001'))) {
 	                // Update balances
-	                tallyMap.updateBalance(address, propertyIdUsed, -payout.toNumber(), 'available');
+	                TallyMap.updateBalance(address, propertyIdUsed, -payout.toNumber(),0,0,0, 'payToTokens',block);
 	                remainingAmount = remainingAmount.minus(payout);
 
 	                console.log(`Distributed ${payout.toFixed()} of token ${propertyIdUsed} to holder ${address}`);
@@ -991,7 +992,7 @@ const Logic = {
 	        // For example, add to a general pool, burn it, or send to a specific address
 	        // Example: send to a designated address
 	        const designatedAddress = 'some_designated_address';
-	        tallyMap.updateBalance(designatedAddress, propertyIdUsed, remainingAmount.toNumber(), 'available');
+	        TallyMap.updateBalance(address, propertyIdUsed, remainingAmount.toNumber(),0,0,0,'payToTokensRounding',block);
 	        console.log(`Remaining ${remainingAmount.toFixed()} of token ${propertyIdUsed} sent to ${designatedAddress}`);
 	    }
 
