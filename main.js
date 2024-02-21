@@ -2,16 +2,16 @@
 const EventEmitter = require('events');
 class ShutdownEmitter extends EventEmitter {}
 const shutdownEmitter = new ShutdownEmitter();
-const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
+//const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const util = require('util')
-const listen = require('./listener');
+//const listen = require('./listener');
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
 //const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./Vesting.js'); // Handles vesting logic
+const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules
