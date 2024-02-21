@@ -320,7 +320,7 @@ class Main {
                 break; // Break the loop if shutdown is requested
             }*/
             chainTip = await this.getBlockCountAsync()
-            //console.log('latest block '+chainTip)
+            console.log('latest block '+chainTip)
 
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);

@@ -322,7 +322,7 @@ class TxIndex {
                     { $set: { type: type, valid: isValid, reason: reason } },
                     { upsert: true }
                 );
-                console.log(`Transaction ${txData._id} validity updated in txIndex.`);
+                //console.log(`Transaction ${txData._id} validity updated in txIndex.`);
             } else {
                 console.error(`No entry found for transaction ${txId} in txIndex.`);
             }

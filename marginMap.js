@@ -258,8 +258,8 @@ class MarginMap {
         if(close==false&&flip==false){
             if(position.contracts==0){
                 if(position.avgPrice==undefined||position.avgPrice==null){
-                    console.log('setting avg. price as 0 for new position ')
-                    position.avgPrice=0
+                    console.log('setting avg. price as trade price for new position '+position.avgPrice)
+                    position.avgPrice=price
                 }else{
                     position.avgPrice=price
                 }
@@ -367,8 +367,8 @@ class MarginMap {
                                                     }
           }
         }
-        let bankruptcyPrice = bankruptcyPriceBN.toNumber()
-        let liquidationPrice = liquidationPriceBN.toNumber()
+        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.toNumber())
+        let liquidationPrice = Math.abs(liquidationPriceBN.toNumber())
         
         return {
             bankruptcyPrice,
@@ -502,7 +502,9 @@ class MarginMap {
 
         let pnl;
         //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
-
+        if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
+            console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
+        }
         const priceBN = new BigNumber(price);
         const avgPriceBN = new BigNumber(avgPrice);
         const contractsBN = new BigNumber(contracts);
@@ -624,7 +626,7 @@ class MarginMap {
             this.margins.set(address, pos)
             await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   
-            return pnl;
+            return pnl.toNumber();
     }
 
     async clear(position, address, pnlChange, avgPrice,contractId) {
@@ -637,22 +639,18 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(position, blockHeight) {
+    async triggerLiquidations(position, blockHeight, contractId) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
         // Example:
-        const liquidationOrder = this.generateLiquidationOrder(position);
-        await this.saveLiquidationOrders(position, liquidationOrder, blockHeight);
+        const liquidationOrder = this.generateLiquidationOrder(position, contractId);
+        await this.saveLiquidationOrders(contractId, position, liquidationOrder, blockHeight);
 
         return liquidationOrder;
     }
 
-    generateLiquidationOrder(position) {
-        const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
-
-            const notionalValue = position.contracts * contract.marketPrice;
-            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
+    generateLiquidationOrder(position, contractId) {
                 // Liquidate 50% of the position if below maintenance margin
                 let side 
                 if(position.contracts>0){
@@ -664,8 +662,8 @@ class MarginMap {
                 }
                 const liquidationSize = position.contracts * 0.5;
                 const liquidationOrder={
-                    address,
-                    contractId: contract.id,
+                    address: position.address,
+                    contractId: contractId,
                     size: liquidationSize,
                     price: position.liqPrice,
                     side: side,
@@ -675,19 +673,19 @@ class MarginMap {
         return liquidationOrder;
     }
 
-    static async saveLiquidationOrders(contract, order, blockHeight) {
+    async saveLiquidationOrders(contractId, position, order, blockHeight) {
         try {
             // Access the marginMaps database
             const liquidationsDB = db.getDatabase('liquidations');
 
             // Construct the key and value for storing the liquidation orders
-            const key = `liquidationOrders-${contract.id}-${blockHeight}`;
-            const value = { _id: key, order: order, blockHeight: blockHeight };
+            const key = `liquidationOrders-${contractId}-${blockHeight}`;
+            const value = { _id: key, order: order, position: position, blockHeight: blockHeight };
 
             // Save the liquidation orders in the marginMaps database
-            await marginMapsDB.insertAsync(value);
+            await liquidationsDB.insertAsync(value);
         } catch (error) {
-            console.error(`Error saving liquidation orders for contract ${contract.id} at block height ${blockHeight}:`, error);
+            console.error(`Error saving liquidation orders for contract ${contractId} at block height ${blockHeight}:`, error);
             throw error;
         }
     }
@@ -695,8 +693,17 @@ class MarginMap {
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
         const liquidationsDB = db.getDatabase('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
-        const liquidations = await liquidationsDB.find({ contractId: contractId, blockHeight: blockHeight });
+        let liquidations = []
 
+        try {
+                // Construct the key based on the provided structure
+                const key = `liquidationOrders-${contractId}-${blockHeight}`;
+                
+                // Find the document with the constructed key
+                liquidations = await liquidationsDB.findOneAsync({ _id: key });
+            } catch (error) {
+                console.error('Error fetching liquidations:', error);
+            }
         // Initialize BigNumber instances
         let liquidatedContracts = new BigNumber(0);
         let filledLiqContracts = new BigNumber(0);
@@ -708,28 +715,34 @@ class MarginMap {
         let buys = new BigNumber(0);
 
         // Calculate values using BigNumber
-        liquidations.forEach(liquidation => {
-            liquidationOrders = liquidationOrders.plus(1);
-            liquidatedContracts = liquidatedContracts.plus(liquidation.contractCount);
-            bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.plus(new BigNumber(liquidation.size).times(new BigNumber(liquidation.bankruptcyPrice)));
-            avgBankrupcyPrice = avgBankrupcyPrice.plus(new BigNumber(liquidation.bankruptcyPrice));
-            if (liquidation.side == false) {
-                sells = sells.plus(0);
-            } else if (liquidation.side == true) {
-                buys = buys.plus(0);
-            }
-        });
+        if (liquidations && liquidations.length > 0) {
+            liquidations.forEach(liquidation => {
+                liquidationOrders = liquidationOrders.plus(1);
+                liquidatedContracts = liquidatedContracts.plus(liquidation.contractCount);
+                bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.plus(new BigNumber(liquidation.size).times(new BigNumber(liquidation.bankruptcyPrice)));
+                avgBankrupcyPrice = avgBankrupcyPrice.plus(new BigNumber(liquidation.bankruptcyPrice));
+                if (liquidation.side == false) {
+                    sells = sells.plus(0);
+                } else if (liquidation.side == true) {
+                    buys = buys.plus(0);
+                }
+            });
+        }else{
+            console.log("No liquidations found for the given criteria.");
+        }
 
         bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.dividedBy(liquidatedContracts);
         avgBankrupcyPrice = avgBankrupcyPrice.dividedBy(liquidationOrders);
 
+        const tradeHistoryDB = db.getDatabase('tradeHistory');
+        const tradeKey = `liquidationOrders-${contractId}-${blockHeight}`;
         // Fetch trade history for the given blockHeight and contractId
-        const trades = await tradeHistoryDB.find({ blockHeight: blockHeight, contractId: contractId });
+        const trades = await tradeHistoryDB.findAsync();
 
         // Count the number of liquidation orders in the trade history
         let liquidationTradeMatches = new BigNumber(0);
         trades.forEach(trade => {
-            if (trade.trade.isLiq === true) {
+            if (trade.trade.isLiq === true&&trade.blockHeight==blockHeight) {
                 liquidationTradeMatches = liquidationTradeMatches.plus(1);
                 filledLiqContracts = filledLiqContracts.plus(trade.trade.amount);
                 filledVWAP = filledVWAP.plus(trade.trade.tradePrice);

@@ -414,7 +414,7 @@ class Channels {
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
-            //console.log('inside process withdrawals '+JSON.stringify(withdrawal))
+            console.log('inside process withdrawals '+JSON.stringify(withdrawal))
             const { block, senderAddress, amount, channel, propertyId, withdrawAll, column } = withdrawal;
             //console.log('about to call getChannel in withdrawals '+channel+' ' +JSON.stringify(withdrawal))
             let thisChannel = await this.getChannel(channel)
@@ -451,7 +451,7 @@ class Channels {
                 }else if(column=="B"){
                   balance = thisChannel.B[propertyId]
                 }
-                if (balance >= amount) {
+                if (balance >= amount&&!isNaN(amount)) {
                     if(!withdrawAll){
                         await this.processWithdrawal(senderAddress,thisChannel,amount,propertyId,column,blockHeight)
                     }
@@ -462,7 +462,7 @@ class Channels {
                     await this.removePendingWithdrawalFromDB(withdrawal)
                 } else {
                     // Insufficient balance, eject the withdrawal from the queue
-                    //console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
+                    console.log(`Insufficient balance for withdrawal: ${senderAddress}`+' amt'+amount+' prptyid'+propertyId);
                     this.pendingWithdrawals.splice(i, 1);
                     i--; // Adjust index after removal
                     await this.removePendingWithdrawalFromDB(withdrawal)

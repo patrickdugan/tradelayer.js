@@ -87,7 +87,7 @@ const Logic = {
                 await Logic.createContractSeries(params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
-                await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,, params.block);
+                await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
                 break;
             case 18:
                 await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress);
@@ -108,7 +108,7 @@ const Logic = {
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
                 break;
             case 24:
-                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress params.block);
+                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress, params.block);
                 break;
             case 25:
                 await Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress, params.block);
