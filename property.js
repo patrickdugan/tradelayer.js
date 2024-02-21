@@ -23,6 +23,7 @@ class PropertyManager {
     static async load() {
         console.log('loading property list');
         try {
+            const instance = PropertyManager.getInstance();
             const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
             if (propertyIndexEntry && propertyIndexEntry.value) {
                 // Check if the value is a string and parse it as JSON
@@ -30,17 +31,17 @@ class PropertyManager {
 
                 // Ensure the data is an array of arrays before converting it to a Map
                 if (Array.isArray(data) && data.every(item => Array.isArray(item) && item.length === 2)) {
-                    this.propertyIndex = new Map(data);
+                    instance.propertyIndex = new Map(data);
                 } else {
                     console.error('Invalid data format for propertyIndex:', data);
-                    this.propertyIndex = new Map();
+                    instance.propertyIndex = new Map();
                 }
             } else {
-                this.propertyIndex = new Map(); // Initialize with an empty Map if no data is found
+                instance.propertyIndex = new Map(); // Initialize with an empty Map if no data is found
             }
         } catch (error) {
             console.error('Error loading data from NeDB:', error);
-            this.propertyIndex = new Map(); // Use an empty Map in case of an error
+            instance.propertyIndex = new Map(); // Use an empty Map in case of an error
         }
     }
 
@@ -147,9 +148,15 @@ class PropertyManager {
     }
 
     static async getPropertyIndex() {
-        await this.load(); // Ensure the property list is loaded
+        const instance = PropertyManager.getInstance();
+
+        // If the propertyIndex is empty, load it first
+        if (instance.propertyIndex.size === 0) {
+            await PropertyManager.load();
+        }
+        
         // Transform the Map into an array of objects, each representing a property
-        return Array.from(this.propertyIndex).map(([id, property]) => ({
+        return Array.from(instance.propertyIndex).map(([id, property]) => ({
             id,
             ticker: property.ticker,
             totalInCirculation: property.totalInCirculation,

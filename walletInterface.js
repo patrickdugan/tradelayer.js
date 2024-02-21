@@ -132,4 +132,4 @@ const expressInterface = {
             return response.data;
         } catch (error) {
             console.error('Error in getOracleHistory:', error.response ? error.response.data : error.message);
-            throw er
+            throw error;
