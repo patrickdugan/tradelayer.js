@@ -260,7 +260,7 @@ class Clearing {
         if(isOracleContract){
             oracleId = await ContractList.getOracleId(contractId)
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
-           
+            //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
             let info = await ContractList.getContractInfo(contractId)
             propertyId1 = info.native.native.onChainData[0]
@@ -272,14 +272,13 @@ class Clearing {
                 const latestBlockData = sortedData[sortedData.length-1];
                 const lastPriceEntry = latestBlockData[latestBlockData.length-1]
                 const currentMarkPrice = lastPriceEntry.data.price;
-            
                 let previousMarkPrice = null
                 
-                if(sortedData.length>1){
+                if(latestData.length>1){
                     previousMarkPrice = latestBlockData[latestBlockData.length-2].data.price
                 }
                     console.log('checking mark price current and last '+currentMarkPrice+' '+previousMarkPrice)
-                return {lastprice: previousMarkPrice, thisPrice:currentMarkPrice}
+                return {lastPrice: previousMarkPrice, thisPrice:currentMarkPrice}
     }
 
     static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){

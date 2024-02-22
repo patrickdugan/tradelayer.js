@@ -502,7 +502,7 @@ class MarginMap {
 
         let pnl;
         //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
-        if(avgPrice==0||avgPrice==null||avgPrice==undefined||avgPrice.isNaN()){
+        if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
             console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
         }
         const priceBN = new BigNumber(price);
