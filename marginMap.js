@@ -367,8 +367,8 @@ class MarginMap {
                                                     }
           }
         }
-        let bankruptcyPrice = bankruptcyPriceBN.toNumber()
-        let liquidationPrice = liquidationPriceBN.toNumber()
+        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.toNumber())
+        let liquidationPrice = Math.abs(liquidationPriceBN.toNumber())
         
         return {
             bankruptcyPrice,
@@ -639,22 +639,18 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(position, blockHeight) {
+    async triggerLiquidations(position, blockHeight, contractId) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
         // Example:
-        const liquidationOrder = this.generateLiquidationOrder(position);
+        const liquidationOrder = this.generateLiquidationOrder(position, contractId);
         await this.saveLiquidationOrders(position, liquidationOrder, blockHeight);
 
         return liquidationOrder;
     }
 
-    generateLiquidationOrder(position) {
-        const maintenanceMarginFactor = 0.05; // 5% for maintenance margin
-
-            const notionalValue = position.contracts * contract.marketPrice;
-            const maintenanceMargin = notionalValue * maintenanceMarginFactor;
+    generateLiquidationOrder(position, contractId) {
                 // Liquidate 50% of the position if below maintenance margin
                 let side 
                 if(position.contracts>0){
@@ -666,8 +662,8 @@ class MarginMap {
                 }
                 const liquidationSize = position.contracts * 0.5;
                 const liquidationOrder={
-                    address,
-                    contractId: contract.id,
+                    address: position.address,
+                    contractId: contractId,
                     size: liquidationSize,
                     price: position.liqPrice,
                     side: side,
