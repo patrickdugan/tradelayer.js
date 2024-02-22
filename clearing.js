@@ -171,10 +171,10 @@ class Clearing {
                 const notionalValue = await ContractList.getNotionalValue(contract.id)
                 
                 // Update margin maps based on mark prices and current contract positions
-                let {positions, liquidationData} = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
+                let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
 
                  // Perform additional tasks like loss socialization if needed
-                if(liquidationData.length>0){
+                if(isLiq){
                     await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id,positions.lastMark);
                 }
             } else {
@@ -197,6 +197,7 @@ class Clearing {
                 // Iterate through each position to adjust for profit or loss
                 let blob = await Clearing.getPriceChange(blockHeight, contractId)
                 console.log('clearing price difference '+blob.lastPrice +' '+ blob.thisPrice)
+                let isLiq =false
         for (let position of positions) {
             if(blob.lastPrice==null){
                     console.log('last price was null what about avg price? '+position.avgPrice)
@@ -207,7 +208,7 @@ class Clearing {
             console.log('updatingMarginMaps with pnlChange '+JSON.stringify(position) + ' '+ pnlChange)
             const newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice,contractId)
             console.log('new Position '+ JSON.stringify(newPosition))
-            let isLiq =false
+            
             if(pnlChange<0){
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange))
                 console.log(JSON.stringify(balance))
@@ -235,7 +236,6 @@ class Clearing {
                          if(liq!="err:0 contracts"){
                               const orderbook = await Orderbooks.getOrderbookInstance(contractId)
                              orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true)
-                            liquidationData.push(...liq);
                          }else{
                             throw new Error(console.log(liq))
                          }
@@ -248,8 +248,7 @@ class Clearing {
         positions.lastMark = blob.lastPrice
             // Save the updated margin map
         await marginMap.saveMarginMap(false);
-        console.log('any liquidations '+liquidationData)
-        return {positions,liquidationData};
+        return {positions, isLiq};
     }
 
     static async getPriceChange(blockHeight, contractId){

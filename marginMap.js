@@ -693,8 +693,17 @@ class MarginMap {
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
         const liquidationsDB = db.getDatabase('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
-        const liquidations = await liquidationsDB.find({ contractId: contractId, blockHeight: blockHeight });
+        let liquidations = []
 
+        try {
+                // Construct the key based on the provided structure
+                const key = `liquidationOrders-${contractId}-${blockHeight}`;
+                
+                // Find the document with the constructed key
+                liquidations = await liquidationsDB.findOneAsync({ _id: key });
+            } catch (error) {
+                console.error('Error fetching liquidations:', error);
+            }
         // Initialize BigNumber instances
         let liquidatedContracts = new BigNumber(0);
         let filledLiqContracts = new BigNumber(0);
@@ -706,28 +715,34 @@ class MarginMap {
         let buys = new BigNumber(0);
 
         // Calculate values using BigNumber
-        liquidations.forEach(liquidation => {
-            liquidationOrders = liquidationOrders.plus(1);
-            liquidatedContracts = liquidatedContracts.plus(liquidation.contractCount);
-            bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.plus(new BigNumber(liquidation.size).times(new BigNumber(liquidation.bankruptcyPrice)));
-            avgBankrupcyPrice = avgBankrupcyPrice.plus(new BigNumber(liquidation.bankruptcyPrice));
-            if (liquidation.side == false) {
-                sells = sells.plus(0);
-            } else if (liquidation.side == true) {
-                buys = buys.plus(0);
-            }
-        });
+        if (liquidations && liquidations.length > 0) {
+            liquidations.forEach(liquidation => {
+                liquidationOrders = liquidationOrders.plus(1);
+                liquidatedContracts = liquidatedContracts.plus(liquidation.contractCount);
+                bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.plus(new BigNumber(liquidation.size).times(new BigNumber(liquidation.bankruptcyPrice)));
+                avgBankrupcyPrice = avgBankrupcyPrice.plus(new BigNumber(liquidation.bankruptcyPrice));
+                if (liquidation.side == false) {
+                    sells = sells.plus(0);
+                } else if (liquidation.side == true) {
+                    buys = buys.plus(0);
+                }
+            });
+        }else{
+            console.log("No liquidations found for the given criteria.");
+        }
 
         bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.dividedBy(liquidatedContracts);
         avgBankrupcyPrice = avgBankrupcyPrice.dividedBy(liquidationOrders);
 
+        const tradeHistoryDB = db.getDatabase('tradeHistory');
+        const tradeKey = `liquidationOrders-${contractId}-${blockHeight}`;
         // Fetch trade history for the given blockHeight and contractId
-        const trades = await tradeHistoryDB.find({ blockHeight: blockHeight, contractId: contractId });
+        const trades = await tradeHistoryDB.findAsync();
 
         // Count the number of liquidation orders in the trade history
         let liquidationTradeMatches = new BigNumber(0);
         trades.forEach(trade => {
-            if (trade.trade.isLiq === true) {
+            if (trade.trade.isLiq === true&&trade.blockHeight==blockHeight) {
                 liquidationTradeMatches = liquidationTradeMatches.plus(1);
                 filledLiqContracts = filledLiqContracts.plus(trade.trade.amount);
                 filledVWAP = filledVWAP.plus(trade.trade.tradePrice);
