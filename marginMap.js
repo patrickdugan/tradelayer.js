@@ -258,8 +258,8 @@ class MarginMap {
         if(close==false&&flip==false){
             if(position.contracts==0){
                 if(position.avgPrice==undefined||position.avgPrice==null){
-                    console.log('setting avg. price as 0 for new position ')
-                    position.avgPrice=0
+                    console.log('setting avg. price as trade price for new position '+position.avgPrice)
+                    position.avgPrice=price
                 }else{
                     position.avgPrice=price
                 }
@@ -502,7 +502,9 @@ class MarginMap {
 
         let pnl;
         //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
-
+        if(avgPrice==0||avgPrice==null||avgPrice==undefined||avgPrice.isNaN()){
+            console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
+        }
         const priceBN = new BigNumber(price);
         const avgPriceBN = new BigNumber(avgPrice);
         const contractsBN = new BigNumber(contracts);
@@ -624,7 +626,7 @@ class MarginMap {
             this.margins.set(address, pos)
             await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   
-            return pnl;
+            return pnl.toNumber();
     }
 
     async clear(position, address, pnlChange, avgPrice,contractId) {

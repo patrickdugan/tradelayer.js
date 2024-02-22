@@ -462,7 +462,7 @@ class Channels {
                     await this.removePendingWithdrawalFromDB(withdrawal)
                 } else {
                     // Insufficient balance, eject the withdrawal from the queue
-                    //console.log(`Insufficient balance for withdrawal: ${senderAddress}`);
+                    console.log(`Insufficient balance for withdrawal: ${senderAddress}`+' amt'+amount+' prptyid'+propertyId);
                     this.pendingWithdrawals.splice(i, 1);
                     i--; // Adjust index after removal
                     await this.removePendingWithdrawalFromDB(withdrawal)

@@ -128,9 +128,6 @@ class Clearing {
                 const lastPriceEntry = latestBlockData[latestBlockData.length-1]
                 //console.log('checking data '+sortedData+ ' ok now latest Block data '+latestBlockData+' last price entry '+lastPriceEntry)
                 // Now, latestBlockData contains the document with the highest blockHeight
-                if(blockHeight >=3107880&&blockHeight<=3107903){
-                    console.log('Latest price entry:'+ JSON.stringify(lastPriceEntry)+' '+blockHeight);
-                }
                 if(lastPriceEntry.blockHeight==blockHeight){
                     console.log('latest data '+lastPriceEntry.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(lastPriceEntry && lastPriceEntry.blockHeight == blockHeight) )
                     return true
