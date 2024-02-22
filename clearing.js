@@ -230,9 +230,10 @@ class Clearing {
                     }
                    
                     if(isLiq==true){
-                         let liq = await marginMap.triggerLiquidations(newPosition, blockHeight);
+                         let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId);
+                         console.log('liquidation!: '+JSON.stringify(liq))
                          if(liq!="err:0 contracts"){
-                              const orderbook = Orderbooks.getOrderbookInstance(contractId)
+                              const orderbook = await Orderbooks.getOrderbookInstance(contractId)
                              orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true)
                             liquidationData.push(...liq);
                          }else{
