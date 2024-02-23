@@ -540,16 +540,24 @@ class Channels {
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       //console.log('in processWithdrawal '+channel[column][propertyId])
+
+      let has = await TallyMap.hasSufficientReserve(channel.channel,propertyId,amount)
+      console.log(amount, has.hasSufficient)
+      if(has.hasSufficient==false){
+         amount-=has.shortfall
+      }
+      console.log(amount, has.shortfall)
       channel[column][propertyId] -= amount;
-      //console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
+      console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
       await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull',block)
       await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete',block)
       this.channelsRegistry.set(channel.channel, channel);
+      return
     }
 
     static async processWithdrawAll(senderAddress, thisChannel, column,blockHeight) {
         for (const [propertyId, amount] of Object.entries(thisChannel[column])) {
-          //console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
+          console.log('in process withdraw all '+senderAddress,thisChannel, amount, propertyId, column)
             await this.processWithdrawal(senderAddress, thisChannel, amount, parseInt(propertyId), column,blockHeight);
         }
     }

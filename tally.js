@@ -235,6 +235,28 @@ class TallyMap {
         }
     }
 
+    static async hasSufficientReserve(senderAddress, propertyId, requiredAmount) {
+        try {
+            const senderTally = await this.getTally(senderAddress, propertyId);
+            console.log('Checking senderTally in has hasSufficientReserve', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
+
+            if (!senderTally || senderTally.reserved === undefined) {
+                return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
+            }
+
+            console.log('Reserve tokens:', senderTally.reserved, 'Required amount:', requiredAmount);
+
+            if (senderTally.reserved < requiredAmount) {
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: requiredAmount-senderTally.reserved };
+            }
+
+            return { hasSufficient: true, reason: '' };
+        } catch (error) {
+            console.error('Error in hasSufficientBalance:', error);
+            return { hasSufficient: false, reason: 'Unexpected error checking balance' };
+        }
+    }
+
 
     async saveToDB() {
         try {
