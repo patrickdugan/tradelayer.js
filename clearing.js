@@ -312,10 +312,13 @@ class Clearing {
             //console.log('pnl ' + pnl.toNumber());
         }
 
-        console.log(priceBN +' '+currentMarkPrice+' '+avgPriceBN+' ' +previousMarkPrice+' '+contractsBN+' '+position.contracts+' '+notionalValueBN+' '+notionalValue)
+        console.log('clearing PNL ' +priceBN +' '+currentMarkPrice+' '+avgPriceBN+' ' +previousMarkPrice+' '+contractsBN+' '+position.contracts+' '+notionalValueBN+' '+notionalValue)
         // Adjust sign based on whether the position is long or short
-        pnl = position.contracts>0 ? pnl : pnl.negated();
-
+        if(contractsBN<0){
+            pnl.times(-1)
+        }
+        //pnl = position.contracts>0 ? pnl : pnl.negated();
+        console.log('pnl '+pnl.toNumber())
         return pnl.toNumber();
     }
 
