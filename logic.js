@@ -63,10 +63,10 @@ const Logic = {
                 await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries, params.block);
                 break;
             case 9:
-                await Logic.issueAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
+                await Logic.issueOrRevokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
                 break;
             case 10:
-                await Logic.revokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
+                await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
                 break;
             case 11:
                 await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager, params.senderAddress, params.block);
@@ -564,7 +564,7 @@ const Logic = {
 	},
 
 
-    async issueAttestation(whitelistId, targetAddress, whitelistRegistry) {
+    async issueOrRevokeAttestation(whitelistId, targetAddress, whitelistRegistry, revoke) {
 
 
 	    await whitelistRegistry.addAddressToWhitelist(whitelistId, targetAddress);
@@ -572,13 +572,29 @@ const Logic = {
         return
 	},
 
-    async revokeAttestation(whitelistId, targetAddress, whitelistRegistry) {
+   async AMMPool(sender, block, isRedeem, isContract, id, amount, id2, amount2) {
+        let ammInstance;
 
+        if (isContract) {
+            ammInstance = await ContractRegistry.getAMM(id);
+        } else {
+            ammInstance = await PropertyRegistry.getAMM(id, id2);
+        }
 
-        await whitelistRegistry.removeAddressFromWhitelist(whitelistId, targetAddress);
-        console.log(`Address ${targetAddress} removed from whitelist ${whitelistId}`);
-        return
-	},
+        if (!ammInstance) {
+            throw new Error('AMM instance not found');
+        }
+
+        if (isRedeem&&isContract) {
+            await ammInstance.redeemCapital(sender, id, amount, isContract, block);
+        }else if(isRedeem&&!isContract){
+            await ammInstance.redeemCapital(sender, id, amount, isContract, id2, amount2, block)
+        }else if(!isRedeem&&isContract){ 
+            await ammInstance.addCapital(sender, id, amount, isContract, block);
+        }else if(!isRedeem&&!isContract){
+            await ammInstance.addCapital(sender, id, amount,isContract, id2, amount2,block)
+        }
+    }
 
     async grantManagedToken(propertyId, amount, recipientAddress, propertyManager,block) {
 

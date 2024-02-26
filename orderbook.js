@@ -822,7 +822,7 @@ class Orderbook {
             }
         }
 
-        async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token) {
+        async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
             await this.loadOrCreateOrderBook(orderBookKey,true)
             //console.log('canceling for key ' +orderBookKey)
             const orderBook = this.orderBooks[orderBookKey]; // Assuming this is the correct reference
@@ -836,84 +836,118 @@ class Orderbook {
                 return []
             }
 
-            if(criteria.txid!=undefined){
-                //console.log('cancelling by txid '+criteria.txid)
-              for (let i = orderBook.buy.length - 1; i >= 0; i--) {
-                const ord = orderBook.buy[i]
-                if(ord.txid === criteria.txid){
-                        cancelledOrders.push(ord);
-
-                        //console.log('splicing order '+JSON.stringify(ord))
-                        orderBook.buy.splice(i, 1);
-                }
-               }
-
-               for (let i = orderBook.sell.length - 1; i >= 0; i--) {
-                const ordi = orderBook.sell[i]
-                if(ordi.txid === criteria.txid){
-                    //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
-                        cancelledOrders.push(ordi);
-
-                        //console.log('splicing order '+JSON.stringify(ordi))
-                        orderBook.buy.splice(i, 1);
-                }
-               }
-
-            }else{
-                      //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
+             // Check if the cancellation criteria are for AMM orders
+            if (amm) {
                 for (let i = orderBook.buy.length - 1; i >= 0; i--) {
-
-                    const order = orderBook.buy[i];
-                    
-                    if(this.shouldCancelOrder(order,criteria)){
-                         // Logic to cancel the order
+                        const order = orderBook.buy[i];
+                        // Check if the order is an AMM order (marked by "amm" sender)
+                        if (order.sender === "amm") {
                             cancelledOrders.push(order);
-
-                            //console.log('splicing order '+JSON.stringify(order))
                             orderBook.buy.splice(i, 1);
-
-                            if(token==true){
-                                returnFromReserve+=order.amountOffered
-                            }else{
-                                returnFromReserve+=order.initMargin
+                            // Adjust return from reserve based on the cancelled order
+                            if (token === true) {
+                                returnFromReserve += order.amountOffered;
+                            } else {
+                                returnFromReserve += order.initMargin;
                             }
+                        }
                     }
-                }
 
-                //console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
-                for (let i = orderBook.sell.length - 1; i >= 0; i--) {
-                    const order = orderBook.sell[i];
-
-                    if(this.shouldCancelOrder(order,criteria)){
-                            //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
-                         // Logic to cancel the order
+                    // Loop through the sell side book as well
+                    for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                        const order = orderBook.sell[i];
+                        // Check if the order is an AMM order (marked by "amm" sender)
+                        if (order.sender === "amm") {
                             cancelledOrders.push(order);
-                            //console.log('splicing order '+JSON.stringify(order))
                             orderBook.sell.splice(i, 1);
-
-                            if(token==true){
-                                returnFromReserve+=order.amountOffered
-                            }else{
-                                returnFromReserve+=order.initMargin
+                            // Adjust return from reserve based on the cancelled order
+                            if (token === true) {
+                                returnFromReserve += order.amountOffered;
+                            } else {
+                                returnFromReserve += order.initMargin;
                             }
+                        }
                     }
-                }
+                } else {
+
+                if(criteria.txid!=undefined){
+                    //console.log('cancelling by txid '+criteria.txid)
+                  for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+                    const ord = orderBook.buy[i]
+                    if(ord.txid === criteria.txid){
+                            cancelledOrders.push(ord);
+
+                            //console.log('splicing order '+JSON.stringify(ord))
+                            orderBook.buy.splice(i, 1);
+                    }
+                   }
+
+                   for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                    const ordi = orderBook.sell[i]
+                    if(ordi.txid === criteria.txid){
+                        //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
+                            cancelledOrders.push(ordi);
+
+                            //console.log('splicing order '+JSON.stringify(ordi))
+                            orderBook.buy.splice(i, 1);
+                    }
+                   }
+
+                }else{
+                          //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
+                    for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+
+                        const order = orderBook.buy[i];
+                        
+                        if(this.shouldCancelOrder(order,criteria)){
+                             // Logic to cancel the order
+                                cancelledOrders.push(order);
+
+                                //console.log('splicing order '+JSON.stringify(order))
+                                orderBook.buy.splice(i, 1);
+
+                                if(token==true){
+                                    returnFromReserve+=order.amountOffered
+                                }else{
+                                    returnFromReserve+=order.initMargin
+                                }
+                        }
+                    }
+
+                    //console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
+                    for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                        const order = orderBook.sell[i];
+
+                        if(this.shouldCancelOrder(order,criteria)){
+                                //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
+                             // Logic to cancel the order
+                                cancelledOrders.push(order);
+                                //console.log('splicing order '+JSON.stringify(order))
+                                orderBook.sell.splice(i, 1);
+
+                                if(token==true){
+                                    returnFromReserve+=order.amountOffered
+                                }else{
+                                    returnFromReserve+=order.initMargin
+                                }
+                        }
+                    }
 
             }
-          
-            //console.log('returning tokens from reserve '+returnFromReserve)
-            cancelledOrders.returnFromReserve=returnFromReserve
-            // Save the updated order book to the database
+              
+                //console.log('returning tokens from reserve '+returnFromReserve)
+                cancelledOrders.returnFromReserve=returnFromReserve
+                // Save the updated order book to the database
 
-            this.orderBooks[orderBookKey] = orderBook
-            //console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
-            await this.saveOrderBook(orderBookKey);
+                this.orderBooks[orderBookKey] = orderBook
+                //console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
+                await this.saveOrderBook(orderBookKey);
 
-            // Log the cancellation for record-keeping
-            //console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
+                // Log the cancellation for record-keeping
+                //console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
 
-            // Return the details of the cancelled orders
-            return cancelledOrders;
+                // Return the details of the cancelled orders
+                return cancelledOrders;
         }
 
         shouldCancelOrder(order, criteria) {

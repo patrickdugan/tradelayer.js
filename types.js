@@ -40,10 +40,10 @@ const Types = {
                 payload += Encode.encodeUpdateAdmin(params);
                 break;
             case 9:
-                payload += Encode.encodeIssueAttestation(params);
+                payload += Encode.encodeIssueOrRevokeAttestation(params);
                 break;
             case 10:
-                payload += Encode.encodeRevokeAttestation(params);
+                payload += Encode.encodeAMMPool(params);
                 break;
             case 11:
                 payload += Encode.encodeGrantManagedToken(params);
@@ -109,13 +109,13 @@ const Types = {
                 payload += Encode.encodePublishNewTx(params);
                 break;
             case 32:
-                payload += Encode.encodeCreateDerivativeOfLRC20OrRGB(params);
+                payload += Encode.encodeMintColoredCoin(params);
                 break;
             case 33:
                 payload += Encode.encodeRegisterOPCTVCovenant(params);
                 break;
             case 34:
-                payload += Encode.encodeMintColoredCoin(params);
+                payload += Encode.zkSwap(params);
                 break;
       default:
         throw new Error('Unknown transaction type');
@@ -192,10 +192,10 @@ const Types = {
                 params = Decode.decodeUpdateAdmin(encodedPayload.substr(index));
                 break;
             case 9:
-                params = Decode.decodeIssueAttestation(encodedPayload.substr(index));
+                params = Decode.decodeIssueOrRevokeAttestation(encodedPayload.substr(index));
                 break;
             case 10:
-                params = Decode.decodeRevokeAttestation(encodedPayload.substr(index));
+                params = Decode.decodeAMMPool(encodedPayload.substr(index));
                 break;
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));

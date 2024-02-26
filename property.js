@@ -10,6 +10,7 @@ class PropertyManager {
         }
 
         this.propertyIndex = new Map();
+        this.ammIndex = new Map(); // Initialize AMM index
         PropertyManager.instance = this;
     }
 
@@ -113,6 +114,21 @@ class PropertyManager {
         console.log('Properties as Array:', propertiesArray);
         console.log('Properties as Object:', propertiesObject);
     }
+
+    static async getAMM(propertyId1, propertyId2) {
+        const pairKey = `${propertyId1}-${propertyId2}`;
+        const ammInstance = PropertyRegistry.getInstance().ammIndex.get(pairKey);
+
+        if (ammInstance) {
+            return ammInstance;
+        } else {
+            // If AMM instance doesn't exist, initialize it
+            const newAMM = await initializeAMM(propertyId1, propertyId2); // You need to define the initialization logic
+            PropertyRegistry.getInstance().ammIndex.set(pairKey, newAMM);
+            return newAMM;
+        }
+    }
+
 
     async save() {
 
