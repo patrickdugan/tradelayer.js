@@ -1,5 +1,5 @@
 var dbInstance = require('./db.js')
-var TxIndex = require('./txindex.js')
+var TxIndex = require('./txIndex.js')
 var PropertyList = require('./property.js')
 const uuid = require('uuid');
 const BigNumber = require('bignumber.js');

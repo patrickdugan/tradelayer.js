@@ -30,7 +30,7 @@ app.post('/tl_initmain', async (req, res) => {
 
 // Get all balances for an address
 app.post('/tl_getallbalancesforaddress', async (req, res) => {
-    console.log('Trying to load balances ' + req.body.address);
+    console.log('Trying to load balances for: ' + req.body.params);
 
     try {
         const tallyMapInstance = await TallyMap.getInstance();
@@ -38,10 +38,22 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
             throw new Error("Failed to get TallyMap instance");
         }
         await tallyMapInstance.loadFromDB();
-        const balances = tallyMapInstance.getAddressBalances(req.body.address);
+        const balances = tallyMapInstance.getAddressBalances(req.body.params);
         res.status(200).json(balances);
     } catch (error) {
         console.error(error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_getproperty', async (req, res) => {
+    try {
+        const pid = req.body.params;
+        console.log('tl_getproperty: ' + pid);
+        const data = await PropertyManager.getPropertyData(pid);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching property data:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
@@ -185,5 +197,8 @@ app.get('/tl_oraclehistory', async (req, res) => {
 // ... Other endpoints ...
 
 app.listen(port, () => {
+    // const params = ['a1','c3'];
+    // const body = { params };
+    // console.log(`body:${JSON.stringify(body)}`)
     console.log(`Express server running on port ${port}`);
 });
