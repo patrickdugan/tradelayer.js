@@ -838,7 +838,7 @@ class Orderbook {
 
              // Check if the cancellation criteria are for AMM orders
             if (amm) {
-                for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+                    for (let i = orderBook.buy.length - 1; i >= 0; i--) {
                         const order = orderBook.buy[i];
                         // Check if the order is an AMM order (marked by "amm" sender)
                         if (order.sender === "amm") {
@@ -870,68 +870,69 @@ class Orderbook {
                     }
                 } else {
 
-                if(criteria.txid!=undefined){
-                    //console.log('cancelling by txid '+criteria.txid)
-                  for (let i = orderBook.buy.length - 1; i >= 0; i--) {
-                    const ord = orderBook.buy[i]
-                    if(ord.txid === criteria.txid){
-                            cancelledOrders.push(ord);
+                    if(criteria.txid!=undefined){
+                        //console.log('cancelling by txid '+criteria.txid)
+                      for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+                        const ord = orderBook.buy[i]
+                        if(ord.txid === criteria.txid){
+                                cancelledOrders.push(ord);
 
-                            //console.log('splicing order '+JSON.stringify(ord))
-                            orderBook.buy.splice(i, 1);
-                    }
-                   }
-
-                   for (let i = orderBook.sell.length - 1; i >= 0; i--) {
-                    const ordi = orderBook.sell[i]
-                    if(ordi.txid === criteria.txid){
-                        //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
-                            cancelledOrders.push(ordi);
-
-                            //console.log('splicing order '+JSON.stringify(ordi))
-                            orderBook.buy.splice(i, 1);
-                    }
-                   }
-
-                }else{
-                          //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
-                    for (let i = orderBook.buy.length - 1; i >= 0; i--) {
-
-                        const order = orderBook.buy[i];
-                        
-                        if(this.shouldCancelOrder(order,criteria)){
-                             // Logic to cancel the order
-                                cancelledOrders.push(order);
-
-                                //console.log('splicing order '+JSON.stringify(order))
+                                //console.log('splicing order '+JSON.stringify(ord))
                                 orderBook.buy.splice(i, 1);
-
-                                if(token==true){
-                                    returnFromReserve+=order.amountOffered
-                                }else{
-                                    returnFromReserve+=order.initMargin
-                                }
                         }
-                    }
+                       }
 
-                    //console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
-                    for (let i = orderBook.sell.length - 1; i >= 0; i--) {
-                        const order = orderBook.sell[i];
+                       for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                        const ordi = orderBook.sell[i]
+                        if(ordi.txid === criteria.txid){
+                            //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
+                                cancelledOrders.push(ordi);
 
-                        if(this.shouldCancelOrder(order,criteria)){
-                                //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
-                             // Logic to cancel the order
-                                cancelledOrders.push(order);
-                                //console.log('splicing order '+JSON.stringify(order))
-                                orderBook.sell.splice(i, 1);
-
-                                if(token==true){
-                                    returnFromReserve+=order.amountOffered
-                                }else{
-                                    returnFromReserve+=order.initMargin
-                                }
+                                //console.log('splicing order '+JSON.stringify(ordi))
+                                orderBook.buy.splice(i, 1);
                         }
-                    }
+                       }
+
+                    }else{
+                              //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
+                        for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+
+                            const order = orderBook.buy[i];
+                            
+                            if(this.shouldCancelOrder(order,criteria)){
+                                 // Logic to cancel the order
+                                    cancelledOrders.push(order);
+
+                                    //console.log('splicing order '+JSON.stringify(order))
+                                    orderBook.buy.splice(i, 1);
+
+                                    if(token==true){
+                                        returnFromReserve+=order.amountOffered
+                                    }else{
+                                        returnFromReserve+=order.initMargin
+                                    }
+                            }
+                        }
+
+                        //console.log('orderbook sellside '+JSON.stringify(orderBook.sell))
+                        for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                            const order = orderBook.sell[i];
+
+                            if(this.shouldCancelOrder(order,criteria)){
+                                    //if(criteria.address=="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"){console.log('canceling all')}
+                                 // Logic to cancel the order
+                                    cancelledOrders.push(order);
+                                    //console.log('splicing order '+JSON.stringify(order))
+                                    orderBook.sell.splice(i, 1);
+
+                                    if(token==true){
+                                        returnFromReserve+=order.amountOffered
+                                    }else{
+                                        returnFromReserve+=order.initMargin
+                                    }
+                            }
+                        }
+                }
 
             }
               

@@ -1,3 +1,7 @@
+const ContractRegistry = require('./contractRegistry.js')
+const Orderbook = require('./orderbook.js')
+const Clearing = require('./clearing.js')
+
 class AMMPool {
     constructor(initialPosition, maxPosition, maxQuoteSize, contractType) {
         this.position = initialPosition;
@@ -8,20 +12,29 @@ class AMMPool {
         this.ammOrders = []; // Array to store AMM orders
     }
 
-    async updateOrdersForAllContractAMMs() {
+    static async updateOrdersForAllContractAMMs(block) {
         // Get the list of all contract IDs
-        const contractIds = await ContractRegistry.getAllContractIds();
-
+        const contractIds = await ContractRegistry.loadContractSeries();
+        console.log(JSON.stringify(contractIds))
         // Loop through each contract ID
         for (const contractId of contractIds) {
+            let change = await Clearing.isPriceUpdatedForBlock(contractId, block)
+            if(!change){continue}
+            let blob = await Clearing.getPriceChange(blockHeight, contractId)
+            let lastPrice = blob.lastPrice
             // Get the AMM instance for the current contract ID
             const ammInstance = await ContractRegistry.getAMMInstance(contractId);
             
             // Get the orderbook key for the current contract ID
             const orderBookKey = contractId; // Assuming the orderbook key is the same as the contract ID
-            
+            let inverse = ContractRegistry.isInverse(contractId)
+            let priceDistance = 0.2
+            let token = false
             // Generate orders for the AMM instance
-            const orders = await ammInstance.generateOrders();
+            const orders = await ammInstance.generateOrders(lastPrice, priceDistance, totalOrders, contractId, null, inverse, token);
+
+             let orderbook = Orderbook.getOrderbookInstance(orderBookKey)
+                 orderbook.cancelOrdersByCriteria('amm', orderBookKey, {},false,true)
 
             // Insert the generated orders into the orderbook
             for (const order of orders) {
@@ -30,9 +43,9 @@ class AMMPool {
                 
                 // Determine if it's a liquidation order based on order.isLiq
                 const isLiq = order.isLiq;
-
+               
                 // Insert the order into the orderbook
-                const message = await this.insertOrder(order, orderBookKey, isBuyOrder, isLiq);
+                const message = await orderbook.insertOrder(order, orderBookKey, isBuyOrder, isLiq);
                 console.log(message);
             }
 
@@ -189,7 +202,7 @@ class AMMPool {
 
     generateOrdersForInverse(oraclePrice, priceDistance, totalOrders) {
         // Calculate distance from oracle to bottom tick
-        const distanceFromOracle = 0.01; // Assuming bottom tick is 0.01 away from oracle
+        const distanceFromOracle = 0.001; // Assuming bottom tick is 0.01 away from oracle
 
         // Calculate order size based on distance from oracle
         const orderSize = this.calculateOrderSize(distanceFromOracle, priceDistance, totalOrders);
