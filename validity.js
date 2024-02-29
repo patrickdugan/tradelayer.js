@@ -396,7 +396,7 @@ const Validity = {
         },
 
         // 9: Issue Attestation
-        validateIssueAttestation: async (sender, params, txid) => {
+        validateIssueOrRevokeAttestation: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -416,8 +416,8 @@ const Validity = {
             return params;
         },
 
-        // 10: Revoke Attestation
-        validateRevokeAttestation: async (sender, params, txid) => {
+        // 10: AMM Pool Attestation
+        validateAMMPool: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 

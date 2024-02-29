@@ -155,18 +155,25 @@ const Decode = {
     },
 
     // Decode Issue Attestation Transaction
-    decodeIssueAttestation: (payload) => {
+    decodeIssueOrRevokeAttestation: (payload) => {
         const parts = payload.split(',');
         return {
-            targetAddress: parts[0]
+            revoke: parts[0]===1,
+            id: parseInt(parts[1],36),
+            targetAddress: parts[3]
         };
     },
 
     // Decode Revoke Attestation Transaction
-    decodeRevokeAttestation: (payload) => {
+    decodeAMMPool: (payload) => {
         const parts = payload.split(',');
         return {
-            targetAddress: parts[0]
+            isRedeem: parts[0] === '1',
+            isContract: parts[1] === '1',
+            id: parseInt(parts[2],36),
+            amount: parseInt(parts[3],36),
+            id2: parseInt(parts[4],36),
+            amount2: parseInt(parts[5],36)
         };
     },
 

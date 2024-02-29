@@ -140,17 +140,24 @@ const Encode = {
 
 
     // Encode Issue Attestation Transaction
-    encodeIssueAttestation: (params) => {
+    encodeIssueOrRevokeAttestation: (params) => {
         const payload = [
+            params.revoke,
+            params.id,
             params.targetAddress,
         ];
         return payload.join(',');
     },
 
     // Encode Revoke Attestation Transaction
-    encodeRevokeAttestation: (params) => {
+    encodeAMMPool: (params) => {
         const payload = [
-            params.targetAddress,
+            params.isRedeem, 
+            params.isContract, 
+            params.id, 
+            params.amount, 
+            params.id2, 
+            params.amount2,
         ];
         return payload.join(',');
     },
