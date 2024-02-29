@@ -8,6 +8,7 @@ const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
 const Channels = require('./channels.js')
+const PropertyManager = require('./property.js')
 //const VolumeIndex = require('./volumeIndex.js')
 
 
@@ -24,10 +25,10 @@ class Clearing {
         //console.log(`Starting clearing operations for block ${blockHeight}`);
 
         // 1. Fee Cache Buy
-        //await this.feeCacheBuy();
+        await this.feeCacheBuy(blockHeight);
 
         // 2. Set channels as closed if needed
-        await Channels.removeEmptyChannels();
+        await Channels.removeEmptyChannels(blockHeight);
 
         // 3. Settle trades at block level
         await this.makeSettlement(blockHeight);
@@ -39,17 +40,42 @@ class Clearing {
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...
 
-    async feeCacheBuy() {
+    async feeCacheBuy(block) {
         console.log('Processing fee cache buy');
 
         // Fetch fees from your data source (e.g., database or in-memory store)
-        let fees = await this.fetchFees();
-
+        let fees = await TallyMap.loadFeeCacheFromDB();
         // Process each fee category
-        fees.forEach(fee => {
-            // Implement logic to use these fees
-            // For example, converting fees to another form, distributing them, etc.
-        });
+       // Process each fee category
+        for (let fee of fees) {
+            let propertyData = await PropertyManager.getPropertyData(fee.id);
+            let threshold = 1;
+            if (propertyData.totalInCirculation > 10000000000) {
+                threshold = new BigNumber(1).times(new BigNumber(10000000000).dividedBy(propertyData.totalInCirculation)).toNumber();
+            }
+
+            if (fee.value >= threshold) {
+                let orderBookKey = '1' + fee.id;
+                let orderbook = Orderbooks.getOrderbookInstance(orderBookKey);
+                const order = {
+                    offeredPropertyId: fee.id,
+                    desiredPropertyId: 1,
+                    amountOffered: fee.value,
+                    amountExpected: 0.000000001,
+                    blockTime: block,
+                    sender: 'feeCache'
+                };
+                await orderbook.insertOrder(order, orderBookKey, false);
+                TallyMap.updateFeeCache(fee.id, -fee.value);
+                const matchResult = await orderbook.matchOrders(orderBookKey);
+                if (matchResult.matches && matchResult.matches.length > 0) {
+                    //console.log('Match Result:', matchResult);
+                    await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
+                } else {
+                    console.log('No Matches for ' + txid);
+                }
+            }
+        }
 
         // Save any changes back to your data source
         await this.saveFees(fees);

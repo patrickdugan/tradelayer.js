@@ -176,7 +176,7 @@ class Orderbook {
             const matchResult = await orderbook.matchTokenOrders(normalizedOrderBookKey);
             if (matchResult.matches && matchResult.matches.length > 0) {
                 //console.log('Match Result:', matchResult);
-                await this.processTokenMatches(matchResult.matches, blockHeight, txid, false);
+                await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
             }else{console.log('No Matches for ' +txid)}
             //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
 
@@ -282,7 +282,7 @@ class Orderbook {
                     return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
-        async processTokenMatches(matches, blockHeight, txid, channel) {
+        async processTokenMatches(matches, blockHeight, txid, channel,fee) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches) || matches.length === 0) {
                 //console.log('No valid matches to process');

@@ -310,7 +310,7 @@ class TallyMap {
     }
 
     
-    static async loadFeeCacheFromDB(propertyId) {
+    static async loadFeeCacheFromDB() {
         let propertyIndex = await PropertyList.getPropertyIndex()    
         try {
             const db = dbInstance.getDatabase('feeCache');
@@ -318,14 +318,15 @@ class TallyMap {
 
             // Assuming you have a list of property IDs, iterate through them
             for (let id of propertyIndex) {
-                const query = { _id: 'feeCache-' + propertyIndex.id };
+                const query = { _id: propertyIndex.id };
                 const result = await db.findOneAsync(query);
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
-                    this.feeCache.set(propertyId, feeAmount);
+                    this.feeCache.set(propertyIndex.id, feeAmount);
                 }
             }
             console.log('FeeCache loaded successfully.');
+            return this.feeCache
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);
         }
@@ -344,7 +345,7 @@ class TallyMap {
 
      // Method to update fee cache for a property
     static async updateFeeCache(propertyId, feeAmount) {
-        await this.loadFeeCacheFromDB();
+        await this.loadFeeCacheFromDB(propertyId);
 
         if (feeAmount === undefined || feeAmount === null) {
             console.error('Invalid feeAmount:', feeAmount);
