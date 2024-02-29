@@ -346,11 +346,34 @@ class TallyMap {
     static async updateFeeCache(propertyId, feeAmount) {
         await this.loadFeeCacheFromDB();
 
+        if (feeAmount === undefined || feeAmount === null) {
+            console.error('Invalid feeAmount:', feeAmount);
+            return; // Exit early if feeAmount is invalid
+        }
 
         if (!this.feeCache.has(propertyId)) {
             this.feeCache.set(propertyId, 0); // Initialize if not present
         }
+        
         const currentFee = this.feeCache.get(propertyId);
+        if (currentFee === undefined || currentFee === null) {
+            console.error('Invalid currentFee:', currentFee);
+            return; // Exit early if currentFee is invalid
+        }
+
+        // Check if feeAmount is a valid number
+        if (isNaN(feeAmount)) {
+            console.error('Invalid feeAmount:', feeAmount);
+            return; // Exit early if feeAmount is not a number
+        }
+
+        // Check if currentFee is a valid number
+        if (isNaN(currentFee)) {
+            console.error('Invalid currentFee:', currentFee);
+            return; // Exit early if currentFee is not a number
+        }
+
+        // Update the fee cache
         this.feeCache.set(propertyId, currentFee + feeAmount);
 
         // Optionally, persist fee cache changes to database if necessary

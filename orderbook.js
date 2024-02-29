@@ -704,6 +704,22 @@ class Orderbook {
                    
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
                     const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
+                    let fee 
+                    if (isInverse) {
+                        fee = new BigNumber(0.000025)
+                            .times(notionalValue)
+                            .times(lastMark)
+                            .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                    } else {
+                        fee = new BigNumber(lastMark)
+                            .dividedBy(notionalValue)
+                            .times(0.000025)
+                            .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                    }
+                    await TallyMap.updateFeeCache(collateralPropertyId,fee.toNumber())
+                    await TallyMap.updateBalance(trade.buyerAddress,collateralPropertyId,0,0,-fee,0,'contractFee')
+                    await TallyMap.updateBalance(trade.sellerAddress,collateralPropertyId,0,0,-fee,0,'contractFee')
+
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     if (isBuyerReducingPosition||isBuyerFlippingPosition) {
