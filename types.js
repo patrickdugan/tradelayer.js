@@ -4,6 +4,7 @@ const Encode = require('./txEncoder'); // Update the path to your txEncoder.js f
 // Import the decoding functions from txDecoder.js
 const Decode = require('./txDecoder'); // Update the path to your txDecoder.js file
 const Validity = require('./validity');
+const TxUtils = require('./txUtils')
 
 const Types = {
   // Function to encode a payload based on the transaction ID and parameters
@@ -162,7 +163,11 @@ const Types = {
                 params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validatevalidateTradeTokenForUTXO(sender, params, txId)
+                let decode = await TxUtils.decoderawtransaction(txId)
+                params.satsPaymentAddress = decode.vOut[0].scriptPubKey.addresses[0]
+                params.utxoAmount = decode.vOut[0].value
+                params.tokenDeliveryAddress = decode.vOut[params.tokenOutput].scriptPubKey.addresses[0]
+                params = await Validity.validatevalidateTradeTokenForUTXO(sender, params, decode)
                 break;
             case 4:
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));

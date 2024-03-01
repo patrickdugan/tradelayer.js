@@ -172,9 +172,35 @@ const Validity = {
                 params.valid = false
                 params.reason += 'Invalid amount; ';
             }
+
+            let has = TallyMap.hasSufficientReserve(sender,params.propertyId,params.amount)
+
+            if(!has.hasSufficient){
+                parms.valid= true
+                params.reason += ' Insufficient Tokens '
+                params.amount -= has.shortfall
+            }
+
             if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
                 params.valid = true; //if we invalidate for things being off we will lose people's UTXO spends but we log the reason
                 params.reason += 'Invalid sats expected; ';
+            }
+
+            if(params.payToAddress!=params.satsPaymentAddress){
+                params.valid = false
+                params.reason = ' vOut[0] address does not match payToAddress'
+            }
+
+            if(params.tokenOutput==0){
+                params.valid = false
+                params.reason = ' cannot self-trade, token delivery output value is same as 0, UTXO delivery output'
+            }
+
+            if(!(Number.isInteger(params.tokenOut)){
+                params.valid = true
+                params.reason = 'tokenOutput not an integer so the address to deliver tokens cannot be parsed, defaults to 1'
+                params.tokenOutput = 1 
+                params.tokenDeliveryAddress = decode.vOut[params.tokenOutput].scriptPubKey.addresses[1]
             }
 
             return params;

@@ -45,7 +45,7 @@ const Logic = {
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
                 break;
             case 3:
-                await Logic.tradeTokenForUTXO(params.senderAddress, params.receiverAddress, params.propertyId, params.tokenAmount, params.utxoAmount, params.transactionFee, params.network, params.block);
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.payToAddress, params.propertyId, params.amount, params.utxoAmount, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.block);
                 break;
             case 4:
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
