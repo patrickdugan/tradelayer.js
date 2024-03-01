@@ -361,35 +361,37 @@ const Logic = {
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, utxoAmount, transactionFee, network,block) {
-		    // Step 1: Construct the token part of the transaction
-		    // Deduct the token amount from the sender's balance and credit to the receiver
-		    // This would involve interacting with your token management system
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, utxoAmount, satsExpected, tokenDeliveryAddress, satsReceived, block) {
+	   
+        // Calculate the number of tokens to deliver based on the LTC received
+        const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
+        const satsExpectedBigNumber = new BigNumber(satsExpected);
+        const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
 
-		    // Assuming a function to update token balances
-		    // updateTokenBalances(senderAddress, receiverAddress, propertyId, tokenAmount);
+        const tokensToDeliver = receiverLTCReceivedBigNumber
+            .dividedBy(satsExpectedBigNumber)
+            .times(decodedTokenAmountBigNumber)
+            .integerValue(BigNumber.ROUND_FLOOR);
 
-		    // Step 2: Construct the UTXO part of the transaction
-		    // Fetch UTXOs for the senderAddress
-		    const utxos = await TxUtils.getUTXOs(senderAddress, network);
+            let channel = await Channels.getChannel(senderAddress)
+            let channelBalance 
+            if(columnA==true){
+                channelBalance = channel["A"][propertyId]
+                
+            }else if(columnA==false){
+                channelBalance = channel["B"][propertyId]
+            }
+            if(tokensToDeliver>channelBalance){
+                tokensToDeliver=channelBalance
+            }
+            if(columnA==true){
+                channel["A"][propertyId]-=tokensToDeliver
+            }else if(columnA==false){
+                channel["B"][propertyId]-=tokensToDeliver
+            }
 
-		    // Check if there are enough UTXOs to cover the amount and the transaction fee
-		    const totalUTXOAmount = utxos.reduce((acc, utxo) => acc + utxo.amount, 0);
-		    if (totalUTXOAmount < utxoAmount + transactionFee) {
-		        throw new Error('Insufficient UTXO for the transaction');
-		    }
-
-		    // Construct the raw transaction
-		    // This involves selecting appropriate UTXOs and constructing inputs and outputs
-		    let rawTx = await TxUtils.createRawTransaction(senderAddress, utxos, receiverAddress, utxoAmount, transactionFee, network);
-
-		    // Step 3: Sign the transaction
-		    const signedTx = await TxUtils.signTransaction(rawTx, senderAddress, network);
-
-		    // Step 4: Broadcast the transaction
-		    const txId = await TxUtils.broadcastTransaction(signedTx, network);
-
-		    return txId; // Return the transaction ID of the broadcasted transaction
+            await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
+            await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {

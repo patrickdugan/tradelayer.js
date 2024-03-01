@@ -50,7 +50,10 @@ const Decode = {
         return {
             propertyId: parseInt(parts[0], 36),
             amount: parseInt(parts[1], 36),
-            satsExpected: parseInt(parts[2], 36)
+            columnA: parts[2]==="1",
+            satsExpected: parseInt(parts[3], 36),
+            tokenOutput: parts[4],
+            payToAddress: parts[5]
         };
     },
 

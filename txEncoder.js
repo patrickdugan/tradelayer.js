@@ -54,7 +54,9 @@ const Encode = {
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
+            params.columnA,
             params.satsExpected.toString(36),
+            params.tokenOutput,
             params.payToAddress
         ];
         return payload.join(',');

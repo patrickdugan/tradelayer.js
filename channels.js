@@ -336,7 +336,6 @@ class Channels {
 
         // Get the channel from the registry
         const channel = this.channelsRegistry.get(channelAddress);
-
         // Determine the column for the sender address
         const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
 
