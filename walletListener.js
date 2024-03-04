@@ -9,6 +9,7 @@ const Orderbook = require('./orderbook.js');
 const ContractRegistry = require('./contractRegistry.js');
 const OracleList = require('./oracle.js');
 const MarginMap = require('./marginMap.js');
+const TxUtils = require('./txUtils.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -24,6 +25,18 @@ app.post('/tl_initmain', async (req, res) => {
         mainProcessor.initialize();
         res.status(200).send('Main process initialized successfully');
     } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+// Validate address
+app.post('/tl_validateaddress', async (req, res) => {
+    try {
+        const { address } = req.body;
+        const validationResponse = await TxUtils.validateAddress(address)
+        res.json(validationResponse);
+    } catch (error) {
+        console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });

@@ -23,6 +23,7 @@ const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decode
 const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
 const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
+const validateAddress = util.promisify(client.cmd.bind(client,'validateaddress'))
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
@@ -36,6 +37,10 @@ const TxUtils = {
         }
         return transaction;
     },
+
+    async validateAddressWrapper(address){
+        return await validateAddress(address)
+    }
 
     async getBlockHeight(blockhash){
         let block;
