@@ -560,8 +560,8 @@ class Orderbook {
                     if(bumpTrade==false){
                         // Add match to the list
                         matches.push({ 
-                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, post:post}, 
-                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, post:post},
+                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: maker}, 
+                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:maker},
                             tradePrice 
                         });
 
@@ -578,7 +578,6 @@ class Orderbook {
                         }
                         if(sellOrder.post==true){
                             sellOrder.price=buyOrder.price+this.tickSize
-                            }
                         }
                     }
                 } else {
@@ -770,21 +769,13 @@ class Orderbook {
                    
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
                     const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
-                    let fee 
-                    if (isInverse) {
-                        fee = new BigNumber(0.000025)
-                            .times(notionalValue)
-                            .times(lastMark)
-                            .decimalPlaces(8, BigNumber.ROUND_CEIL);
-                    } else {
-                        fee = new BigNumber(lastMark)
-                            .dividedBy(notionalValue)
-                            .times(0.000025)
-                            .decimalPlaces(8, BigNumber.ROUND_CEIL);
-                    }
+                    
+                    let buyerFee = calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true)
+                    let sellerFee = calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false)
+     
                     await TallyMap.updateFeeCache(collateralPropertyId,fee.toNumber())
-                    await TallyMap.updateBalance(trade.buyerAddress,collateralPropertyId,0,0,-fee,0,'contractFee')
-                    await TallyMap.updateBalance(trade.sellerAddress,collateralPropertyId,0,0,-fee,0,'contractFee')
+                    await TallyMap.updateBalance(trade.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
+                    await TallyMap.updateBalance(trade.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
 
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
@@ -902,6 +893,61 @@ class Orderbook {
                         // Optionally handle the PnL if needed, e.g., logging or further processing
                     // ...    
             }
+        }
+
+        calculateFee(sellMaker,buyMaker,isInverse,isBuyer){
+                let fee = 0
+              if(sellMaker==false&&buyMaker==false){
+                        if(isInverse) {
+                            fee = new BigNumber(0.000025)
+                                .times(notionalValue)
+                                .times(lastMark)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                        } else {
+                            fee = new BigNumber(lastMark)
+                                .dividedBy(notionalValue)
+                                .times(0.000025)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                        }
+                        return fee    
+                }else if(sellMaker==true&&buyMaker==false){
+                    if(isInverse) {
+                            fee = new BigNumber(0.00005)
+                                .times(notionalValue)
+                                .times(lastMark)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                            if(isBuyer==true){
+                                return fee
+                            }
+                        } else {
+                            fee = new BigNumber(lastMark)
+                                .dividedBy(notionalValue)
+                                .times(0.00005)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                        }  
+                        if(isBuyer==true){
+                                return fee
+                        }else{
+                            return 0
+                        } 
+                }else if(sellMaker==false&&buyMaker==true){
+                    if(isInverse) {
+                            fee = new BigNumber(0.00005)
+                                .times(notionalValue)
+                                .times(lastMark)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                    } else {
+                            fee = new BigNumber(lastMark)
+                                .dividedBy(notionalValue)
+                                .times(0.00005)
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                    }    
+                    if(isBuyer==false){
+                                return fee
+                        }else{
+                            return 0
+                    } 
+                }
         }
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
