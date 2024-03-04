@@ -283,8 +283,7 @@ class Orderbook {
                                             buyOrder, 
                                             amountOfTokenA: amountOfTokenA.toNumber(), 
                                             amountOfTokenB: amountOfTokenB.toNumber(),
-                                            tradePrice,
-                                            post
+                                            tradePrice
                                         });
                             matchOccurred = true;
 
@@ -510,7 +509,37 @@ class Orderbook {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
 
-                let tradePrice 
+                let tradePrice
+                let bumpTrade = false
+                let post = false
+                    if(sellOrder.blockTime == buyOrder.blockTime){
+                        console.log('trades in the same block, defaulting to buy order')
+                        tradePrice = buyOrder.price
+                        if(sellOrder.post){
+                            tradePrice = sellOrder.price
+                            post = true
+                            sellOrder.maker=true
+                            buyOrder.maker=false
+                        }else if(buyOrder.post){
+                            tradePrice = buyOrder.price
+                            post = true
+                            buyOrder.maker=true
+                            sellOrder.maker=false
+                        }else{
+                            sellOrder.maker=false
+                            buyOrder.maker=false
+                        }
+                    }else{
+                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                        sellOrder.maker = Boolean(sellOrder.blockTime < buyOrder.blockTime)
+                        buyOrder.maker = Boolean(buyOrder.blockTime < sellOrder.blockTime)
+                        if(sellOrder.blockTime < buyOrder.blockTime&&buyOrder.post==true){
+                            bumpTrade = true
+                        }
+                        if(buyOrder.blockTime < sellOrder.blockTime&&sellOrder.post==true){
+                            bumpTrade = true
+                        }
+                    } 
                     if(sellOrder.blockTime == buyOrder.blockTime){
                         console.log('contract trades in the same block, defaulting to buy order')
                         tradePrice = buyOrder.price
@@ -527,19 +556,30 @@ class Orderbook {
                     sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
                     buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
 
-                    // Add match to the list
-                    matches.push({ 
-                        sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq }, 
-                        buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq },
-                        tradePrice 
-                    });
 
-                    // Remove filled orders from the order book
-                    if (sellOrder.amount === 0) {
-                        orderBook.sell.shift();
-                    }
-                    if (buyOrder.amount === 0) {
-                        orderBook.buy.shift();
+                    if(bumpTrade==false){
+                        // Add match to the list
+                        matches.push({ 
+                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, post:post}, 
+                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, post:post},
+                            tradePrice 
+                        });
+
+                        // Remove filled orders from the order book
+                        if (sellOrder.amount === 0) {
+                            orderBook.sell.shift();
+                        }
+                        if (buyOrder.amount === 0) {
+                            orderBook.buy.shift();
+                        }
+                    }else if(bumpTrade==true){
+                        if(buyOrder.post==true){
+                            buyOrder.price=sellOrder.price-this.tickSize
+                        }
+                        if(sellOrder.post==true){
+                            sellOrder.price=buyOrder.price+this.tickSize
+                            }
+                        }
                     }
                 } else {
                     break; // No more matches possible
