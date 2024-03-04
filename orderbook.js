@@ -238,13 +238,27 @@ class Orderbook {
                     let buyOrder = orderBook.buy[0];
 
                     let tradePrice 
+                    let bumpTrade = false
+                    let post = false
                     if(sellOrder.blockTime == buyOrder.blockTime){
                         console.log('trades in the same block, defaulting to buy order')
                         tradePrice = buyOrder.price
+                        if(sellOrder.post){
+                            tradePrice = sellOrder.price
+                            post = true
+                        }else if(buyOrder.post){
+                            tradePrice = buyOrder.price
+                            post = true
+                        }
                     }else{
                         tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                        if(sellOrder.blockTime < buyOrder.blockTime&&buyOrder.post==true){
+                            bumpTrade = true
+                        }
+                        if(buyOrder.blockTime < sellOrder.blockTime&&sellOrder.post==true){
+                            bumpTrade = true
+                        }
                     }
-
 
                     // Check for price match
                     if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
@@ -262,19 +276,31 @@ class Orderbook {
                         sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountOfTokenA).toNumber();
                         buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountOfTokenB).toNumber();
 
-                        // Add to matches
-                        matches.push({ sellOrder, 
-                                        buyOrder, 
-                                        amountOfTokenA: amountOfTokenA.toNumber(), 
-                                        amountOfTokenB: amountOfTokenB.toNumber(),
-                                        tradePrice });
-                        matchOccurred = true;
+                            if(bumpTrade==false){
+
+                            // Add to matches
+                            matches.push({ sellOrder, 
+                                            buyOrder, 
+                                            amountOfTokenA: amountOfTokenA.toNumber(), 
+                                            amountOfTokenB: amountOfTokenB.toNumber(),
+                                            tradePrice,
+                                            post
+                                        });
+                            matchOccurred = true;
 
 
-                        // Remove filled orders from the order book
-                        if (sellOrder.amountOffered==0){orderBook.sell.shift();}
-                        if (buyOrder.amountExpected==0){orderBook.buy.shift();}
-                    } else {
+                            // Remove filled orders from the order book
+                            if (sellOrder.amountOffered==0){orderBook.sell.shift();}
+                            if (buyOrder.amountExpected==0){orderBook.buy.shift();}
+                            }else if(bumpTrade==true){
+                                if(buyOrder.post==true){
+                                    buyOrder.price=sellOrder.price-this.tickSize
+                                }
+                                if(sellOrder.post==true){
+                                    sellOrder.price=buyOrder.price+this.tickSize
+                                }
+                            }
+                    } else{   
                         break; // No more matches possible
                     }
                 }
@@ -344,7 +370,7 @@ class Orderbook {
                     await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
                     buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
                     sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
-                } else if ((match.buyOrder.blockTime == match.sellOrder.blockTime)||channel==true){
+                } else if (((match.buyOrder.blockTime == match.sellOrder.blockTime)&&(match.sellOrder.post==false&&match.sellOrder.post==false))||channel==true){
                     match.buyOrder.orderRole = 'split';
                     match.sellOrder.orderRole = 'split';
                     var takerFeeA = amountToTradeA.times(0.0001);
