@@ -51,7 +51,7 @@ const Logic = {
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
                 break;
             case 5:
-                await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block);
+                await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block, params.stop, params.post);
                 break;
             case 6:
                 await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
@@ -90,7 +90,7 @@ const Logic = {
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
                 break;
             case 18:
-                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop);
                 break;
             case 19:
                 await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid);
@@ -409,7 +409,7 @@ const Logic = {
         return;
     },
 
-    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight) {
+    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post) {
         // Construct the pair key for the Orderbook instance
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
         // Retrieve or create the Orderbook instance for this pair
@@ -420,6 +420,9 @@ const Logic = {
         const txInfo = await TxUtils.getRawTransaction(txid)
         const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
 
+        if(stop==true&&post==true){
+            post=false
+        }
         // Construct the order object
         const order = {
             offeredPropertyId:offeredPropertyId,
@@ -427,7 +430,9 @@ const Logic = {
             amountOffered:amountOffered,
             amountExpected:amountExpected,
             blockTime: confirmedBlock,
-            sender: fromAddress 
+            sender: fromAddress, 
+            stop: stop,
+            post: post
         };
 
         console.log('entering order into book '+JSON.stringify(order), 'txid')
@@ -669,11 +674,11 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender) {
+    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, reduce, post,stop) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         //console.log('checking contract orderbook ' +JSON.stringify(orderbook))
-	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false);
+	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false,reduce,post,stop);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
         return
 	},

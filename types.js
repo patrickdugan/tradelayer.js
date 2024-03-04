@@ -201,6 +201,9 @@ const Types = {
                 break;
             case 10:
                 params = Decode.decodeAMMPool(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateAMMPool(sender, params, txId)
                 break;
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));

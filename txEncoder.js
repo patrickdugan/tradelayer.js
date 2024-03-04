@@ -80,6 +80,8 @@ const Encode = {
             params.propertyIdDesired.toString(36),
             params.amountOffered.toString(36),
             params.amountExpected.toString(36),
+            params.stop ? '1':'0',
+            params.post ? '1':'0'
         ];
         return payload.join(',');
     },
@@ -261,6 +263,9 @@ const Encode = {
             params.amount.toString(36),
             params.side ? '1' : '0',
             params.insurance ? '1' : '0',
+            params.reduce ? '1':'0',
+            params.post ? '1':'0',
+            params.stop ? '1':'0'
         ];
         return payload.join(',');
     },
