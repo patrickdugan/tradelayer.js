@@ -332,6 +332,22 @@ class TallyMap {
         }
     }
 
+    static async loadFeeCacheForProperty(id) {    
+        try {
+            const db = dbInstance.getDatabase('feeCache');
+
+            // Assuming you have a list of property IDs, iterate through them
+            const query = { _id: id };
+                const result = await db.findOneAsync(query);
+            
+            console.log('FeeCache loaded for property.');
+            return result.value
+        } catch (error) {
+            console.error('Error loading fee cache from dbInstance:', error);
+        }
+    }
+
+
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height
         for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {

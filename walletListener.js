@@ -83,6 +83,28 @@ app.post('/tl_listproperties', async (req, res) => {
     }
 });
 
+app.post('/tl_listFeeCache', async(req,res)=>{
+    try{
+        console.log('Pulling fees for all properties');
+        const feeCache = await PropertyManager.loadFeeCacheFromDB();
+        res.json(feeCache);
+    } catch (error) {
+        console.error('Error fetching fee cache', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+})
+
+app.post('/tl_propertyFeeCache', async(req,res)=>{
+    try{
+        console.log('Pulling fees for all properties');
+        const feeCache = await PropertyManager.loadFeeCacheForProperty(req.id);
+        res.json(feeCache);
+    } catch (error) {
+        console.error('Error fetching fee cache', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+})
+
 // Get activations
 app.post('/tl_getactivations', async (req, res) => {
     try {
