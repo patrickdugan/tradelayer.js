@@ -601,7 +601,7 @@ const Logic = {
         }else if(!isRedeem&&!isContract){
             await ammInstance.addCapital(sender, id, amount,isContract, id2, amount2,block)
         }
-    }
+    },
 
     async grantManagedToken(propertyId, amount, recipientAddress, propertyManager,block) {
 
@@ -674,7 +674,7 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, reduce, post,stop) {
+    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
 	    // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         //console.log('checking contract orderbook ' +JSON.stringify(orderbook))

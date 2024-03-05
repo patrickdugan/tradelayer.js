@@ -41,7 +41,7 @@ const TxUtils = {
 
     async validateAddressWrapper(address){
         return await validateAddress(address)
-    }
+    },
 
     async getBlockHeight(blockhash){
         let block;
