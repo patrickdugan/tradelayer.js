@@ -24,6 +24,7 @@ const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client,
 const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
 const validateAddress = util.promisify(client.cmd.bind(client,'validateaddress'))
+const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
@@ -52,6 +53,16 @@ const TxUtils = {
         }
         return block.height;
     },
+
+    async getBlockCount(){
+        let height;
+        try{
+            height = await getBlockCountAsync()
+        } catch (error) {
+            console.error(`Error fetching transaction for txid ${blockhash}:`, error);
+        }
+        return height;
+    }
 
     /*async fetchTransactionData(txId) {
         console.log('fetching tx data '+txId)

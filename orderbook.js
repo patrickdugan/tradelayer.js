@@ -450,7 +450,7 @@ class Orderbook {
             }
         }    
 
-        async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, isLiq) {
+        async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
             const ContractRegistry = require('./contractRegistry.js')
             const inverse = ContractRegistry.isInverse(contractId)
             const MarginMap = require('./marginMap.js')
@@ -469,7 +469,7 @@ class Orderbook {
             }
 
             // Create a contract order object with the sell parameter
-            const contractOrder = { contractId, amount, price, blockTime, side, initMargin, sender, txid };
+            const contractOrder = { contractId, amount, price, blockTime, side, initMargin, sender, txid, isLiq, reduce,post,stop };
 
             // The orderBookKey is based on the contractId since it's a derivative contract
             const orderBookKey = `${contractId}`;
@@ -508,6 +508,12 @@ class Orderbook {
             while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
+
+                if(sellOrder.reduce==true){
+
+                }else if(buyOrder.reduce==true){
+                    
+                }
 
                 let tradePrice
                 let bumpTrade = false

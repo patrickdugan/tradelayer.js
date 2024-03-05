@@ -23,6 +23,6 @@ function randomNumber(min, max) {
 
 var random = randomNumber(10000,20000)
 
-    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',4,random,null)
+    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk',3,random,null)
 //tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz
 //
