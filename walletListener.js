@@ -60,12 +60,12 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
 });
 
 // Add OP_Return to tx blob
-app.post('/tl_createrawtx_opreturn', async (req, res) => {
-
+ app.post('/tl_createrawtx_opreturn', async (req, res) => {
     try {
-        const payloadedTx = await TxUtils.addOPReturn(req.tx,req.payload);
-       
-        res.status(200).json(payloadedTx);
+        const [txHex, payload] = req.body.params;
+        const payloadedTx = await TxUtils.addOPReturn(txHex, payload);
+        const result = { data: payloadedTx.toString('hex') };
+        res.status(200).send(result);
     } catch (error) {
         console.error(error);
         res.status(500).send('Error: ' + error.message);
