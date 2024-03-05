@@ -508,11 +508,22 @@ class Orderbook {
             while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
-
                 if(sellOrder.reduce==true){
-
+                      let sellerPosition = await marginMap.getPositionForAddress(sellOrder.sender, buyOrder.contractId);
+                      if(sellerPosition.contracts<=0){
+                        //reduce only order is auto-cancelled
+                        orderBook.sell.shift();
+                      }else if(sellerPosition.contracts>sellOrder.amount){
+                        sellOrder.amount=sellerPosition.contracts
+                      }
                 }else if(buyOrder.reduce==true){
-                    
+                    let buyerPosition = await marginMap.getPositionForAddress(buyOrder.sender, buyOrder.contractId);
+                    if(buyerPosition.contracts>=0){
+                        //reduce only order is auto-cancelled
+                        orderBook.buy.shift();
+                    }else if(sellerPosition.contracts>sellOrder.amount){
+                        buyOrder.amount=buyerPosition.contracts
+                    }
                 }
 
                 let tradePrice
