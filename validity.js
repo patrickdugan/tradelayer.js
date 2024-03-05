@@ -196,7 +196,7 @@ const Validity = {
                 params.reason = ' cannot self-trade, token delivery output value is same as 0, UTXO delivery output'
             }
 
-            if(!(Number.isInteger(params.tokenOut)){
+            if(!(Number.isInteger(params.tokenOut))){
                 params.valid = true
                 params.reason = 'tokenOutput not an integer so the address to deliver tokens cannot be parsed, defaults to 1'
                 params.tokenOutput = 1 

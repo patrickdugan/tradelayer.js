@@ -43,6 +43,10 @@ const TxUtils = {
         return await validateAddress(address)
     },
 
+    async addOPReturn(txBlob,payload){
+        return new litecore.Transaction(txBlob).addData(payload)
+    },
+
     async getBlockHeight(blockhash){
         let block;
         try {
@@ -62,7 +66,7 @@ const TxUtils = {
             console.error(`Error fetching transaction for txid ${blockhash}:`, error);
         }
         return height;
-    }
+    },
 
     /*async fetchTransactionData(txId) {
         console.log('fetching tx data '+txId)

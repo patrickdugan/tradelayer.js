@@ -59,6 +59,19 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
     }
 });
 
+// Add OP_Return to tx blob
+app.post('/tl_createrawtx_opreturn', async (req, res) => {
+
+    try {
+        const payloadedTx = await TxUtils.addOPReturn(req.tx,req.payload);
+       
+        res.status(200).json(payloadedTx);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 app.post('/tl_getproperty', async (req, res) => {
     try {
         const pid = req.body.params;
