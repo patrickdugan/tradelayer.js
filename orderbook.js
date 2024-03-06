@@ -3,6 +3,7 @@ const dbInstance = require('./db.js'); // Import your database instance
 const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
 const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
+const VolumeIndex= require('./VolumeIndex.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -443,6 +444,11 @@ class Orderbook {
                     amountExpected: match.amountOfTokenB, // or appropriate amount
                     // other relevant trade details...
                 };
+
+                if(channel==false){
+                    const key = normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
+                    VolumeIndex.saveVolumeDataById(key,{match.amountOfTokenA,match.amountOfTokenB},match.tradePrice,blockHeight)
+                }
 
                 // Record the token trade
                 await this.recordTokenTrade(trade, blockHeight, txid);
@@ -896,19 +902,12 @@ class Orderbook {
                         //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
-                    //console.log('params before calling updateMargin '+match.buyOrder.contractId,match.buyOrder.buyerAddress,match.buyOrder.amount, match.buyOrder.price)
-                    // Update margin based on the new positions
-                    //marginMap.updateMargin(match.buyOrder.contractId, match.buyOrder.buyerAddress, match.buyOrder.amount, match.buyOrder.price, inverse);
-                    //marginMap.updateMargin(match.sellOrder.contractId, match.sellOrder.sellerAddress, -match.sellOrder.amount, match.sellOrder.price, inverse);
-
+           
+                    if(channel==false){
+                       VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,match.tradePrice,currentBlockHeight)
+                    }
                     // Save the updated margin map
-                    await marginMap.saveMarginMap(false);
-
-                    //console.log('checking match object before writing trade data obj '+JSON.stringify(match)+ ' what this looks like inside sellOrder contractid '+ match.sellOrder.contractId+' amount '+match.sellOrder.amount)
-                    // Construct a trade object for recording
-
-                        // Optionally handle the PnL if needed, e.g., logging or further processing
-                    // ...    
+                    await marginMap.saveMarginMap(false);  
             }
         }
 

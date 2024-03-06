@@ -299,7 +299,7 @@ class TallyMap {
                 const serializedFeeAmount = JSON.stringify(feeAmount);
                 await db.updateAsync(
                     { _id: 'feeCache-' + propertyId },
-                    { _id: 'feeCache-' + propertyId, value: serializedFeeAmount },
+                    { value: serializedFeeAmount },
                     { upsert: true }
                 );
             }

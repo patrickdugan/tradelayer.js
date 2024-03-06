@@ -28,6 +28,7 @@ const Types = require('./types.js'); // Defines different types used in the syst
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const BigNumber = require('bignumber.js')
+const VolumeIndex = require('volumeIndex.js')
 // logic.js
 const Logic = {
 
@@ -373,6 +374,8 @@ const Logic = {
             .times(decodedTokenAmountBigNumber)
             .integerValue(BigNumber.ROUND_FLOOR);
 
+        const price = satsExpectedBigNumber.dividedBy(decodedTokenAmountBigNumber).toNumber()
+
             let channel = await Channels.getChannel(senderAddress)
             let channelBalance 
             if(columnA==true){
@@ -392,6 +395,8 @@ const Logic = {
 
             await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
+            const key = '0-'+propertyId
+            await VolumeIndex.saveVolumeDataById(key,utxoAmount,price,block)
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {
@@ -716,6 +721,8 @@ const Logic = {
         matches.push(match)
 	    // Trade the contract within a channel
         await orderbook.processContractMatches(matches,block,txid,true)
+        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block)
+
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
 	},
 
@@ -769,8 +776,10 @@ const Logic = {
         matches.push(match)
 
 		    // Update balances in the channel columns and commitment addresses
-            console.log('about to process token match in channel '+JSON.stringify(matches),block)
-		    await orderbook.processTokenMatches(matches, block, txid,true)
+        console.log('about to process token match in channel '+JSON.stringify(matches),block)
+		await orderbook.processTokenMatches(matches, block, txid,true)
+        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block)
+
 		    return `Trade executed in channel ${channelAddress}`;
 	},
 
