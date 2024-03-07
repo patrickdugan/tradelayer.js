@@ -15,6 +15,7 @@ const client = new Litecoin.Client({
 });
 
 // Promisify the necessary client functions
+const getBlockchainInfoAsync = util.promisify(client.cmd.bind(client, 'getblockchaininfo'));
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
 const getBlockDataAsync = util.promisify(client.getBlock.bind(client))
 const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
@@ -28,6 +29,15 @@ const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
+    async getBlockchainInfo() {
+        try {
+            return await getBlockchainInfoAsync()
+        } catch (error) {
+            console.error(`Error getBlockchainInfoAsync: `, error);
+        }
+        return {};
+    },
+    
     async getRawTransaction(txid) {
         let transaction;
         try {

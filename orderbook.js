@@ -3,7 +3,7 @@ const dbInstance = require('./db.js'); // Import your database instance
 const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
 const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
-const VolumeIndex= require('./VolumeIndex.js')
+const VolumeIndex= require('./volumeIndex.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -447,7 +447,7 @@ class Orderbook {
 
                 if(channel==false){
                     const key = normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-                    VolumeIndex.saveVolumeDataById(key,{match.amountOfTokenA,match.amountOfTokenB},match.tradePrice,blockHeight)
+                    //VolumeIndex.saveVolumeDataById(key,{match.amountOfTokenA,match.amountOfTokenB},match.tradePrice,blockHeight)
                 }
 
                 // Record the token trade

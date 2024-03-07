@@ -412,8 +412,7 @@ class TxIndex {
     static async getTransactionData(txId) {
         try {
             const txIndexDB = db.getDatabase('txIndex');
-            const blockHeight = TxIndex.fetchChainTip()
-            const txData = await txIndexDB.findOneAsync({ _id: indexKey });
+            const txData = await txIndexDB.findOneAsync({ _id: txId });
 
             if (txData) {
                 console.log(`Transaction data found for ${txId}:`, txData);

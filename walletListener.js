@@ -17,6 +17,25 @@ const port = 3000; // Choose a port that suits your setup
 
 app.use(express.json()); // Middleware to parse JSON bodies
 
+app.use(function (req, res, next) {
+
+    // Website you wish to allow to connect
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    // Request methods you wish to allow
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+
+    // Request headers you wish to allow
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+
+    // Set to true if you need the website to include cookies in the requests sent
+    // to the API (e.g. in case you use sessions)
+    res.setHeader('Access-Control-Allow-Credentials', true);
+
+    // Pass to next layer of middleware
+    next();
+});
+
 // Initialize Main
 app.post('/tl_initmain', async (req, res) => {
     try {
@@ -60,7 +79,7 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
 });
 
 // Add OP_Return to tx blob
- app.post('/tl_createrawtx_opreturn', async (req, res) => {
+app.post('/tl_createrawtx_opreturn', async (req, res) => {
     try {
         const [txHex, payload] = req.body.params;
         const payloadedTx = await TxUtils.addOPReturn(txHex, payload);
@@ -72,9 +91,21 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
     }
 });
 
-app.post('/tl_getproperty', async (req, res) => {
+app.get('/tl_getAllBalancesForAddress/:addr', async (req, res) => {
+    console.log('tl_getAllBalancesForAddress: ' + req.params?.addr);
     try {
-        const pid = req.body.params;
+        const balances = (await TallyMap.getInstance()).getAddressBalances(req.params?.addr);
+        res.status(200).json(balances);
+    } catch (error) {
+        console.error(error); // Log the full error for debugging
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
+app.get('/tl_getproperty/:pid', async (req, res) => {
+    try {
+        const pid = parseInt(req.params.pid);
         console.log('tl_getproperty: ' + pid);
         const data = await PropertyManager.getPropertyData(pid);
         res.json(data);
@@ -84,10 +115,9 @@ app.post('/tl_getproperty', async (req, res) => {
     }
 });
 
-// List properties
-app.post('/tl_listproperties', async (req, res) => {
+app.get('/tl_listproperties', async (req, res) => {
     try {
-        console.log('Express calling property list');
+        console.log('/tl_listproperties');
         const propertiesArray = await PropertyManager.getPropertyIndex();
         res.json(propertiesArray);
     } catch (error) {
@@ -96,10 +126,21 @@ app.post('/tl_listproperties', async (req, res) => {
     }
 });
 
-app.post('/tl_listFeeCache', async(req,res)=>{
-    try{
+app.get('/tl_getchaininfo', async (req, res) => {
+    try {
+        console.log('/tl_getchaininfo');
+        const data = await TxUtils.getBlockchainInfo();
+        res.json(data);
+    } catch (error) {
+        console.error('Error /tl_getchaininfo:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_listFeeCache', async (req, res) => {
+    try {
         console.log('Pulling fees for all properties');
-        const feeCache = await PropertyManager.loadFeeCacheFromDB();
+        const feeCache = await TallyMap.loadFeeCacheFromDB();
         res.json(feeCache);
     } catch (error) {
         console.error('Error fetching fee cache', error);
@@ -107,13 +148,24 @@ app.post('/tl_listFeeCache', async(req,res)=>{
     }
 })
 
-app.post('/tl_propertyFeeCache', async(req,res)=>{
-    try{
-        console.log('Pulling fees for all properties');
-        const feeCache = await PropertyManager.loadFeeCacheForProperty(req.id);
-        res.json(feeCache);
+app.get('/tl_propertyFeeCache/:pid', async (req, res) => {
+    try {
+        console.log(`tl_propertyFeeCache: ${req.params?.pid}`);
+        const feeCache = await TallyMap.loadFeeCacheForProperty(`feeCache-${req.params.pid}`);
+        res.json({feeCache});
     } catch (error) {
         console.error('Error fetching fee cache', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+})
+
+app.get('/tl_getTxData/:tid', async (req, res) => {
+    try {
+        console.log(`tl_getTxData: ${req.params?.tid}`);
+        const data = await TxIndex.getTransactionData(req.params?.tid);
+        res.json(data);
+    } catch (error) {
+        console.error('Error tl_getTxData: ', error);
         res.status(500).send('Error: ' + error.message);
     }
 })

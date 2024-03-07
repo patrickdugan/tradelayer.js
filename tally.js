@@ -515,8 +515,8 @@ class TallyMap {
             const properties = this.addresses.get(address);
             for (const [propertyId, balanceData] of Object.entries(properties)) {
                 balances.push({
-                    propertyId: propertyId,
-                    balance: balanceData
+                    propertyId,
+                    ...balanceData
                 });
             }
         }

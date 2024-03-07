@@ -34,7 +34,7 @@ const activationInstance = Activation.getInstance()
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
-const AMM = require('./AMM.js')
+//const AMM = require('./AMM.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
@@ -216,7 +216,7 @@ class Main {
         //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
         //console.log(blockHeight, currentBlockHeight, realtime)
         for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
-            await AMM.updateOrdersForAllContractAMMs()
+            //await AMM.updateOrdersForAllContractAMMs()
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];

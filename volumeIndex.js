@@ -1,4 +1,3 @@
-const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')

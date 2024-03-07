@@ -4,7 +4,7 @@ const util = require('util');
 //const TxUtils = require('./txUtils.js')
 const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
-const AMMPool = require('./AMM.js')
+//const AMMPool = require('./AMM.js')
 class ContractRegistry {
     constructor() {
         // ... Other initializations ...
@@ -43,7 +43,7 @@ class ContractRegistry {
 
         // Generate a unique ID for the new contract series
         const seriesId = await ContractRegistry.getNextIdFromMap(contractList);
-        const thisAMM = new AMMPool(0,1,10,seriesId)
+        //const thisAMM = new AMMPool(0,1,10,seriesId)
         // Create the contract series object
         const contractSeries = {
             id: seriesId,
@@ -62,7 +62,7 @@ class ContractRegistry {
                 expired: [],
                 unexpired: await ContractRegistry.generateContracts(expiryPeriod, series, seriesId, block)
             },
-            ammPool: thisAMM // Add the AMM object to the contract series
+            //ammPool: thisAMM // Add the AMM object to the contract series
         };
 
         // Add the new contract series to the contract list
@@ -91,18 +91,18 @@ class ContractRegistry {
             throw new Error(`Contract ID ${contractId} not found in contract registry`);
         }
         
-        const { ammPool } = this.contractList.get(contractId);
+        // const { ammPool } = this.contractList.get(contractId);
         
-        // Update the AMM object based on LPs pledge or redeem
-        if (pledgeAmount !== null && pledgeAmount > 0) {
-            // Pledge scenario: Add liquidity
-            ammPool.insertCapital(lpAddress, pledgeAmount);
-        } else if (redeemAmount !== null && redeemAmount > 0) {
-            // Redeem scenario: Remove liquidity
-            ammPool.redeemCapital(lpAddress, redeemAmount);
-        } else {
-            throw new Error(`Invalid pledgeAmount (${pledgeAmount}) or redeemAmount (${redeemAmount})`);
-        }
+        // // Update the AMM object based on LPs pledge or redeem
+        // if (pledgeAmount !== null && pledgeAmount > 0) {
+        //     // Pledge scenario: Add liquidity
+        //     ammPool.insertCapital(lpAddress, pledgeAmount);
+        // } else if (redeemAmount !== null && redeemAmount > 0) {
+        //     // Redeem scenario: Remove liquidity
+        //     ammPool.redeemCapital(lpAddress, redeemAmount);
+        // } else {
+        //     throw new Error(`Invalid pledgeAmount (${pledgeAmount}) or redeemAmount (${redeemAmount})`);
+        // }
 
         // Save the updated contract list back to the database
         await this.saveAllData();
