@@ -658,15 +658,42 @@ class Orderbook {
 
 
                     if(isBuyerReducingPosition){
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')            
+                        if(reserveBalanceB.margin==0){
+                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')                   
+
+                        }else{
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')                   
+                        }        
                     }else{
-                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')            
+                        if(reserveBalanceB.margin==0){
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')            
+                        }else{
+                            if(reserveBalanceB.reserve==0){
+                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
+                            }else{            
+                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee')                                          
+                            }    
+                        }
+
                     }
                     if(isSellerReducingPosition){
-                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
+                        if(reserveBalanceA.margin==0){
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')     
+                        }else{   
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
+                 
+                        }
                     }else{
                         console.log('inside fee deduction '+match.sellOrder.sellerAddress)
-                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
+                        if(reserveBalanceA.margin==0){
+                            if(reserveBalanceA.reserve==0){
+                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')         
+                            }else{
+                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')         
+                            }
+                        }else{
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')    
+                        }
                     }
 
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
@@ -1131,6 +1158,7 @@ class Orderbook {
 
         async cancelAllContractOrders(fromAddress, offeredPropertyId,block) {
             const TallyMap = require('./tally.js')
+            const ContractRegistry = require('./contractRegistry.js')
             // Logic to cancel all contract orders
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address

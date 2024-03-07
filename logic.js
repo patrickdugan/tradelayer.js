@@ -778,7 +778,7 @@ const Logic = {
 		    // Update balances in the channel columns and commitment addresses
         console.log('about to process token match in channel '+JSON.stringify(matches),block)
 		await orderbook.processTokenMatches(matches, block, txid,true)
-        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block)
+        await VolumeIndex.saveVolumeDataById(key,amount,price,block)
 
 		    return `Trade executed in channel ${channelAddress}`;
 	},
