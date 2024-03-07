@@ -13,12 +13,17 @@ class AMMPool {
     }
 
     static async updateOrdersForAllContractAMMs(block) {
+        const ContractRegistry = require('./contractRegistry.js')
         // Get the list of all contract IDs
         const contractIds = await ContractRegistry.loadContractSeries();
-        console.log(JSON.stringify(contractIds))
+        if (contractIds.size === 0||contractIds=== {}) {
+          return; // No contracts found, return early
+        }
+
+        //console.log('displaying contract Ids object in update AMM orders ' +JSON.stringify(contractIds))
         // Loop through each contract ID
         for (const contractId of contractIds) {
-            let change = await Clearing.isPriceUpdatedForBlock(contractId, block)
+            let change = await Clearing.isPriceUpdatedForBlockHeight(contractId, block)
             if(!change){continue}
             let blob = await Clearing.getPriceChange(blockHeight, contractId)
             let lastPrice = blob.lastPrice
@@ -52,7 +57,7 @@ class AMMPool {
             console.log(`Orders updated for contract ID ${contractId}`);
         }
 
-        console.log("Orders updated for all AMMs.");
+        //console.log("Orders updated for all AMMs.");
     }
 
 

@@ -5,6 +5,7 @@ const util = require('util');
 const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 const AMMPool = require('./AMM.js')
+
 class ContractRegistry {
     constructor() {
         // ... Other initializations ...
@@ -257,7 +258,7 @@ class ContractRegistry {
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
-            console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
+            //console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
 
             return null;
         }

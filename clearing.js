@@ -1,5 +1,5 @@
 const TallyMap = require('./tally.js')
-const ContractList = require('./contractRegistry.js');
+const ContractRegistry = require('./contractRegistry.js');
 const db = require('./db.js')
 const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
@@ -40,12 +40,16 @@ class Clearing {
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...
 
-    async feeCacheBuy(block) {
-        console.log('Processing fee cache buy');
+    static async feeCacheBuy(block) {
+        //console.log('Processing fee cache buy');
 
         // Fetch fees from your data source (e.g., database or in-memory store)
         let fees = await TallyMap.loadFeeCacheFromDB();
-        // Process each fee category
+            // If the fees array is empty, return early
+            if (fees.size === 0) {
+                //console.log('Fee cache is empty');
+                return;
+            }
        // Process each fee category
         for (let fee of fees) {
             let propertyData = await PropertyManager.getPropertyData(fee.id);
@@ -78,10 +82,10 @@ class Clearing {
         }
 
         // Save any changes back to your data source
-        await this.saveFees(fees);
+        await TallyMap.saveFeeCacheToDB();
     }
 
-   async updateLastExchangeBlock(blockHeight) {
+   static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
 
         // Fetch the list of active channels
@@ -118,7 +122,7 @@ class Clearing {
      * @param {number} blockHeight - The block height for which to load clearing deltas.
      * @returns {Promise<Array>} - A promise that resolves to an array of clearing deltas for the block.
      */
-    async loadClearingDeltasForBlock(blockHeight) {
+    static async loadClearingDeltasForBlock(blockHeight) {
         try {
             const clearingDeltas = [];
             const query = { blockHeight: blockHeight }; // Query to match the block height
@@ -138,12 +142,12 @@ class Clearing {
 
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
         // Determine if the contract is an oracle contract
-
-        const isOracle = await ContractList.isOracleContract(contractId);
+        const ContractRegistry = require('./contractRegistry.js')
+        const isOracle = await ContractRegistry.isOracleContract(contractId);
         let latestData;
         //console.log('checking if contract is oracle '+contractId +' '+isOracle)
         if (isOracle) {
-            let oracleId = await ContractList.getOracleId(contractId)
+            let oracleId = await ContractRegistry.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
             //console.log('oracle id '+oracleId)         
             const latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
@@ -185,16 +189,17 @@ class Clearing {
     }
 
     static async makeSettlement(blockHeight) {
-              const contracts = await ContractList.getAllContracts();
+            const ContractRegistry = require('./contractRegistry.js');
+            const contracts = await ContractRegistry.loadContractSeries();
         for (const contract of contracts) {
             // Check if there is updated price information for the contract
             if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
                 console.log('new price')
                 // Proceed with processing for this contract
                 console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
-                let collateralId = await ContractList.getCollateralId(contract.id)
-                let inverse = await ContractList.isInverse(contract.id)
-                const notionalValue = await ContractList.getNotionalValue(contract.id)
+                let collateralId = await ContractRegistry.getCollateralId(contract.id)
+                let inverse = await ContractRegistry.isInverse(contract.id)
+                const notionalValue = await ContractRegistry.getNotionalValue(contract.id)
                 
                 // Update margin maps based on mark prices and current contract positions
                 let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
@@ -237,7 +242,7 @@ class Clearing {
             
             if(pnlChange<0){
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange))
-                console.log(JSON.stringify(balance))
+                console.log('displaying return from has Suf. Balance in update Margin Maps' +JSON.stringify(balance))
                 if(balance.hasSufficient==true){
                         await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0,0,'clearing', blockHeight);
                 }else{
@@ -278,17 +283,17 @@ class Clearing {
     }
 
     static async getPriceChange(blockHeight, contractId){
-        let isOracleContract = await ContractList.isOracleContract(contractId)
+        let isOracleContract = await ContractRegistry.isOracleContract(contractId)
         let oracleId = null
         let propertyId1 = null
         let propertyId2 = null
         let latestData
         if(isOracleContract){
-            oracleId = await ContractList.getOracleId(contractId)
+            oracleId = await ContractRegistry.getOracleId(contractId)
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
             //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
-            let info = await ContractList.getContractInfo(contractId)
+            let info = await ContractRegistry.getContractInfo(contractId)
             propertyId1 = info.native.native.onChainData[0]
             propertyId2 = info.native.native.onChainData[1]
             latestData = await volumeIndexDB.findOneAsync({propertyId1:propertyId1,propertyId2:propertyId2})
@@ -348,7 +353,7 @@ class Clearing {
         return pnl.toNumber();
     }
 
-    async getBalance(holderAddress) {
+    static async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
         try {
             let balance = await database.getBalance(holderAddress);
@@ -386,7 +391,7 @@ class Clearing {
     }
 
 
-    async auditSettlementTasks(blockHeight, positions) {
+    static async auditSettlementTasks(blockHeight, positions) {
         try {
             // Check total margin consistency
             let totalMargin = this.calculateTotalMargin(positions);
@@ -416,7 +421,7 @@ class Clearing {
         }
     }
 
-    async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
+    static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
         const clearingDB = dbInstance.getDatabase('clearing');
         const recordKey = `clearing-${contractId}-${blockHeight}`;
 
@@ -440,7 +445,7 @@ class Clearing {
         }
     }
 
-    async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
+    static async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
         const clearingDB = dbInstance.getDatabase('clearing');
         try {
             const query = {
@@ -458,8 +463,7 @@ class Clearing {
         }
     }
 
-
-    async getBalance(holderAddress) {
+    static async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
         try {
             let balance = await database.getBalance(holderAddress);
@@ -472,7 +476,7 @@ class Clearing {
 
 
     // Implement or reference these helper methods as per your system's logic
-    calculateTotalMargin(positions) {
+    static calculateTotalMargin(positions) {
         let totalMargin = 0;
         positions.forEach(position => {
             totalMargin += position.margin;  // Assuming each position object has a 'margin' property
@@ -480,13 +484,13 @@ class Clearing {
         return totalMargin;
     }
 
-    isMarginConsistent(totalMargin) {
+    static isMarginConsistent(totalMargin) {
         const expectedMargin = this.getExpectedTotalMargin(); // Implement this method based on your system
         // You can also implement a range-based check instead of an exact value match
         return totalMargin === expectedMargin;
     }
 
-    async saveAuditIndex(blockHeight) {
+    static async saveAuditIndex(blockHeight) {
         const auditData = this.prepareAuditData(); // Implement this method to prepare data for saving
         try {
             await database.saveAuditData(blockHeight, auditData);
@@ -496,7 +500,7 @@ class Clearing {
         }
     }
 
-    prepareAuditData(blockHeight, positions, balanceChanges) {
+    static prepareAuditData(blockHeight, positions, balanceChanges) {
         // The data structure to hold the audit data
         let auditData = {};
 
@@ -528,8 +532,8 @@ class Clearing {
             let bankruptcyVWAP = 0;
             let oracleTwap = 0;
 
-            let isOracleContract = await ContractList.isOracleContract(contractId);
-            let notionalSize = await ContractList.getNotionalValue(contractId)
+            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
+            let notionalSize = await ContractRegistry.getNotionalValue(contractId)
             let marginMap = await MarginMap.getInstance(contractId)
             if (isOracleContract) {
                 let liquidationData = await marginMap.fetchLiquidationVolume(positions, contractId);
@@ -611,7 +615,7 @@ class Clearing {
     }
 
 
-    async fetchAuditData(auditDataKey) {
+    static async fetchAuditData(auditDataKey) {
         // Implement logic to fetch audit data from the database
         try {
             const auditData = await database.getAuditData(auditDataKey);

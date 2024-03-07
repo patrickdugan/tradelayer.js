@@ -23,6 +23,7 @@ class VolumeIndex {
         this.contractCumulativeVolumes = {};
         this.cumulativeFees = 0;
         this.dbPath = dbPath;
+        this.VWAPIndex = new Map()
     }
 
     static async saveVolumeDataById(id, volume,price,blockHeight) {

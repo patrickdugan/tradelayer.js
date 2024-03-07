@@ -303,7 +303,7 @@ class TallyMap {
                     { upsert: true }
                 );
             }
-            console.log('FeeCache saved successfully.');
+            //console.log('FeeCache saved successfully.');
         } catch (error) {
             console.error('Error saving FeeCache:', error);
         }
@@ -325,7 +325,7 @@ class TallyMap {
                     this.feeCache.set(propertyIndex.id, feeAmount);
                 }
             }
-            console.log('FeeCache loaded successfully.');
+            //console.log('FeeCache loaded successfully.');
             return this.feeCache
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);

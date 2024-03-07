@@ -28,7 +28,7 @@ const Types = require('./types.js'); // Defines different types used in the syst
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const BigNumber = require('bignumber.js')
-const VolumeIndex = require('volumeIndex.js')
+const VolumeIndex = require('./volumeIndex.js')
 // logic.js
 const Logic = {
 

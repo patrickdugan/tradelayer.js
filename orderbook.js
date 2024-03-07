@@ -3,7 +3,7 @@ const dbInstance = require('./db.js'); // Import your database instance
 const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid library
 const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
-const VolumeIndex= require('./VolumeIndex.js')
+const VolumeIndex= require('./volumeIndex.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -444,10 +444,10 @@ class Orderbook {
                     amountExpected: match.amountOfTokenB, // or appropriate amount
                     // other relevant trade details...
                 };
-
                 if(channel==false){
+                    console.log('checking match before volume index save ' +JSON.stringify(match))
                     const key = normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-                    VolumeIndex.saveVolumeDataById(key,{match.amountOfTokenA,match.amountOfTokenB},match.tradePrice,blockHeight)
+                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight)
                 }
 
                 // Record the token trade
@@ -583,8 +583,8 @@ class Orderbook {
                     if(bumpTrade==false){
                         // Add match to the list
                         matches.push({ 
-                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: maker}, 
-                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:maker},
+                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: sellOrder.maker}, 
+                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:buyOrder.maker},
                             tradePrice 
                         });
 
@@ -613,6 +613,7 @@ class Orderbook {
 
         async processContractMatches(matches, currentBlockHeight, inverse, channel) {
             const TallyMap = require('./tally.js');
+            const ContractRegistry = require('./contractRegistry.js')
             if (!Array.isArray(matches)) {
                 // Handle the non-iterable case, e.g., log an error, initialize as an empty array, etc.
                 console.error('Matches is not an array:', matches);
@@ -633,14 +634,40 @@ class Orderbook {
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     match.inverse = isInverse
-                    //console.log('checking the marginMap for contractId '+ marginMap )
+
+                    let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
+                    const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
+                    const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
+                    let reserveBalanceA = await TallyMap.getTally(match.sellOrder.sellerAddress,collateralPropertyId)
+                    let reserveBalanceB = await TallyMap.getTally(match.buyOrder.buyerAddress,collateralPropertyId)
+                    console.log('checking reserves in process contract matches '+JSON.stringify(reserveBalanceA)+' '+JSON.stringify(reserveBalanceB))
+                      //console.log('checking the marginMap for contractId '+ marginMap )
                     // Get the existing position sizes for buyer and seller
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                     match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
 
+
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
 
+                    let buyerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue)
+                    let sellerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue)
+     
+                    await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
+                    await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
+
+
+                    if(isBuyerReducingPosition){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')            
+                    }else{
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')            
+                    }
+                    if(isSellerReducingPosition){
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
+                    }else{
+                        console.log('inside fee deduction '+match.sellOrder.sellerAddress)
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
+                    }
 
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
                     //the purpose of which is to handle flipping positions long to short or visa versa
@@ -653,7 +680,6 @@ class Orderbook {
                     let flipShort = 0
                     let initialMarginPerContract
                     let totalMargin 
-                    let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
                     let buyerFullyClosed =false
                     let sellerFullyClosed = false
                     if(isBuyerFlippingPosition){
@@ -789,16 +815,6 @@ class Orderbook {
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
-                   
-                    const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId)
-                    const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
-                    
-                    let buyerFee = calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true)
-                    let sellerFee = calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false)
-     
-                    await TallyMap.updateFeeCache(collateralPropertyId,fee.toNumber())
-                    await TallyMap.updateBalance(trade.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
-                    await TallyMap.updateBalance(trade.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
 
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
@@ -911,19 +927,20 @@ class Orderbook {
             }
         }
 
-        calculateFee(sellMaker,buyMaker,isInverse,isBuyer){
+        calculateFee(sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue){
                 let fee = 0
+                console.log('inside calc fee ' +lastMark+' '+notionalValue)
               if(sellMaker==false&&buyMaker==false){
                         if(isInverse) {
                             fee = new BigNumber(0.000025)
                                 .times(notionalValue)
                                 .times(lastMark)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         } else {
                             fee = new BigNumber(lastMark)
                                 .dividedBy(notionalValue)
                                 .times(0.000025)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         }
                         return fee    
                 }else if(sellMaker==true&&buyMaker==false){
@@ -931,7 +948,7 @@ class Orderbook {
                             fee = new BigNumber(0.00005)
                                 .times(notionalValue)
                                 .times(lastMark)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                             if(isBuyer==true){
                                 return fee
                             }
@@ -939,7 +956,7 @@ class Orderbook {
                             fee = new BigNumber(lastMark)
                                 .dividedBy(notionalValue)
                                 .times(0.00005)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         }  
                         if(isBuyer==true){
                                 return fee
@@ -951,12 +968,12 @@ class Orderbook {
                             fee = new BigNumber(0.00005)
                                 .times(notionalValue)
                                 .times(lastMark)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                     } else {
                             fee = new BigNumber(lastMark)
                                 .dividedBy(notionalValue)
                                 .times(0.00005)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL);
+                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                     }    
                     if(isBuyer==false){
                                 return fee
