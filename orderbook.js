@@ -656,43 +656,58 @@ class Orderbook {
                     await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
                     await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
 
+                    let buyFeeFromMargin = false
+                    let buyFeeFromReserve = false
+                    let buyFeeFromAvailable = false
+                    let sellFeeFromMargin = false
+                    let sellFeeFromReserve = false
+                    let sellFeeFromAvailable = false
+
                     console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                     if(isBuyerReducingPosition){
                         if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')                   
-
+                                buyFeeFromReserve=true
                         }else{
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')                   
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
+                            buyFeeFromMargin=true
                         }        
                     }else{
                         if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')            
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')
+                            buyFeeFromReserve=true
                         }else{
                             if(reserveBalanceB.reserve<buyerFee){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
+                                buyFeeFromMargin=true
                             }else{            
-                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee')                                          
+                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee')
+                                buyFeeFromAvailable= true
                             }    
                         }
 
                     }
                     if(isSellerReducingPosition){
                         if(reserveBalanceA.margin<buyerFee||reserveBalanceA.margin==undefined){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')     
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
+                            sellFeeFromReserve=true
                         }else{   
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
-                 
+                            sellFeeFromMargin=true                 
                         }
                     }else{
                         console.log('inside fee deduction '+match.sellOrder.sellerAddress)
                         if(reserveBalanceA.margin<sellerFee||reserveBalanceA.margin==undefined){
                             if(reserveBalanceA.reserve<sellerFee||reserveBalanceA.reserve==undefined){
-                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')         
+                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
+                                sellFeeFromReserve=true
                             }else{
-                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')         
+                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')
+                                sellFeeFromAvailable=true
                             }
                         }else{
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')    
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')
+                            sellFeeFromAvailable=true
                         }
                     }
         
@@ -714,6 +729,9 @@ class Orderbook {
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.buyOrder.contractId, match.tradePrice);
                         
                         totalMargin = initialMarginPerContract*flipLong
+                        if(buyFeeFromMargin){
+                            totalMargin-=buyerFee
+                        }
                         //console.log('checking flip logic checking hasSufficientBalance'+match.buyOrder.buyerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
@@ -740,7 +758,9 @@ class Orderbook {
                         initialMarginPerContract = await ContractRegistry.getInitialMargin(match.sellOrder.contractId, match.tradePrice);
                         totalMargin = initialMarginPerContract*flipLong
                          //console.log('checking flip logic checking hasSufficientBalance'+match.sellOrder.sellerAddress+ ' '+collateralPropertyId + ' '+totalMargin)
-                      
+                        if(sellFeeFromMargin){
+                            totalMargin-=sellerFee
+                        }
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress, collateralPropertyId,totalMargin)
                         if (hasSufficientBalance.hasSufficient==false) {
                             //console.log('checking flip logic shortfall '+JSON.stringify(hasSufficientBalance))
@@ -760,14 +780,20 @@ class Orderbook {
                         //console.log('checking flip logic' +flipShort)
                   }
                     console.log('about to go into logic brackets for init margin '+isBuyerReducingPosition + ' seller reduce? '+ isSellerReducingPosition+ ' channel? '+channel)
+                    let feeInfo = {buyFeeFromMargin: buyFeeFromMargin, 
+                        buyFeeFromReserve:buyFeeFromReserve, buyFeeFromAvailable:buyFeeFromAvailable,
+                        sellFeeFromMargin:sellFeeFromMargin, sellFeeFromReserve:sellFeeFromReserve,
+                        sellFeeFromAvailable:sellFeeFromAvailable, buyerFee:buyerFee, sellerFee: sellerFee}
+}
+
                     if(!isBuyerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin buyer not channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,currentBlockHeight)
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,currentBlockHeight,feeInfo)
                         }else if(channel==true){
                             console.log('moving margin buyer channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress,currentBlockHeight)                  
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress,currentBlockHeight,feeInfo)                  
                          }
                         //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
@@ -776,10 +802,10 @@ class Orderbook {
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin seller not channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,currentBlockHeight)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,currentBlockHeight,feeInfo)
                          }else if(channel==true){
                             console.log('moving margin seller channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress,currentBlockHeight)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress,currentBlockHeight,feeInfo)
                          }
                         //console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
