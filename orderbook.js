@@ -308,7 +308,7 @@ class Orderbook {
                     return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
-        async processTokenMatches(matches, blockHeight, txid, channel,fee) {
+        async processTokenMatches(matches, blockHeight, txid, channel) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches) || matches.length === 0) {
                 //console.log('No valid matches to process');
@@ -490,7 +490,7 @@ class Orderbook {
             var matchResult = await this.matchContractOrders(orderBookKey);
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
-                await this.processContractMatches(matchResult.matches, blockTime, contractId, inverse,false)
+                await this.processContractMatches(matchResult.matches, blockTime, false)
             }
            
             //console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.matches)
@@ -611,7 +611,7 @@ class Orderbook {
             return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
-        async processContractMatches(matches, currentBlockHeight, inverse, channel) {
+        async processContractMatches(matches, currentBlockHeight, channel) {
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js')
             if (!Array.isArray(matches)) {
@@ -646,17 +646,17 @@ class Orderbook {
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                     match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
 
-
+                    console.log('checking positions '+JSON.stringify(match.buyerPosition)+' '+JSON.stringify(match.sellerPosition))
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
 
-                    let buyerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue)
-                    let sellerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue)
+                    let buyerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
+                    let sellerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
         
                     await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
                     await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
 
-
+                    console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                     if(isBuyerReducingPosition){
                         if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')                   
@@ -759,12 +759,14 @@ class Orderbook {
                         sellerFullyClosed=true
                         //console.log('checking flip logic' +flipShort)
                   }
-
+                    console.log('about to go into logic brackets for init margin '+isBuyerReducingPosition + ' seller reduce? '+ isSellerReducingPosition+ ' channel? '+channel)
                     if(!isBuyerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
+                            console.log('moving margin buyer not channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
                             match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,currentBlockHeight)
                         }else if(channel==true){
+                            console.log('moving margin buyer channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
                             match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress,currentBlockHeight)                  
                          }
                         //console.log('buyer position after moveCollat '+match.buyerPosition)
@@ -773,8 +775,10 @@ class Orderbook {
                     if(!isSellerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
+                            console.log('moving margin seller not channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
                             match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,currentBlockHeight)
                          }else if(channel==true){
+                            console.log('moving margin seller channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
                             match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress,currentBlockHeight)
                          }
                         //console.log('sellerPosition after moveCollat '+match.sellerPosition)
@@ -954,10 +958,10 @@ class Orderbook {
             }
         }
 
-        calculateFee(sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue){
+        calculateFee(sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue, channel){
                 let fee = 0
                 console.log('inside calc fee ' +lastMark+' '+notionalValue)
-              if(sellMaker==false&&buyMaker==false){
+              if((sellMaker==false&&buyMaker==false)||channel==true){
                         if(isInverse) {
                             fee = new BigNumber(0.000025)
                                 .times(notionalValue)

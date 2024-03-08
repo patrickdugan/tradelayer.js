@@ -384,6 +384,7 @@ class ContractRegistry {
                     let excessMargin
             if(orderPrice>price&&side==true&&excessMargin!=0&&channel==false){
                     excessMargin = initMargin -totalInitialMargin
+                    console.log('calling move margin in buyer excess margin channel false '+sender+' '+excessMargin)
                     //contract was bid higher than the fill, the initMargin in reserve is too high and will be returned to available
                      await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin,0, 0, 'returnExcessMargin',block);
             }else if(orderPrice<price&&side==false&&excessMargin!=0&&channel==false){
@@ -398,12 +399,15 @@ class ContractRegistry {
                         totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();                         
                         excessMargin=totalInitialMargin-initMargin                               
                     //contract was offered lower than the fill, init Margin in reserve is too high extra will return to available
+                    console.log('calling move margin in seller excess margin channel false, insufficient Balance '+sender+' '+excessMargin)
                         await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin',block);    
                     }else{
+                    console.log('calling move margin in seller excess margin channel false, sufficient Balance '+sender+' '+excessMargin)                
                        await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin',block);  
                     }  
             }
         if(channel==false){
+             console.log('calling move margin standard '+sender+' '+totalInitialMargin)
              await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
         }else if(channel==true){
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)

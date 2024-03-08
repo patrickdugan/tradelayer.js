@@ -504,7 +504,7 @@ class TallyMap {
         return {amount: addressObj[propertyId].amount, 
             available: addressObj[propertyId].available, 
             reserved: addressObj[propertyId].reserved, 
-            margined: addressObj[propertyId].margined, 
+            margin: addressObj[propertyId].margin, 
             vesting:addressObj[propertyId].vesting}; // or other specific fields like available, reserved
     }
 

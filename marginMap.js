@@ -113,7 +113,7 @@ class MarginMap {
         // Check if there is an existing position for the sender
         let position = this.margins.get(sender);
 
-        //console.log('setting initial margin position '+JSON.stringify(position))
+        console.log('setting initial margin position '+JSON.stringify(position))
 
         if (!position) {
             // If no existing position, initialize a new one
@@ -291,6 +291,7 @@ class MarginMap {
         const available = balances.available
         console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse+' '+'avg entry '+position.avgPrice)
         const isLong = position.contracts>0? true: false
+        console.log('isLong '+isLong)
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log('liquidation info ' +JSON.stringify(liquidationInfo));
         if(liquidationInfo==null){
