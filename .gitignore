@@ -10,3 +10,4 @@ dbPath/LOG
 *.old
 dbPath/MANIFEST-000319
 oldTests/dbDiag.js
+*.db
