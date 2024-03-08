@@ -652,23 +652,23 @@ class Orderbook {
 
                     let buyerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue)
                     let sellerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue)
-        /*
+        
                     await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
                     await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
 
 
                     if(isBuyerReducingPosition){
-                        if(reserveBalanceB.margin==0){
+                        if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')                   
 
                         }else{
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')                   
                         }        
                     }else{
-                        if(reserveBalanceB.margin==0){
+                        if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee')            
                         }else{
-                            if(reserveBalanceB.reserve==0){
+                            if(reserveBalanceB.reserve<buyerFee){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
                             }else{            
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee')                                          
@@ -677,7 +677,7 @@ class Orderbook {
 
                     }
                     if(isSellerReducingPosition){
-                        if(reserveBalanceA.margin==0){
+                        if(reserveBalanceA.margin<buyerFee||reserveBalanceA.margin==undefined){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')     
                         }else{   
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
@@ -685,17 +685,17 @@ class Orderbook {
                         }
                     }else{
                         console.log('inside fee deduction '+match.sellOrder.sellerAddress)
-                        if(reserveBalanceA.margin==0){
-                            if(reserveBalanceA.reserve==0){
+                        if(reserveBalanceA.margin<sellerFee||reserveBalanceA.margin==undefined){
+                            if(reserveBalanceA.reserve<sellerFee||reserveBalanceA.reserve==undefined){
                                 await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')         
                             }else{
                                 await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')         
                             }
                         }else{
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')    
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')    
                         }
                     }
-        */
+        
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
                     //the purpose of which is to handle flipping positions long to short or visa versa
                     const isBuyerFlippingPosition =  Boolean((match.buyOrder.amount>Math.abs(match.buyerPosition.contracts))&&match.buyerPosition.contracts<0)
@@ -859,11 +859,11 @@ class Orderbook {
                         let avgEntry = match.buyerPosition.avgPrice 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        const accountingPNL = marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.buyerPosition, true,match.buyOrder.contractId);
+                        const accountingPNL = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        const settlementPNL = marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+accountingPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
@@ -883,7 +883,7 @@ class Orderbook {
                         //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                         //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
+                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
                         } 
                         if(reduction.mode=='shortfall'){
                             //check the address available balance for the neg. balance
@@ -917,12 +917,12 @@ class Orderbook {
                         //console.log('LIFO '+JSON.stringify(LIFO))
 
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
-                        const accountingPNL = marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false,match.sellOrder.contractId);
+                        const accountingPNL = await marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false,match.sellOrder.contractId);
                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, lastMark, match.sellOrder.contractId,currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, lastMark, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false);
@@ -937,7 +937,7 @@ class Orderbook {
                         //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                         //unusual edge case but we're covering it here 'maint'
                         if(reduction.mode!='maint'){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, accountingPNL/*settlementPNL*/, 0, 0, 0, 'contractTradeSettlement',currentBlockHeight);
+                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0, 0, 'contractTradeSettlement',currentBlockHeight);
                         } 
                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: accountingPNL, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,

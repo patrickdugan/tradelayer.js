@@ -609,14 +609,17 @@ class MarginMap {
 
                 // Retrieve the latest oracle data for the previous block
                 const oracleData = await ContractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1);
-                let oraclePrice = oracleData.data.price
+                //console.log('inside settlePNL oracle retrieval '+JSON.stringify(oracleData)+' '+JSON.stringify(oracleData.data)+' '+JSON.stringify(oracleData.data.price))
+                oraclePrice = oracleData.data.price
             }
 
             // Use settlement price based on the oracle data or LIFO Avg. Entry
             const settlementPrice = isOracleContract ? oraclePrice : avgEntry;
 
             // Calculate PnL based on settlement price
+            console.log('inside settlePNL ' +settlementPrice+' '+price+' is oracle '+isOracleContract+'oracle price '+oraclePrice+' '+avgEntry)
             const pnl = new BigNumber((price - settlementPrice) * Math.abs(contracts));
+            console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
             if (contracts < 0) {
                 pnl.negated(); // Invert the value if contracts is negative
             }

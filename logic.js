@@ -680,7 +680,8 @@ const Logic = {
 	},
 
     async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
-	    // Trade the contract on-chain
+	    return
+        // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         //console.log('checking contract orderbook ' +JSON.stringify(orderbook))
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false,reduce,post,stop);
@@ -689,6 +690,7 @@ const Logic = {
 	},
 
     async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, channelAddress, block, txid) {
+        return
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
         const orderbook = await Orderbook.getOrderbookInstance(contractId)
         const initMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
