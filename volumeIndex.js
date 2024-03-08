@@ -3,9 +3,6 @@ const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')
 
-
-const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
-
 class VolumeIndex {
     constructor(db) {
         // Initialize data structures and database path
