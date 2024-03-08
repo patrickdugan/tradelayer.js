@@ -1,7 +1,7 @@
 node_modules
 *.db
 package*.json
-
+nedb-data
 *.ldb
 *.log
 *.db
