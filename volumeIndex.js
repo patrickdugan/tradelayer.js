@@ -2,14 +2,7 @@ const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')
-const client = new Litecoin.Client({
 
-            host: '127.0.0.1',
-            port: 18332,
-            user: 'user',
-            pass: 'pass',
-            timeout: 10000
-        });
 
 const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
 
