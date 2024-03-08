@@ -27,7 +27,7 @@ class VolumeIndex {
     }
 
     static async saveVolumeDataById(id, volume,price,blockHeight) {
-        await this.db.getDatabase('volumeIndex').updateAsync(
+        await db.getDatabase('volumeIndex').updateAsync(
             { _id: id },
             { value: { blockHeight:blockHeight, volume: volume, price:price } },
             { upsert: true }
@@ -35,23 +35,23 @@ class VolumeIndex {
     }
 
     static async getVolumeDataById(id) {
-        return await this.db.getDatabase('volumeIndex').findOneAsync({ _id: id });
+        return await db.getDatabase('volumeIndex').findOneAsync({ _id: id });
     }
 
     static async sampleVolumesByBlock(blockHeight) {
-        const volumeIndexData = await this.db.getDatabase('volumeIndex').findAsync({ blockHeight });
+        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ blockHeight });
         return volumeIndexData.map(entry => ({ id: entry._id, volume: entry.volume }));
     }
 
     static async sampleVolumesByBlockRange(startBlockHeight, endBlockHeight) {
-        const volumeIndexData = await this.db.getDatabase('volumeIndex').findAsync({ 
+        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ 
             blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
         });
         return volumeIndexData.map(entry => ({ id: entry._id, volume: entry.volume }));
     }
 
     static async calculateCumulativeVolume(id1, id2) {
-        const volumeIndexData = await this.db.getDatabase('volumeIndex').findAsync({ _id: { $regex: `^${id1}-${id2}-` } });
+        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ _id: { $regex: `^${id1}-${id2}-` } });
         let cumulativeVolume = 0;
         volumeIndexData.forEach(entry => cumulativeVolume += entry.volume);
         return cumulativeVolume;
