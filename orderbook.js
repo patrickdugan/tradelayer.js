@@ -784,7 +784,6 @@ class Orderbook {
                         buyFeeFromReserve:buyFeeFromReserve, buyFeeFromAvailable:buyFeeFromAvailable,
                         sellFeeFromMargin:sellFeeFromMargin, sellFeeFromReserve:sellFeeFromReserve,
                         sellFeeFromAvailable:sellFeeFromAvailable, buyerFee:buyerFee, sellerFee: sellerFee}
-}
 
                     if(!isBuyerReducingPosition){
                         if(channel==false){

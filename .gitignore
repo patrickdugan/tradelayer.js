@@ -11,3 +11,4 @@ dbPath/LOG
 dbPath/MANIFEST-000319
 oldTests/dbDiag.js
 *.db
+*.db
