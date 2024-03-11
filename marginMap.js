@@ -453,7 +453,7 @@ class MarginMap {
         }
     }
    
-    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address,side) {
+    async reduceMargin(pos, contracts, pnl, isInverse, contractId, address,side, feeDebit,fee) {
         //console.log('checking position inside reduceMargin ' + JSON.stringify(pos));
         //console.log('checking PNL math in reduceMargin '+pnl+' '+address)
         if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
@@ -489,6 +489,9 @@ class MarginMap {
 
             // Assign the updated pos.margin
             pos.margin = posMargin.toNumber();    
+            if(feeDebit){
+                pos.margin-=fee
+            }
             //console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
              
         this.margins.set(address, pos);
@@ -496,6 +499,17 @@ class MarginMap {
         //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
         await this.saveMarginMap(true);
         return reduction.toNumber();
+    }
+
+    async feeMarginReduce(address,pos, reduction,contractId){
+             // Now you can use the minus method
+        pos.margin -= reduction
+                   
+        this.margins.set(address, pos);
+        await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginFeeReduction')
+        //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
+        await this.saveMarginMap(true);
+        return pos;
     }
 
     realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {

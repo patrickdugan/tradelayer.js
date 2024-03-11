@@ -680,6 +680,7 @@ class Orderbook {
                             if(reserveBalanceB.reserve<buyerFee){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee')
                                 buyFeeFromMargin=true
+                                await marginMap.feeMarginReduce(match.buyOrder.buyerAddress,match.buyerPosition,buyerFee,match.buyerOrder.contractId)
                             }else{            
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee')
                                 buyFeeFromAvailable= true
@@ -693,7 +694,8 @@ class Orderbook {
                             sellFeeFromReserve=true
                         }else{   
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
-                            sellFeeFromMargin=true                 
+                            sellFeeFromMargin=true
+                            await marginMap.feeMarginReduce(match.sellOrder.sellerAddress,match.sellerPosition,sellerFee,match.sellOrder.contractId)               
                         }
                     }else{
                         console.log('inside fee deduction '+match.sellOrder.sellerAddress)
@@ -784,12 +786,13 @@ class Orderbook {
                         buyFeeFromReserve:buyFeeFromReserve, buyFeeFromAvailable:buyFeeFromAvailable,
                         sellFeeFromMargin:sellFeeFromMargin, sellFeeFromReserve:sellFeeFromReserve,
                         sellFeeFromAvailable:sellFeeFromAvailable, buyerFee:buyerFee, sellerFee: sellerFee}
-
+                    console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
                     if(!isBuyerReducingPosition){
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin buyer not channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,currentBlockHeight,feeInfo)
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,true,match.buyOrder.initMargin,channel,null,currentBlockHeight,feeInfo)
+                            console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
                         }else if(channel==true){
                             console.log('moving margin buyer channel not reducing '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount)
                             match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,true,match.buyOrder.initMargin,channel, match.channelAddress,currentBlockHeight,feeInfo)                  
@@ -801,7 +804,7 @@ class Orderbook {
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin seller not channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,currentBlockHeight,feeInfo)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, false, match.sellOrder.initMargin,channel,null,currentBlockHeight,feeInfo)
                          }else if(channel==true){
                             console.log('moving margin seller channel not reducing '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount)
                             match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, false, match.sellOrder.initMargin,channel, match.channelAddress,currentBlockHeight,feeInfo)
@@ -895,7 +898,10 @@ class Orderbook {
                         const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+accountingPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition))
-                        const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true);
+                        const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true,buyFeeFromMargin,buyerFee);
+                        if(buyFeeFromMargin){
+                            reduction-buyerFee
+                        }
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){
                             //console.log('reduction about to pass to TallyMap' +reduction)
@@ -954,8 +960,11 @@ class Orderbook {
                         const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, lastMark, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
-                        const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false);
-                        //{netMargin,mode}   
+                        const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false,sellFeeFromMargin,sellerFee);
+                        //{netMargin,mode}
+                        if(sellFeeFromMargin){
+                            reduction-sellerFee
+                        }   
                         if(reduction !=0){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin

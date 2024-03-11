@@ -368,10 +368,11 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo) {
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,commitAddr,block,feeInfo){
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
+        console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
         //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         //console.log('initialMarginPerContract '+initialMarginPerContract)
@@ -406,6 +407,7 @@ class ContractRegistry {
                        await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin',block);  
                     }  
             }
+            console.log('checking feeInfo obj again '+JSON.stringify(feeInfo))
         if(channel==false){
              console.log('calling move margin standard '+sender+' '+totalInitialMargin)
              if(feeInfo.buyFeeFromReserve&&side==true){
@@ -421,8 +423,8 @@ class ContractRegistry {
                 totalInitialMargin-=feeInfo.sellerFee
             }
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
-            await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
-            await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+            await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
+            await TallyMap.updateBalance(commitAddr, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
         }  
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
         return position
