@@ -133,3 +133,9 @@ const expressInterface = {
         } catch (error) {
             console.error('Error in getOracleHistory:', error.response ? error.response.data : error.message);
             throw error;
+        }
+    }
+}
+
+
+module.exports = expressInterface;
