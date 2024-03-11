@@ -480,7 +480,7 @@ class MarginMap {
             }
             existingPosition = Math.abs(existingPosition)
             // Now you can use the dividedBy method
-            const reduction = remainingMargin.times(contractAmount.dividedBy(existingPosition));
+            let reduction = remainingMargin.times(contractAmount.dividedBy(existingPosition));
             // Update the margin and contracts based on the reduction ratio
            let posMargin = new BigNumber(pos.margin);
 
@@ -490,7 +490,12 @@ class MarginMap {
             // Assign the updated pos.margin
             pos.margin = posMargin.toNumber();    
             if(feeDebit){
+                console.log('debiting fee in reduce margin '+fee)
                 pos.margin-=fee
+                reduction = reduction.toNumber()
+                reduction -=fee
+            }else{
+                reduction.toNumber()
             }
             //console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
              
@@ -498,7 +503,7 @@ class MarginMap {
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginReduction')
         //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
         await this.saveMarginMap(true);
-        return reduction.toNumber();
+        return reduction;
     }
 
     async feeMarginReduce(address,pos, reduction,contractId){

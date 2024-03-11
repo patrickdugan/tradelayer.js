@@ -422,7 +422,7 @@ class ContractRegistry {
             }else if(feeInfo.sellFeeFromReserve&&side==false){
                 totalInitialMargin-=feeInfo.sellerFee
             }
-            console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
+            console.log('about to move initMargin from channel '+commitAddr+' '+collateralPropertyId+' '+totalInitialMargin)
             await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
             await TallyMap.updateBalance(commitAddr, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
         }  

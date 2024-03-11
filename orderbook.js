@@ -899,9 +899,6 @@ class Orderbook {
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+accountingPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition))
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, accountingPNL /*settlementPNL*/, isInverse,match.buyOrder.contractId, match.buyOrder.buyerAddress, true,buyFeeFromMargin,buyerFee);
-                        if(buyFeeFromMargin){
-                            reduction-buyerFee
-                        }
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){
                             //console.log('reduction about to pass to TallyMap' +reduction)
@@ -961,10 +958,7 @@ class Orderbook {
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+JSON.stringify(match.sellerPosition))
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, accountingPNL/*settlementPNL*/, isInverse, match.sellOrder.contractId, match.sellOrder.sellerAddress, false,sellFeeFromMargin,sellerFee);
-                        //{netMargin,mode}
-                        if(sellFeeFromMargin){
-                            reduction-sellerFee
-                        }   
+                        //{netMargin,mode} 
                         if(reduction !=0){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
