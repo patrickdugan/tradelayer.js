@@ -47,7 +47,7 @@ class ConsensusDatabase {
     }
 
     static async markTxAsProcessed(txId, params) {
-        value = {processed: true, params}
+        let value = {processed: true, params}
         await db.getDatabase('consensus').insertAsync({ _id: txId, value });
     }
 }
