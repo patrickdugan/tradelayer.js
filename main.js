@@ -264,12 +264,12 @@ class Main {
                 saveHeight=startHeight
                }
                if(decodedParams.valid==true){
-                  await Consensus.markTxAsProcessed(txId);
+                  await Consensus.markTxAsProcessed(txId, decodedParams);
                   console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId+'blockHeight '+blockHeight)
                   await Logic.typeSwitch(type, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                 }else{
-                  await Consensus.markTxAsProcessed(txId);
+                  await Consensus.markTxAsProcessed(txId, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction
