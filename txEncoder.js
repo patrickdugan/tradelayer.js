@@ -74,14 +74,16 @@ const Encode = {
 
     // Encode On-chain Token for Token Transaction
     encodeOnChainTokenForToken: (params) => {
-        console.log('encoding token trade '+JSON.stringify(params))
+        console.log('encoding token trade ' + JSON.stringify(params));
+        const amountOffered = new BigNumber(params.amountOffered).times(1e8).toNumber(); // Multiply by 100 million
+        const amountExpected = new BigNumber(params.amountExpected).times(1e8).toNumber(); // Multiply by 100 million
         const payload = [
             params.propertyIdOffered.toString(36),
             params.propertyIdDesired.toString(36),
-            params.amountOffered.toString(36),
-            params.amountExpected.toString(36),
-            params.stop ? '1':'0',
-            params.post ? '1':'0'
+            amountOffered.toString(36),
+            amountExpected.toString(36),
+            params.stop ? '1' : '0',
+            params.post ? '1' : '0'
         ];
         return payload.join(',');
     },

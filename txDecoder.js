@@ -69,16 +69,16 @@ const Decode = {
 
     // Decode On-chain Token for Token Transaction
     decodeOnChainTokenForToken: (payload) => {
-            const parts = payload.split(',');
-            return {
-                propertyIdOffered: parseInt(parts[0], 36),
-                propertyIdDesired: parseInt(parts[1], 36),
-                amountOffered: parseInt(parts[2], 36),
-                amountExpected: parseInt(parts[3], 36),
-                stop: parts[4]==="1",
-                post: parts[5]==="1",
-            };
-      },
+        const parts = payload.split(',');
+        return {
+            propertyIdOffered: parseInt(parts[0], 36),
+            propertyIdDesired: parseInt(parts[1], 36),
+            amountOffered: new BigNumber(parts[2], 36).div(1e8).toNumber(), // Divide by 100 million
+            amountExpected: new BigNumber(parts[3], 36).div(1e8).toNumber(), // Divide by 100 million
+            stop: parts[4] === "1",
+            post: parts[5] === "1",
+        };
+    },
 
     decodeCancelOrder:(encodedTx) =>{
         const elements = encodedTx.split(',');
