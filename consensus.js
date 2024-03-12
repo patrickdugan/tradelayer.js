@@ -1,15 +1,6 @@
 const db = require('./db.js');
-const path = require('path');
-const util = require('util');
 
 class ConsensusDatabase {
-    constructor() {
-        if (ConsensusDatabase.instance) {
-            return ConsensusDatabase.instance;
-        }
-
-        ConsensusDatabase.instance = this;
-    }
 
     static async storeConsensusHash(blockHeight, consensusHash) {
         const doc = { blockHeight, consensusHash };
@@ -38,13 +29,18 @@ class ConsensusDatabase {
 
     static async checkIfTxProcessed(txId) {
         const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
-        return !!result;
+        return result && result.value && result.value.processed === true;
     }
 
-    static async markTxAsProcessed(txId) {
-        await db.getDatabase('consensus').insertAsync({ _id: txId, processed: true });
+    static async getTxParams(txId) {
+        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        return result.value.processed === true ? result.value.params : null;
+    }
+
+    static async markTxAsProcessed(txId, params) {
+        value = {processed: true, params}
+        await db.getDatabase('consensus').insertAsync({ _id: txId, value });
     }
 }
 
 module.exports = ConsensusDatabase;
-

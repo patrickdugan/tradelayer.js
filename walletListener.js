@@ -10,6 +10,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const OracleList = require('./oracle.js');
 const MarginMap = require('./marginMap.js');
 const TxUtils = require('./txUtils.js')
+const TxUtils = require('./consensus.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -169,6 +170,17 @@ app.get('/tl_getTxData/:tid', async (req, res) => {
         res.status(500).send('Error: ' + error.message);
     }
 })
+
+app.post('/tl_gettransaction', async (req, res) => {
+    try {
+        const { txid } = req.body;
+        const txInfo = await Consensus.getTxParams(txid)
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
 // Get activations
 app.post('/tl_getactivations', async (req, res) => {
