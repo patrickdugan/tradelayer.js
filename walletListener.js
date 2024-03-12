@@ -10,7 +10,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const OracleList = require('./oracle.js');
 const MarginMap = require('./marginMap.js');
 const TxUtils = require('./txUtils.js')
-const TxUtils = require('./consensus.js')
+const Consensus = require('./consensus.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -160,24 +160,24 @@ app.get('/tl_propertyFeeCache/:pid', async (req, res) => {
     }
 })
 
-app.get('/tl_getTxData/:tid', async (req, res) => {
+app.get('/tl_gettxdata/:tid', async (req, res) => {
     try {
-        console.log(`tl_getTxData: ${req.params?.tid}`);
+        console.log(`tl_gettxdata: ${req.params?.tid}`);
         const data = await TxIndex.getTransactionData(req.params?.tid);
         res.json(data);
     } catch (error) {
-        console.error('Error tl_getTxData: ', error);
+        console.error('Error tl_gettxdata: ', error);
         res.status(500).send('Error: ' + error.message);
     }
 })
 
-app.post('/tl_gettransaction', async (req, res) => {
+app.get('/tl_gettransaction/:tid', async (req, res) => {
     try {
-        const { txid } = req.body;
-        const txInfo = await Consensus.getTxParams(txid)
+        console.log(`tl_gettransaction: ${req.params?.tid}`);
+        const txInfo = await Consensus.getTxParams(req.params?.tid)
         res.json(txInfo);
     } catch (error) {
-        console.error('Error validating address:', error);
+        console.error('Error tl_gettransaction: ', error);
         res.status(500).send('Error: ' + error.message);
     }
 });

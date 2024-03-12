@@ -34,7 +34,7 @@ class ConsensusDatabase {
 
     static async getTxParams(txId) {
         const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
-        return result.value.processed === true ? result.value.params : null;
+        return result.value?.processed === true ? result.value?.params : {};
     }
 
     static async markTxAsProcessed(txId, params) {
