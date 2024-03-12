@@ -78,6 +78,17 @@ app.post('/tl_gettransactionforblock', async (req, res) => {
     }
 });
 
+app.post('/tl_getMaxProcessedHeight', async (req, res) => {
+    try {
+        const {} = req.body;
+        const txInfo = await Consensus.compareBlockHeights()
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // Get all balances for an address
 app.post('/tl_getallbalancesforaddress', async (req, res) => {
     console.log('Trying to load balances for: ' + req.body.params);

@@ -61,6 +61,33 @@ class ConsensusDatabase {
         return results.map(result => result.value.params);
     }
 
+    static async getMaxProcessedBlock() {
+        const result = await db.getDatabase('consensus').findOneAsync({ _id: 'MaxProcessedHeight' });
+        return result ? result.value : null;
+    }
+
+static async getHighestBlockHeight() {
+    const result = await db.getDatabase('consensus').aggregateAsync([
+        { $group: { _id: null, maxBlockHeight: { $max: "$value.params.blockHeight" } } }
+    ]);
+
+    return result.length > 0 ? result[0].maxBlockHeight : null;
+}
+
+static async compareBlockHeights() {
+    const maxProcessedBlock = await this.getMaxProcessedBlock();
+    const highestBlockHeight = await this.getHighestBlockHeight();
+
+    const higherBlockHeight = Math.max(maxProcessedBlock, highestBlockHeight);
+
+    return {
+        maxProcessedBlock,
+        highestBlockHeight,
+        higherBlockHeight
+    };
+}
+
+
 }
 
 module.exports = ConsensusDatabase;
