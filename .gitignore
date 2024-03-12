@@ -12,3 +12,4 @@ dbPath/MANIFEST-000319
 oldTests/dbDiag.js
 *.db
 *.db
+nedb-data/txIndex.db

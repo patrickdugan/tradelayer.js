@@ -42,7 +42,7 @@ app.post('/tl_validateaddress', async (req, res) => {
     }
 });
 
-// Validate address
+
 app.post('/tl_gettransaction', async (req, res) => {
     try {
         const { txid } = req.body;
@@ -54,6 +54,29 @@ app.post('/tl_gettransaction', async (req, res) => {
     }
 });
 
+
+app.post('/tl_gettransactionsforaddress', async (req, res) => {
+    try {
+        const { address } = req.body;
+        const txInfo = await Consensus.getTxParamsForAddress(address)
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
+app.post('/tl_gettransactionforblock', async (req, res) => {
+    try {
+        const { blockHeight } = req.body;
+        const txInfo = await Consensus.getTxParamsForBlock(blockHeight)
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
 // Get all balances for an address
 app.post('/tl_getallbalancesforaddress', async (req, res) => {

@@ -50,6 +50,17 @@ class ConsensusDatabase {
         let value = {processed: true, params}
         await db.getDatabase('consensus').insertAsync({ _id: txId, value });
     }
+
+    static async getTxParamsForAddress(address) {
+        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
+        return results.map(result => result.value.params);
+    }
+
+    static async getTxParamsForBlock(blockHeight) {
+        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
+        return results.map(result => result.value.params);
+    }
+
 }
 
 module.exports = ConsensusDatabase;
