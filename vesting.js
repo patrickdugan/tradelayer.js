@@ -24,13 +24,17 @@ class TradeLayerManager {
     async initializeTokens() {
         const TallyMap = require('./tally.js');
          const alreadyInitialized = await TallyMap.checkInitializationFlag();
-
+        
+        if(this.adminAddress==undefined||this.adminAddress==null){
+            this.adminAddress="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
+        }
+         
         if (!alreadyInitialized) {
             var TLTokenId = 1;
             const TLTotalAmount = 1500000;
 
             var TLVESTTokenId = 2;
-            const TLVESTTotalAmount = 1500000;
+            const TLVESTTotalAmount = 1250000;
             var amountToInsuranceFund = 250000;
             const propertyManager = PropertyManager.getInstance()
             TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
@@ -42,7 +46,7 @@ class TradeLayerManager {
             insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
             
-            await TallyMap.updateBalance(this.adminAddress, TLTokenId, 0, 0, 0, TLTotalAmount - amountToInsuranceFund);
+            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLTotalAmount-TLVESTTotalAmount, 0, 0, TLTotalAmount - amountToInsuranceFund);
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
             
             const balances = await TallyMap.getAddressBalances(this.adminAddress)

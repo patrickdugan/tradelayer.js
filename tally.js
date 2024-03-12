@@ -291,19 +291,28 @@ class TallyMap {
         }
     }
 
-     // Method to save fee cache to the database
-     static async saveFeeCacheToDB() {
+   static async saveFeeCacheToDB() {
         try {
             const db = dbInstance.getDatabase('feeCache');
             for (let [propertyId, feeAmount] of this.feeCache.entries()) {
-                const serializedFeeAmount = JSON.stringify(feeAmount);
+                const existingEntry = await db.findOneAsync({ _id: 'feeCache-' + propertyId });
+                let totalFee = feeAmount;
+
+                if (existingEntry && existingEntry.value) {
+                    const existingFee = parseFloat(existingEntry.value);
+                    if (!isNaN(existingFee)) {
+                        totalFee += existingFee;
+                    }
+                }
+
+                const serializedFeeAmount = JSON.stringify(totalFee);
                 await db.updateAsync(
                     { _id: 'feeCache-' + propertyId },
                     { value: serializedFeeAmount },
                     { upsert: true }
                 );
             }
-            //console.log('FeeCache saved successfully.');
+            console.log('FeeCache saved successfully.');
         } catch (error) {
             console.error('Error saving FeeCache:', error);
         }
