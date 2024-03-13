@@ -291,39 +291,40 @@ class TallyMap {
         }
     }
 
-  static async saveFeeCacheToDB(propertyId, feeAmount) {
-    try {
+    static async saveFeeCacheToDB(propertyId, feeAmount) {
+        console.log('inside save fee cache '+propertyId+' '+feeAmount);
         const db = dbInstance.getDatabase('feeCache');
-        const serializedFeeAmount = JSON.stringify(feeAmount);
-        await db.updateAsync(
-            { _id: propertyId },
-            { value: feeAmount },
-            { upsert: true }
-        );
-        console.log('FeeCache for property ' + propertyId + ' saved successfully.');
-    } catch (error) {
-        console.error('Error saving FeeCache:', error);
+        try {
+            const serializedFeeAmount = JSON.stringify(feeAmount);
+            const cacheId = propertyId.toString(); // Ensure propertyId is converted to a string
+            await db.updateAsync(
+                { _id: cacheId }, // Query to find the document
+                { $set: { value: serializedFeeAmount } }, // Update the value field
+                { upsert: true } // Insert a new document if it doesn't exist
+            );
+            console.log('FeeCache for property ' + propertyId + ' saved successfully.');
+        } catch (error) {
+            console.error('Error saving FeeCache:', error);
+        }
     }
-}
 
-    
     static async loadFeeCacheFromDB() {
-        let propertyIndex = await PropertyList.getPropertyIndex()    
+        let propertyIndex = await PropertyList.getPropertyIndex();    
         try {
             const db = dbInstance.getDatabase('feeCache');
             this.feeCache = new Map();
 
             // Assuming you have a list of property IDs, iterate through them
             for (let id of propertyIndex) {
-                const query = { _id: propertyIndex.id };
+                const query = { _id: id }; // Corrected typo here
                 const result = await db.findOneAsync(query);
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
-                    this.feeCache.set(propertyIndex.id, feeAmount);
+                    this.feeCache.set(id, feeAmount); // Using `id` instead of `propertyIndex.id`
                 }
             }
             //console.log('FeeCache loaded successfully.');
-            return this.feeCache
+            return this.feeCache;
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);
         }
@@ -335,63 +336,36 @@ class TallyMap {
 
             // Assuming you have a list of property IDs, iterate through them
             const query = { _id: id };
-                const result = await db.findOneAsync(query);
-            
-            console.log('FeeCache loaded for property.');
-            return result.value
+            const cursor = await db.findAsync(query);
+            console.log('Result from database:', cursor);
+
+            const result = await cursor.toArray();
+            console.log('Documents found:', result);
+
+            if (result.length > 0 && result[0].value) {
+                console.log('FeeCache loaded for property ' + id + ': ' + result[0].value);
+                return parseFloat(result[0].value); // Parse the value to a float before returning
+            } else {
+                console.log('No FeeCache found for property ' + id);
+                return 0; // Return a default value if no document is found
+            }
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);
+            return 0; // Return a default value in case of error
         }
     }
 
 
-    async applyDeltasSinceLastHeight(lastHeight) {
-        // Retrieve and apply all deltas from lastHeight to the current height
-        for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
-            const serializedDelta = await dbInstance.get(`tallyMapDelta-${height}`);
-            if (serializedDelta) {
-                const delta = JSON.parse(serializedDelta);
-                this.applyDelta(delta);
-            }
-        }
-    }
 
      // Method to update fee cache for a property
     static async updateFeeCache(propertyId, feeAmount) {
-        await this.loadFeeCacheFromDB(propertyId);
-
-        if (feeAmount === undefined || feeAmount === null) {
-            console.error('Invalid feeAmount:', feeAmount);
-            return; // Exit early if feeAmount is invalid
-        }
-
-        if (!this.feeCache.has(propertyId)) {
-            this.feeCache.set(propertyId, 0); // Initialize if not present
-        }
-        
-        const currentFee = this.feeCache.get(propertyId);
-        if (currentFee === undefined || currentFee === null) {
-            console.error('Invalid currentFee:', currentFee);
-            return; // Exit early if currentFee is invalid
-        }
-
-        // Check if feeAmount is a valid number
-        if (isNaN(feeAmount)) {
-            console.error('Invalid feeAmount:', feeAmount);
-            return; // Exit early if feeAmount is not a number
-        }
-
-        // Check if currentFee is a valid number
-        if (isNaN(currentFee)) {
-            console.error('Invalid currentFee:', currentFee);
-            return; // Exit early if currentFee is not a number
-        }
-
+        let currentFee = await this.loadFeeCacheForProperty(propertyId);
+       console.log('current fee '+currentFee+' '+propertyId)
         // Update the fee cache
         this.feeCache.set(propertyId, currentFee + feeAmount);
 
         // Optionally, persist fee cache changes to database if necessary
-        await this.saveFeeCacheToDB(); 
+        await this.saveFeeCacheToDB(propertyId, feeAmount); 
     }
 
     static async drawOnFeeCache(propertyId) {
@@ -421,6 +395,17 @@ class TallyMap {
 
         // Save the updated fee cache to the database
         await this.saveFeeCacheToDB();
+    }
+
+    async applyDeltasSinceLastHeight(lastHeight) {
+        // Retrieve and apply all deltas from lastHeight to the current height
+        for (let height = lastHeight + 1; height <= currentBlockHeight; height++) {
+            const serializedDelta = await dbInstance.get(`tallyMapDelta-${height}`);
+            if (serializedDelta) {
+                const delta = JSON.parse(serializedDelta);
+                this.applyDelta(delta);
+            }
+        }
     }
 
     // Function to record a delta
