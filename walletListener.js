@@ -228,11 +228,11 @@ app.get('/tl_gettransactions', async (req, res) => {
 app.get('/tl_gettop10blocks', async (req, res) => {
     try {
         console.log(`tl_gettop10blocks`);
-        let n = await TxUtils.getBlockCount();
+        let n = 3191533;    //await TxUtils.getBlockCount();
         data = Array.from(Array(10).keys()).map(j=>({ blockId: n-j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
         res.json(data);
     } catch (error) {
-        console.error('Error tl_gettransactions: ', error);
+        console.error('Error tl_gettop10blocks: ', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
