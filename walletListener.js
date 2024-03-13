@@ -1,4 +1,6 @@
 const express = require('express');
+const https = require('https');
+const fs = require('fs');
 const axios = require('axios');
 const TallyMap = require('./tally.js');
 const TxIndex = require('./txIndex.js');
@@ -13,8 +15,10 @@ const TxUtils = require('./txUtils.js')
 const Consensus = require('./consensus.js')
 
 let isInitialized = false; // A flag to track the initialization status
+
 const app = express();
-const port = 3000; // Choose a port that suits your setup
+const SSL = false;
+const port = SSL ? 9191 : 3000;
 
 app.use(express.json()); // Middleware to parse JSON bodies
 
@@ -36,6 +40,12 @@ app.use(function (req, res, next) {
     // Pass to next layer of middleware
     next();
 });
+
+if (SSL)
+    https.createServer({ key: fs.readFileSync('./key.pem'), cert: fs.readFileSync('./cert.pem'), passphrase: 'test1' }, app)
+        .listen(3000);    
+else
+    app.listen(port, () => console.log(`Express server running on port ${port}`));
 
 // Initialize Main
 app.post('/tl_initmain', async (req, res) => {
@@ -182,6 +192,53 @@ app.get('/tl_gettransaction/:tid', async (req, res) => {
     }
 });
 
+app.get('/tl_gettransactionsforaddress/:addr', async (req, res) => {
+    try {
+        console.log(`tl_gettransactionsforaddress: ${req.params?.addr}`);
+        const data = await Consensus.getTxParamsForAddress(req.params?.addr)
+        res.json(data);
+    } catch (error) {
+        console.error('Error tl_gettransactionsforaddress: ', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
+app.get('/tl_gettransactionsforblock/:bid', async (req, res) => {
+    try {
+        const bid = parseInt(req.params?.bid);
+        console.log(`tl_gettransaction: ${bid}`);
+        const data = await Consensus.getTxParamsForBlock(bid)
+        res.json(data);
+    } catch (error) {
+        console.error('Error tl_gettransactionforblock: ', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_gettransactions', async (req, res) => {
+    try {
+        console.log(`tl_gettransactions`);
+        const data = await Consensus.getInvalidated()
+        res.json(data);
+    } catch (error) {
+        console.error('Error tl_gettransactions: ', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_gettop10blocks', async (req, res) => {
+    try {
+        console.log(`tl_gettop10blocks`);
+        let n = await TxUtils.getBlockCount();
+        data = Array.from(Array(10).keys()).map(j=>({ blockId: n-j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
+        res.json(data);
+    } catch (error) {
+        console.error('Error tl_gettransactions: ', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // Get activations
 app.post('/tl_getactivations', async (req, res) => {
     try {
@@ -304,13 +361,4 @@ app.get('/tl_oraclehistory', async (req, res) => {
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
     }
-});
-
-// ... Other endpoints ...
-
-app.listen(port, () => {
-    // const params = ['a1','c3'];
-    // const body = { params };
-    // console.log(`body:${JSON.stringify(body)}`)
-    console.log(`Express server running on port ${port}`);
 });

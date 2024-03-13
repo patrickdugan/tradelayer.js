@@ -419,7 +419,7 @@ class TxIndex {
                 return txData.value; // Return the value part of the transaction data
             } else {
                 console.log(`No transaction data found for ${txId}.`);
-                return null;
+                return {};
             }
         } catch (error) {
             console.error(`Error retrieving transaction data for ${txId}:`, error);

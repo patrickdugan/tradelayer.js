@@ -34,7 +34,7 @@ const activationInstance = Activation.getInstance()
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
-//const AMM = require('./AMM.js')
+const AMM = require('./amm.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
@@ -216,7 +216,7 @@ class Main {
         //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
         //console.log(blockHeight, currentBlockHeight, realtime)
         for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
-            //await AMM.updateOrdersForAllContractAMMs()
+            await AMM.updateOrdersForAllContractAMMs()
             // Process each transaction
             for (const txData of txDataSet) {
                 const txId = txData._id.split('-')[2];
@@ -264,12 +264,12 @@ class Main {
                 saveHeight=startHeight
                }
                if(decodedParams.valid==true){
-                  await Consensus.markTxAsProcessed(txId);
+                  await Consensus.markTxAsProcessed(txId, decodedParams);
                   console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId+'blockHeight '+blockHeight)
                   await Logic.typeSwitch(type, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                 }else{
-                  await Consensus.markTxAsProcessed(txId);
+                  await Consensus.markTxAsProcessed(txId, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
                 // Additional processing for each transaction

@@ -25,13 +25,13 @@ class Clearing {
         //console.log(`Starting clearing operations for block ${blockHeight}`);
 
         // 1. Fee Cache Buy
-        await this.feeCacheBuy(blockHeight);
+        // await this.feeCacheBuy(blockHeight);
 
-        // 2. Set channels as closed if needed
-        await Channels.removeEmptyChannels(blockHeight);
+        // // 2. Set channels as closed if needed
+        // await Channels.removeEmptyChannels(blockHeight);
 
-        // 3. Settle trades at block level
-        await this.makeSettlement(blockHeight);
+        // // 3. Settle trades at block level
+        // await this.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return

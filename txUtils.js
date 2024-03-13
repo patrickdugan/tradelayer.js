@@ -73,7 +73,7 @@ const TxUtils = {
         try{
             height = await getBlockCountAsync()
         } catch (error) {
-            console.error(`Error fetching transaction for txid ${blockhash}:`, error);
+            console.error(`Error getBlockCountAsync(): `, error);
         }
         return height;
     },

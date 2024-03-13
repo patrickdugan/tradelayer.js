@@ -26,7 +26,6 @@ class ConsensusDatabase {
             }
     }
 
-
     static async checkIfTxProcessed(txId) {
         const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
         return result && result.value && result.value.processed === true;
@@ -40,6 +39,36 @@ class ConsensusDatabase {
     static async markTxAsProcessed(txId, params) {
         value = {processed: true, params}
         await db.getDatabase('consensus').insertAsync({ _id: txId, value });
+    }
+
+    static async getTxParamsForAddress(address) {
+        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
+        return entries.map(e=>({
+            txid: e.value.params.txid,
+            block: e.value.params.block,
+            amounts: e.value.params.amounts,
+            reason: e.value.params.reason,
+        }));
+    }
+
+    static async getTxParamsForBlock(blockHeight) {
+        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
+        return entries.map(e=>({
+            txid: e.value.params.txid,
+            block: e.value.params.block,
+            amounts: e.value.params.amounts,
+            reason: e.value.params.reason,
+        }));
+    }
+
+    static async getInvalidated() {
+        const entries = await db.getDatabase('consensus').findAsync({ 'value.params.valid' :false });
+        return entries.map(e=>({
+            txid: e.value.params.txid,
+            block: e.value.params.block,
+            amounts: e.value.params.amounts,
+            reason: e.value.params.reason,
+        }));
     }
 }
 
