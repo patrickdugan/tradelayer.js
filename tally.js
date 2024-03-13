@@ -334,26 +334,31 @@ class TallyMap {
         try {
             const db = dbInstance.getDatabase('feeCache');
 
-            // Assuming you have a list of property IDs, iterate through them
-            const query = { _id: id };
-            const cursor = await db.findAsync(query);
-            console.log('Result from database:', cursor);
+            const result = await db.findAsync({});
+            console.log('Database contents:', JSON.stringify(result, null, 2));
 
-            const result = await cursor.toArray();
-            console.log('Documents found:', result);
-
-            if (result.length > 0 && result[0].value) {
-                console.log('FeeCache loaded for property ' + id + ': ' + result[0].value);
-                return parseFloat(result[0].value); // Parse the value to a float before returning
-            } else {
-                console.log('No FeeCache found for property ' + id);
-                return 0; // Return a default value if no document is found
+            let value = 0;
+            for (const doc of result) {
+                console.log(JSON.stringify(doc))
+                if (doc._id == id) {
+                    value = parseFloat(doc.value);
+                    console.log('FeeCache loaded for property ' + id + ': ' + value);
+                    break;
+                }
             }
+
+            if (value === 0) {
+                console.log('No FeeCache found for property ' + id);
+            }
+
+            return value;
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);
             return 0; // Return a default value in case of error
         }
     }
+
+
 
 
 
@@ -363,7 +368,7 @@ class TallyMap {
        console.log('current fee '+currentFee+' '+propertyId)
         // Update the fee cache
         this.feeCache.set(propertyId, currentFee + feeAmount);
-
+        feeAmount+=currentFee
         // Optionally, persist fee cache changes to database if necessary
         await this.saveFeeCacheToDB(propertyId, feeAmount); 
     }
