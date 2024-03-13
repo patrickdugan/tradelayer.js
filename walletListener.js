@@ -17,7 +17,7 @@ const Consensus = require('./consensus.js')
 let isInitialized = false; // A flag to track the initialization status
 
 const app = express();
-const SSL = false;
+const SSL = true;
 const port = SSL ? 9191 : 3000;
 
 app.use(express.json()); // Middleware to parse JSON bodies
@@ -41,11 +41,9 @@ app.use(function (req, res, next) {
     next();
 });
 
-if (SSL)
-    https.createServer({ key: fs.readFileSync('./key.pem'), cert: fs.readFileSync('./cert.pem'), passphrase: 'test1' }, app)
-        .listen(3000);    
-else
-    app.listen(port, () => console.log(`Express server running on port ${port}`));
+const exp = SSL ? https.createServer({ key: fs.readFileSync('./key.pem'), cert: fs.readFileSync('./cert.pem'), passphrase: 'test1' }, app)
+                : app;
+exp.listen(port, () => console.log(`Express server running on port:${port}, SSL:${SSL}`));
 
 // Initialize Main
 app.post('/tl_initmain', async (req, res) => {
