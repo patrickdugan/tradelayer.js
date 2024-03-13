@@ -16,8 +16,9 @@ const Consensus = require('./consensus.js')
 
 let isInitialized = false; // A flag to track the initialization status
 
+/// openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
 const app = express();
-const SSL = true;
+const SSL = 0;
 const port = SSL ? 9191 : 3000;
 
 app.use(express.json()); // Middleware to parse JSON bodies
@@ -138,7 +139,7 @@ app.get('/tl_listproperties', async (req, res) => {
 app.get('/tl_getchaininfo', async (req, res) => {
     try {
         console.log('/tl_getchaininfo');
-        const data = await TxUtils.getBlockchainInfo();
+        const data = await Consensus.getBlockchainInfo();
         res.json(data);
     } catch (error) {
         console.error('Error /tl_getchaininfo:', error);
@@ -228,8 +229,9 @@ app.get('/tl_gettransactions', async (req, res) => {
 app.get('/tl_gettop10blocks', async (req, res) => {
     try {
         console.log(`tl_gettop10blocks`);
-        let n = 3191533;    //await TxUtils.getBlockCount();
-        data = Array.from(Array(10).keys()).map(j=>({ blockId: n-j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
+        let nn = await Consensus.getTop10Blocks();
+        //data = Array.from(Array(Math.min(nn.length,10)).keys()).map(j=>({ blockId: n-j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
+        data = nn.map(j=>({ blockId: j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
         res.json(data);
     } catch (error) {
         console.error('Error tl_gettop10blocks: ', error);

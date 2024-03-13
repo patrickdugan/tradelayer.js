@@ -70,6 +70,11 @@ class ConsensusDatabase {
             reason: e.value.params.reason,
         }));
     }
+
+    static async getTop10Blocks() {
+        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": {$exists: true} });
+        return Array.from(entries.map(e=>e.value.params.block)).sort((a,b)=>a>b);
+    }
 }
 
 module.exports = ConsensusDatabase;
