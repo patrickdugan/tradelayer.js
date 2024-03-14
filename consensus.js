@@ -42,27 +42,32 @@ class ConsensusDatabase {
     }
 
     static async getTxParamsForAddress(address) {
-        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
-        return entries.map(e=>({
-            txid: e.value.params.txid,
-            block: e.value.params.block,
-            amounts: e.value.params.amounts,
-            reason: e.value.params.reason,
-        }));
+        //const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
+        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, $or: [ { "value.params.address": address }, { "value.params.senderAddress": address } ] });
+        return entries.map(e=>this.moveTxId(e.value.params));
+        // return entries.map(e=>({
+        //     txid: e.value.params.txid,
+        //     from: e.value.params.senderAddress,
+        //     to1: e.value.params.address,
+        //     amounts: e.value.params.amounts,
+        //     reason: e.value.params.reason,
+        // }));
     }
 
     static async getTxParamsForBlock(blockHeight) {
         const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
-        return entries.map(e=>({
-            txid: e.value.params.txid,
-            block: e.value.params.block,
-            amounts: e.value.params.amounts,
-            reason: e.value.params.reason,
-        }));
+        return entries.map(e=>this.moveTxId(e.value.params));
+        // ({
+        //     txid: e.value.params.txid,
+        //     from: e.value.params?.senderAddress,
+        //     to: e.value.params?.address,
+        //     amounts: e.value.params.amounts,
+        //     reason: undefined//e.value.params.reason,
+        // }));
     }
 
     static async getInvalidated() {
-        const entries = await db.getDatabase('consensus').findAsync({ 'value.params.valid' :false });
+        const entries = await db.getDatabase('consensus').findAsync({ 'value.params.valid': false });
         return entries.map(e=>({
             txid: e.value.params.txid,
             block: e.value.params.block,
@@ -72,8 +77,17 @@ class ConsensusDatabase {
     }
 
     static async getTop10Blocks() {
-        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": {$exists: true} });
-        return Array.from(entries.map(e=>e.value.params.block)).sort((a,b)=>a>b);
+        const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": { $exists: true } });
+        return Array.from(entries.map(e=>e.value.params.block)).sort().reverse().slice(0,10);
+    }
+
+    static moveTxId(data) {
+        let txid = data?.txid;
+        if (txid === undefined) {
+            return data;
+        }
+        delete data.txid;
+        return { txid, ...data };
     }
 }
 

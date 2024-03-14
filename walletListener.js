@@ -202,7 +202,6 @@ app.get('/tl_gettransactionsforaddress/:addr', async (req, res) => {
     }
 });
 
-
 app.get('/tl_gettransactionsforblock/:bid', async (req, res) => {
     try {
         const bid = parseInt(req.params?.bid);
@@ -229,9 +228,16 @@ app.get('/tl_gettransactions', async (req, res) => {
 app.get('/tl_gettop10blocks', async (req, res) => {
     try {
         console.log(`tl_gettop10blocks`);
-        let nn = await Consensus.getTop10Blocks();
-        //data = Array.from(Array(Math.min(nn.length,10)).keys()).map(j=>({ blockId: n-j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
-        data = nn.map(j=>({ blockId: j, timestamp: new Date(Date.now()-j*1000000).toISOString(), other: 'N/A' }))
+        let ts = Date.now()
+        data = (await Consensus.getTop10Blocks()).map(j=>({ 
+            blockId: j, 
+            timestamp: new Date().toLocaleDateString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }),
+            transactions: 0 
+        }));
         res.json(data);
     } catch (error) {
         console.error('Error tl_gettop10blocks: ', error);
