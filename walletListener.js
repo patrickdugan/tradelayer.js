@@ -18,7 +18,7 @@ let isInitialized = false; // A flag to track the initialization status
 
 /// openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
 const app = express();
-const SSL = 0;
+const SSL = 1;
 const port = SSL ? 9191 : 3000;
 
 app.use(express.json()); // Middleware to parse JSON bodies

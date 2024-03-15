@@ -42,28 +42,26 @@ class ConsensusDatabase {
     }
 
     static async getTxParamsForAddress(address) {
-        //const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
         const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, $or: [ { "value.params.address": address }, { "value.params.senderAddress": address } ] });
-        return entries.map(e=>this.moveTxId(e.value.params));
-        // return entries.map(e=>({
-        //     txid: e.value.params.txid,
-        //     from: e.value.params.senderAddress,
-        //     to1: e.value.params.address,
-        //     amounts: e.value.params.amounts,
-        //     reason: e.value.params.reason,
-        // }));
+        //return entries.map(e=>this.moveTxId(e.value.params));
+        return entries.map(e=>({
+            txid: e.value.params.txid,
+            from: e.value.params.senderAddress,
+            to: e.value.params?.address ? e.value.params?.address : '?',
+            amounts: e.value.params?.amounts ? e.value.params.amounts : 'NaN',
+            validity: e.value.params?.valid ? true : false,
+        }));
     }
 
     static async getTxParamsForBlock(blockHeight) {
         const entries = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
-        return entries.map(e=>this.moveTxId(e.value.params));
-        // ({
-        //     txid: e.value.params.txid,
-        //     from: e.value.params?.senderAddress,
-        //     to: e.value.params?.address,
-        //     amounts: e.value.params.amounts,
-        //     reason: undefined//e.value.params.reason,
-        // }));
+        return entries.map(e=>({
+            txid: e.value.params.txid,
+            from: e.value.params.senderAddress,
+            to: e.value.params?.address ? e.value.params?.address : '?',
+            amounts: e.value.params?.amounts ? e.value.params.amounts : 'NaN',
+            validity: e.value.params?.valid ? true : false,
+        }));
     }
 
     static async getInvalidated() {
