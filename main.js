@@ -173,6 +173,13 @@ class Main {
         }
     }
 
+    /*
+        Most important function, has two modes, realtime==false means we're catching up and constructing consensus,
+        from the txIndex, from genesis until chaintip.
+        Real-time==true means we're looping in a delayed timer to check for new blocks and include any new ones in the
+        txIndex then apply them to this to update the db and consensus.
+    */
+
    async constructConsensusFromIndex(startHeight, realtime) {
 
         let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
@@ -197,7 +204,8 @@ class Main {
                 //console.log('again lastIndexBlock '+lastIndexBlock)
         
       
-
+        //this one is a bit tricky, if we're building consensus from scratch we start from genesis
+        //otherwise we reference a value stored in the DB called lastConsensusHeight that tracks our progress
         if(realtime!=true){
             blockHeight = startHeight
           console.log('construct Consensus from Index max indexed block '+lastIndexBlock, 'start height '+startHeight)
@@ -216,6 +224,7 @@ class Main {
         //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
         //console.log(blockHeight, currentBlockHeight, realtime)
         for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
+            //this keeps the AMM system ahead of incoming orders for the block
             await AMM.updateOrdersForAllContractAMMs()
             // Process each transaction
             for (const txData of txDataSet) {
@@ -243,6 +252,7 @@ class Main {
                 const senderUTXO = txData.value.sender.amount
                 const referenceUTXO = txData.value.reference.amount/COIN
                 console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress+blockHeight)
+                //this next one is key, puts the rax txIndex data into decoder and validity logic
                 const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
                 decodedParams.block=blockHeight
                 //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
@@ -256,6 +266,7 @@ class Main {
                         decodedParams.valid = false
                         decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues '
                         //console.log(decodedParams.reason)
+                        //these blocks enforce that unactivated tx are not valid
                       }
                 }
                //console.log('decoded params with validity' +JSON.stringify(decodedParams))
@@ -272,9 +283,13 @@ class Main {
                   await Consensus.markTxAsProcessed(txId, decodedParams);
                   await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                   console.log('invalid tx '+decodedParams.reason)}
-                // Additional processing for each transaction
+                //This block marks processed tx along with their param data in the Consensus.db so we can parse them for
+                //other information retrieval "RPCs" like "tl_gettransaction" which we use in the Explorer and can be useful for wallet
+                //It's also useful for preventing duplicate processings so the DB is only affected by a tx parsing once.
             }
+            //removes balances from channels, since this happens 7 blocks later than the withdrawal tx is processed
             await Channels.processWithdrawals(blockHeight)
+            //updates derivatives positions for mark-price, also buys back $TL tokens with fee cache, deletes empty channels
             await Clearing.clearingFunction(blockHeight)
             maxProcessedHeight = blockHeight; // Update max processed height after each block
         }
@@ -293,6 +308,9 @@ class Main {
         }else{return maxProcessedHeight}
     }
 
+    /*originally was an if-logic based switch function but refactoring real-time mode
+      it simply is a part of a flow, could be refactored into one function
+    */
     async syncIfNecessary() {
         const blockLag = await this.checkBlockLag();
         /*if (blockLag > 0) {
@@ -302,6 +320,7 @@ class Main {
         //}
     }
 
+    //updates max consensus block in real-time mode
     async checkBlockLag() {
         const chaintip = await this.getBlockCountAsync()
         const maxConsensusBlock = await this.loadMaxProcessedHeight()
@@ -310,7 +329,7 @@ class Main {
         return {'lag':lag, 'chainTip':chaintip, 'maxConsensus':maxConsensusBlock}
     }
 
-
+    /*main function of real-time mode*/
     async processIncomingBlocks(lag, maxConsensusBlock, chainTip) {
         // Continuously loop through incoming blocks and process them
         let latestProcessedBlock = maxConsensusBlock
@@ -339,6 +358,7 @@ class Main {
         }
     }
 
+    /*sub-function of real-time mode, breaks things into 3 steps*/
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
         await this.blockHandlerBegin(blockData.hash, blockNumber);
@@ -358,6 +378,8 @@ class Main {
         process.exit(0); // or use another method to exit gracefully
       }
 
+    /*first step of real-time mode is meta-level analysis of consensus and re-orgs, 
+    may revert to last persistence checkpoint if re-org detected*/
     async blockHandlerBegin(blockHash, blockHeight) {
         //console.log(`Beginning to process block ${blockHeight}`);
 
@@ -374,6 +396,7 @@ class Main {
         return //console.log('no re-org detected ' +blockHeight)
     }
 
+    /*middle part of real-time mode processed new tx */
     async blockHandlerMid(blockHash, blockHeight) {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
@@ -396,6 +419,9 @@ class Main {
         //console.log('processed ' + blockHash)
     }
 
+    /*here's where we finish a block processing in real-time mode, handling anything that is done after
+    the main tx processing. But since I've stuck the clearing function, channel removal and others in the constructConsensus function
+    this is currently also redundant */
     async blockHandlerEnd(blockHash, blockHeight) {
         //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
