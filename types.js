@@ -160,6 +160,8 @@ const Types = {
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 3:
+                //this one is a bit different because we're also looking at TxUtil deconstruction of the UTXOs
+                //If we're working in API mode we may need a flag to check, like if(params.API){outcall}else{TxUtils.decode}
                 params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
