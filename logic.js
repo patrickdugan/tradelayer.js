@@ -31,7 +31,10 @@ const BigNumber = require('bignumber.js')
 const VolumeIndex = require('./volumeIndex.js')
 // logic.js
 const Logic = {
-
+    //here we have a kinda stupid structure where instead of passing the params obj. I break it down into its sub-properties
+    //and have to map the subsequent function's parameter sequence to how I have it here
+    //I've wasted a lot of time fixing small bugs relating to getting this right for each functiom, would do it differently
+    //Anyway, here we branch into each logic function.
     async typeSwitch(txNumber, params){
         if(params.valid == false){return null}
         console.log('tx number and params ' +txNumber, params)
@@ -375,7 +378,7 @@ const Logic = {
             .integerValue(BigNumber.ROUND_FLOOR);
 
         const price = satsExpectedBigNumber.dividedBy(decodedTokenAmountBigNumber).toNumber()
-
+        //look at the channel balance where the commited tokens we're selling for LTC exist
             let channel = await Channels.getChannel(senderAddress)
             let channelBalance 
             if(columnA==true){
@@ -384,15 +387,23 @@ const Logic = {
             }else if(columnA==false){
                 channelBalance = channel["B"][propertyId]
             }
+            //We need this function to be valid and flexible since the LTC UTXO is a fact in the Litecoin protocol
+            //So we make sure that you get as many tokens as are available and if the parameters fall short thats
+            //something you have to monitor before you co-sign.
             if(tokensToDeliver>channelBalance){
                 tokensToDeliver=channelBalance
             }
+
+            //Debits the tokens from the correct column of the channel
             if(columnA==true){
                 channel["A"][propertyId]-=tokensToDeliver
             }else if(columnA==false){
                 channel["B"][propertyId]-=tokensToDeliver
             }
 
+            //the tokens exist both as channel object balances and reserve balance on the channel address, which is the sender
+            //So we debit there and then credit them to the token delivery address, which we took in the parsing
+            //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
             await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
             const key = '0-'+propertyId
