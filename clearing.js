@@ -45,44 +45,65 @@ class Clearing {
 
         // Fetch fees from your data source (e.g., database or in-memory store)
         let fees = await TallyMap.loadFeeCacheFromDB();
+        //console.log('fee cache size '+fees.size)
             // If the fees array is empty, return early
             if (fees.size === 0) {
+
                 //console.log('Fee cache is empty');
                 return;
+            }else{ 
+                 /*   console.log('Checking fee cache:');
+                // Iterate over the map entries
+                for (let [id, feeAmount] of fees.entries()) {
+                    console.log('ID:' +JSON.stringify(id)+' Fee Amount:'+feeAmount);
+                }*/
             }
        // Process each fee category
         for (let fee of fees) {
-            let propertyData = await PropertyManager.getPropertyData(fee.id);
-            let threshold = 1;
-            if (propertyData.totalInCirculation > 10000000000) {
-                threshold = new BigNumber(1).times(new BigNumber(10000000000).dividedBy(propertyData.totalInCirculation)).toNumber();
+            //console.log('fee'+JSON.stringify(fee))
+             let propertyData = null;
+             let threshold = 1;
+            if(fee[0]==null){continue}else{
+                propertyData = await PropertyManager.getPropertyData(fee[0].id);
+                //console.log('propertyData' + Boolean(propertyData !== null)+JSON.stringify(propertyData))
+                
             }
-
-            if (fee.value >= threshold) {
-                let orderBookKey = '1' + fee.id;
-                let orderbook = Orderbooks.getOrderbookInstance(orderBookKey);
-                const order = {
-                    offeredPropertyId: fee.id,
-                    desiredPropertyId: 1,
-                    amountOffered: fee.value,
-                    amountExpected: 0.000000001,
-                    blockTime: block,
-                    sender: 'feeCache'
-                };
-                await orderbook.insertOrder(order, orderBookKey, false);
-                TallyMap.updateFeeCache(fee.id, -fee.value);
-                const matchResult = await orderbook.matchOrders(orderBookKey);
-                if (matchResult.matches && matchResult.matches.length > 0) {
-                    //console.log('Match Result:', matchResult);
-                    await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
-                } else {
-                    console.log('No Matches for ' + txid);
+            
+            if(propertyData !== null) {
+                if (propertyData.totalInCirculation > 10000000000) {
+                    threshold = new BigNumber(1).times(new BigNumber(10000000000).dividedBy(propertyData.totalInCirculation)).toNumber();
                 }
-            }
+
+                if (fee[1] >= threshold) {
+                    console.log('above fee threshold '+fee[1]+' '+fee[0].id)
+                    let orderBookKey = '1-' + fee[0].id;
+                    let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+                    const order = {
+                        offeredPropertyId: fee[0].id,
+                        desiredPropertyId: 1,
+                        amountOffered: fee[1],
+                        amountExpected: 0.00000001,
+                        blockTime: block,
+                        sender: 'feeCache'
+                    };
+                    await orderbook.insertOrder(order, orderBookKey, true,false);
+                    await TallyMap.updateFeeCache(fee[0].id, -fee.value);
+                    const matchResult = await orderbook.matchTokenOrders(orderBookKey);
+                    if (matchResult.matches && matchResult.matches.length > 0) {
+                        //console.log('Match Result:', matchResult);
+                        await orderbook.processTokenMatches(matchResult.matches, blockHeight, null, false);
+                    } else {
+                        console.log('No Matches for fee' +JSON.stringify(order));
+                    }
+                }
+             }else{
+                  // Handle the case where propertyData is null
+                console.log(`Property data for fee id ${fee[0].id} is null.`);
+             }
         }
 
         // Save any changes back to your data source
-        await TallyMap.saveFeeCacheToDB();
+        //await TallyMap.saveFeeCacheToDB();
     }
 
    static async updateLastExchangeBlock(blockHeight) {

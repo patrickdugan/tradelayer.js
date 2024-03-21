@@ -291,12 +291,21 @@ class TallyMap {
         }
     }
 
-    static async saveFeeCacheToDB(propertyId, feeAmount) {
-        console.log('inside save fee cache '+propertyId+' '+feeAmount);
+   static async saveFeeCacheToDB(propertyId, feeAmount) {
+        if (propertyId === undefined || feeAmount === undefined) {
+            console.error('Property ID or fee amount is undefined.');
+            return;
+        }
+
+        console.log('Inside save fee cache ' + propertyId + ' ' + feeAmount);
+
         const db = dbInstance.getDatabase('feeCache');
         try {
             const serializedFeeAmount = JSON.stringify(feeAmount);
-            const cacheId = propertyId.toString(); // Ensure propertyId is converted to a string
+            
+            // Convert propertyId to a string if it's not already a string
+            const cacheId = String(propertyId);
+
             await db.updateAsync(
                 { _id: cacheId }, // Query to find the document
                 { $set: { value: serializedFeeAmount } }, // Update the value field
@@ -308,6 +317,7 @@ class TallyMap {
         }
     }
 
+
     static async loadFeeCacheFromDB() {
         let propertyIndex = await PropertyList.getPropertyIndex();    
         try {
@@ -316,14 +326,15 @@ class TallyMap {
 
             // Assuming you have a list of property IDs, iterate through them
             for (let id of propertyIndex) {
-                const query = { _id: id }; // Corrected typo here
+                const query = { _id: id.id.toString() }; // Corrected typo here
                 const result = await db.findOneAsync(query);
+                //console.log(result, id.id)
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
                     this.feeCache.set(id, feeAmount); // Using `id` instead of `propertyIndex.id`
                 }
             }
-            //console.log('FeeCache loaded successfully.');
+            
             return this.feeCache;
         } catch (error) {
             console.error('Error loading fee cache from dbInstance:', error);
@@ -358,19 +369,26 @@ class TallyMap {
         }
     }
 
-
-
-
-
-     // Method to update fee cache for a property
+    // Method to update fee cache for a property
     static async updateFeeCache(propertyId, feeAmount) {
+        // Load current fee from the fee cache
         let currentFee = await this.loadFeeCacheForProperty(propertyId);
-       console.log('current fee '+currentFee+' '+propertyId)
-        // Update the fee cache
-        this.feeCache.set(propertyId, currentFee + feeAmount);
-        feeAmount+=currentFee
-        // Optionally, persist fee cache changes to database if necessary
-        await this.saveFeeCacheToDB(propertyId, feeAmount); 
+
+        console.log('current fee: ' + currentFee + ', propertyId: ' + propertyId);
+
+        // Check if currentFee is undefined (no existing fee)
+        if (currentFee === undefined||currentFee==0) {
+            currentFee = 0; // Set currentFee to 0 if it's undefined
+        }
+
+        // Update the fee cache by adding the new fee amount
+        let updatedFee = currentFee + feeAmount;
+        this.feeCache.set(propertyId, updatedFee);
+
+        console.log('Updated fee cache for property ' + propertyId + ': ' + updatedFee);
+
+        // Optionally, persist fee cache changes to the database if necessary
+        await this.saveFeeCacheToDB(propertyId, updatedFee);
     }
 
     static async drawOnFeeCache(propertyId) {

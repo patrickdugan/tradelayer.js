@@ -196,6 +196,9 @@ class Orderbook {
             if (!this.orderBooks[orderBookKey]) {
                 this.orderBooks[orderBookKey] = { buy: [], sell: [] };
             }
+            if(order.sender=='feeCache'){
+                console.log('inserting fee order '+JSON.stringify(order))
+            }
             if(isLiq==true){
                 order.isLiq=true
             }else if(isLiq==undefined||isLiq==false){
