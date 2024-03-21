@@ -374,10 +374,10 @@ class TallyMap {
         // Load current fee from the fee cache
         let currentFee = await this.loadFeeCacheForProperty(propertyId);
 
-        console.log('current fee: ' + currentFee + ', propertyId: ' + propertyId);
+        console.log('current fee: ' + currentFee + ', propertyId: ' + propertyId+'fee to update '+feeAmount);
 
         // Check if currentFee is undefined (no existing fee)
-        if (currentFee === undefined||currentFee==0) {
+        if (currentFee === undefined||currentFee==0||isNaN(currentFee)) {
             currentFee = 0; // Set currentFee to 0 if it's undefined
         }
 

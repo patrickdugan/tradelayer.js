@@ -86,15 +86,22 @@ class Clearing {
                         blockTime: block,
                         sender: 'feeCache'
                     };
-                    await orderbook.insertOrder(order, orderBookKey, true,false);
+            
+                    const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
+            
+                    order.price = calculatedPrice;
+
+                    let reply = await orderbook.insertOrder(order, orderBookKey, false,false);
+                    console.log(reply)
                     await TallyMap.updateFeeCache(fee[0].id, -fee.value);
                     const matchResult = await orderbook.matchTokenOrders(orderBookKey);
                     if (matchResult.matches && matchResult.matches.length > 0) {
-                        //console.log('Match Result:', matchResult);
+                        console.log('Fee Match Result:', matchResult);
                         await orderbook.processTokenMatches(matchResult.matches, blockHeight, null, false);
                     } else {
                         console.log('No Matches for fee' +JSON.stringify(order));
                     }
+                    await orderbook.saveOrderBook(orderBookKey);
                 }
              }else{
                   // Handle the case where propertyData is null
