@@ -4,7 +4,7 @@ const util = require('util');
 //const TxUtils = require('./txUtils.js')
 const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
-const AMMPool = require('./AMM.js')
+const AMMPool = require('./amm.js')
 
 class ContractRegistry {
     constructor() {
@@ -20,7 +20,7 @@ class ContractRegistry {
         const instance = ContractRegistry.getInstance(); // Access singleton instance
         //console.log('loading contract list for this instance '+JSON.stringify(instance))
         try {
-            const docs = await db.getDatabase('contractList').findAsync({ type: 'contractSeries' });
+            const docs = await db.getCollection('contractList').find({ type: 'contractSeries' });
             return instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
         } catch (error) {
             console.error('Error loading contract series data:', error);
@@ -38,8 +38,8 @@ class ContractRegistry {
 
     static async createContractSeries(native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
         // Load the current contract list from the database
-        const contractListDB = db.getDatabase('contractList');
-        const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
+        const contractListDB = db.getCollection('contractList');
+        const currentContractList = await contractListDB.find({ type: 'contractSeries' });
         const contractList = new Map(currentContractList.map(doc => [doc.id, doc.data]));
 
         // Generate a unique ID for the new contract series
@@ -139,7 +139,7 @@ class ContractRegistry {
     }
 
     static loadContractsFromDB() {
-        return db.getDatabase('contractList').findAsync()
+        return db.getCollection('contractList').find()
             .then(docs => {
                 docs.forEach(doc => {
                     const { type, seriesId } = doc;
@@ -162,7 +162,7 @@ class ContractRegistry {
         }));
 
         await Promise.all(dataArray.map(entry => 
-            db.getDatabase('contractList').updateAsync({ id: entry.id }, entry, { upsert: true })
+            db.getCollection('contractList').updateOne({ id: entry.id }, entry, { upsert: true })
         ));
     }
 
@@ -201,8 +201,8 @@ class ContractRegistry {
     }
 
     static async getContractSeries(seriesId) {
-        const contractListDB = db.getDatabase('contractList');
-        const doc = await contractListDB.findOneAsync({ id: seriesId, type: 'contractSeries' });
+        const contractListDB = db.getCollection('contractList');
+        const doc = await contractListDB.findOne({ id: seriesId, type: 'contractSeries' });
         return doc ? doc.data : null;
     }
 
@@ -210,15 +210,15 @@ class ContractRegistry {
 
     // Function to generate unique series ID
     static async getNextId() {
-        const contractListDB = db.getDatabase('contractList');
-        const docs = await contractListDB.findAsync({ type: 'contractSeries' });
+        const contractListDB = db.getCollection('contractList');
+        const docs = await contractListDB.find({ type: 'contractSeries' });
         let maxId = docs.reduce((max, doc) => Math.max(max, parseInt(doc.id)), 0);
         return maxId + 1;
     }
 
     static async getAllContracts() {
-        const contractListDB = db.getDatabase('contractList');
-        const docs = await contractListDB.findAsync({ type: 'contractSeries' });
+        const contractListDB = db.getCollection('contractList');
+        const docs = await contractListDB.find({ type: 'contractSeries' });
         return docs.map(doc => doc.data);
     }
 
@@ -255,8 +255,8 @@ class ContractRegistry {
 
     static async getContractInfo(contractId) {
         //console.log('retrieving db info for contract '+contractId)
-        const contractListDB = db.getDatabase('contractList');
-        const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
+        const contractListDB = db.getCollection('contractList');
+        const doc = await contractListDB.findOne({ id: contractId, type: 'contractSeries' });
         if (!doc) {
             //console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
 
@@ -437,15 +437,15 @@ class ContractRegistry {
         let propertyId1 = null;
         let propertyId2 = null;
         let latestData;
-        let oracleDataDB = db.getDatabase('contractList')
+        let oracleDataDB = db.getCollection('contractList')
         if (isOracleContract) {
             oracleId = await ContractRegistry.getOracleId(contractId);
-            latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            latestData = await oracleDataDB.find({ oracleId: oracleId });
         } else {
             let info = await ContractRegistry.getContractInfo(contractId);
             propertyId1 = info.native.native.onChainData[0];
             propertyId2 = info.native.native.onChainData[1];
-            latestData = await volumeIndexDB.findOneAsync({ propertyId1: propertyId1, propertyId2: propertyId2 });
+            latestData = await volumeIndexDB.findOne({ propertyId1: propertyId1, propertyId2: propertyId2 });
         }
 
         // Filter data to get updates before the given blockHeight
@@ -495,10 +495,10 @@ class ContractRegistry {
 
     static async getLatestOracleData(oracleId){
          // Access the database where oracle data is stored
-            const oracleDataDB = db.getDatabase('oracleData');
+            const oracleDataDB = db.getCollection('oracleData');
             // Query the database for the latest oracle data for the given contract
                        
-            const latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });
+            const latestData = await oracleDataDB.findOne({ oracleId: oracleId });
             if (latestData) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
                 const latestBlockData = sortedData[0];
@@ -582,13 +582,13 @@ class ContractRegistry {
     static async saveFundingEvent(contractId, fundingRate, blockHeight) {
         const dbInstance = require('./db.js');
         const fundingEvent = { contractId, fundingRate, blockHeight };
-        await dbInstance.getDatabase('fundingEvents').insertAsync(fundingEvent);
+        await dbInstance.getCollection('fundingEvents').insertOne(fundingEvent);
     }
 
     // Load funding events for a contract
     static async loadFundingEvents(contractId) {
         const dbInstance = require('./db.js');
-        const fundingEvents = await dbInstance.getDatabase('fundingEvents').findAsync({ contractId: contractId });
+        const fundingEvents = await dbInstance.getCollection('fundingEvents').find({ contractId: contractId });
         return fundingEvents.map(doc => doc);
     }
 }

@@ -151,8 +151,8 @@ class TallyMap {
 
 
         static async setInitializationFlag() {
-            const db = dbInstance.getDatabase('tallyMap');
-            await db.updateAsync(
+            const db = dbInstance.getCollection('tallyMap');
+            await db.updateOne(
                 { _id: '$TLinit' },
                 { _id: '$TLinit', initialized: true },
                 { upsert: true }
@@ -160,8 +160,8 @@ class TallyMap {
         }
 
     static async checkInitializationFlag() {
-            const db = dbInstance.getDatabase('tallyMap');
-            const result = await db.findOneAsync({ _id: '$TLinit' });
+            const db = dbInstance.getCollection('tallyMap');
+            const result = await db.findOne({ _id: '$TLinit' });
             if(result==undefined){return false}
             return result ? result.initialized : false;
         }
@@ -260,11 +260,11 @@ class TallyMap {
 
     async saveToDB() {
         try {
-            const db = dbInstance.getDatabase('tallyMap');
+            const db = dbInstance.getCollection('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
 
             // Use upsert option
-            await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
+            await db.updateOne({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
             //console.log('TallyMap saved successfully.');
         } catch (error) {
             console.error('Error saving TallyMap:', error);
@@ -274,7 +274,7 @@ class TallyMap {
     async loadFromDB() {
         try {
             const query = { _id: 'tallyMap' };
-            const result = await dbInstance.getDatabase('tallyMap').findOneAsync(query);
+            const result = await dbInstance.getCollection('tallyMap').findOne(query);
 
             if (result && result.data) {
                 // Deserialize the data from a JSON string to an array
@@ -293,11 +293,11 @@ class TallyMap {
 
     static async saveFeeCacheToDB(propertyId, feeAmount) {
         console.log('inside save fee cache '+propertyId+' '+feeAmount);
-        const db = dbInstance.getDatabase('feeCache');
+        const db = dbInstance.getCollection('feeCache');
         try {
             const serializedFeeAmount = JSON.stringify(feeAmount);
             const cacheId = propertyId.toString(); // Ensure propertyId is converted to a string
-            await db.updateAsync(
+            await db.updateOne(
                 { _id: cacheId }, // Query to find the document
                 { $set: { value: serializedFeeAmount } }, // Update the value field
                 { upsert: true } // Insert a new document if it doesn't exist
@@ -311,13 +311,13 @@ class TallyMap {
     static async loadFeeCacheFromDB() {
         let propertyIndex = await PropertyList.getPropertyIndex();    
         try {
-            const db = dbInstance.getDatabase('feeCache');
+            const db = dbInstance.getCollection('feeCache');
             this.feeCache = new Map();
 
             // Assuming you have a list of property IDs, iterate through them
             for (let id of propertyIndex) {
                 const query = { _id: id }; // Corrected typo here
-                const result = await db.findOneAsync(query);
+                const result = await db.findOne(query);
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
                     this.feeCache.set(id, feeAmount); // Using `id` instead of `propertyIndex.id`
@@ -332,9 +332,9 @@ class TallyMap {
 
     static async loadFeeCacheForProperty(id) {    
         try {
-            const db = dbInstance.getDatabase('feeCache');
+            const db = dbInstance.getCollection('feeCache');
 
-            const result = await db.findAsync({});
+            const result = await db.find({});
             console.log('Database contents:', JSON.stringify(result, null, 2));
 
             let value = 0;
@@ -416,7 +416,7 @@ class TallyMap {
     // Function to record a delta
      static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
-        const db = dbInstance.getDatabase('tallyMapDelta');
+        const db = dbInstance.getCollection('tallyMapDelta');
         const deltaKey = `${address}-${propertyId}-${newUuid}`;
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
         
@@ -424,14 +424,14 @@ class TallyMap {
 
         try {
             // Try to find an existing document based on the key
-            const existingDocument = await db.findOneAsync({ _id: deltaKey });
+            const existingDocument = await db.findOne({ _id: deltaKey });
 
             if (existingDocument) {
                 // If the document exists, update it
-                await db.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
+                await db.updateOne({ _id: deltaKey }, { $set: { data: delta } });
             } else {
                 // If the document doesn't exist, insert a new one
-                await db.insertAsync({ _id: deltaKey, data: delta });
+                await db.insertOne({ _id: deltaKey, data: delta });
             }
 
             return; // Return success or handle as needed
@@ -452,13 +452,13 @@ class TallyMap {
 
     async saveDeltaTodbInstance(blockHeight, delta) {
         const serializedDelta = JSON.stringify(delta);
-        await dbInstance.getDatabase('tallyMap').insert(`tallyMapDelta-${blockHeight}`, serializedDelta);
+        await dbInstance.getCollection('tallyMap').insertOne(`tallyMapDelta-${blockHeight}`, serializedDelta);
     }
 
     // Function to save the aggregated block delta
     saveBlockDelta(blockHeight, blockDelta) {
         const deltaKey = `blockDelta-${blockHeight}`;
-        dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(blockDelta));
+        dbInstance.getCollection('tallyMap').insertOne(deltaKey, JSON.stringify(blockDelta));
     }
 
     // Function to load all deltas for a block

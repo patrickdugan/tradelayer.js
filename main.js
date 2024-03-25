@@ -34,7 +34,7 @@ const activationInstance = Activation.getInstance()
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
-const AMM = require('./AMM.js')
+const AMM = require('./amm.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
@@ -186,19 +186,19 @@ class Main {
         let blockHeight
         let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
 
-        const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
+        const txIndexDB = db.getCollection('txIndex'); // Access the txIndex database
 
         const tallyMapInstance = TallyMap.getInstance();
         const lastConsensusHeight = await this.loadMaxProcessedHeight();
 
         // Fetch all transaction data
-        const allTxData = await txIndexDB.findAsync({});
+        const allTxData = await txIndexDB.find({});
         //console.log('allTxData length '+allTxData.length)
          const txDataSet = allTxData.filter(txData => 
                 txData._id.startsWith(`tx-`));
         //console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
               let lastEntry = txDataSet[txDataSet.length-1]
-                const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
+                const blockHeightMatch = 0;//lastEntry._id.match(/^tx-(\d+)-/);
                 
                 lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
                 //console.log('again lastIndexBlock '+lastIndexBlock)
@@ -451,7 +451,7 @@ class Main {
 
     async saveMaxProcessedHeight(maxProcessedHeight, realtime){ 
         try {
-            await db.getDatabase('consensus').updateAsync(
+            await db.getCollection('consensus').updateOne(
                 { _id: 'MaxProcessedHeight' },
                 { $set: { value: maxProcessedHeight } },
                 { upsert: true }
@@ -467,10 +467,10 @@ class Main {
     }
  
     async loadMaxProcessedHeight() {
-        const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
+        const consensusDB = db.getCollection('consensus'); // Access the consensus sub-database
 
         try {
-            const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
+            const maxProcessedHeightDoc = await consensusDB.findOne({ _id: 'MaxProcessedHeight' });
             if (maxProcessedHeightDoc) {
                 const maxProcessedHeight = maxProcessedHeightDoc.value;
                 //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);

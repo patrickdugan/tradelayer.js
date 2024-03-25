@@ -14,7 +14,7 @@ class ConsensusDatabase {
     static async storeConsensusHash(blockHeight, consensusHash) {
         const doc = { blockHeight, consensusHash };
         try {
-            await db.getDatabase('consensus').insertAsync(doc);
+            await db.getCollection('consensus').insertOne(doc);
             console.log(`Consensus hash for block ${blockHeight} stored.`);
         } catch (err) {
             console.error('Error storing consensus hash:', err);
@@ -23,7 +23,7 @@ class ConsensusDatabase {
 
     static async getConsensusHash(blockHeight) {
             try {
-                const docs = await db.getDatabase('consensus').findAsync({ blockHeight });
+                const docs = await db.getCollection('consensus').find({ blockHeight });
                 if (docs.length > 0) {
                     return docs[0].consensusHash;
                 } else {
@@ -37,38 +37,38 @@ class ConsensusDatabase {
 
 
     static async checkIfTxProcessed(txId) {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        const result = await db.getCollection('consensus').findOne({ _id: txId });
         return result && result.value && result.value.processed === true;
     }
 
     static async getTxParams(txId) {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        const result = await db.getCollection('consensus').findOne({ _id: txId });
         return result.value.processed === true ? result.value.params : null;
     }
 
     static async markTxAsProcessed(txId, params) {
         let value = {processed: true, params}
-        await db.getDatabase('consensus').insertAsync({ _id: txId, value });
+        await db.getCollection('consensus').insertOne({ _id: txId, value });
     }
 
     static async getTxParamsForAddress(address) {
-        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
+        const results = await db.getCollection('consensus').find({ "value.processed": true, "value.params.address": address });
         return results.map(result => result.value.params);
     }
 
     static async getTxParamsForBlock(blockHeight) {
-        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
+        const results = await db.getCollection('consensus').find({ "value.processed": true, "value.params.block": blockHeight });
         return results.map(result => result.value.params);
     }
 
     static async getMaxProcessedBlock() {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: 'MaxProcessedHeight' });
+        const result = await db.getCollection('consensus').findOne({ _id: 'MaxProcessedHeight' });
         return result ? result.value : null;
     }
 
     static async getHighestBlockHeight() {
-        const result = await db.getDatabase('consensus').aggregateAsync([
-            { $group: { _id: null, maxBlockHeight: { $max: "$value.params.blockHeight" } } }
+        const result = await db.getCollection('consensus').aggregate([
+            { $group: { _id: null, maxBlockHeight: { $max: "$value.params.block" } } }
         ]);
 
         return result.length > 0 ? result[0].maxBlockHeight : null;

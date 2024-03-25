@@ -6,9 +6,9 @@ const dbInstance = require('./db.js'); // Import the dbInstance from your db.js 
 
 async function updateMaxHeight(chainTip) {
     try {
-        const txIndexDB = dbInstance.getDatabase('txIndex'); // Retrieve the txIndex database using dbInstance
+        const txIndexDB = dbInstance.getCollection('txIndex'); // Retrieve the txIndex database using dbInstance
         console.log(`Updating MaxHeight to ${chainTip}`);
-        await txIndexDB.updateAsync(
+        await txIndexDB.updateOne(
             { _id: 'MaxHeight' },
             { _id: 'MaxHeight', value: chainTip },
             { upsert: true }
@@ -22,8 +22,8 @@ async function updateMaxHeight(chainTip) {
 
 async function fetchMaxHeight() {
     try {
-        const txIndexDB = dbInstance.getDatabase('txIndex'); // Retrieve the txIndex database using dbInstance
-        const maxHeightDoc = await txIndexDB.findOneAsync({ _id: 'MaxHeight' });
+        const txIndexDB = dbInstance.getCollection('txIndex'); // Retrieve the txIndex database using dbInstance
+        const maxHeightDoc = await txIndexDB.findOne({ _id: 'MaxHeight' });
         if (maxHeightDoc) {
             console.log(`MaxHeight fetched from DB: ${maxHeightDoc.value}`);
         } else {

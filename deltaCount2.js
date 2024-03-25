@@ -1,13 +1,13 @@
 const dbInstance = require('./db');
 
 // Load tallyMapDelta database
-const tallyMapDeltaDB = dbInstance.getDatabase('tallyMapDelta');
+const tallyMapDeltaDB = dbInstance.getCollection('tallyMapDelta');
 
 // Function to tally amounts and calculate balance for each type and property ID
 async function calculateBalanceForAddress(address) {
     try {
         // Find all delta records for the given address
-        const deltaRecords = await tallyMapDeltaDB.findAsync({ 'data.address': address });
+        const deltaRecords = await tallyMapDeltaDB.find({ 'data.address': address });
 
         // Create a map to store totals for each type, property ID, and cumulative amounts
         const totalsByTypeAndProperty = {};

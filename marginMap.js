@@ -21,10 +21,10 @@ class MarginMap {
         const key = JSON.stringify({ seriesId });
         //console.log('loading margin map for ' + seriesId);
         // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = db.getDatabase('marginMaps');
+        const marginMapsDB = db.getCollection('marginMaps');
 
         try {
-            const doc = await marginMapsDB.findOneAsync({ _id: key });
+            const doc = await marginMapsDB.findOne({ _id: key });
             if (!doc) {
                 // Return a new instance if not found
                 console.log('no MarginMap found, spinning up a fresh one');
@@ -56,10 +56,10 @@ class MarginMap {
         const key = JSON.stringify({ seriesId});
         console.log('loading margin map for '+seriesId)
         // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = db.getDatabase('marginMaps');
+        const marginMapsDB = db.getCollection('marginMaps');
 
         try {
-            const doc = await marginMapsDB.findOneAsync({ _id: key });
+            const doc = await marginMapsDB.findOne({ _id: key });
             if (!doc) {
                 // Return a new instance if not found
                 console.log('no MarginMap found, spinning up a fresh one')
@@ -140,7 +140,7 @@ class MarginMap {
     async saveMarginMap(isMargin) {
         try {
             const key = JSON.stringify({ seriesId: this.seriesId });
-            const marginMapsDB = db.getDatabase('marginMaps');
+            const marginMapsDB = db.getCollection('marginMaps');
             const value = JSON.stringify([...this.margins]);
             if(isMargin){
                 //console.log('updating marginMap with margin '+JSON.stringify(value))
@@ -148,7 +148,7 @@ class MarginMap {
                 //console.log('updating marginMap after match process '+JSON.stringify(value))
             }
             // Save the margin map to the database
-            await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+            await marginMapsDB.updateOne({ _id: key }, { $set: { value } }, { upsert: true });
 
             //console.log('MarginMap saved successfully.');
         } catch (err) {
@@ -564,7 +564,7 @@ class MarginMap {
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode) {
             const newUuid = uuid.v4();
-            const dbInstance = db.getDatabase('marginMapDelta');
+            const dbInstance = db.getCollection('marginMapDelta');
             const deltaKey = `${address}-${contractId}-${newUuid}`;
             const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode };
 
@@ -572,14 +572,14 @@ class MarginMap {
 
             try {
                 // Try to find an existing document based on the key
-                const existingDocument = await dbInstance.findOneAsync({ _id: deltaKey });
+                const existingDocument = await dbInstance.findOne({ _id: deltaKey });
 
                 if (existingDocument) {
                     // If the document exists, update it
-                    await dbInstance.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
+                    await dbInstance.updateOne({ _id: deltaKey }, { $set: { data: delta } });
                 } else {
                     // If the document doesn't exist, insert a new one
-                    await dbInstance.insertAsync({ _id: deltaKey, data: delta });
+                    await dbInstance.insertOne({ _id: deltaKey, data: delta });
                 }
 
                 return; // Return success or handle as needed
@@ -699,14 +699,14 @@ class MarginMap {
     async saveLiquidationOrders(contractId, position, order, blockHeight) {
         try {
             // Access the marginMaps database
-            const liquidationsDB = db.getDatabase('liquidations');
+            const liquidationsDB = db.getCollection('liquidations');
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contractId}-${blockHeight}`;
             const value = { _id: key, order: order, position: position, blockHeight: blockHeight };
 
             // Save the liquidation orders in the marginMaps database
-            await liquidationsDB.insertAsync(value);
+            await liquidationsDB.insertOne(value);
         } catch (error) {
             console.error(`Error saving liquidation orders for contract ${contractId} at block height ${blockHeight}:`, error);
             throw error;
@@ -714,7 +714,7 @@ class MarginMap {
     }
 
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
-        const liquidationsDB = db.getDatabase('liquidations');
+        const liquidationsDB = db.getCollection('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
         let liquidations = []
 
@@ -723,7 +723,7 @@ class MarginMap {
                 const key = `liquidationOrders-${contractId}-${blockHeight}`;
                 
                 // Find the document with the constructed key
-                liquidations = await liquidationsDB.findOneAsync({ _id: key });
+                liquidations = await liquidationsDB.findOne({ _id: key });
             } catch (error) {
                 console.error('Error fetching liquidations:', error);
             }
@@ -757,10 +757,10 @@ class MarginMap {
         bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.dividedBy(liquidatedContracts);
         avgBankrupcyPrice = avgBankrupcyPrice.dividedBy(liquidationOrders);
 
-        const tradeHistoryDB = db.getDatabase('tradeHistory');
+        const tradeHistoryDB = db.getCollection('tradeHistory');
         const tradeKey = `liquidationOrders-${contractId}-${blockHeight}`;
         // Fetch trade history for the given blockHeight and contractId
-        const trades = await tradeHistoryDB.findAsync();
+        const trades = await tradeHistoryDB.find();
 
         // Count the number of liquidation orders in the trade history
         let liquidationTradeMatches = new BigNumber(0);

@@ -1,4 +1,3 @@
-const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')
@@ -17,7 +16,7 @@ class VolumeIndex {
     }
 
     static async saveVolumeDataById(id, volume,price,blockHeight) {
-        await db.getDatabase('volumeIndex').updateAsync(
+        await db.getCollection('volumeIndex').updateOne(
             { _id: id },
             { value: { blockHeight:blockHeight, volume: volume, price:price } },
             { upsert: true }
@@ -25,23 +24,23 @@ class VolumeIndex {
     }
 
     static async getVolumeDataById(id) {
-        return await db.getDatabase('volumeIndex').findOneAsync({ _id: id });
+        return await db.getCollection('volumeIndex').findOne({ _id: id });
     }
 
     static async sampleVolumesByBlock(blockHeight) {
-        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ blockHeight });
+        const volumeIndexData = await db.getCollection('volumeIndex').find({ blockHeight });
         return volumeIndexData.map(entry => ({ id: entry._id, volume: entry.volume }));
     }
 
     static async sampleVolumesByBlockRange(startBlockHeight, endBlockHeight) {
-        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ 
+        const volumeIndexData = await db.getCollection('volumeIndex').find({ 
             blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
         });
         return volumeIndexData.map(entry => ({ id: entry._id, volume: entry.volume }));
     }
 
     static async calculateCumulativeVolume(id1, id2) {
-        const volumeIndexData = await db.getDatabase('volumeIndex').findAsync({ _id: { $regex: `^${id1}-${id2}-` } });
+        const volumeIndexData = await db.getCollection('volumeIndex').find({ _id: { $regex: `^${id1}-${id2}-` } });
         let cumulativeVolume = 0;
         volumeIndexData.forEach(entry => cumulativeVolume += entry.volume);
         return cumulativeVolume;

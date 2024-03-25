@@ -26,8 +26,8 @@ class OracleList {
             this.oracles.set(oracleId, oracleData);
 
             // Add to NeDB database (if applicable)
-            const oracleDB = db.getDatabase('oracleList');
-            await oracleDB.insertAsync({ _id: oracleId, ...oracleData });
+            const oracleDB = db.getCollection('oracleList');
+            await oracleDB.insertOne({ _id: oracleId, ...oracleData });
 
             console.log(`Oracle added: ID ${oracleId}`);
             return true; // Indicate success
@@ -55,9 +55,9 @@ class OracleList {
         }
 
         // If not found in-memory, optionally check the database
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = db.getCollection('oracleList');
         console.log('oracle key '+oracleKey)
-        const dbOracle = await oracleDB.findOneAsync({ _id: oracleKey });
+        const dbOracle = await oracleDB.findOne({ _id: oracleKey });
         console.log('db oracle '+ JSON.stringify(dbOracle))
         if (dbOracle) {
             return dbOracle;
@@ -99,8 +99,8 @@ class OracleList {
 
     static async load() {
         try {
-            const oracleDB = db.getDatabase('oracleList');
-            const oracles = await oracleDB.findAsync({});
+            const oracleDB = db.getCollection('oracleList');
+            const oracles = await oracleDB.find({});
 
             const instance = OracleList.getInstance();
             for (const oracle of oracles) {
@@ -117,8 +117,8 @@ class OracleList {
         try {
             const oracleKey = `oracle-${oracleId}`;
             console.log('checking admin for oracle key '+oracleKey)
-            const oracleDB = db.getDatabase('oracleList');
-            const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
+            const oracleDB = db.getCollection('oracleList');
+            const oracleData = await oracleDB.findOne({ _id: oracleKey });
 
             if (oracleData && oracleData.name.adminAddress === senderAddress) {
                 return true; // The sender is the admin
@@ -140,8 +140,8 @@ class OracleList {
 
         // If not found in-memory, check the database
         if (!oracle) {
-            const oracleDB = db.getDatabase('oracleList');
-            oracle = await oracleDB.findOneAsync({ _id: oracleKey });
+            const oracleDB = db.getCollection('oracleList');
+            oracle = await oracleDB.findOne({ _id: oracleKey });
         }
 
         // Verify admin address
@@ -154,10 +154,10 @@ class OracleList {
         const instance = OracleList.getInstance();
             
         // Get the NeDB datastore for oracles
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = db.getCollection('oracleList');
 
         // Fetch the current oracle data
-        const oracle = await oracleDB.findOneAsync({ _id: oracleKey });
+        const oracle = await oracleDB.findOne({ _id: oracleKey });
 
         if (!oracle) {
             throw new Error('Oracle not found');
@@ -167,7 +167,7 @@ class OracleList {
         oracle.adminAddress = newAdminAddress;
 
         // Update the oracle in the database
-        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});
+        await oracleDB.updateOne({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});
 
         // Optionally, update the in-memory map if you are maintaining one
         this.oracles.set(oracleKey, oracle);
@@ -189,11 +189,11 @@ class OracleList {
         };
 
         // Get the NeDB datastore for oracles
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = db.getCollection('oracleList');
 
         try {
             // Save the new oracle to the database
-            await oracleDB.insertAsync(newOracle);
+            await oracleDB.insertOne(newOracle);
 
             // Also save the new oracle to the in-memory map
             instance.oracles.set(oracleKey, newOracle);
@@ -219,7 +219,7 @@ class OracleList {
     }
 
     async saveOracleData(oracleId, data, blockHeight) {
-        const oracleDataDB = db.getDatabase('oracleData');
+        const oracleDataDB = db.getCollection('oracleData');
         const recordKey = `oracle-${oracleId}-${blockHeight}`;
         console.log('saving published oracle data to key '+recordKey)
         const oracleDataRecord = {
@@ -230,7 +230,7 @@ class OracleList {
         };
 
         try {
-            await oracleDataDB.updateAsync(
+            await oracleDataDB.updateOne(
                 { _id: recordKey },
                 oracleDataRecord,
                 { upsert: true }
@@ -243,13 +243,13 @@ class OracleList {
     }
 
     async loadOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const oracleDataDB = db.getDatabase('oracleData');
+        const oracleDataDB = db.getCollection('oracleData');
         try {
             const query = {
                 oracleId: oracleId,
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
             };
-            const oracleDataRecords = await oracleDataDB.findAsync(query);
+            const oracleDataRecords = await oracleDataDB.find(query);
             return oracleDataRecords.map(record => ({
                 blockHeight: record.blockHeight,
                 data: record.data

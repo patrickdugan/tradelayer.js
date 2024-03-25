@@ -22,7 +22,7 @@ app.post('/initMain', async (req, res) => {
     try {
         console.log('Initializing');
         const mainProcessor = Main.getInstance(req.body.test); // Use req.body for arguments
-        mainProcessor.initialize();
+        await mainProcessor.initialize();
         res.status(200).send('Main process initialized successfully');
     } catch (error) {
         res.status(500).send('Error: ' + error.message);

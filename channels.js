@@ -21,7 +21,7 @@ class Channels {
 
     static async saveChannelsRegistry() {
         // Persist the channels registry to NeDB
-        const channelsDB = dbInstance.getDatabase('channels');
+        const channelsDB = dbInstance.getCollection('channels');
         const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
             return {
                 _id: `${channelId}`, // Unique identifier for each channel
@@ -30,7 +30,7 @@ class Channels {
         });
 
         for (const entry of entries) {
-            await channelsDB.updateAsync(
+            await channelsDB.updateOne(
                 { _id: entry._id },
                 { $set: { data: entry.data } },
                 { upsert: true }
@@ -40,9 +40,9 @@ class Channels {
 
     static async loadChannelsRegistry(retrieve) {
         // Load the channels registry from NeDB
-        const channelsDB = dbInstance.getDatabase('channels');
+        const channelsDB = dbInstance.getCollection('channels');
         try {
-            const entries = await channelsDB.findAsync({});
+            const entries = await channelsDB.find({});
             //console.log('loading channel DB '+JSON.stringify(entries))
             this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
             //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
@@ -61,8 +61,8 @@ class Channels {
      // Function to save pending withdrawal object to the database
     static async savePendingWithdrawalToDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
-        await withdrawalDB.updateAsync(
+        const withdrawalDB = dbInstance.getCollection('withdrawQueue');
+        await withdrawalDB.updateOne(
             { _id: withdrawalKey },
             { $set: { data: withdrawalObj } },
             { upsert: true }
@@ -71,17 +71,17 @@ class Channels {
 
     // Function to load pending withdrawals from the database
     static async loadPendingWithdrawalsFromDB() {
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
-        const entries = await withdrawalDB.findAsync({ _id: { $regex: /^withdrawal-/ } });
+        const withdrawalDB = dbInstance.getCollection('withdrawQueue');
+        const entries = await withdrawalDB.find({ _id: { $regex: /^withdrawal-/ } });
         return entries.map(entry => entry.data);
     }
 
     static async removePendingWithdrawalFromDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        const withdrawalDB = dbInstance.getCollection('withdrawQueue');
         
         // Remove the withdrawal from the database
-        await withdrawalDB.removeAsync({ _id: withdrawalKey });
+        await withdrawalDB.deleteOne({ _id: withdrawalKey });
     }
 
     // Record a token trade with specific key identifiers
@@ -111,7 +111,7 @@ class Channels {
     }
 
     static async saveTrade(tradeRecord) {
-        const tradeDB = dbInstance.getDatabase('tradeHistory');
+        const tradeDB = dbInstance.getCollection('tradeHistory');
 
         // Use the key provided in the trade record for storage
         const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
@@ -124,7 +124,7 @@ class Channels {
 
         // Save or update the trade record in the database
         try {
-            await tradeDB.updateAsync(
+            await tradeDB.updateOne(
                 { _id: tradeId },
                 tradeDoc,
                 { upsert: true }
@@ -173,7 +173,7 @@ class Channels {
     }
 
     static async addCommitment(channelId, commitment) {
-        await this.db.updateAsync(
+        await this.db.updateOne(
             { channelId: channelId },
             { $push: { commitments: commitment } },
             { upsert: true }
@@ -181,7 +181,7 @@ class Channels {
     }
 
     static async getCommitments(channelId) {
-        const channel = await this.db.findOneAsync({ channelId: channelId });
+        const channel = await this.db.findOne({ channelId: channelId });
         return channel ? channel.commitments : [];
     }
 
@@ -511,11 +511,11 @@ class Channels {
     }
 
     static async removeChannelFromDB(channelAddress) {
-      const channelsDB = dbInstance.getDatabase('channels');
+      const channelsDB = dbInstance.getCollection('channels');
       const withdrawalKey = `${channelAddress}`;
       
       // Remove the channel entry from the database
-      await channelsDB.removeAsync({ _id: withdrawalKey });
+      await channelsDB.deleteOne({ _id: withdrawalKey });
   }
 
 

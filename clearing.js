@@ -3,7 +3,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const db = require('./db.js')
 const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
-const oracleDataDB = db.getDatabase('oracleData');
+const oracleDataDB = db.getCollection('oracleData');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
@@ -106,7 +106,7 @@ class Clearing {
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
         try {
-            const liquidationData = await db.getDatabase('clearing').findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` });
+            const liquidationData = await db.getCollection('clearing').findOne({ _id: `liquidation-${contractId}-${blockHeight}` });
             return liquidationData ? liquidationData.volume : null; // Assuming 'volume' is the field you're interested in
         } catch (error) {
             if (error.name === 'NotFoundError') {
@@ -128,7 +128,7 @@ class Clearing {
             const query = { blockHeight: blockHeight }; // Query to match the block height
 
             // Fetch the deltas from the database
-            const results = await db.getDatabase('clearing').findAsync(query);
+            const results = await db.getCollection('clearing').find(query);
             results.forEach(doc => {
                 clearingDeltas.push(doc.value); // Assuming each document has a 'value' field with the delta data
             });
@@ -150,7 +150,7 @@ class Clearing {
             let oracleId = await ContractRegistry.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
             //console.log('oracle id '+oracleId)         
-            const latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            const latestData = await oracleDataDB.find({ oracleId: oracleId });
             //console.log('is price updated ' +JSON.stringify(latestData))
             if (latestData.length>0) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
@@ -167,9 +167,9 @@ class Clearing {
             }
         } /*else {
             // Access the database where volume index data is stored
-            const volumeIndexDB = db.getDatabase('volumeIndex');
+            const volumeIndexDB = db.getCollection('volumeIndex');
                         // Query the database for the latest volume index data for the given contract
-            const latestData = await volumeIndexDB.findOneAsync({ contractId: contractId });
+            const latestData = await volumeIndexDB.findOne({ contractId: contractId });
             if (latestData) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
                 const latestBlockData = sortedData[0];
@@ -290,13 +290,13 @@ class Clearing {
         let latestData
         if(isOracleContract){
             oracleId = await ContractRegistry.getOracleId(contractId)
-            latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            latestData = await oracleDataDB.find({ oracleId: oracleId });
             //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
             let info = await ContractRegistry.getContractInfo(contractId)
             propertyId1 = info.native.native.onChainData[0]
             propertyId2 = info.native.native.onChainData[1]
-            latestData = await volumeIndexDB.findOneAsync({propertyId1:propertyId1,propertyId2:propertyId2})
+            latestData = await volumeIndexDB.findOne({propertyId1:propertyId1,propertyId2:propertyId2})
         }
             //console.log('is price updated ' +JSON.stringify(latestData))
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
@@ -422,7 +422,7 @@ class Clearing {
     }
 
     static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = dbInstance.getCollection('clearing');
         const recordKey = `clearing-${contractId}-${blockHeight}`;
 
         const clearingRecord = {
@@ -433,7 +433,7 @@ class Clearing {
         };
 
         try {
-            await clearingDB.updateAsync(
+            await clearingDB.updateOne(
                 { _id: recordKey },
                 clearingRecord,
                 { upsert: true }
@@ -446,13 +446,13 @@ class Clearing {
     }
 
     static async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = dbInstance.getCollection('clearing');
         try {
             const query = {
                 contractId: contractId,
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
             };
-            const clearingRecords = await clearingDB.findAsync(query);
+            const clearingRecords = await clearingDB.find(query);
             return clearingRecords.map(record => ({
                 blockHeight: record.blockHeight,
                 settlementDetails: record.settlementDetails

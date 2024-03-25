@@ -1,6 +1,10 @@
 const db = require('./db.js');
 const path = require('path');
 
+async function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class PropertyManager {
     static instance = null;
 
@@ -25,7 +29,7 @@ class PropertyManager {
         console.log('loading property list');
         try {
             const instance = PropertyManager.getInstance();
-            const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+            const propertyIndexEntry = await db.getCollection('propertyList').findOne({ _id: 'propertyIndex' });
             if (propertyIndexEntry && propertyIndexEntry.value) {
                 // Check if the value is a string and parse it as JSON
                 const data = typeof propertyIndexEntry.value === 'string' ? JSON.parse(propertyIndexEntry.value) : propertyIndexEntry.value;
@@ -135,13 +139,11 @@ class PropertyManager {
 
         const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
         const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
-
-        await new Promise((resolve, reject) => {
-            db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        
+        await db.getCollection('propertyList').updateOne(
+            { _id: 'propertyIndex' }, 
+            { $set: { value: propertyIndexJSON } }, 
+            { upsert: true });
     }
 
     static async getPropertyData(propertyId) {

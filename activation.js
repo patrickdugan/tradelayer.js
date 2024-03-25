@@ -39,7 +39,7 @@ class Activation {
 
     async loadConsensusVector() {
         try {
-            const storedVector = await db.getDatabase('consensus').findAsync({})
+            const storedVector = await db.getCollection('consensus').find({})
                 .then(entries => {
                     entries.forEach(entry => {
                         data[entry._id] = entry.value;
@@ -60,7 +60,7 @@ class Activation {
     async saveConsensusVector(vector) {
         //populate vector with consensus hashes - arguably this and the other one belong to consensus.js and just the save activations belongs here
         try {
-            await db.getDatabase('consensus').insertAsync({ _id: `consensus-vector`, value: vector});
+            await db.getCollection('consensus').insertOne({ _id: `consensus-vector`, value: vector});
             console.log('Consensus vector saved successfully.');
         } catch (error) {
             console.error('Error saving consensus vector:', error);
@@ -69,13 +69,13 @@ class Activation {
 
     async saveActivationsList() {
     try {
-        const activationsDB = db.getDatabase('activations');
+        const activationsDB = db.getCollection('activations');
         const query = { _id: 'activationsList' };
         const update = { $set: { value: JSON.stringify(this.txRegistry) } };
         const options = { upsert: true }; // This option will insert if not found
 
         //console.log('Saving activations list:', JSON.stringify(this.txRegistry));
-        await activationsDB.updateAsync(query, update, options);
+        await activationsDB.updateOne(query, update, options);
         console.log('Activations list saved successfully.');
     } catch (error) {
         console.error('Error saving activations list:', error);
@@ -86,8 +86,8 @@ class Activation {
    // New Method to load activations list
     async loadActivationsList() {
         try {
-            const activationsDB = db.getDatabase('activations');
-            const entries = await activationsDB.findAsync({});
+            const activationsDB = db.getCollection('activations');
+            const entries = await activationsDB.find({});
             //console.log('loaded activations '+JSON.stringify(entries))
             if (entries.length === 0) {
                 // If no entries found, initialize the txRegistry with default values

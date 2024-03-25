@@ -8,7 +8,7 @@ setInterval(() => {
     intervalCount++;
     if (intervalCount % COMPACT_MODULO === 0) {
         console.log('Compacting database...');
-        compactDatabase();
+        //compactDatabase();
     }
 }, COMPACT_INTERVAL_MS);
 
@@ -16,7 +16,7 @@ function compactDatabase() {
     // Assuming you have multiple databases to compact, loop through them
     const databases = ['tallyMap', 'propertyList', 'anotherDatabase']; // List your databases here
     databases.forEach(dbName => {
-        const db = dbInstance.getDatabase(dbName);
+        const db = dbInstance.getCollection(dbName);
         db.persistence.compactDatafile();
         console.log(`Compacted ${dbName} database.`);
     });

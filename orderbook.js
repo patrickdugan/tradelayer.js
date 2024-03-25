@@ -22,10 +22,10 @@ class Orderbook {
          async loadOrCreateOrderBook(key, flag) {
             //console.log('key before the string treatment '+key)
             const stringKey = typeof key === 'string' ? key : String(key);
-            const orderBooksDB = dbInstance.getDatabase('orderBooks');
+            const orderBooksDB = dbInstance.getCollection('orderBooks');
              //console.log('checking orderbook in this cancel call '+stringKey)
             try{
-                 const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
+                 const orderBookData = await orderBooksDB.findOne({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
                     //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
@@ -49,8 +49,8 @@ class Orderbook {
             // Save order book to your database
             //console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderBooks[key]))
             
-            const orderBooksDB = dbInstance.getDatabase('orderBooks');
-            await orderBooksDB.updateAsync(
+            const orderBooksDB = dbInstance.getCollection('orderBooks');
+            await orderBooksDB.updateOne(
                 { _id: key },
                 { _id: key, value: JSON.stringify(this.orderBooks[key]) },
                 { upsert: true }
@@ -86,7 +86,7 @@ class Orderbook {
         }
 
         async saveTrade(tradeRecord) {
-            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeDB = dbInstance.getCollection('tradeHistory');
 
             const uuid = uuidv4();
 
@@ -101,7 +101,7 @@ class Orderbook {
 
             // Save or update the trade record in the database
             try {
-                await tradeDB.updateAsync(
+                await tradeDB.updateOne(
                     { _id: tradeId },
                     tradeDoc,
                     { upsert: true }
@@ -115,25 +115,25 @@ class Orderbook {
 
         // Retrieve token trading history by propertyId pair
         static async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
+                const tradeDB = dbInstance.getCollection('tradeHistory');
                 const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
-                const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+                const trades = await tradeDB.find({ key: tradeRecordKey });
                 return trades.map(doc => doc.trade);
         }
 
         // Retrieve contract trading history by contractId
         static async getContractTradeHistoryByContractId(contractId) {
                 //console.log('loading trade history for '+contractId)
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
+                const tradeDB = dbInstance.getCollection('tradeHistory');
                 const tradeRecordKey = `contract-${contractId}`;
-                const trades = await tradeDB.findAsync({ key: tradeRecordKey });
+                const trades = await tradeDB.find({ key: tradeRecordKey });
                 return trades.map(doc => doc.trade);
         }
 
         // Retrieve trade history by address for both token and contract trades
         static async getTradeHistoryByAddress(address) {
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
-                const trades = await tradeDB.findAsync({ 
+                const tradeDB = dbInstance.getCollection('tradeHistory');
+                const trades = await tradeDB.find({ 
                     $or: [{ 'trade.sender': address }, { 'trade.receiverAddress': address }]
                 });
                 return trades.map(doc => doc.trade);

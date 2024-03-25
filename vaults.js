@@ -55,8 +55,8 @@ class SynthRegistry {
 
     // Persist vault data to the database
     async saveVault(vaultId) {
-        const vaultDB = dbInstance.getDatabase('vaults');
-        await vaultDB.updateAsync(
+        const vaultDB = dbInstance.getCollection('vaults');
+        await vaultDB.updateOne(
           { _id: `vault-${vaultId}` },
           { _id: `vault-${vaultId}`, value: JSON.stringify(this.vaults.get(vaultId)) },
           { upsert: true }
@@ -65,8 +65,8 @@ class SynthRegistry {
 
     // Persist synthetic token data to the database
     async saveSyntheticToken(syntheticTokenId) {
-        const synthDB = dbInstance.getDatabase('syntheticTokens');
-        await synthDB.updateAsync(
+        const synthDB = dbInstance.getCollection('syntheticTokens');
+        await synthDB.updateOne(
           { _id: `synth-${syntheticTokenId}` },
           { _id: `synth-${syntheticTokenId}`, value: JSON.stringify(this.syntheticTokens.get(syntheticTokenId)) },
           { upsert: true }
@@ -212,13 +212,13 @@ class SynthRegistry {
     // Load vaults and synthetic tokens from the database
     static async loadFromDatabase() {
         // Example loading logic for vaults
-        const vaultsData = await db.getDatabase('vaults').findAsync();
+        const vaultsData = await db.getCollection('vaults').find();
         vaultsData.forEach(vault => {
             this.vaults.set(vault._id, vault.data);
         });
 
         // Example loading logic for synthetic tokens
-        const syntheticTokensData = await db.getDatabase('syntheticTokens').findAsync();
+        const syntheticTokensData = await db.getCollection('syntheticTokens').find();
         syntheticTokensData.forEach(synth => {
             this.syntheticTokens.set(synth._id, synth.data);
         });

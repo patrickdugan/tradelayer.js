@@ -46,7 +46,7 @@ class TickSizeAdjuster {
                 const db = require('./db.js');
 
                 // Save adjustment event to the "contractAdjustments" category in the database
-                const result = await db.getDatabase("contractAdjustments").updateAsync(
+                const result = await db.getCollection("contractAdjustments").updateOne(
                     { category: "contractAdjustments" },
                     { $push: { events: { type, value, timestamp: new Date() } } },
                     { upsert: true }

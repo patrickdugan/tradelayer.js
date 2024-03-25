@@ -62,7 +62,7 @@ class InsuranceFund {
             timestamp: new Date().toISOString()
         };
         await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
+            db.getCollection('insurance').insert({ _id: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
                 if (err) reject(err);
                 resolve();
             });
@@ -72,7 +72,7 @@ class InsuranceFund {
 
     async getSnapshot(timestamp) {
         return new Promise((resolve, reject) => {
-            db.getDatabase('insurance').findOne({ key: `snapshot-${timestamp}` }, (err, doc) => {
+            db.getCollection('insurance').findOne({ _id: `snapshot-${timestamp}` }, (err, doc) => {
                 if (err) {
                     console.error('Error retrieving snapshot:', err);
                     reject(err);
@@ -90,7 +90,7 @@ class InsuranceFund {
             timestamp: new Date().toISOString()
         };
         await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `event-${eventRecord.timestamp}`, value: eventRecord }, (err) => {
+            db.getCollection('insurance').insert({ _id: `event-${eventRecord.timestamp}`, value: eventRecord }, (err) => {
                 if (err) reject(err);
                 resolve();
             });

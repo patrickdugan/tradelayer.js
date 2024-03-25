@@ -3,13 +3,13 @@ const BigNumber = require('bignumber.js');
 
 class TradeHistory {
   constructor() {
-    this.tradeHistoryDb = database.getDatabase('tradeHistory');
+    this.tradeHistoryDb = database.getCollection('tradeHistory');
   }
 
   async loadTradeHistory(contractId) {
     let key = { "key": "contract-" + contractId }
     console.log('key to load trades ' +JSON.stringify(key))
-    return this.tradeHistoryDb.findAsync(key);
+    return this.tradeHistoryDb.find(key);
   }
 
   async getTradeHistoryForAddress(address,contractId) {
@@ -357,13 +357,13 @@ async calculateLIFOEntry(address, amount, contractId) {
        */
       async save(key, data) {
         try {
-          const db = database.getDatabase('tradeHistory');
+          const db = database.getCollection('tradeHistory');
           const value = JSON.stringify(data);
 
           console.log(`updating tradeHistoryDB with ${value}`);
 
           // Save the data to the database
-          await db.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+          await db.updateOne({ _id: key }, { $set: { value } }, { upsert: true });
 
           console.log(`tradeHistoryDB saved successfully.`);
         } catch (err) {

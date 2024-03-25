@@ -2,10 +2,10 @@
 const Database = require('./db');
 
 // Get the tradeHistory database instance
-const tradeHistoryDB = Database.getDatabase('tradeHistory');
+const tradeHistoryDB = Database.getCollection('tradeHistory');
 
 // Example: Find all documents in the tradeHistory database and display them
-tradeHistoryDB.findAsync({ type: 'contract' })  // Adjust the query to exclude blockHeight
+tradeHistoryDB.find({ type: 'contract' })  // Adjust the query to exclude blockHeight
     .then(tradeHistoryData => {
         console.log('Trade History Data:');
         console.log(tradeHistoryData);

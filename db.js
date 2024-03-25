@@ -1,13 +1,13 @@
-const Datastore = require('nedb')
-const path = require('path')
-const util = require('util')
+const MongoClient = require('mongodb').MongoClient;
+const url = 'mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=tl.js1.0';
 
 class Database {
-    constructor(dbPath) {
-        this.databases = {}
+    constructor() {
 
-        // Define the categories for your datastores
-        const categories = [
+        this.db = new MongoClient(url).db('local');
+        
+        this.coll = {};
+        [   
             'txIndex',
             'propertyList',
             'oracleList',
@@ -34,37 +34,26 @@ class Database {
             'syntheticTokens',
             'liquidations'
         ]
+        .forEach(c => this.coll[c] = this.db.collection(c));
 
-        // Initialize a NeDB datastore for each category and promisify methods
-        categories.forEach(category => {
-            const db = new Datastore({ 
-                filename: path.join(dbPath, `${category}.db`), 
-                autoload: true 
-            })
-
-            // Promisify NeDB methods for each category
-            db.findAsync = util.promisify(db.find.bind(db))
-            db.insertAsync = util.promisify(db.insert.bind(db))
-            db.removeAsync = util.promisify(db.remove.bind(db))
-            db.updateAsync = util.promisify(db.update.bind(db))
-            db.findOneAsync = util.promisify(db.findOne.bind(db))
-            db.countAsync = util.promisify(db.count.bind(db))
-
-            this.databases[category] = db
-        })
-
-        
+        console.log('mongodb: initialized');
     }
 
-    getDatabase(category) {
-        return this.databases[category];
+    getCollection(cn) {
+        return this.coll[cn];
     }
 
-    // You can keep the callback-based methods or replace them with promisified methods
-    // Example: get, put, del, findAll
+    async dropCollection(cn, enforce=false) {
+        if (enforce) {
+            await this.db.dropCollection(cn);
+        }
+    }
 
-    // Additional methods like batch operations, find, etc., can be added as needed.
+    async dropDb(enforce=false) {
+        if (enforce) {
+            await this.db.dropDatabase();
+        }
+    }
 }
 
-// Initialize the Database instance with the desired path
-module.exports = new Database(path.join(__dirname, 'nedb-data'));
+module.exports = new Database()
