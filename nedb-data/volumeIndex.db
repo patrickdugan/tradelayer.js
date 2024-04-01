@@ -3,6 +3,7 @@
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"04wToeAn8HcQwdpA"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"0LULPF2XZIrppcry"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"0nOaAEbBlDiqJWvK"}
+{"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"1MVGkBwyc0AFGQSj"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"1NfwvC3LDqRf0xOQ"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"1mLVqv2f04faPcC8"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"1sQXYNCrOdwSdgFw"}
@@ -12,6 +13,7 @@
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"2k25NsIic1v8ToqI"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"2y9JDntBI4lJpJJH"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"3Jmdn94Ayi3pnOwU"}
+{"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"3SJqrtomcoQSi7QW"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"3SbFIqo7g3fhEqWz"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"4rKulg1DbX94wLhS"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"4wL1RFouEm9AKD4v"}
@@ -126,6 +128,7 @@
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"YQhaCYE0GHnsMOKd"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"Yjo8zkKE5crjbSJy"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"YtJgAnZAxF5VfZNL"}
+{"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"Z686zUuJ3BvmkSYQ"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"ZOiFSFizpkB84msN"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"ZR61m3fNYzN8HD32"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"ZbbZ4ATdySmQD6sf"}
@@ -156,6 +159,7 @@
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"hShjTiNR6m2zTPCa"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"hZsHiztHjSzNAyOQ"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"hkMkdpriCuXMO8fj"}
+{"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"hnqWAmyjJCaA7H8a"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"hpwucaG3SGIfOmXI"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"i7sXVf7zr4ku6T3B"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"icHMeHwF0wGUXH6i"}
@@ -208,14 +212,10 @@
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"y7rCT0qQtzBpIZMz"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"yJDzgdvydtlLyewM"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"yuUXBQaqmZ3tDpNP"}
+{"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"yyGwBKIQ9LTH46Cg"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"z4kVZsRB3piDHCIT"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"zFsgxA3Amb5chdL2"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"zObUtVCYVW0cBXjT"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"zr68Ar8JgZSYAupO"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"zrwhHCFmApcf6DBQ"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"zvJXKZBQHDqbnrVf"}
-{"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"Z686zUuJ3BvmkSYQ"}
-{"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"hnqWAmyjJCaA7H8a"}
-{"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"3SJqrtomcoQSi7QW"}
-{"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"1MVGkBwyc0AFGQSj"}
-{"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"yyGwBKIQ9LTH46Cg"}

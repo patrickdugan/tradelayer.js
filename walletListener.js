@@ -81,7 +81,7 @@ app.post('/tl_gettransactionforblock', async (req, res) => {
 app.post('/tl_getMaxProcessedHeight', async (req, res) => {
     try {
         const {} = req.body;
-        const txInfo = await Consensus.compareBlockHeights()
+        const txInfo = await Consensus.getMaxProcessedBlock()
         res.json(txInfo);
     } catch (error) {
         console.error('Error validating address:', error);

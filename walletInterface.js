@@ -133,3 +133,19 @@ const expressInterface = {
         } catch (error) {
             console.error('Error in getOracleHistory:', error.response ? error.response.data : error.message);
             throw error;
+        }
+    },
+
+    async getMaxProcessedHeight() {
+        try {
+            const response = await axios.post(`${serverUrl}/tl_getMaxProcessedHeight`, {});
+            return response.data;
+        } catch (error) {
+            console.error('Error in getMaxProcessedHeight:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    }
+
+}
+
+module.exports= expressInterface
