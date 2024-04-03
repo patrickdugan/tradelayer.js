@@ -249,7 +249,7 @@ class TxIndex {
     }
 
     static async processTransaction(payload, txId, marker) {
-        const Types = require('./Types.js'); // Lazy load Types
+        const Types = require('./txTypes.js'); // Lazy load Types
         // Process the transaction...
         const sender = await TxUtils.getSender(txId);
         const reference = await TxUtils.getReference(txId);

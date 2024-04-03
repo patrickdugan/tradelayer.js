@@ -24,7 +24,7 @@ const ContractRegistry = require('./contractRegistry.js'); // Registry for contr
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
-const Types = require('./types.js'); // Defines different types used in the system
+const Types = require('./txTypes.js'); // Defines different types used in the system
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const db = require('./db.js'); // Adjust the path if necessary
 const BigNumber = require('bignumber.js')

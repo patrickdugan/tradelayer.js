@@ -2,7 +2,7 @@
   "name": "tradelayer",
   "version": "1.0.0",
   "description": ".js rebuild of TradeLayer protocol",
-  "main": "main.js",
+  "main": "src/main.js",
   "scripts": {
     "test": "jest"
   },
