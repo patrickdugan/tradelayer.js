@@ -67,4 +67,6 @@ class Database {
 }
 
 // Initialize the Database instance with the desired path
-module.exports = new Database(path.join(__dirname, 'nedb-data'));
+const dbFolderName = 'nedb-data';
+const dbPath = path.join(dbFolderName);
+module.exports = new Database(dbPath);

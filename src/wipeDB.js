@@ -1,6 +1,8 @@
 const Datastore = require('nedb');
 const path = require('path');
 
+const dbFolderName = "nedb-data";
+
 function clearDatastore(dbPath, dbName) {
     const db = new Datastore({ filename: dbPath, autoload: true });
 
@@ -19,24 +21,24 @@ function clearDatastore(dbPath, dbName) {
 }
 
 // Define paths to your NeDB database files
-const txIndexDbPath = path.join(__dirname, 'nedb-data', 'txIndex.db');
-const propertyListDbPath = path.join(__dirname, 'nedb-data', 'propertyList.db');
-const tallyMapDbPath = path.join(__dirname, 'nedb-data', 'tallyMap.db');
-const activationsDbPath = path.join(__dirname, 'nedb-data', 'activations.db');
-const consensusDbPath = path.join(__dirname, 'nedb-data', 'consensus.db');
-const orderBooksDbPath = path.join(__dirname, 'nedb-data', 'orderBooks.db');
-const insuranceDbPath = path.join(__dirname, 'nedb-data', 'insurance.db');
-const oracleListDbPath = path.join(__dirname, 'nedb-data', 'oracleList.db'); // Path to oracleList.db
-const contractListDbPath = path.join(__dirname, 'nedb-data', 'contractList.db')
-const tradeHistoryDbPath = path.join(__dirname, 'nedb-data', 'tradeHistory.db')
-const oracleDataDbPath = path.join(__dirname, 'nedb-data', 'oracleData.db');
-const marginMapDbPath = path.join(__dirname, 'nedb-data', 'marginMaps.db')
-const tallyMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'tallyMapDelta.db')
-const marginMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'marginMapDelta.db')
-const channelsDbPath = path.join(__dirname, 'nedb-data','channels.db')
-const withdrawalQueueDbPath = path.join(__dirname, 'nedb-data','withdrawalQueue.db')
-const liquidationsDbPath = path.join(__dirname, 'Nedb-data','liquidations.db')
-const feeCacheDbPath = path.join(__dirname, 'Nedb-data','feeCache.db')
+const txIndexDbPath = path.join(dbFolderName, 'txIndex.db');
+const propertyListDbPath = path.join(dbFolderName, 'propertyList.db');
+const tallyMapDbPath = path.join(dbFolderName, 'tallyMap.db');
+const activationsDbPath = path.join(dbFolderName, 'activations.db');
+const consensusDbPath = path.join(dbFolderName, 'consensus.db');
+const orderBooksDbPath = path.join(dbFolderName, 'orderBooks.db');
+const insuranceDbPath = path.join(dbFolderName, 'insurance.db');
+const oracleListDbPath = path.join(dbFolderName, 'oracleList.db'); // Path to oracleList.db
+const contractListDbPath = path.join(dbFolderName, 'contractList.db')
+const tradeHistoryDbPath = path.join(dbFolderName, 'tradeHistory.db')
+const oracleDataDbPath = path.join(dbFolderName, 'oracleData.db');
+const marginMapDbPath = path.join(dbFolderName, 'marginMaps.db')
+const tallyMapDeltasDbPath = path.join(dbFolderName, 'tallyMapDelta.db')
+const marginMapDeltasDbPath = path.join(dbFolderName, 'marginMapDelta.db')
+const channelsDbPath = path.join(dbFolderName,'channels.db')
+const withdrawalQueueDbPath = path.join(dbFolderName,'withdrawalQueue.db')
+const liquidationsDbPath = path.join(dbFolderName,'liquidations.db')
+const feeCacheDbPath = path.join(dbFolderName,'feeCache.db')
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
