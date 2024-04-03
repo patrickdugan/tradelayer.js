@@ -1,6 +1,5 @@
 const Datastore = require('nedb');
 const path = require('path');
-
 const dbFolderName = "nedb-data";
 
 function clearDatastore(dbPath, dbName) {
