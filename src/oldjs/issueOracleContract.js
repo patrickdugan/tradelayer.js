@@ -52,7 +52,9 @@ async function createOracleAndIssueContract() {
         // This is just a placeholder, you should implement a proper wait/check mechanism
         console.log('Waiting for oracle confirmation...');
         await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds delay
+    } catch (error) {
+        console.error('Error creating oracle:', error);
+    }
 }
-
 // Call the function to create an oracle and issue a contract
 createOracleAndIssueContract();
