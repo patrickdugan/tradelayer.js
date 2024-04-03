@@ -1,6 +1,6 @@
 const TxUtils = require('./txUtils.js');
 const Encode = require('./txEncoder.js');
-const types= require('./types.js')
+const types= require('./txTypes.js')
 
 const fromAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
 const toAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"; // Update this to the desired destination address

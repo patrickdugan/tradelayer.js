@@ -20,7 +20,7 @@ const PropertyManager = require('./property.js');
 const ContractsRegistry = require('./contractRegistry.js');
 const Consensus = require('./consensus.js');
 const Encode = require('./txEncoder.js');
-const Types = require('./types.js');
+const Types = require('./txTypes.js');
 const Decode = require('./txDecoder.js');
 const Clearing = require('./clearing.js');
 

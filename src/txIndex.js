@@ -2,7 +2,6 @@ const litecoin = require('litecoin');
 const json = require('big-json');
 const util = require('util');
 const TxUtils = require('./txUtils');
-//const Types = require('./types.js');
 const db = require('./db.js');
 
 const clientConfig = /*test ?*/ {

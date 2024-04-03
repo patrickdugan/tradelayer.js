@@ -30,9 +30,9 @@ const PropertyManager = require('./property.js'); // Manages properties
 const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Activation = require('./activation.js')
-const activationInstance = Activation.getInstance()
+const activationInstance = Activation.getInstance();
 const Encode = require('./txEncoder.js'); // Encodes transactions
-const Types = require('./types.js'); // Defines different types used in the system
+const Types = require('./txTypes.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
 const AMM = require('./AMM.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
