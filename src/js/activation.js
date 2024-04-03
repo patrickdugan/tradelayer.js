@@ -1,4 +1,4 @@
-const db = require('./db')
+const db = require('./db.js')
 //const Logic = require('./logic.js');
 const TradeLayerManager = require('./vesting.js')
 

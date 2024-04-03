@@ -1,6 +1,6 @@
 const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
-const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
+const ContractsRegistry = require('./contractRegistry.js'); // Assuming this is the correct import
 
 class TradeLayerManager {
     static instance = null;

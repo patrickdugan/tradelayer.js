@@ -1,5 +1,5 @@
 const TxUtils = require('./txUtils.js')
-const db = require('./db')
+const db = require('./db.js')
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance();
 const PropertyList = require('./property.js')

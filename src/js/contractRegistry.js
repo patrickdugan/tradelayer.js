@@ -1,10 +1,10 @@
-const db = require('./db')
+const db = require('./db.js')
 const path = require('path');
 const util = require('util');
 //const TxUtils = require('./txUtils.js')
 const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
-const AMMPool = require('./AMM.js')
+const AMMPool = require('./amm.js')
 
 class ContractRegistry {
     constructor() {

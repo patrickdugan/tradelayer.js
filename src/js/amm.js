@@ -16,9 +16,9 @@ class AMMPool {
         const ContractRegistry = require('./contractRegistry.js')
         // Get the list of all contract IDs
         const contractIds = await ContractRegistry.loadContractSeries();
-        if (contractIds.size === 0||contractIds=== {}) {
-          return; // No contracts found, return early
-        }
+        // if (contractIds.size === 0|| contractIds=== {}) {
+        //   return; // No contracts found, return early
+        // }
 
         //console.log('displaying contract Ids object in update AMM orders ' +JSON.stringify(contractIds))
         // Loop through each contract ID

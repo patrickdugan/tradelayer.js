@@ -618,7 +618,7 @@ class MarginMap {
             const pos = this.margins.get(address);
 
             if (!pos) return 0;
-            const ContractRegistry = require('./ContractRegistry.js')
+            const ContractRegistry = require('./contractRegistry.js')
             // Check if the contract is associated with an oracle
             const isOracleContract = await ContractRegistry.isOracleContract(contractId);
 
