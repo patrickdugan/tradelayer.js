@@ -39,6 +39,7 @@ const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = requ
 const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
 const COIN = 100000000
+const pause = false
 
 class Main {
     static instance;
@@ -99,7 +100,8 @@ class Main {
         const consensus = await this.constructOrLoadConsensus();
 
         // Start processing incoming blocks
-        await this.processIncomingBlocks(consensus);
+        //await this.processIncomingBlocks(consensus);
+        
     }
 
     async getCurrentBlockHeight() {
@@ -316,8 +318,26 @@ class Main {
         /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
         }else if (blockLag === 0) {*/
-            this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus, blockLag.chainTip); // Start processing new blocks as they come
+        if(pause){
+            while(pause){
+                await delay(1000)
+            }
+            if(!pause){
+                this.processIncomingBlocks(consensus)
+            }
+        }else{
+                this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus, blockLag.chainTip); // Start processing new blocks as they come
+        }
         //}
+    }
+
+    setPause(){
+       if(!pause){
+            pause=true 
+       }else if(pause){
+            pause=false
+       }
+       return pause
     }
 
     //updates max consensus block in real-time mode
@@ -348,14 +368,16 @@ class Main {
                 latestProcessedBlock = blockNumber;
             }
 
-            /*shutdownEmitter.on('shutdown', () => {
-                shutdown();
-            });*/
+            if(pause==true){
+               console.log('exiting real-time mode '+latestProcessedBlock)  
+                break
+            };
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
             await TxIndex.saveMaxHeight(latestProcessedBlock)
         }
+        return syncIfNecessary()
     }
 
     /*sub-function of real-time mode, breaks things into 3 steps*/

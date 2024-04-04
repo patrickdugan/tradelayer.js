@@ -89,6 +89,17 @@ app.post('/tl_getMaxProcessedHeight', async (req, res) => {
     }
 });
 
+app.post('/tl_pause', async (req, res) => {
+    try {
+        const {} = req.body;
+        const pause = Main.setPause()
+        res.json(pause);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // Get all balances for an address
 app.post('/tl_getallbalancesforaddress', async (req, res) => {
     console.log('Trying to load balances for: ' + req.body.params);
