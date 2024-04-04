@@ -7,6 +7,7 @@ const Orderbook = require("../src/js/orderbook.js");
 const ContractRegistry = require("../src/js/contractRegistry.js");
 const OracleList = require("../src/js/oracle.js");
 const MarginMap = require("../src/js/marginMap.js");
+const Consensus = require('../src/js/consensus.js');
 
 const activationsInstance = Activations.getInstance()
 
@@ -51,6 +52,17 @@ app.post('/listProperties', async (req, res) => {
         res.json(propertiesArray); // Send the array representation of the properties
     } catch (error) {
         console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/getMaxProcessedHeight', async (req, res) => {
+    try {
+        const {} = req.body;
+        const txInfo = await Consensus.getMaxProcessedBlock()
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });

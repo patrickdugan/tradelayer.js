@@ -512,58 +512,58 @@ class ContractRegistry {
     }
 
     // Calculate the 1-hour funding rate for an oracle contract
-    static async calculateFundingRate(contractId) {
-        const isOracle = await ContractRegistry.isOracleContract(contractId);
-        if (!isOracle) {
-            return 0; // Return zero for non-oracle contracts
-        }
+    // static async calculateFundingRate(contractId) {
+    //     const isOracle = await ContractRegistry.isOracleContract(contractId);
+    //     if (!isOracle) {
+    //         return 0; // Return zero for non-oracle contracts
+    //     }
 
-        // Get oracle data for the last 24 blocks
-        const Oracles = require('./Oracles');
-        const oracleData = await Oracles.getLast24BlocksData(contractId);
-        const avgOraclePrice = ContractRegistry.calculateAveragePrice(oracleData);
+    //     // Get oracle data for the last 24 blocks
+    //     const Oracles = require('./Oracles');
+    //     const oracleData = await Oracles.getLast24BlocksData(contractId);
+    //     const avgOraclePrice = ContractRegistry.calculateAveragePrice(oracleData);
 
-        // Placeholder for the logic to get the average trade price for the contract
-        // const avgTradePrice = ...;
+    //     // Placeholder for the logic to get the average trade price for the contract
+    //     // const avgTradePrice = ...;
 
-        // Calculate the funding rate based on the difference between oracle price and trade price
-        const priceDifference = avgTradePrice / avgOraclePrice;
-        let fundingRate = 0;
+    //     // Calculate the funding rate based on the difference between oracle price and trade price
+    //     const priceDifference = avgTradePrice / avgOraclePrice;
+    //     let fundingRate = 0;
 
-        if (priceDifference > 1.0005) {
-            fundingRate = (priceDifference - 1.0005) * oracleData.length; // Example calculation
-        } else if (priceDifference < 0.9995) {
-            fundingRate = (0.9995 - priceDifference) * oracleData.length; // Example calculation
-        }
+    //     if (priceDifference > 1.0005) {
+    //         fundingRate = (priceDifference - 1.0005) * oracleData.length; // Example calculation
+    //     } else if (priceDifference < 0.9995) {
+    //         fundingRate = (0.9995 - priceDifference) * oracleData.length; // Example calculation
+    //     }
 
-        return fundingRate;
-    }
+    //     return fundingRate;
+    // }
 
-    async applyFundingRateToSystem(contractId,block) {
-        const fundingRate = await ContractsRegistry.calculateFundingRate(contractId);
+    // async applyFundingRateToSystem(contractId,block) {
+    //     const fundingRate = await ContractsRegistry.calculateFundingRate(contractId);
         
-        // Apply funding rate to marginMap+tallyMap
-        for (const [address, position] of marginMap.entries()) {
-            if (position.contractId === contractId) {
-                const fundingAmount = calculateFundingAmount(position.size, fundingRate);
-                TallyMap.updateBalance(address, contractId, fundingAmount,0,0,0,'funding',block);
-                marginMap.updatePosition(address, contractId, fundingAmount);
-            }
-        }
+    //     // Apply funding rate to marginMap+tallyMap
+    //     for (const [address, position] of marginMap.entries()) {
+    //         if (position.contractId === contractId) {
+    //             const fundingAmount = calculateFundingAmount(position.size, fundingRate);
+    //             TallyMap.updateBalance(address, contractId, fundingAmount,0,0,0,'funding',block);
+    //             marginMap.updatePosition(address, contractId, fundingAmount);
+    //         }
+    //     }
 
-        // Apply funding rate to vaulted contracts
-        for (const [vaultId, vault] of SynthRegistry.vaults.entries()) {
-            if (vault.contractId === contractId) {
-                const fundingAmount = ContractRegistry.calculateFundingAmount(vault.contractBalance, fundingRate);
-                SynthRegistry.applyPerpetualSwapFunding(vaultId, contractId, fundingAmount);
-            }
-        }
+    //     // Apply funding rate to vaulted contracts
+    //     for (const [vaultId, vault] of SynthRegistry.vaults.entries()) {
+    //         if (vault.contractId === contractId) {
+    //             const fundingAmount = ContractRegistry.calculateFundingAmount(vault.contractBalance, fundingRate);
+    //             SynthRegistry.applyPerpetualSwapFunding(vaultId, contractId, fundingAmount);
+    //         }
+    //     }
 
-        // Save changes
-        await TallyMap.save();
-        await marginMap.save();
-        await SynthRegistry.saveVaults();
-    }
+    //     // Save changes
+    //     await TallyMap.save();
+    //     await marginMap.save();
+    //     await SynthRegistry.saveVaults();
+    // }
 
     static calculateFundingAmount(contractSize, fundingRate) {
         return contractSize * fundingRate;
