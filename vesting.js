@@ -51,13 +51,16 @@ class TradeLayerManager {
             
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
+            //await initializeContractSeries()
+            await initializeClearlists()
+
             // After initializing tokens, set the flag
             await TallyMap.setInitializationFlag();
             return balances
         }
     }
 
-    static initializeContractSeries() {
+    static async initializeContractSeries() {
         const LTC_TL_Future_ContractId = 1;
         const contractProperties = {
             // Define contract properties such as margin requirements, expiry, etc.
@@ -71,9 +74,29 @@ class TradeLayerManager {
         };
 
         // Create the contract series
-        ContractsRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties);
+        await ContractsRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties);
+
 
         // Additional setup if required, such as initializing order books, setting initial market conditions, etc.
+    }
+
+     static async initializeClearlists() {
+        const ClearlistManager = require('./clearlistManager');
+
+        // Initialize issuer whitelist
+        const issuerClearlistId = await ClearlistManager.createClearlist({
+            adminAddress: this.adminAddress,
+            name: 'Issuer Whitelist'
+        });
+
+        // Initialize market maker whitelist
+        const marketMakerClearlistId = await ClearlistManager.createClearlist({
+            adminAddress: this.adminAddress,
+            name: 'Market Maker Whitelist'
+        });
+
+        console.log(`Issuer whitelist created with ID: ${issuerClearlistId}`);
+        console.log(`Market maker whitelist created with ID: ${marketMakerClearlistId}`);
     }
 
     static updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC) {

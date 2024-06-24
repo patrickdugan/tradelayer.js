@@ -18,6 +18,7 @@ class Database {
             'marginMapDelta',
             'marginMaps',
             'clearlists',
+            'attestations',
             'clearing',
             'consensus',
             'persistence',

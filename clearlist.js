@@ -1,23 +1,23 @@
 const dbInstance = require('./db.js');
 
-class ClearlistManager {
-    constructor() {
+class clearlistManager {
+    constructor(dbPath = './clearlistDB') {
         this.db = dbInstance.getDatabase('clearlists');
-        this.clearlists = new Map(); // Initialize the clearlists map
-        this.loadClearlists(); // Load existing clearlists
+        this.attestationsDb = dbInstance.getDatabase('attestations');
+        this.clearlists = new Map();
+        this.loadClearlists();
     }
 
     async createClearlist({ adminAddress, name = '', criteria = [], backupAddress = '' }) {
         const clearlistId = await this.getNextId();
         const clearlistData = {
-            _id: clearlistId.toString(),
             adminAddress,
             name,
             criteria,
             backupAddress
         };
 
-        await this.db.insertAsync(clearlistData);
+        await this.db.insertAsync({ _id: `clearlist:${clearlistId}`, data: clearlistData });
 
         return clearlistId;
     }
@@ -25,8 +25,8 @@ class ClearlistManager {
     async loadClearlists() {
         try {
             const clearlists = await this.db.findAsync({});
-            clearlists.forEach(clearlist => {
-                this.clearlists.set(clearlist._id, clearlist);
+            clearlists.forEach(({ _id, data }) => {
+                this.clearlists.set(_id.split(':')[1], data);
             });
         } catch (error) {
             console.error('Error loading clearlists from the database:', error);
@@ -34,28 +34,28 @@ class ClearlistManager {
     }
 
     async verifyAdmin(clearlistId, adminAddress) {
-        const clearlist = this.clearlists.get(clearlistId.toString());
+        const clearlist = this.clearlists.get(clearlistId);
 
         if (!clearlist) {
-            throw new Error('clearlist not found');
+            throw new Error('Clearlist not found');
         }
 
         return clearlist.adminAddress === adminAddress;
     }
 
     async updateAdmin(clearlistId, newAdminAddress) {
-        const clearlistIdStr = clearlistId.toString();
-        const clearlist = this.clearlists.get(clearlistIdStr);
+        const clearlistKey = `clearlist:${clearlistId}`;
+        const clearlist = this.clearlists.get(clearlistId);
 
         if (!clearlist) {
-            throw new Error('clearlist not found');
+            throw new Error('Clearlist not found');
         }
 
         clearlist.adminAddress = newAdminAddress;
-        await this.db.updateAsync({ _id: clearlistIdStr }, { $set: { adminAddress: newAdminAddress } });
-        this.clearlists.set(clearlistIdStr, clearlist);
+        await this.db.updateAsync({ _id: clearlistKey }, { $set: { data: clearlist } });
+        this.clearlists.set(clearlistId, clearlist);
 
-        console.log(`clearlist ID ${clearlistId} admin updated to ${newAdminAddress}`);
+        console.log(`Clearlist ID ${clearlistId} admin updated to ${newAdminAddress}`);
     }
 
     async getNextId() {
@@ -69,7 +69,49 @@ class ClearlistManager {
         return maxId + 1;
     }
 
+    async addAttestation(clearlistId, address, metaData) {
+        const attestationId = address
+        const attestationData = {
+            clearlistId,
+            address,
+            status: 'active',
+            metaData,
+            timestamp: new Date().toISOString()
+        };
+
+        await this.attestationsDb.updateAsync({ _id: attestationId}, 
+        { $set: { data: attestationData } },{ upsert: true });
+
+        return attestationId;
+    }
+
+    async revokeAttestation(attestationId,targetAddress,revokeReason) {
+        const attestationKey = `attestation:${targetAddress}`;
+        const attestation = await this.attestationsDb.findOneAsync({ _id: attestationKey });
+
+        if (!attestation) {
+            throw new Error('Attestation not found');
+        }
+
+        attestation.data.status = 'revoked';
+        attestation.data.id = attestationId
+        attestation.data.revokeReason = revokeReason
+        attestation.data.timestamp = new Date().toISOString();
+
+        await this.attestationsDb.updateAsync({ _id: attestationKey }, { $set: { data: attestation.data } });
+
+        return attestationId;
+    }
+
+    async getAttestations(clearlistId) {
+        return this.attestationsDb.findAsync({ 'data.clearlistId': clearlistId });
+    }
+
+    async getAttestationHistory(address, clearlistId) {
+        return this.attestationsDb.findAsync({ 'data.address': address });
+    }
+
     // Additional methods for managing clearlists
 }
 
-module.exports = ClearlistManager;
+module.exports = clearlistManager;

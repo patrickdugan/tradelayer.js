@@ -590,9 +590,12 @@ const Logic = {
 
     async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, revoke) {
 
-
-	    await clearlistRegistry.addAddressToclearlist(clearlistId, targetAddress);
-	    console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
+        if(!revoke){
+             await clearlistRegistry.addAddressToclearlist(clearlistId, targetAddress);
+            console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
+        }else if(revoke==true){
+            
+        }
         return
 	},
 
