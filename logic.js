@@ -21,6 +21,7 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
+const ClearListManager = require('./clearlist.js')
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -61,13 +62,13 @@ const Logic = {
                 await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
                 break;
            case 7:
-                await Logic.createWhitelist(params.adminAddress, params.name, params.criteria, params.backupAddress, params.block);
+                await Logic.createClearList(params.adminAddress, params.name, params.criteria, params.backupAddress, params.block);
                 break;
             case 8:
                 await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries, params.block);
                 break;
             case 9:
-                await Logic.issueOrRevokeAttestation(params.whitelistId, params.targetAddress, params.whitelistRegistry, params.block);
+                await Logic.issueOrRevokeAttestation(params.clearlistId, params.targetAddress, params.clearlistRegistry, params.block);
                 break;
             case 10:
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
@@ -79,7 +80,7 @@ const Logic = {
                 await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager, params.senderAddress, params.block);
                 break;
             case 13:
-                await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.whitelists, params.lag, params.oracleRegistry, params.block);
+                await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.clearlists, params.lag, params.oracleRegistry, params.block);
                 break;
             case 14:
                 await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.block);
@@ -165,7 +166,7 @@ const Logic = {
  
     },
 
-    async tokenIssue(sender, initialAmount, ticker, url = '', whitelistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
         const propertyManager = PropertyManager.getInstance();
 
         // Determine the type of the token based on whether it's managed or an NFT
@@ -176,13 +177,13 @@ const Logic = {
             ticker: ticker,
             totalInCirculation: initialAmount,
             type: tokenType,
-            whitelistId: whitelistId,
+            clearlistId: clearlistId,
             backupAddress: backupAddress
         };
 
         // Create the token in the property manager
         try {
-            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, whitelistId, backupAddress);
+            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, clearlistId, backupAddress);
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
             await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance',block);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
@@ -530,38 +531,38 @@ const Logic = {
     },
 
 		    /**
-		     * Creates a new whitelist.
+		     * Creates a new clearlist.
 		     * 
-		     * @param {Object} params - Parameters for creating the whitelist
-		     * @param {string} params.adminAddress - The address of the admin for this whitelist
-		     * @param {string} [params.name] - Optional name for the whitelist
-		     * @param {Array} [params.criteria] - Optional criteria for inclusion in the whitelist
+		     * @param {Object} params - Parameters for creating the clearlist
+		     * @param {string} params.adminAddress - The address of the admin for this clearlist
+		     * @param {string} [params.name] - Optional name for the clearlist
+		     * @param {Array} [params.criteria] - Optional criteria for inclusion in the clearlist
 		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
-		     * @returns {Object} - The result of the whitelist creation
+		     * @returns {Object} - The result of the clearlist creation
 		     */
-	async   createWhitelist(params) {
+	async   createClearList(params) {
 		        const { adminAddress, name, criteria, backupAddress } = params;
 
 		        // Validate input parameters
 		        if (!adminAddress) {
-		            throw new Error('Admin address is required to create a whitelist');
+		            throw new Error('Admin address is required to create a clearlist');
 		        }
 
-		        // Instantiate the WhitelistManager
-		        const whitelistManager = new WhitelistManager();
+		        // Instantiate the clearlistManager
+		        const clearListManager = new clearListManager();
 
-		        // Create the whitelist
-		        const whitelistId = await whitelistManager.createWhitelist({
+		        // Create the clearlist
+		        const clearlistId = await clearlistManager.createclearlist({
 		            adminAddress,
 		            name,
 		            criteria,
 		            backupAddress
 		        });
 
-		        // Return a message with the new whitelist ID
+		        // Return a message with the new clearlist ID
 		        return {
-		            message: `Whitelist created successfully with ID: ${whitelistId}`,
-		            whitelistId
+		            message: `clearlist created successfully with ID: ${clearlistId}`,
+		            clearlistId
 		        };
 		},
 
@@ -572,8 +573,8 @@ const Logic = {
 	        case 'property':
 	            await registries.propertyRegistry.updateAdmin(entityId, newAdminAddress);
 	            break;
-	        case 'whitelist':
-	            await registries.whitelistRegistry.updateAdmin(entityId, newAdminAddress);
+	        case 'clearlist':
+	            await registries.clearlistRegistry.updateAdmin(entityId, newAdminAddress);
 	            break;
 	        case 'oracle':
 	            await registries.oracleRegistry.updateAdmin(entityId, newAdminAddress);
@@ -587,11 +588,11 @@ const Logic = {
 	},
 
 
-    async issueOrRevokeAttestation(whitelistId, targetAddress, whitelistRegistry, revoke) {
+    async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, revoke) {
 
 
-	    await whitelistRegistry.addAddressToWhitelist(whitelistId, targetAddress);
-	    console.log(`Address ${targetAddress} added to whitelist ${whitelistId}`);
+	    await clearlistRegistry.addAddressToclearlist(clearlistId, targetAddress);
+	    console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         return
 	},
 
@@ -647,10 +648,10 @@ const Logic = {
         return
 	},
 
-    async createOracle(adminAddress, ticker, url, backupAddress, whitelists, lag, oracleRegistry,block) {
+    async createOracle(adminAddress, ticker, url, backupAddress, clearlists, lag, oracleRegistry,block) {
 
 	    // Create a new oracle
-	    const oracleId = await OracleList.createOracle({adminAddress, ticker, url, backupAddress, whitelists, lag});
+	    const oracleId = await OracleList.createOracle({adminAddress, ticker, url, backupAddress, clearlists, lag});
 	    console.log(`Oracle created with ID: ${oracleId}`);
 	    return oracleId;
 	},

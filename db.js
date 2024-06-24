@@ -17,7 +17,7 @@ class Database {
             'tallyMapDelta',
             'marginMapDelta',
             'marginMaps',
-            'whitelists',
+            'clearlists',
             'clearing',
             'consensus',
             'persistence',
