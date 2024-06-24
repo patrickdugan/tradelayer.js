@@ -10,6 +10,7 @@ const BigNumber = require('bignumber.js')
 const Orderbook = require('./orderbook.js')
 const Channels = require('./channels.js')
 const MarginMap = require('./marginMap.js')
+const ClearListManager = require('./clearlist.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -422,25 +423,43 @@ const Validity = {
         },
 
         // 9: Issue Attestation
-        validateIssueOrRevokeAttestation: async (sender, params, txid) => {
+       validateIssueOrRevokeAttestation: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(9);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
+            if (!isAlreadyActivated) {
+                params.valid = false;
+                params.reason += 'Tx type not yet activated; ';
             }
 
-            if (!(typeof params.targetAddress === 'string')) {
+            if (typeof params.targetAddress !== 'string') {
                 params.valid = false;
                 params.reason += 'Invalid target address; ';
             }
 
-            // Additional logic can be added here if needed
+            // Fetch the clearlistId from params or wherever it's stored
+            const clearlistId = params.clearlistId;
+
+            // Assuming clearlistManager or an equivalent instance is available
+            const clearlist = await clearlistManager.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
+
+            if (!clearlist) {
+                params.valid = false;
+                params.reason += `Clearlist with ID ${clearlistId} not found; `;
+            } else {
+                // Check if the sender matches the admin address of the clearlist
+                if (sender !== clearlist.adminAddress) {
+                    params.valid = false;
+                    params.reason += `Sender ${sender} is not authorized to issue or revoke attestations for clearlist ${clearlistId}; `;
+                }
+            }
+
+            // Additional validation logic can be added here
 
             return params;
         },
+
 
         // 10: AMM Pool Attestation
         validateAMMPool: async (sender, params, txid) => {

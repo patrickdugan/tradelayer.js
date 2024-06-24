@@ -549,10 +549,10 @@ const Logic = {
 		        }
 
 		        // Instantiate the clearlistManager
-		        const clearListManager = new clearListManager();
+		        const clearListManager = new ClearListManager();
 
 		        // Create the clearlist
-		        const clearlistId = await clearlistManager.createclearlist({
+		        const clearlistId = await clearListManager.createclearlist({
 		            adminAddress,
 		            name,
 		            criteria,
@@ -574,8 +574,13 @@ const Logic = {
 	            await registries.propertyRegistry.updateAdmin(entityId, newAdminAddress);
 	            break;
 	        case 'clearlist':
-	            await registries.clearlistRegistry.updateAdmin(entityId, newAdminAddress);
+                const clearListManager = new ClearListManager();
+	            await registries.clearListManager.updateAdmin(entityId, newAdminAddress);
 	            break;
+            case 'clearList':
+                const clearListManager = new ClearListManager();
+                await registries.clearListManager.updateAdmin(entityId, newAdminAddress);
+                break;
 	        case 'oracle':
 	            await registries.oracleRegistry.updateAdmin(entityId, newAdminAddress);
 	            break;
@@ -588,13 +593,14 @@ const Logic = {
 	},
 
 
-    async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, revoke) {
+    async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, metaData, revoke) {
+        const clearListManager = new ClearListManager();
 
         if(!revoke){
-             await clearlistRegistry.addAddressToclearlist(clearlistId, targetAddress);
+             await clearListManager.addAttestion(clearlistId, targetAddress,metaData);
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
-            
+            await clearListManager.revokeAttestation(clearlistId,targetAddress,metaData)
         }
         return
 	},
