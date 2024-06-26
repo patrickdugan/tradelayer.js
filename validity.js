@@ -109,7 +109,7 @@ const Validity = {
                 params.reason = 'Transaction type activated in the future';
             }
 
-            const propertyData = PropertyList.getPropertyData(params.propertyIds)
+            const propertyData = await PropertyList.getPropertyData(params.propertyIds)
             if(propertyData==null||propertyData==undefined){
                 params.valid = false
                 params.reason = 'propertyId not found in Property List'
@@ -139,17 +139,48 @@ const Validity = {
                 console.log(params.valid, params.reason)
             }*/
 
-            /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
-            if (!isSenderWhitelisted) {
+                    // Whitelist validation logic
+            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
+
+            // Get recipient whitelist IDs from the attestation map
+            const recipientAttestations = await clearlistManager.getAttestations(params.recipientAddress);
+            const recipientWhitelists = recipientAttestations.map(att => att.data.clearlistId);
+            var passesSend = false
+
+            for (const whitelistId of senderWhitelists) {
+                
+                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (senderWhitelisted) {
+                    passes=true
+                }
+            }
+            if(!passesSend){
                 params.valid=false
-                params.reason += 'Sender address not whitelisted; ';
+                params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
             }
 
-            const isRecipientWhistelisted = await whitelistRegistry.isAddressWhitelisted(params.recipientAddress);
-            if (!senderKYCCleared) {
-                params.valid=false
-                params.reason += 'Sender address KYC not cleared; ';
-            }*/
+            var passesReceive = false
+
+            for (const whitelistId of recipientWhitelists) {
+                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, params.recipientAddress);
+                if (recipientWhitelisted) {
+                    passesReceive=true
+                
+                    break; // No need to check further if one fails
+                }
+            }
+            if(!passesReceive){
+                    params.valid = false;
+                    params.reason += `Recipient address not whitelisted in clearlist ${whitelistId}; `;
+            }
+
+            // Ensure both sender and recipient have at least one matching whitelist
+            const matchingWhitelists = senderWhitelists.filter(whitelistId => recipientWhitelists.includes(whitelistId));
+            if (matchingWhitelists.length === 0) {
+                params.valid = false;
+                params.reason += 'No matching whitelists between sender and recipient; ';
+            }
 
             return params
         },
@@ -226,11 +257,24 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.propertyId);
-            if (!isSenderWhitelisted) {
-                params.valid = false;
-                params.reason += 'Sender address not whitelisted; ';
-            }*/
+
+            const propertyData = await PropertyList.getPropertyData(params.propertyId)
+            
+                    // Whitelist validation logic
+            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
+            var passes = false
+            for (const whitelistId of senderWhitelists) {
+                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (senderWhitelisted) {
+                    passes=true
+                }
+            }
+
+            if(passes){
+             params.valid = false;
+                    params.reason += `Sender address not listed in clearlist for the token ${whitelistId}; `;
+            }
 
             return params;
         },
@@ -264,17 +308,37 @@ const Validity = {
                 params.reason += 'Insufficient balance for offered token; ';
             }
 
-            /*const isSenderWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.senderAddress, params.offeredPropertyId);
-            if (!isSenderWhitelisted) {
-                params.valid = false;
-                params.reason += 'Sender not whitelisted for offered property; ';
-            }
+            const propertyData1 = await PropertyList.getPropertyData(params.propertyIdDesired)
+            const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
+                    // Whitelist validation logic
+            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
+            const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
 
-            const isRecipientWhitelisted = await whitelistRegistry.isAddressWhitelisted(params.recipientAddress, params.desiredPropertyId);
-            if (!isRecipientWhitelisted) {
-                params.valid = false;
-                params.reason += 'Recipient not whitelisted for desired property; ';
-            }*/
+            var passes1 = false
+            for (const whitelistId of senderWhitelists) {
+                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (senderWhitelisted) {
+                    passes1 = true
+                }
+            }
+            if(passes1){
+                    params.valid = false;
+                    params.reason += `Sender address not listed in clearlist for offered token ${whitelistId}; `;
+            }
+             
+            var passes2 = false
+
+            for (const whitelistId of desiredLists) {
+                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (recipientWhitelisted) {
+                    passes2 = true
+                }
+            }
+            if(passes2){
+                    params.valid = false;
+                    params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
+            }
 
             return params;
         },
@@ -476,6 +540,39 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Invalid target address; ';
             }
+
+             const propertyData1 = await PropertyList.getPropertyData(params.id)
+            const propertyData2 = await PropertyList.getPropertyData(params.id2)
+                    // Whitelist validation logic
+            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
+            const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
+
+            var passes1 = false
+            for (const whitelistId of senderWhitelists) {
+                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (senderWhitelisted) {
+                    passes1 = true
+                }
+            }
+            if(passes1){
+                    params.valid = false;
+                    params.reason += `Sender address not listed in clearlist for offered token ${whitelistId}; `;
+            }
+             
+            var passes2 = false
+
+            for (const whitelistId of desiredLists) {
+                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (recipientWhitelisted) {
+                    passes2 = true
+                }
+            }
+            if(passes2){
+                    params.valid = false;
+                    params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
+            }
+
 
                return params;
         },
@@ -783,16 +880,31 @@ const Validity = {
 
                 params.amount -= contractUndo;
              }
-            if(params.leverage>50){
-                params.valid=false
-                params.reason+= "Stop encouraging gambling!"
-            }
-            /*const isSenderWhitelisted = contractDetails.type === 'oracle' ? await whitelistRegistry.isAddressWhitelisted(params.senderAddress, contractDetails.oracleId) : true;
-            if (!isSenderWhitelisted) {
-                params.valid = false;
-                params.reason += 'Sender address not whitelisted for the contract\'s oracle; ';
-            }*/
 
+            const collateralPropertyId = contractDetails.data.native.collateralPropertyId;
+
+            // Get property data for the collateralPropertyId
+            const collateralPropertyData = await PropertyManager.getPropertyData(collateralPropertyId);
+            if (collateralPropertyData == null || collateralPropertyData == undefined) {
+                params.valid = false;
+                params.reason += 'Collateral propertyId not found in Property List; ';
+            }
+
+            // Extract whitelist IDs from the collateral property data
+            const senderWhitelists = Array.isArray(collateralPropertyData.whitelistId) ? collateralPropertyData.whitelistId : [collateralPropertyData.whitelistId];
+             // Check if the sender address is in the whitelists
+            var listed = false
+            for (const whitelistId of senderWhitelists) {
+                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                if (senderWhitelisted) {
+                    listed=true
+                    break; // No need to check further if one fails
+                }
+            }
+            if(listed){
+                params.valid = false;
+                params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
+            }
             return params;
         },
 
@@ -1032,17 +1144,78 @@ const Validity = {
                     params.reason += "Column B has insufficient balance for amountOffered"
                 }
             }
-            /*const isAddressAWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressA, params.propertyId1);
-            if (!isAddressAWhitelisted) {
-                params.valid = false;
-                params.reason += 'Commit address A not whitelisted for property ID 1; ';
-            }
 
-            const isAddressBWhitelisted = await whitelistRegistry.isAddressWhitelisted(commitAddressB, params.propertyId2);
-            if (!isAddressBWhitelisted) {
-                params.valid = false;
-                params.reason += 'Commit address B not whitelisted for property ID 2; ';
-            }*/
+        // Whitelist validation logic
+        const clearlistManager = new ClearlistManager();
+
+        // Get property data for both propertyIdOffered and propertyIdDesired
+        const propertyDataOffered = await PropertyManager.getPropertyData(params.propertyIdOffered);
+        const propertyDataDesired = await PropertyManager.getPropertyData(params.propertyIdDesired);
+
+        if (propertyDataOffered == null || propertyDataDesired == null) {
+            params.valid = false;
+            params.reason += 'Property data not found; ';
+            return params;
+        }
+
+        const whitelistsOffered = Array.isArray(propertyDataOffered.whitelistId) ? propertyDataOffered.whitelistId : [propertyDataOffered.whitelistId];
+        const whitelistsDesired = Array.isArray(propertyDataDesired.whitelistId) ? propertyDataDesired.whitelistId : [propertyDataDesired.whitelistId];
+
+        var listed1 = false
+        var listed2 = false
+        var listed3 = false
+        var listed4 = false
+
+        // Check whitelists for commitAddressA
+        for (const whitelistId of whitelistsOffered) {
+            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressA);
+            if (isWhitelisted) {
+                listed1=true
+                break;
+            }
+        }
+        if(!listed1){
+            params.valid = false;
+            params.reason += `Commit address A not whitelisted in clearlist ${whitelistId} for property offered; `;
+        }
+
+        for (const whitelistId of whitelistsDesired) {
+            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressA);
+            if (isWhitelisted) {
+                listed2=true
+            
+                break;
+            }
+        }
+        if(!listed2){
+            params.valid = false;
+            params.reason += `Commit address A not whitelisted in clearlist ${whitelistId} for property desired; `;
+        }
+
+        // Check whitelists for commitAddressB
+        for (const whitelistId of whitelistsOffered) {
+            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressB);
+            if (isWhitelisted) {
+                listed3=true
+                break;
+            }
+        }
+        if(!listed3){
+            params.valid = false;
+            params.reason += `Commit address B not whitelisted in clearlist ${whitelistId} for property offered; `;
+        }
+
+        for (const whitelistId of whitelistsDesired) {
+            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressB);
+            if (isWhitelisted) {
+                listed4 =true
+                break;
+            }
+        }
+        if(!listed4){
+            params.valid = false;
+            params.reason += `Commit address B not whitelisted in clearlist ${whitelistId} for property desired; `;
+        }
 
             return params;
         },
