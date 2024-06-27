@@ -89,7 +89,7 @@ const Logic = {
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry, params.block);
                 break;
             case 16:
-                await Logic.createContractSeries(params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
+                await Logic.createContractSeries(params.senderAddress, params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
                 break;
             case 17:
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
@@ -184,7 +184,7 @@ const Logic = {
 
         // Create the token in the property manager
         try {
-            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, clearlistId, backupAddress);
+            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, clearlistId, sender, backupAddress);
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
             await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance',block);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
@@ -541,7 +541,7 @@ const Logic = {
 		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
 		     * @returns {Object} - The result of the clearlist creation
 		     */
-	async   createClearList(params) {
+	async createClearList(params) {
 		        const { adminAddress, name, criteria, backupAddress } = params;
 
 		        // Validate input parameters
@@ -682,10 +682,10 @@ const Logic = {
         return
 	},
 
-    async createContractSeries(native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
+    async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
 	    // Create a new future contract series
 	    const futureContractSeriesId = await ContractRegistry.createContractSeries({
-	        native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
+	        sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
 	    });
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;

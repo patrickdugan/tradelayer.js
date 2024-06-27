@@ -36,7 +36,7 @@ class ContractRegistry {
         return this.instance;
     }
 
-    static async createContractSeries(native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
+    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
         // Load the current contract list from the database
         const contractListDB = db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
@@ -48,6 +48,7 @@ class ContractRegistry {
         // Create the contract series object
         const contractSeries = {
             id: seriesId,
+            issuer: sender,
             native: native,
             underlyingOracleId: underlyingOracleId,
             onChainData: onChainData,
