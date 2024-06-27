@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');  // Import the v4 function from the uuid
 const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
 const VolumeIndex= require('./volumeIndex.js')
+const Channels = require('./channels.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -318,11 +319,17 @@ class Orderbook {
                 return;
             }
 
+             //see if the trade qualifies for increased Liquidity Reward
+          
+
             for (const match of matches) {
                 if (!match.sellOrder || !match.buyOrder) {
                     //console.error('Invalid match object:', match);
                     continue;
                 }
+
+                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
+                var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
 
                 const sellOrderAddress = match.sellOrder.sender;
                 const buyOrderAddress = match.buyOrder.sender;
@@ -586,8 +593,8 @@ class Orderbook {
                     if(bumpTrade==false){
                         // Add match to the list
                         matches.push({ 
-                            sellOrder: { ...sellOrder, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: sellOrder.maker}, 
-                            buyOrder: { ...buyOrder, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:buyOrder.maker},
+                            sellOrder: { ...sellOrder, contractId: sellOrder.contractId, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: sellOrder.maker}, 
+                            buyOrder: { ...buyOrder, contractId: buyOrder.contractId, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:buyOrder.maker},
                             tradePrice 
                         });
 
@@ -614,6 +621,71 @@ class Orderbook {
             return { orderBook: this.orderBooks[orderBookKey], matches };
         }
 
+        async evaluateBasicLiquidityReward(match, channel, contract) {
+            var accepted = false
+            const clearlistManager = new ClearlistManager();
+            const propertyManager = new PropertyManager();
+            
+            const contractOrPropertyIds = []
+            if(!contract){
+                contractOrPropertyIds=[match.propertyId1, match.propertyId2];
+            }else{
+                contractOrPropertyIds=[match.sellOrder.contractId]
+            }
+            let issuerAddresses = [];
+            
+            if(contract){
+                    for (const id of contractOrPropertyIds) {
+                        const contractData = await propertyManager.getContractData(id); // Assuming you have a similar method for contracts
+                        if (contractData && contractData.issuerAddress) {
+                            issuerAddresses.push(contractData.issuerAddress);
+                        }
+                    }
+            }else{
+                    for (const id of contractOrPropertyIds) {
+                    const propertyData = await propertyManager.getPropertyData(id);
+                    if (propertyData && propertyData.issuerAddress) {
+                        issuerAddresses.push(propertyData.issuerAddress);
+                    }
+                }
+
+            }
+            
+            for (const address of issuerAddresses) {
+                const isWhitelisted = await clearlistManager.isAddressInClearlist(1, address);
+                if (isWhitelisted) {
+                    accepted=true
+                }
+            }
+            
+            return accepted;
+        }
+
+        async evaluateEnhancedLiquidityReward(match, channel) {
+            var accepted = false
+            const clearlistManager = new ClearlistManager();
+            
+            let addressesToCheck = [];
+            
+            if (match.type === 'channel') {
+                const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(match.address);
+                addressesToCheck = [channel.A.address, channel.B.address];
+            } else {
+                addressesToCheck = [match.buyerAddress, match.sellerAddress];
+            }
+            
+            for (const address of addressesToCheck) {
+                const isWhitelisted = await clearlistManager.isAddressInClearlist(2, address);
+                if (isWhitelisted) {
+                    accepted=true;
+                }
+            }
+            
+            return accepted;
+        }
+
+
+
         async processContractMatches(matches, currentBlockHeight, channel) {
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js')
@@ -629,6 +701,9 @@ class Orderbook {
 
             for (const match of matches) {
 
+                    //see if the trade qualifies for increased Liquidity Reward
+                    var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
+                    var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)
                         continue

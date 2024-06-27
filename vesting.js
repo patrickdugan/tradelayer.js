@@ -36,9 +36,12 @@ class TradeLayerManager {
             var TLVESTTokenId = 2;
             const TLVESTTotalAmount = 1250000;
             var amountToInsuranceFund = 250000;
+            const TLInitialLiquidity = 250000;
+            const TLVESTReserve = TLTotalAmount-amountToInsuranceFund-TLInitialLiquidity
             const propertyManager = PropertyManager.getInstance()
             TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
             TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
+            TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting')
 
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
             var insuranceFund = new InsuranceFund(1,0,0.5)
@@ -46,7 +49,7 @@ class TradeLayerManager {
             insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
             
-            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLTotalAmount-TLVESTTotalAmount, 0, 0, TLTotalAmount - amountToInsuranceFund);
+            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, TLVESTReserve;
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
             
             const balances = await TallyMap.getAddressBalances(this.adminAddress)

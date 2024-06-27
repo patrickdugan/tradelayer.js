@@ -736,7 +736,7 @@ const Logic = {
                         sellOrder,
                         buyOrder,
                         price,
-                        channelAddress,
+                        address: channelAddress,
                         tradePrice: price 
                     }
         let matches = []
