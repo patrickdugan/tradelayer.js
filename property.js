@@ -56,7 +56,7 @@ class PropertyManager {
         return maxId + 1;
     }
 
-    async createToken(ticker, totalInCirculation, type, whitelistId, backupAddress) {
+    async createToken(ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
         // Check if the ticker already exists
 
         if (this.propertyIndex.has(ticker)) {
@@ -69,12 +69,12 @@ class PropertyManager {
         }
 
         const propertyId = await this.getNextPropertyId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress);
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress);
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
       }
 
-    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, backupAddress) {
+    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
         
         const propertyTypeIndexes = {
             'Fixed': 1,
@@ -94,6 +94,7 @@ class PropertyManager {
             totalInCirculation,
             type: propertyTypeIndexes[type],
             whitelistId: whitelistId,
+            issuer: issuer,
             backupAddress: backupAddress
         });
         await this.save();
@@ -144,24 +145,7 @@ class PropertyManager {
         });
     }
 
-    static async getPropertyData(propertyId) {
-        const instance = PropertyManager.getInstance();
-
-        // If the propertyIndex is empty, load it first
-        if (instance.propertyIndex.size === 0) {
-            await PropertyManager.load();
-        }
-
-        // Get the property data from the index
-        const propertyData = instance.propertyIndex.get(propertyId);
-
-        // If property data is found, return it; otherwise, return null
-        if (propertyData !== undefined) {
-            return propertyData;
-        } else {
-            return null;
-        }
-    }
+     
 
     static async getPropertyIndex() {
         const instance = PropertyManager.getInstance();

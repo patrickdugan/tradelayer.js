@@ -119,6 +119,3 @@ class clearlistManager {
 }
 
 module.exports = clearlistManager;
-
-
-module.exports = clearlistManager;

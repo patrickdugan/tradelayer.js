@@ -178,6 +178,7 @@ const Logic = {
             totalInCirculation: initialAmount,
             type: tokenType,
             clearlistId: clearlistId,
+            issuer: sender,
             backupAddress: backupAddress
         };
 
