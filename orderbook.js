@@ -457,7 +457,7 @@ class Orderbook {
                 if(channel==false){
                     console.log('checking match before volume index save ' +JSON.stringify(match))
                     const key = this.normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight)
+                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
                 }
 
                 // Record the token trade
@@ -700,10 +700,6 @@ class Orderbook {
             //console.log('processing contract mathces '+JSON.stringify(matches))
 
             for (const match of matches) {
-
-                    //see if the trade qualifies for increased Liquidity Reward
-                    var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
-                    var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)
                         continue
@@ -1059,6 +1055,11 @@ class Orderbook {
                     if(channel==false){
                        VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,match.tradePrice,currentBlockHeight)
                     }
+
+                     //see if the trade qualifies for increased Liquidity Reward
+                    var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
+                    var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
+                    
                     // Save the updated margin map
                     await marginMap.saveMarginMap(false);  
             }

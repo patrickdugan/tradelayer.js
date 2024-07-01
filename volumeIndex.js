@@ -2,27 +2,78 @@ const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')
+const Contracts = require('./contractRegistry.js')
 
 class VolumeIndex {
     constructor(db) {
         // Initialize data structures and database path
         this.pairVolumes = {};
         this.pairFees = {};
-        this.pairCumulativeVolumes = {};
+        this.tokenPairCumulativeVolumes = 0;
         this.ltcPairTotalVolume = 0;
-        this.contractCumulativeVolumes = {};
+        this.contractCumulativeVolumes = 0;
         this.cumulativeFees = 0;
         this.dbPath = dbPath;
         this.VWAPIndex = new Map()
     }
 
-    static async saveVolumeDataById(id, volume,price,blockHeight) {
+    static async saveVolumeDataById(id, volume,price,blockHeight, type) {
         await db.getDatabase('volumeIndex').updateAsync(
             { _id: id },
             { value: { blockHeight:blockHeight, volume: volume, price:price } },
             { upsert: true }
         );
+
+        // Update global cumulative volume variables
+        this.updateCumulativeVolumes(volume, type,id);
     }
+
+       static async updateCumulativeVolumes(volume, type, id) {
+        if (type === "contract") {
+            const collateralId = await Contracts.getCollateralId(id);
+            const priceInLTC = await this.getTokenPriceInLTC(collateralId);
+            const notionalValue= Contracts.getNotionalValue(id)
+            const volumeInLTC = volume * priceInLTC*notionalValue;
+            this.contractCumulativeVolumes += volumeInLTC;
+            this.globalCumulativeVolume += volume;
+        } else if (type === "token") {
+            const [tokenId1, tokenId2] = id.split('-');
+            const priceInLTC1 = await this.getTokenPriceInLTC(tokenId1);
+            const priceInLTC2 = await this.getTokenPriceInLTC(tokenId2);
+            const avgPriceInLTC = (priceInLTC1 + priceInLTC2) / 2;
+            const volumeInLTC = volume * avgPriceInLTC;
+            this.ltcPairTotalVolume += volumeInLTC;
+            this.globalCumulativeVolume += volume;
+        } else {
+            // Assuming the volume is directly in LTC
+            this.ltcPairTotalVolume += volume;
+            this.globalCumulativeVolume += volume;
+        }
+        // Assuming volume is in LTC
+    }
+
+    static async getTokenPriceInLTC(tokenId) {
+        // Attempt to fetch the VWAP price from the database
+        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `vwap-${tokenId}` });
+        
+        if (vwapData && vwapData.value && vwapData.value.price) {
+            return vwapData.value.price;
+        }
+
+        // If VWAP price is not available, return a default low value
+        return 0.001; // Minimum price
+    }
+
+    static getCumulativeVolumes() {
+        // Return an object containing the global cumulative volume data
+        return {
+            globalCumulativeVolume: this.globalCumulativeVolume,
+            // Add other cumulative volume variables here if needed
+            ltcPairTotalVolume: this.ltcPairTotalVolume,
+            contractCumulativeVolumes: this.contractCumulativeVolumes
+        };
+    }
+
 
     static async getVolumeDataById(id) {
         return await db.getDatabase('volumeIndex').findOneAsync({ _id: id });

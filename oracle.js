@@ -37,7 +37,7 @@ class OracleList {
         }
     }
 
-    static async getOracleData(oracleId) {
+    static async getOracleInfo(oracleId) {
         const instance = OracleList.getInstance();
 
         // Check if in-memory map is empty and load if necessary
@@ -67,6 +67,18 @@ class OracleList {
         return null;
     }
 
+    static async getOraclePrice(oracleId) {
+        // Oracle key to search for
+        const oracleKey = `oracle-${oracleId}`;
+
+        // If not found in-memory, optionally check the database
+        const oracleDB = db.getDatabase('oracleData');
+        const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
+        console.log('db oracle '+ JSON.stringify(dbOracle))
+         return oracleData.data;
+
+    }
+
 
     static async publishData(oracleId, price, high, low, close, blockHeight) {
         try {
@@ -76,7 +88,7 @@ class OracleList {
             const oracleData = { price, high, low, close, blockHeight };
 
             // Update in-memory oracle data (optional)
-            const oracleKey = `oracle-${oracleId}-${blockHeight}`;
+            const oracleKey = `oracle-${oracleId}`;
             instance.oracles.set(oracleKey, oracleData);
 
             // Save oracle data to the database

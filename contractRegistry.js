@@ -272,12 +272,15 @@ class ContractRegistry {
             const contractData = await this.getContractInfo(contractId);
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
-            if (contractData && contractData.native && contractData.native.notionalValue !== undefined) {
+            if (contractData && contractData.native && contractData.native.notionalValue !== undefined && contractInfo.inverse==true) {
                 const notionalValue = contractData.native.notionalValue;
                 return notionalValue;
-            } else {
-                console.error(`Notional value not found for contractId: ${contractId}`);
-                return 0; // or any default value
+            } else if(contractInfo.native.inverse==false && contractInfo.native.native==false) {
+                const latestPrice = await OracleRegistry.getOracleData(contractData.native.oracleId);
+                return latestPrice.price*contractData.native.notonalValue; // or any default value
+            } else if(contractInfo.native.inverse==true && contractInfo.native.native==false){
+                const latestPrice = await OracleRegistry.getOracleData(contractData.native.oracleId);
+                return 1/latestPrice.price*contractData.native.notonalValue; // or any default value
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);

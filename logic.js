@@ -409,7 +409,7 @@ const Logic = {
             await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
             const key = '0-'+propertyId
-            await VolumeIndex.saveVolumeDataById(key,utxoAmount,price,block)
+            await VolumeIndex.saveVolumeDataById(key,utxoAmount,price,block,'UTXO')
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {
@@ -743,7 +743,7 @@ const Logic = {
         matches.push(match)
 	    // Trade the contract within a channel
         await orderbook.processContractMatches(matches,block,true)
-        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block)
+        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block,'contract')
 
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
 	},
@@ -800,7 +800,7 @@ const Logic = {
 		    // Update balances in the channel columns and commitment addresses
         console.log('about to process token match in channel '+JSON.stringify(matches),block)
 		await orderbook.processTokenMatches(matches, block, txid,true)
-        await VolumeIndex.saveVolumeDataById(key,{amountOffered,amountDesired},tradePrice,block)
+        await VolumeIndex.saveVolumeDataById(key,{amountOffered,amountDesired},tradePrice,block,'token')
 
 		    return `Trade executed in channel ${channelAddress}`;
 	},
