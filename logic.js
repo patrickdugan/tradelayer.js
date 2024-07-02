@@ -410,6 +410,29 @@ const Logic = {
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
             const key = '0-'+propertyId
             await VolumeIndex.saveVolumeDataById(key,utxoAmount,price,block,'UTXO')
+            const clearlistManager = new ClearlistManager();
+
+            const isListedA = await clearlistManager.isAddressInClearlist(2, senderAddress);
+            const isListedB = await clearlistManager.isAddressInClearlist(2, receiverAddress)
+
+             const isTokenListed = await clearlistManager.isAddressInClearlist(1, address);
+            const  = await Orderbook.evaluateBasicLiquidityReward(,true,false)
+                
+                if(isTokenListed){
+                        const liqRewardBaseline1= VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
+                        const liqRewardBaseline2= VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
+                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                }
+                if(isListedA){
+                    const liqReward1= VolumeIndex.calculateLiquidityReward(satsReceived,0)    
+                    TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
+                }
+                if(isListedB){
+                    const liqReward2= VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
+                    TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
+
+                }
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {

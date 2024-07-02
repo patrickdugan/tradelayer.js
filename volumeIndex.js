@@ -25,7 +25,7 @@ class VolumeIndex {
         );
 
         // Update global cumulative volume variables
-        this.updateCumulativeVolumes(volume, type,id);
+        await updateCumulativeVolumes(volume, type,id);
     }
 
        static async updateCumulativeVolumes(volume, type, id) {
@@ -50,6 +50,18 @@ class VolumeIndex {
             this.globalCumulativeVolume += volume;
         }
         // Assuming volume is in LTC
+        await db.getDatabase('volumeIndex').updateAsync(
+            { _id: 'ltcPairCumulativeVolume' },
+            { value: this.ltcPairTotalVolume },
+            { upsert: true }
+        );
+
+        await db.getDatabase('volumeIndex').updateAsync(
+            { _id: 'globalCumulativeVolume' },
+            { value: this.globalCumulativeVolume },
+            { upsert: true }
+        );
+        return
     }
 
     static async getTokenPriceInLTC(tokenId) {
@@ -64,15 +76,43 @@ class VolumeIndex {
         return 0.001; // Minimum price
     }
 
-    static getCumulativeVolumes() {
-        // Return an object containing the global cumulative volume data
+    static async getCumulativeVolumes() {
+        // Check if globalCumulativeVolume and ltcPairTotalVolume are defined and not zero
+        if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {
+            // Fetch globalCumulativeVolume from the database
+            try {
+                const globalCumulativeVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'globalCumulativeVolume' });
+                if (globalCumulativeVolumeFromDB) {
+                    this.globalCumulativeVolume = globalCumulativeVolumeFromDB.value;
+                }
+            } catch (error) {
+                console.error('Error fetching global cumulative volume:', error);
+                // Handle or log the error as needed
+            }
+        }
+
+        if (!this.ltcPairTotalVolume || this.ltcPairTotalVolume === 0) {
+            // Fetch ltcPairTotalVolume from the database
+            try {
+                const ltcPairTotalVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'ltcPairCumulativeVolume' });
+                if (ltcPairTotalVolumeFromDB) {
+                    this.ltcPairTotalVolume = ltcPairTotalVolumeFromDB.value;
+                }
+            } catch (error) {
+                console.error('Error fetching LTC pair total volume:', error);
+                // Handle or log the error as needed
+            }
+        }
+
+        // Return an object containing the cumulative volume data
         return {
             globalCumulativeVolume: this.globalCumulativeVolume,
-            // Add other cumulative volume variables here if needed
             ltcPairTotalVolume: this.ltcPairTotalVolume,
             contractCumulativeVolumes: this.contractCumulativeVolumes
+            // Add other cumulative volume variables here if needed
         };
     }
+
 
 
     static async getVolumeDataById(id) {
@@ -100,7 +140,7 @@ class VolumeIndex {
 
     static async saveCumulativeVolume(id1, id2, cumulativeVolume) {
         const id = `cumulative-${id1}-${id2}`;
-        await this.saveVolumeDataById(id, null, cumulativeVolume);
+        await saveVolumeDataById(id, null, cumulativeVolume);
     }
 
     static async auditVWAP(blockHeight) {
@@ -161,9 +201,111 @@ class VolumeIndex {
         return vwap;
     }
 
-    static async saveVWAP(blockHeight, vwap) {
-        await this.saveVolumeDataById(`vwap-${blockHeight}`, blockHeight, vwap);
+    static async saveVWAP(id, blockHeight, vwap) {
+        await db.getDatabase('volumeIndex').updateAsync(
+            { _id: 'vwap-'+id },
+            { value: { blockHeight:blockHeight, volume: volume, price:price } },
+            { upsert: true }
+        );
     }
+
+    static calculateLiquidityReward(tradeVolume, token) {
+
+        if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {
+            const blob = await getCumulativeVolumes; // Assuming this function fetches or initializes globalCumulativeVolume
+            this.globalCumulativeVolume=blob.globalCumulativeVolume
+        }
+        
+        if(token!=0){
+            const tokenPriceInLTC = await this.getTokenPriceInLTC(token);
+        }
+
+        tradeVolume=tradeVolume*tokenPriceInLTC
+        const totalVolume = this.globalCumulativeVolume - tradeVolume;
+        
+        // Calculate logarithmic value
+        const logVolume = Math.log10(totalVolume / 1e9); // Log base 10 with cap at 1 billion LTC
+
+        // Calculate liquidity reward based on log value
+        let liquidityReward = 0;
+        if (logVolume > 0) {
+            liquidityReward = logVolume * 3e6 / 3; // Adjust 3e6 for percentage calculation
+        }
+
+        return liquidityReward;
+    }
+
+    static async baselineLiquidityReward(tradeVolume, fee, token) {
+        const totalVolume = this.globalCumulativeVolume - tradeVolume;
+        if(token!=0){
+
+            // Step 1: Get LTC price of the token in question
+            const tokenPriceInLTC = await this.getTokenPriceInLTC(token);
+
+            // Step 2: Get TL/LTC price (assuming TL is a specific token or currency)
+            const tlPriceInLTC = await this.getTLPriceInLTC();
+
+            // Step 3: Calculate fee in TL
+            const feeInTL = fee * tokenPriceInLTC * tlPriceInLTC;
+        }else{
+            const feeInTL= fee * tlPriceInLTC
+        }
+
+
+        // Calculate logarithmic value
+        const logVolume = Math.log10(totalVolume);
+
+        // Calculate liquidity reward based on log value and fee
+        let liquidityReward = 0;
+        if (logVolume > 0) {
+            const feeAdjustment = 1/logVolume; // Reducing by 10% per log 10
+            liquidityReward = feeInTL * feeAdjustment;
+        }
+        
+        return liquidityReward;
+    }
+
+    static async getTLPriceInLTC() {
+        // Attempt to fetch the VWAP price from the database
+        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `vwap-1` });
+        
+        if (vwapData && vwapData.value && vwapData.value.price) {
+            return vwapData.value.price;
+        }
+
+        // If VWAP price is not available, return a default low value
+        return 0.001; // Minimum price
+    }
+
+
+
+    static vestTokens(tradeVolume) {
+        // Calculate logarithmic value
+        const logVolume = Math.log10(this.globalCumulativeVolume / 1e9); // Log base 10 with cap at 100 billion LTC
+
+        // Tier 1 vesting tokens (1000 to 100,000,000 LTC)
+        let tier1Tokens = 0;
+        if (logVolume > 0) {
+            if (totalVolume >= 1000 && totalVolume <= 1e8) {
+                tier1Tokens = logVolume * 1e6; // Adjust 1e6 for tokens calculation
+            }
+        }
+
+        // Tier 2 vesting tokens (100,000,000 to 100 billion LTC)
+        let tier2Tokens = 0;
+        if (logVolume > 0) {
+            if (totalVolume > 1e8 && totalVolume <= 1e11) {
+                tier2Tokens = logVolume * 3e6; // Adjust 3e6 for tokens calculation
+            }
+        }
+
+        return {
+            tier1Tokens,
+            tier2Tokens
+        };
+    }
+
+
 }
 
 module.exports = VolumeIndex;

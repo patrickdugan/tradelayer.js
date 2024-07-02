@@ -328,9 +328,6 @@ class Orderbook {
                     continue;
                 }
 
-                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
-                var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
-
                 const sellOrderAddress = match.sellOrder.sender;
                 const buyOrderAddress = match.buyOrder.sender;
                 const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
@@ -460,10 +457,27 @@ class Orderbook {
                     VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
                 }
 
+                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
+                var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
+                
+                if(qualifiesBasicLiqReward){
+                        const liqRewardBaseline1= VolumeIndex.baselineLiquidityReward(match.amountOfTokenA,0.000025,match.sellOrder.offeredPropertyId)
+                        const liqRewardBaseline2= VolumeIndex.baselineLiquidityReward(match.amountOfTokenB,0.000025,match.buyOrder.desiredPropertyId)
+                        TallyMap.updateBalance(sellerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                        TallyMap.updateBalance(buyerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                }
+
+                if(qualifiesEnhancedLiqReward){
+                        const liqReward1= VolumeIndex.calculateLiquidityReward(match.amountOfTokenA,match.sellOrder.offeredPropertyId)
+                        const liqReward2= VolumeIndex.calculateLiquidityReward(match.amountOfTokenB,match.buyOrder.offeredPropertyId)
+                        TallyMap.updateBalance(sellerAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
+                        TallyMap.updateBalance(buyerAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
+                }
+
                 // Record the token trade
                 await this.recordTokenTrade(trade, blockHeight, txid);
 
-            }
+                }
         }    
 
         async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
@@ -624,7 +638,6 @@ class Orderbook {
         async evaluateBasicLiquidityReward(match, channel, contract) {
             var accepted = false
             const clearlistManager = new ClearlistManager();
-            const propertyManager = new PropertyManager();
             
             const contractOrPropertyIds = []
             if(!contract){
@@ -636,14 +649,14 @@ class Orderbook {
             
             if(contract){
                     for (const id of contractOrPropertyIds) {
-                        const contractData = await propertyManager.getContractData(id); // Assuming you have a similar method for contracts
+                        const contractData = await ContractRegistry.getContractData(id); // Assuming you have a similar method for contracts
                         if (contractData && contractData.issuerAddress) {
                             issuerAddresses.push(contractData.issuerAddress);
                         }
                     }
             }else{
                     for (const id of contractOrPropertyIds) {
-                    const propertyData = await propertyManager.getPropertyData(id);
+                    const propertyData = await PropertyManager.getPropertyData(id);
                     if (propertyData && propertyData.issuerAddress) {
                         issuerAddresses.push(propertyData.issuerAddress);
                     }
@@ -1059,7 +1072,19 @@ class Orderbook {
                      //see if the trade qualifies for increased Liquidity Reward
                     var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
                     var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
-                    
+                    if(qualifiesBasicLiqReward){
+                        var notionalTokens = notionalValue*trade.amount
+                        const liqRewardBaseline= VolumeIndex.baselineLiquidityReward(notionalTokens,0.000025,collateralPropertyId)
+                        TallyMap.updateBalance(match.sellOrder.sellerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                        TallyMap.updateBalance(match.buyOrder.buyerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                    }
+
+                    if(qualifiesEnhancedLiqReward){
+                        var notionalTokens = notionalValue*trade.amount
+                        const liqRewardBaseline= VolumeIndex.calculateLiquidityReward(notionalTokens)
+                        TallyMap.updateBalance(match.sellOrder.sellerAddress,3,liqRewardBaseline,0,0,0,'enhancedLiquidityReward')
+                        TallyMap.updateBalance(match.buyOrder.buyerAddress,3,liqRewardBaseline,0,0,0,'enhancedLiquidityReward')
+                    }
                     // Save the updated margin map
                     await marginMap.saveMarginMap(false);  
             }
