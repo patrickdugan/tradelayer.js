@@ -5,6 +5,7 @@ const util = require('util');
 const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 const AMMPool = require('./AMM.js')
+const VolumeIndex = require('./volumeIndex.js')
 
 class ContractRegistry {
     constructor() {

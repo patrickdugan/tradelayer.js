@@ -416,8 +416,7 @@ const Logic = {
             const isListedB = await clearlistManager.isAddressInClearlist(2, receiverAddress)
 
              const isTokenListed = await clearlistManager.isAddressInClearlist(1, address);
-            const  = await Orderbook.evaluateBasicLiquidityReward(,true,false)
-                
+                            
                 if(isTokenListed){
                         const liqRewardBaseline1= VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
                         const liqRewardBaseline2= VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
@@ -601,10 +600,6 @@ const Logic = {
                 const clearListManager = new ClearListManager();
 	            await registries.clearListManager.updateAdmin(entityId, newAdminAddress);
 	            break;
-            case 'clearList':
-                const clearListManager = new ClearListManager();
-                await registries.clearListManager.updateAdmin(entityId, newAdminAddress);
-                break;
 	        case 'oracle':
 	            await registries.oracleRegistry.updateAdmin(entityId, newAdminAddress);
 	            break;

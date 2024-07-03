@@ -42,6 +42,7 @@
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"CFjA5vaX3THL23Ft"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"Cil3s1zdNuatAKQ4"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"Ck0wOHOfDAW8QJm5"}
+{"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"DU8QMgsiesKSIMCS"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"DXTucq0ErKrOqyvx"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"Dz5YUCh5S2F55xQQ"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"E0XhhcMPi7bhxMX2"}
@@ -121,6 +122,7 @@
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"VIKZuwErGrv7PWg3"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"VaDTcZt8qInhZpJo"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"W1VC00TV7mN52wRI"}
+{"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"WJLgu1LgnzIH8Pur"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"WW8S6gDiO0dO1b3V"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"XAaPw4YSgZ8g2hhu"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"XBgHwtnHio1YxH73"}
@@ -148,6 +150,7 @@
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"dWvCe4yahEuLUh9O"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"eQcIhILMicEQgAHe"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"f0fxZ4tjR0AHXhHS"}
+{"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"fLJHGWGxlS5ofjE7"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"fk6zN44GVyRvjhxt"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"fsPGGM14MzD1bC5S"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"gHZ74pFGjibdJj4t"}
@@ -175,6 +178,7 @@
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"lh1sX7R5ciuc8Stb"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"m6bE1vJ3QPmeQkup"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"mBd48zOCiJxK994C"}
+{"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"mbnWcqhxsFzHjPy4"}
 {"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"mn51jYHnZzcF7mbI"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"n22h2q36P84dUu6X"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"nFIZObR0O2szCtwN"}
@@ -193,6 +197,7 @@
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"sfuMDCh6aq5nBiE2"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"sjAJhAUdMBLPGwpa"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"soq3IXlVkTtufjwZ"}
+{"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"tA8dM8gbiwJUIh13"}
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"tNfCxkCOZRa8DFRQ"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"tWjSUkvvMOaTEPwG"}
 {"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"tiD1i73W3ccxtJtQ"}
@@ -219,8 +224,3 @@
 {"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"zr68Ar8JgZSYAupO"}
 {"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"zrwhHCFmApcf6DBQ"}
 {"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"zvJXKZBQHDqbnrVf"}
-{"value":{"blockHeight":3100639,"volume":1,"price":43149},"_id":"DU8QMgsiesKSIMCS"}
-{"value":{"blockHeight":3123273,"volume":1,"price":42219},"_id":"fLJHGWGxlS5ofjE7"}
-{"value":{"blockHeight":3142027,"volume":1,"price":49344},"_id":"tA8dM8gbiwJUIh13"}
-{"value":{"blockHeight":3148140,"volume":{"amountOffered":100,"amountDesired":50},"price":{"s":1,"e":0,"c":[2]}},"_id":"mbnWcqhxsFzHjPy4"}
-{"value":{"blockHeight":3150848,"volume":1,"price":45000},"_id":"WJLgu1LgnzIH8Pur"}

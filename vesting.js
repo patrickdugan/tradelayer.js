@@ -49,7 +49,7 @@ class TradeLayerManager {
             insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
             
-            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, TLVESTReserve;
+            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, TLVESTReserve);
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
             
             const balances = await TallyMap.getAddressBalances(this.adminAddress)

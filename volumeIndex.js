@@ -4,6 +4,7 @@ const Litecoin = require('litecoin')
 const util = require('util')
 const Contracts = require('./contractRegistry.js')
 
+
 class VolumeIndex {
     constructor(db) {
         // Initialize data structures and database path
@@ -201,6 +202,44 @@ class VolumeIndex {
         return vwap;
     }
 
+
+    
+    static async getVwapData(propertyId1, propertyId2, trailingBlocks) {
+        try {
+         // Fetch the N most recent VWAP entries for the specified property pair
+            const vwapData = await db.getDatabase('volumeIndex').findAsync({
+                _id: { $regex: `^vwap-${propertyId1}-${propertyId2}-` }
+            }, {
+                sort: { blockHeight: -1 },  // Sort by blockHeight in descending order
+                limit: trailingBlocks      // Limit to the N most recent entries
+            });
+
+            // Calculate total volume and sum of (volume * price)
+            let totalVolume = 0;
+            let sumVolumeTimesPrice = 0;
+
+            for (const entry of vwapData) {
+                const price = entry.value.price;
+                const volume = entry.value.volume;
+
+                totalVolume += volume;
+                sumVolumeTimesPrice += volume * price;
+            }
+
+            // Avoid division by zero
+            if (totalVolume === 0) {
+                return null;
+            }
+
+            // Calculate VWAP
+            const vwap = sumVolumeTimesPrice / totalVolume;
+            return vwap;
+        } catch (error) {
+            console.error('Error fetching VWAP data:', error);
+            throw new Error('Failed to fetch VWAP data.');
+        }
+    }
+
     static async saveVWAP(id, blockHeight, vwap) {
         await db.getDatabase('volumeIndex').updateAsync(
             { _id: 'vwap-'+id },
@@ -209,7 +248,7 @@ class VolumeIndex {
         );
     }
 
-    static calculateLiquidityReward(tradeVolume, token) {
+    static async calculateLiquidityReward(tradeVolume, token) {
 
         if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {
             const blob = await getCumulativeVolumes; // Assuming this function fetches or initializes globalCumulativeVolume
