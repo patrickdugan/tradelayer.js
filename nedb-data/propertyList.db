@@ -1,0 +1,3 @@
+{"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"whitelistId\":0}]]"}
+{"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"whitelistId\":0}],[2,{\"ticker\":\"TLVEST\",\"totalInCirculation\":1250000,\"type\":4,\"whitelistId\":0}]]"}
+{"_id":"propertyIndex","value":"[[1,{\"ticker\":\"TL\",\"totalInCirculation\":1500000,\"type\":1,\"whitelistId\":0}],[2,{\"ticker\":\"TLVEST\",\"totalInCirculation\":1250000,\"type\":4,\"whitelistId\":0}],[3,{\"ticker\":\"TLVESTLIQ\",\"totalInCirculation\":0,\"type\":4,\"whitelistId\":0}]]"}

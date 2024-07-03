@@ -139,8 +139,8 @@ class PropertyManager {
 
         await new Promise((resolve, reject) => {
             db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
-                if (err) reject(err);
-                else resolve();
+                //if (err) reject(err);
+                /*else*/ resolve();
             });
         });
     }
@@ -213,6 +213,30 @@ class PropertyManager {
         // Save changes
         await this.save();
         console.log(`Redeemed ${amount} managed tokens from ${recipient} for property ${propertyId}.`);
+    }
+
+
+    // Add the getPropertyData function
+    static async getPropertyData(propertyId) {
+        try {
+            const propertyData = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+
+            if (propertyData && propertyData.value) {
+                const parsedData = JSON.parse(propertyData.value);
+                const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
+
+                if (propertyEntry) {
+                    return propertyEntry[1]; // Return the object stored at index 1 of the found entry
+                } else {
+                    return null; // Return null if propertyId is not found
+                }
+            } else {
+                return null; // Return null if no property data found in the database
+            }
+        } catch (error) {
+            console.error('Error fetching property data:', error);
+            return null; // Return null in case of any errors
+        }
     }
 
 

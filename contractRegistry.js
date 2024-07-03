@@ -309,10 +309,10 @@ class ContractRegistry {
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-        //console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
-        let inverse = contractInfo.native.inverse;
-        let notionalValue = contractInfo.native.notionalValue
-        let leverage = contractInfo.native.leverage
+        console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
+        let inverse = contractInfo.issuer.inverse;
+        let notionalValue = contractInfo.issuer.notionalValue
+        let leverage = contractInfo.issuer.leverage
         //console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
@@ -448,9 +448,9 @@ class ContractRegistry {
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
         } else {
             let info = await ContractRegistry.getContractInfo(contractId);
-            propertyId1 = info.native.native.onChainData[0];
-            propertyId2 = info.native.native.onChainData[1];
-            latestData = await volumeIndexDB.findOneAsync({ propertyId1: propertyId1, propertyId2: propertyId2 });
+            propertyId1 = info.issuer.onChainData[0];
+            propertyId2 = info.issuer.onChainData[1];
+            latestData = await VolumeIndex.get
         }
 
         // Filter data to get updates before the given blockHeight
@@ -488,14 +488,14 @@ class ContractRegistry {
     static async isOracleContract(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
-        return contractInfo && contractInfo.native.native === false;
+        return contractInfo && contractInfo.issuer.native === false;
     }
 
       // Determine a contract's oracle
     static async getOracleId(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
-        return contractInfo.native.underlyingOracleId;
+        return contractInfo.issuer.underlyingOracleId;
     }
 
     static async getLatestOracleData(oracleId){

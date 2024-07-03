@@ -140,7 +140,10 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
-            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const clearlistManager = new ClearListManager(); // Ensure the correct path
+            const propertyId = params.propertyIds
+            console.log(JSON.stringify(propertyData))
+            
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
             // Get recipient whitelist IDs from the attestation map
@@ -152,12 +155,12 @@ const Validity = {
                 
                 const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
-                    passes=true
+                    passesSend=true
                 }
             }
             if(!passesSend){
                 params.valid=false
-                params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
+                params.reason += `Sender address not whitelisted in clearlist`;
             }
 
             var passesReceive = false
@@ -172,7 +175,7 @@ const Validity = {
             }
             if(!passesReceive){
                     params.valid = false;
-                    params.reason += `Recipient address not whitelisted in clearlist ${whitelistId}; `;
+                    params.reason += `Recipient address not whitelisted in clearlist; `;
             }
 
             // Ensure both sender and recipient have at least one matching whitelist
@@ -261,7 +264,7 @@ const Validity = {
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
             
                     // Whitelist validation logic
-            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
             var passes = false
             for (const whitelistId of senderWhitelists) {
@@ -311,7 +314,7 @@ const Validity = {
             const propertyData1 = await PropertyList.getPropertyData(params.propertyIdDesired)
             const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
                     // Whitelist validation logic
-            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
             const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
 
@@ -544,7 +547,7 @@ const Validity = {
              const propertyData1 = await PropertyList.getPropertyData(params.id)
             const propertyData2 = await PropertyList.getPropertyData(params.id2)
                     // Whitelist validation logic
-            const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+            const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
             const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
 
@@ -670,7 +673,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
                 // Retrieve the oracle instance using its ID
-                const oracle = await OracleList.getOracleData(params.oracleId);
+                const oracle = await OracleList.getOracleInfo(params.oracleId);
                 if (!oracle) {
                     params.valid = false
                     params.reason += 'Oracle not found; ';
@@ -682,7 +685,7 @@ const Validity = {
         // 15: Close Oracle
         validateCloseOracle: async (sender, params, txid) => {
             params.reason = '';
-            params.valid = OracleRegistry.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleList.isAdmin(params.senderAddress, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
@@ -702,7 +705,7 @@ const Validity = {
 
             // Check if the underlyingOracleId exists or is null
             if (params.native === false) {
-                const validOracle = await OracleList.getOracleData(params.underlyingOracleId) !== null;
+                const validOracle = await OracleList.getOracleInfo(params.underlyingOracleId) !== null;
                 if (!validOracle) {
                     params.valid = false;
                     params.reason += "Invalid or missing underlying oracle ID. ";
@@ -849,8 +852,8 @@ const Validity = {
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
 
                 // Check if the sender has enough balance for the initial margin
-                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
-                const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin);
+                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin)
+                const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin);
                 if (hasSufficientBalance.hasSufficient==false) {
                     console.log('Insufficient balance for initial margin');
                     params.valid=false
@@ -871,7 +874,7 @@ const Validity = {
                 flipShort=params.amount-existingPosition.contracts
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
              }
-             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.native.collateralPropertyId, totalInitialMargin)
+             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin)
              if(hasSufficientBalance.hasSufficient==false){
                  let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                     .dividedBy(initialMarginPerContract)
@@ -881,15 +884,15 @@ const Validity = {
                 params.amount -= contractUndo;
              }
 
-            const collateralPropertyId = contractDetails.data.native.collateralPropertyId;
+            const collateralPropertyId = contractDetails.issuer.collateralPropertyId;
 
             // Get property data for the collateralPropertyId
-            const collateralPropertyData = await PropertyManager.getPropertyData(collateralPropertyId);
+            const collateralPropertyData = await PropertyList.getPropertyData(collateralPropertyId);
             if (collateralPropertyData == null || collateralPropertyData == undefined) {
                 params.valid = false;
                 params.reason += 'Collateral propertyId not found in Property List; ';
             }
-
+            const clearlistManager = new ClearListManager()
             // Extract whitelist IDs from the collateral property data
             const senderWhitelists = Array.isArray(collateralPropertyData.whitelistId) ? collateralPropertyData.whitelistId : [collateralPropertyData.whitelistId];
              // Check if the sender address is in the whitelists
@@ -934,7 +937,7 @@ const Validity = {
                 return params
             }
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
-            const collateralIdString = contractDetails.native.collateralPropertyId.toString()
+            const collateralIdString = contractDetails.issuer.collateralPropertyId.toString()
             const balanceA = channel.A[collateralIdString]
             const balanceB = channel.B[collateralIdString]
             console.log('checking our channel info is correct: A'+balanceA+' B '+balanceB+' commitAddrA '+commitAddressA+' commitAddrB '+commitAddressB)
@@ -1028,8 +1031,8 @@ const Validity = {
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
                 BFlipShort=true
              }
-             let tallyA = await TallyMap.getTally(commitAddressA,contractDetails.native.collateralPropertyId)
-             let tallyB = await TallyMap.getTally(commitAddressB,contractDetails.native.collateralPropertyId)
+             let tallyA = await TallyMap.getTally(commitAddressA,contractDetails.issuer.collateralPropertyId)
+             let tallyB = await TallyMap.getTally(commitAddressB,contractDetails.issuer.collateralPropertyId)
 
              if((balanceA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
                 ||(balanceA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
@@ -1149,8 +1152,8 @@ const Validity = {
         const clearlistManager = new ClearlistManager();
 
         // Get property data for both propertyIdOffered and propertyIdDesired
-        const propertyDataOffered = await PropertyManager.getPropertyData(params.propertyIdOffered);
-        const propertyDataDesired = await PropertyManager.getPropertyData(params.propertyIdDesired);
+        const propertyDataOffered = await PropertyList.getPropertyData(params.propertyIdOffered);
+        const propertyDataDesired = await PropertyList.getPropertyData(params.propertyIdDesired);
 
         if (propertyDataOffered == null || propertyDataDesired == null) {
             params.valid = false;
@@ -1363,7 +1366,7 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with linear contracts'
         }
-        if(contractInfo.native==false){
+        if(contractInfo.issuer.native==false){
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
         }

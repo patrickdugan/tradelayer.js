@@ -157,7 +157,7 @@ class MarginMap {
         }
     }
 
-    
+
 
     async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
         //console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
@@ -777,7 +777,7 @@ class MarginMap {
             const contractInfo = ContractsRegistry.getContractInfo(contract.id);
             if (contractInfo && contractInfo.indexPair) {
                 const [propertyId1, propertyId2] = contractInfo.indexPair;
-                marketPrice = await VolumeIndex.getVwapData(propertyId1, propertyId2);
+                marketPrice = await VolumeIndex.getVwapData(propertyId1, propertyId2,3);
             }
         } else {
             throw new Error(`Unknown contract type for contract ID: ${contract.id}`);

@@ -1,6 +1,7 @@
 const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
+const ClearListManager = require('./clearlist.js')
 
 class TradeLayerManager {
     static instance = null;
@@ -39,9 +40,9 @@ class TradeLayerManager {
             const TLInitialLiquidity = 250000;
             const TLVESTReserve = TLTotalAmount-amountToInsuranceFund-TLInitialLiquidity
             const propertyManager = PropertyManager.getInstance()
-            TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed');
-            TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting');
-            TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting')
+            TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed', 0);
+            TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting',0);
+            const TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting',0)
 
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
             var insuranceFund = new InsuranceFund(1,0,0.5)
@@ -55,7 +56,7 @@ class TradeLayerManager {
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
             //await initializeContractSeries()
-            await initializeClearlists()
+            await TradeLayerManager.initializeClearlists();
 
             // After initializing tokens, set the flag
             await TallyMap.setInitializationFlag();
@@ -84,16 +85,16 @@ class TradeLayerManager {
     }
 
      static async initializeClearlists() {
-        const ClearlistManager = require('./clearlistManager');
+        const clearlistManager = new ClearListManager();
 
         // Initialize issuer whitelist
-        const issuerClearlistId = await ClearlistManager.createClearlist({
+        const issuerClearlistId = await clearlistManager.createClearlist({
             adminAddress: this.adminAddress,
             name: 'Issuer Whitelist'
         });
 
         // Initialize market maker whitelist
-        const marketMakerClearlistId = await ClearlistManager.createClearlist({
+        const marketMakerClearlistId = await clearlistManager.createClearlist({
             adminAddress: this.adminAddress,
             name: 'Market Maker Whitelist'
         });
