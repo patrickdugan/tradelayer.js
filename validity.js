@@ -113,6 +113,7 @@ const Validity = {
             if(propertyData==null||propertyData==undefined){
                 params.valid = false
                 params.reason = 'propertyId not found in Property List'
+                return params
             }
 
             const TallyMap = require('./tally.js')
@@ -140,7 +141,14 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
+<<<<<<< Updated upstream
             const clearlistManager = require('./clearlistManager.js'); // Ensure the correct path
+=======
+            const clearlistManager = new ClearListManager(); // Ensure the correct path
+            const propertyId = params.propertyIds
+            console.log(JSON.stringify(propertyData))
+
+>>>>>>> Stashed changes
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
             // Get recipient whitelist IDs from the attestation map

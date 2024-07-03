@@ -1,0 +1,2 @@
+{"_id":"3-4","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":4,\"desiredPropertyId\":3,\"amountOffered\":1.7e-7,\"amountExpected\":1e-7,\"blockTime\":3091361,\"sender\":\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",\"stop\":false,\"post\":false,\"price\":1.7,\"isLiq\":false}]}"}
+{"_id":"3-4","value":"{\"buy\":[],\"sell\":[]}"}

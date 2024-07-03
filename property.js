@@ -136,7 +136,7 @@ class PropertyManager {
 
         const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
         const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
-
+        console.log('saving property index ' +propertyIndexData)
         await new Promise((resolve, reject) => {
             db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
                 if (err) reject(err);
