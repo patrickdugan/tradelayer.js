@@ -911,76 +911,77 @@ const Logic = {
 		    console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
 		},
 
-		exerciseDerivative(txParams,block) {
-		    const { contractId, exerciseType, propertyId, amount } = txParams;
+		exerciseDerivative(sender, txParams,block) {
+		    const { contractId, amount } = txParams;
 
-		    switch (exerciseType) {
-		        case 'deliverContract':
-		            this.deliverContract(contractId, propertyId, amount,block);
-		            break;
-		        case 'optionExercise':
-		            this.handleOptionExercise(contractId, propertyId, amount,block);
-		            break;
-		        default:
-		            throw new Error('Invalid exercise type');
-		    }
+            // Check if the contractId has more hyphens and contains 'P' or 'C'
+            const hyphenCount = (contractId.match(/-/g) || []).length;
+            const hasPOrC = /[PC]/.test(contractId);
+            const isOption = Boolean(hyphenCount >= 2 && hasPOrC);
+            const marginMap = MarginMap.getInstance(contractId)
+		    if(!isOption){
+		          this.deliverContract(sender, contractId, amount,block);
+		        }else if(isOption){
+                  this.handleOptionExercise(sender,contractId, amount,block);
+            }
 		},
 
-		deliverContract(contractId, propertyId, amount,block) {
-		    // Logic for contract delivery
-		    // This would involve transferring tokens from the contract to the exercising party
-		    // Eliminate the contract positions
 
-		    // Retrieve contract details and involved parties' balances
-		    // Assume existence of functions getContractDetails and getAddressBalance
-		    const contractDetails = this.getContractDetails(contractId);
-		    const senderBalance = this.getAddressBalance(contractDetails.senderAddress, propertyId);
-		    const receiverBalance = this.getAddressBalance(contractDetails.receiverAddress, propertyId);
+        deliverContract(contractId, amount,block) {
+            // Logic for contract delivery
+            // This would involve transferring tokens from the contract to the exercising party
+            // Eliminate the contract positions
 
-		    // Transfer tokens based on contract terms
-		    if (senderBalance >= amount) {
-		        this.updateBalance(contractDetails.senderAddress, propertyId, -amount, 0 ,0,0,'deliver');
-		        this.updateBalance(contractDetails.receiverAddress, propertyId, amount,0,0,0,'receiveExercise');
-		    } else {
-		        throw new Error('Insufficient balance for contract delivery');
-		    }
+            // Retrieve contract details and involved parties' balances
+            // Assume existence of functions getContractDetails and getAddressBalance
+            const contractDetails = ContractRegistry.getContractDetails(contractId);
+            const senderBalance = this.getAddressBalance(contractDetails.senderAddress, propertyId);
+            const receiverBalance = this.getAddressBalance(contractDetails.receiverAddress, propertyId);
 
-		    // Eliminate the contract
-		    this.removeContract(contractId);
-		},
+            // Transfer tokens based on contract terms
+            if (senderBalance >= amount) {
+                this.updateBalance(contractDetails.senderAddress, propertyId, -amount, 0 ,0,0,'deliver');
+                this.updateBalance(contractDetails.receiverAddress, propertyId, amount,0,0,0,'receiveExercise');
+            } else {
+                throw new Error('Insufficient balance for contract delivery');
+            }
 
-		handleOptionExercise(contractId, propertyId1, propertyId2, numberOfContracts, block) {
-		    // Logic for handling option exercise
-		    // Notional value of the contract is based on the strike price
-		    // Eliminate the contract positions
+            // Eliminate the contract
+            this.removeContract(contractId);
+        },
 
-		    // Retrieve contract details
-		    const contractDetails = this.getContractDetails(contractId);
-		    const strikePrice = contractDetails.strikePrice; // The strike price of the option
+        handleOptionExercise(contractId, propertyId1, propertyId2, numberOfContracts, block) {
+            // Logic for handling option exercise
+            // Notional value of the contract is based on the strike price
+            // Eliminate the contract positions
 
-		    // Calculate the notional value based on the strike price
-		    const notionalValue = numberOfContracts * strikePrice;
+            // Retrieve contract details
+            const contractDetails = this.getContractDetails(contractId);
+            const strikePrice = contractDetails.strikePrice; // The strike price of the option
 
-		    // Retrieve balances of involved parties
-		    const balanceProperty1 = this.getAddressBalance(contractDetails.holderAddress, propertyId1);
-		    const balanceProperty2 = this.getAddressBalance(contractDetails.writerAddress, propertyId2);
+            // Calculate the notional value based on the strike price
+            const notionalValue = numberOfContracts * strikePrice;
 
-		    // Execute the exchange if balances are sufficient
-		    if (balanceProperty1 >= notionalValue && balanceProperty2 >= numberOfContracts) {
-		        // Holder of the option (buyer) exercises the option
-		        this.updateBalance(contractDetails.holderAddress, propertyId1, -notionalValue);
-		        this.updateBalance(contractDetails.holderAddress, propertyId2, numberOfContracts);
+            // Retrieve balances of involved parties
+            const balanceProperty1 = this.getAddressBalance(contractDetails.holderAddress, propertyId1);
+            const balanceProperty2 = this.getAddressBalance(contractDetails.writerAddress, propertyId2);
 
-		        // Writer of the option (seller) fulfills the option
-		        this.updateBalance(contractDetails.writerAddress, propertyId1, notionalValue);
-		        this.updateBalance(contractDetails.writerAddress, propertyId2, -numberOfContracts);
-		    } else {
-		        throw new Error('Insufficient balance for option exercise');
-		    }
+            // Execute the exchange if balances are sufficient
+            if (balanceProperty1 >= notionalValue && balanceProperty2 >= numberOfContracts) {
+                // Holder of the option (buyer) exercises the option
+                this.updateBalance(contractDetails.holderAddress, propertyId1, -notionalValue);
+                this.updateBalance(contractDetails.holderAddress, propertyId2, numberOfContracts);
 
-		    // Eliminate the contract
-		    this.removeContract(contractId);
-		},
+                // Writer of the option (seller) fulfills the option
+                this.updateBalance(contractDetails.writerAddress, propertyId1, notionalValue);
+                this.updateBalance(contractDetails.writerAddress, propertyId2, -numberOfContracts);
+            } else {
+                throw new Error('Insufficient balance for option exercise');
+            }
+
+            // Eliminate the contract
+            this.removeContract(contractId);
+        },
 
 		async mintSynthetic(propertyId, contractId, amount,address, block) {
 		    // Check if it's the first instance of this synthetic token
