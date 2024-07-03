@@ -1361,7 +1361,7 @@ class Orderbook {
 
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
-                //console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
+                console.log('cancelling orders in cancelAll token orders '+JSON.stringify(order)+' '+reserveAmount)
                 await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
             }
 

@@ -262,7 +262,7 @@ class TallyMap {
         try {
             const db = dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
-
+            console.log('saving tallymap')
             // Use upsert option
             await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
             //console.log('TallyMap saved successfully.');

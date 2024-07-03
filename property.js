@@ -139,8 +139,8 @@ class PropertyManager {
 
         await new Promise((resolve, reject) => {
             db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
-                //if (err) reject(err);
-                /*else*/ resolve();
+                if (err) reject(err);
+                resolve();
             });
         });
     }

@@ -113,6 +113,7 @@ const Validity = {
             if(propertyData==null||propertyData==undefined){
                 params.valid = false
                 params.reason = 'propertyId not found in Property List'
+                return params
             }
 
             const TallyMap = require('./tally.js')
@@ -1149,7 +1150,7 @@ const Validity = {
             }
 
         // Whitelist validation logic
-        const clearlistManager = new ClearlistManager();
+        const clearlistManager = new ClearListManager();
 
         // Get property data for both propertyIdOffered and propertyIdDesired
         const propertyDataOffered = await PropertyList.getPropertyData(params.propertyIdOffered);
@@ -1179,7 +1180,7 @@ const Validity = {
         }
         if(!listed1){
             params.valid = false;
-            params.reason += `Commit address A not whitelisted in clearlist ${whitelistId} for property offered; `;
+            params.reason += `Commit address A not whitelisted in clearlist for property offered; `;
         }
 
         for (const whitelistId of whitelistsDesired) {
@@ -1192,7 +1193,7 @@ const Validity = {
         }
         if(!listed2){
             params.valid = false;
-            params.reason += `Commit address A not whitelisted in clearlist ${whitelistId} for property desired; `;
+            params.reason += `Commit address A not whitelisted in clearlist for property desired; `;
         }
 
         // Check whitelists for commitAddressB
@@ -1205,7 +1206,7 @@ const Validity = {
         }
         if(!listed3){
             params.valid = false;
-            params.reason += `Commit address B not whitelisted in clearlist ${whitelistId} for property offered; `;
+            params.reason += `Commit address B not whitelisted in clearlist for property offered; `;
         }
 
         for (const whitelistId of whitelistsDesired) {
@@ -1217,7 +1218,7 @@ const Validity = {
         }
         if(!listed4){
             params.valid = false;
-            params.reason += `Commit address B not whitelisted in clearlist ${whitelistId} for property desired; `;
+            params.reason += `Commit address B not whitelisted in clearlist for property desired; `;
         }
 
             return params;

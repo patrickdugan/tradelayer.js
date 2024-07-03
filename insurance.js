@@ -61,6 +61,7 @@ class InsuranceFund {
             hedgeRatio: this.hedgeRatio, // Use a colon here
             timestamp: new Date().toISOString()
         };
+        console.log('saving to insurance fund '+snapshot)
         await new Promise((resolve, reject) => {
             db.getDatabase('insurance').insert({ key: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
                 if (err) reject(err);

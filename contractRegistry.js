@@ -273,15 +273,15 @@ class ContractRegistry {
             const contractData = await this.getContractInfo(contractId);
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
-            if (contractData && contractData.native && contractData.native.notionalValue !== undefined && contractInfo.inverse==true) {
-                const notionalValue = contractData.native.notionalValue;
+            if (contractData && contractData.native && contractData.issuer.notionalValue !== undefined && contractInfo.inverse==true) {
+                const notionalValue = contractData.issuer.notionalValue;
                 return notionalValue;
-            } else if(contractInfo.native.inverse==false && contractInfo.native.native==false) {
-                const latestPrice = await OracleRegistry.getOracleData(contractData.native.oracleId);
-                return latestPrice.price*contractData.native.notonalValue; // or any default value
-            } else if(contractInfo.native.inverse==true && contractInfo.native.native==false){
-                const latestPrice = await OracleRegistry.getOracleData(contractData.native.oracleId);
-                return 1/latestPrice.price*contractData.native.notonalValue; // or any default value
+            } else if(contractInfo.issuer.inverse==false && contractInfo.issuer.native==false) {
+                const latestPrice = await OracleRegistry.getOracleData(contractData.issuer.oracleId);
+                return latestPrice.price*contractData.issuer.notonalValue; // or any default value
+            } else if(contractInfo.issuer.inverse==true && contractInfo.issuer.native==false){
+                const latestPrice = await OracleRegistry.getOracleData(contractData.issuer.oracleId);
+                return 1/latestPrice.price*contractData.issuer.notonalValue; // or any default value
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
@@ -353,10 +353,10 @@ class ContractRegistry {
         if (!contractInfo) {
             console.log(`Contract info not found for contract ID: ${contractId}`);
         }
-        //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.native.collateralPropertyId))
+        //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.issuer.collateralPropertyId))
         // Return the collateral property ID from the contract information
-        //console.log('returning collateral id '+contractInfo.native.collateralPropertyId+ ' type of '+typeof contractInfo.native.collateralPropertyId)
-        return contractInfo.native.collateralPropertyId;
+        //console.log('returning collateral id '+contractInfo.issuer.collateralPropertyId+ ' type of '+typeof contractInfo.issuer.collateralPropertyId)
+        return contractInfo.issuer.collateralPropertyId;
     }
 
         // In the contract order addition process
@@ -487,14 +487,14 @@ class ContractRegistry {
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
+        //console.log(contractInfo.issuer.native,Boolean(contractInfo.issuer.native===false))
         return contractInfo && contractInfo.issuer.native === false;
     }
 
       // Determine a contract's oracle
     static async getOracleId(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        //console.log(contractInfo.native.native,Boolean(contractInfo.native.native===false))
+        //console.log(contractInfo.issuer.native,Boolean(contractInfo.issuer.native===false))
         return contractInfo.issuer.underlyingOracleId;
     }
 
