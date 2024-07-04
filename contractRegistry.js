@@ -256,7 +256,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-        //console.log('retrieving db info for contract '+contractId)
+        console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {

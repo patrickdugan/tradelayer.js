@@ -323,7 +323,7 @@ const Validity = {
 
             const propertyData1 = await PropertyList.getPropertyData(params.propertyIdDesired)
             const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
-            
+
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
@@ -952,7 +952,14 @@ const Validity = {
                 params.reason = "Tx sender is not found to be a channel address"
                 return params
             }
+            console.log('contractid ' +params.contractId)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+            if(contractDetails==null){
+                params.valid=false
+                params.reason = "ContractId not found"
+                return params
+            }
+            console.log(JSON.stringify(contractDetails))
             const collateralIdString = contractDetails.issuer.collateralPropertyId.toString()
             const balanceA = channel.A[collateralIdString]
             const balanceB = channel.B[collateralIdString]
