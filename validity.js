@@ -142,9 +142,14 @@ const Validity = {
 
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
-            const propertyId = params.propertyIds
-            console.log(JSON.stringify(propertyData))
-            
+            let propertyIds = [];
+
+                if (Array.isArray(params.propertyIds)) {
+                    propertyIds = params.propertyIds;
+                } else if (Number.isInteger(params.propertyIds)) {
+                    propertyIds = [params.propertyIds];
+                }
+
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
             // Get recipient whitelist IDs from the attestation map
@@ -261,6 +266,10 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            if(params.propertyId==2||params.propertyId==3){
+                params.valid=false
+                params.reason="Cannot trade vesting tokens"
+            }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
             
@@ -299,7 +308,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
+            const isVEST= (parseInt(params.propertyIdDesired)==2||parseInt(params.propertyIdOffered)==2||parseInt(params.propertyIdDesired)==3||parseInt(params.propertyIdOffered)==3)
             if(isVEST){
                 params.valid =false
                 params.reason += "Vesting tokens cannot be traded"
@@ -314,6 +323,7 @@ const Validity = {
 
             const propertyData1 = await PropertyList.getPropertyData(params.propertyIdDesired)
             const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
+            
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
@@ -547,6 +557,11 @@ const Validity = {
 
              const propertyData1 = await PropertyList.getPropertyData(params.id)
             const propertyData2 = await PropertyList.getPropertyData(params.id2)
+
+             if(propertyData1==2||propertyData1==3||propertyData2==2||propertyData2==3){
+                params.valid=false
+                params.reason="Cannot trade vesting tokens"
+            }
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
@@ -728,7 +743,7 @@ const Validity = {
                 }
             }
 
-            const isVEST= (parseInt(params.collateralPropertyId)==2&&parseInt(params.notionalPropertyId)==2)
+            const isVEST= (parseInt(params.collateralPropertyId)==2&&parseInt(params.notionalPropertyId)==2||parseInt(params.collateralPropertyId)==3)
             if(isVEST){
                 params.valid =false
                 params.reason += "Vesting tokens cannot be used as collateral or hedged"
@@ -1105,7 +1120,7 @@ const Validity = {
                 return params
             }
 
-            const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2)
+            const isVEST= (parseInt(params.propertyId1)==2&&parseInt(params.propertyId2)==2||parseInt(params.propertyId1)==3&&parseInt(params.propertyId2)==4)
             if(isVEST){
                 params.valid =false
                 params.reason += "Vesting tokens cannot be traded"
