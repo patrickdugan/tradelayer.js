@@ -151,6 +151,7 @@ const Encode = {
             params.revoke,
             params.id,
             params.targetAddress,
+            params.metaData
         ];
         return payload.join(',');
     },

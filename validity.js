@@ -184,14 +184,6 @@ const Validity = {
                     params.reason += `Recipient address not whitelisted in clearlist; `;
             }
 
-            // Ensure both sender and recipient have at least one matching whitelist
-            /*const matchingWhitelists = senderWhitelists.filter(whitelistId => recipientWhitelists.includes(whitelistId));
-            console.log(propertyData.whitelistId)
-            if (matchingWhitelists.length === 0||propertyData.whitelistId!=0) {
-                params.valid = false;
-                params.reason += 'No matching whitelists between sender and recipient; ';
-            }*/
-
             return params
         },
 
@@ -282,10 +274,11 @@ const Validity = {
                 const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passes=true
+                    break
                 }
             }
 
-            if(passes){
+            if(!passes){
              params.valid = false;
                     params.reason += `Sender address not listed in clearlist for the token ${whitelistId}; `;
             }
@@ -335,9 +328,10 @@ const Validity = {
                 const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passes1 = true
+                    break
                 }
             }
-            if(passes1){
+            if(!passes1){
                     params.valid = false;
                     params.reason += `Sender address not listed in clearlist for offered token ${whitelistId}; `;
             }
@@ -348,9 +342,10 @@ const Validity = {
                 const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
                 if (recipientWhitelisted) {
                     passes2 = true
+                    break
                 }
             }
-            if(passes2){
+            if(!passes2){
                     params.valid = false;
                     params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
             }
@@ -533,6 +528,12 @@ const Validity = {
                     params.reason += `Sender ${sender} is not authorized to issue or revoke attestations for clearlist ${clearlistId}; `;
                 }
             }
+
+            if(sender!=params.targetAddress&&clearListId==0){
+                    params.valid = false;
+                    params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
+            }
+
 
             // Additional validation logic can be added here
 
@@ -921,7 +922,7 @@ const Validity = {
                     break; // No need to check further if one fails
                 }
             }
-            if(listed){
+            if(!listed){
                 params.valid = false;
                 params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
             }

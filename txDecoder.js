@@ -165,7 +165,8 @@ const Decode = {
         return {
             revoke: parts[0]===1,
             id: parseInt(parts[1],36),
-            targetAddress: parts[3]
+            targetAddress: parts[3],
+            metaData: parts[4]
         };
     },
 
