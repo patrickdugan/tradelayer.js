@@ -3,10 +3,17 @@ const TxUtils = require('./TxUtils'); // Import your TxUtils class
 async function runTestTokenTrades() {
     // Define some sample data for testing
     const testAdminAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; // Replace with actual admin address
+    const counterparty = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr'
+function randomNumber(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+var random = randomNumber(10,100)
+var random2 = randomNumber(5,50)
 
     // Sample data for token trades
     const trades = [
-        { offeredPropertyId: 5, desiredPropertyId: 4, amountOffered: 25, amountExpected: 53 }
+        { offeredPropertyId: 4, desiredPropertyId: 5, amountOffered: random, amountExpected: random2}
     ];
 
     // Iterate over each trade and create a transaction
@@ -14,7 +21,7 @@ async function runTestTokenTrades() {
         try {
             console.log(`Creating trade: Offered Property ID ${trade.offeredPropertyId}, Desired Property ID ${trade.desiredPropertyId}`);
             const txId = await TxUtils.tokenTradeTransaction(
-                testAdminAddress,
+                counterparty,
                 trade.offeredPropertyId,
                 trade.desiredPropertyId,
                 trade.amountOffered,
