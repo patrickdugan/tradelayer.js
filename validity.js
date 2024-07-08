@@ -185,11 +185,12 @@ const Validity = {
             }
 
             // Ensure both sender and recipient have at least one matching whitelist
-            const matchingWhitelists = senderWhitelists.filter(whitelistId => recipientWhitelists.includes(whitelistId));
+            /*const matchingWhitelists = senderWhitelists.filter(whitelistId => recipientWhitelists.includes(whitelistId));
+            console.log(propertyData.whitelistId)
             if (matchingWhitelists.length === 0||propertyData.whitelistId!=0) {
                 params.valid = false;
                 params.reason += 'No matching whitelists between sender and recipient; ';
-            }
+            }*/
 
             return params
         },

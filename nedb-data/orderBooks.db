@@ -1,1 +1,5 @@
 {"_id":"3-4"}
+{"_id":"3-4"}
+{"_id":"4-5","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":5,\"desiredPropertyId\":4,\"amountOffered\":87,\"amountExpected\":28,\"blockTime\":3343551,\"sender\":\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",\"stop\":false,\"post\":false,\"price\":3.10714286,\"isLiq\":false}]}"}
+{"_id":"4-5","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":5,\"desiredPropertyId\":4,\"amountOffered\":26,\"amountExpected\":47,\"blockTime\":3343551,\"sender\":\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",\"stop\":false,\"post\":false,\"price\":0.55319149,\"isLiq\":false}]}"}
+{"_id":"4-5","value":"{\"buy\":[],\"sell\":[{\"offeredPropertyId\":5,\"desiredPropertyId\":4,\"amountOffered\":38,\"amountExpected\":11,\"blockTime\":3343551,\"sender\":\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",\"stop\":false,\"post\":false,\"price\":3.45454545,\"isLiq\":false}]}"}
