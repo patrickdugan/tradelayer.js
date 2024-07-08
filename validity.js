@@ -164,7 +164,7 @@ const Validity = {
                     passesSend=true
                 }
             }
-            if(!passesSend){
+            if(!passesSend&&propertyData.whitelistId!=0){
                 params.valid=false
                 params.reason += `Sender address not whitelisted in clearlist`;
             }
@@ -179,7 +179,7 @@ const Validity = {
                     break; // No need to check further if one fails
                 }
             }
-            if(!passesReceive){
+            if(!passesReceive&&propertyData.whitelistId!=0){
                     params.valid = false;
                     params.reason += `Recipient address not whitelisted in clearlist; `;
             }
@@ -522,10 +522,10 @@ const Validity = {
             // Assuming clearlistManager or an equivalent instance is available
             const clearlist = await clearlistManager.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
 
-            if (!clearlist) {
+            if (!clearlist&&clearlistId!=0) {
                 params.valid = false;
                 params.reason += `Clearlist with ID ${clearlistId} not found; `;
-            } else {
+            } else if(clearlistID!=0){
                 // Check if the sender matches the admin address of the clearlist
                 if (sender !== clearlist.adminAddress) {
                     params.valid = false;

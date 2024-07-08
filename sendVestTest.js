@@ -21,8 +21,8 @@ function randomNumber(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-var random = randomNumber(100,200)
+var random = randomNumber(10000,20000)
 
-    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l',3,random,null)
-//tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz
+    TxUtils.sendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8','tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz',4,random,null)
 //
+//tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
