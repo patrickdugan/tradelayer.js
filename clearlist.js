@@ -64,6 +64,7 @@ class clearlistManager {
 
     async getNextId() {
         let maxId = 0;
+        await this.loadClearlists()
         for (const key of this.clearlists.keys()) {
             const currentId = parseInt(key);
             if (currentId > maxId) {

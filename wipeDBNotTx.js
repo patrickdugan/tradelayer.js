@@ -37,7 +37,7 @@ const withdrawalQueueDbPath = path.join(__dirname, 'nedb-data','withdrawalQueue.
 const liquidationsDbPath = path.join(__dirname, 'Nedb-data','liquidations.db')
 const feeCacheDbPath = path.join(__dirname, 'Nedb-data','feeCache.db')
 const volumeIndexDbPath = path.join(__dirname, 'Nedb-data','volumeIndex.db')
-const clearListDbPath = path.join(__dirname, 'Nedb-data','clearList.db')
+const clearListDbPath = path.join(__dirname, 'Nedb-data','clearLists.db')
 const attestationsDbPath = path.join(__dirname, 'Nedb-data','attestations.db')
 
 
@@ -60,5 +60,5 @@ clearDatastore(withdrawalQueueDbPath, 'withdrawalQueue')
 clearDatastore(liquidationsDbPath, 'liquidations')
 clearDatastore(feeCacheDbPath, 'feeCache')
 clearDatastore(volumeIndexDbPath, 'volumeIndex')
-clearDatastore(clearListDbPath,'clearList')
+clearDatastore(clearListDbPath,'clearLists')
 clearDatastore(attestationsDbPath,'attestations')

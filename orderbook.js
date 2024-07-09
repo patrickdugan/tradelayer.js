@@ -29,7 +29,7 @@ class Orderbook {
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
                 }else{
 
                 }
@@ -453,7 +453,7 @@ class Orderbook {
                 };
                 if(channel==false){
                     const key = this.normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-                    
+
                     console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
                     VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
                 }
