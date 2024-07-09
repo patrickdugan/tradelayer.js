@@ -278,9 +278,9 @@ const Validity = {
                 }
             }
 
-            if(!passes){
+            if(!passes&&propertyData.whitelistId!=0){
              params.valid = false;
-                    params.reason += `Sender address not listed in clearlist for the token ${whitelistId}; `;
+                    params.reason += `Sender address not listed in clearlist for the token`;
             }
 
             return params;
@@ -331,9 +331,9 @@ const Validity = {
                     break
                 }
             }
-            if(!passes1){
+            if(!passes1&&propertyData1.whitelistId!=0&&propertyData2.whitelistId!=0){
                     params.valid = false;
-                    params.reason += `Sender address not listed in clearlist for offered token ${whitelistId}; `;
+                    params.reason += `Sender address not listed in clearlist for offered token `;
             }
              
             var passes2 = false
@@ -345,9 +345,9 @@ const Validity = {
                     break
                 }
             }
-            if(!passes2){
+            if(!passes2&&propertyData1.whitelistId!=0&&propertyData2.whitelistId!=0){
                     params.valid = false;
-                    params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
+                    params.reason += `Trader address not listed in clearlist `;
             }
 
             return params;

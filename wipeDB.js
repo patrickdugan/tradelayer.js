@@ -37,6 +37,7 @@ const channelsDbPath = path.join(__dirname, 'nedb-data','channels.db')
 const withdrawalQueueDbPath = path.join(__dirname, 'nedb-data','withdrawalQueue.db')
 const liquidationsDbPath = path.join(__dirname, 'Nedb-data','liquidations.db')
 const feeCacheDbPath = path.join(__dirname, 'Nedb-data','feeCache.db')
+const volumeIndexDbPath = path.join(__dirname, 'Nedb-data','volumeIndex.db')
 
 // Clear entries from each database
 clearDatastore(txIndexDbPath, 'txIndex');
@@ -57,3 +58,4 @@ clearDatastore(channelsDbPath, 'channels')
 clearDatastore(withdrawalQueueDbPath, 'withdrawalQueue')
 clearDatastore(liquidationsDbPath, 'liquidations')
 clearDatastore(feeCacheDbPath, 'feeCache')
+clearDatastore(volumeIndexDbPath, 'volumeIndex')

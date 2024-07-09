@@ -17,7 +17,7 @@ class clearlistManager {
             backupAddress
         };
 
-      await this.db.update(
+      await this.db.updateAsync(
             { _id: clearlistId },
             { $set: { data: clearlistData } },
             { upsert: true }

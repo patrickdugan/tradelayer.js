@@ -452,8 +452,9 @@ class Orderbook {
                     // other relevant trade details...
                 };
                 if(channel==false){
-                    console.log('checking match before volume index save ' +JSON.stringify(match))
                     const key = this.normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
+                    
+                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
                     VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
                 }
 
