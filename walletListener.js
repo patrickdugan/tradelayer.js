@@ -195,8 +195,7 @@ app.post('/tl_getorderbook', async (req, res) => {
         const { propertyId1, propertyId2 } = req.body;
         const orderBookKey = `${propertyId1}-${propertyId2}`;
         const orderbook = new Orderbook(orderBookKey);
-        await orderbook.loadOrCreateOrderBook();
-        const orderBookData = orderbook.orderBooks[orderBookKey] || {};
+        const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);
     } catch (error) {
         console.error('Error fetching order book:', error);

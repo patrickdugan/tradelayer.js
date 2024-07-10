@@ -109,10 +109,10 @@ app.post('/getContractOrderBook', async (req, res) => {
 
         // Instantiate your Orderbook class with the specific contractId
         const orderbook = new Orderbook(orderBookKey);
-        await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
+         // Load or create the specific order book
 
         // Retrieve the specific order book data
-        const orderBookData = orderbook.getOrderBookData();
+        const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);
     } catch (error) {
         console.error('Error fetching contract order book:', error);

@@ -5,22 +5,23 @@ const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
 const VolumeIndex= require('./volumeIndex.js')
 const Channels = require('./channels.js')
+const ClearlistManager = require('./clearlist.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
             this.tickSize = tickSize;
             this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
             this.orderBooks = {};
-            this.loadOrCreateOrderBook(); // Load or create an order book based on the orderBookKey
+            //this.loadOrderBook(); // Load or create an order book based on the orderBookKey
         }
          // Static async method to get an instance of Orderbook
         static async getOrderbookInstance(orderBookKey) {
             const orderbook = new Orderbook(orderBookKey);
-            await orderbook.loadOrCreateOrderBook(orderBookKey); // Load or create the order book
+            this.orderBooks= await orderbook.loadOrderBook(orderBookKey); // Load or create the order book
             return orderbook;
         }
 
-         async loadOrCreateOrderBook(key, flag) {
+         async loadOrderBook(key, flag) {
             //console.log('key before the string treatment '+key)
             const stringKey = typeof key === 'string' ? key : String(key);
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
@@ -30,8 +31,9 @@ class Orderbook {
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
                     console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    return orderBookData.value
                 }else{
-
+                    return {buy:[],sell:[]}
                 }
             }   catch (error) {
                  console.error('Error loading or parsing order book data:', error);
@@ -46,18 +48,14 @@ class Orderbook {
             }*/
         }
 
-        async saveOrderBook(key) {
-            // Save order book to your database
-            //console.log('saving book ' + JSON.stringify(key) + ' ' + JSON.stringify(this.orderBooks[key]))
-            
+        async saveOrderBook(orderbookData, key) {
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
                 { _id: key },
-                { _id: key, value: JSON.stringify(this.orderBooks[key]) },
+                { _id: key, value: JSON.stringify(orderbookData) },
                 { upsert: true }
             );
         }
-
                 // Record a token trade with specific key identifiers
         async recordTokenTrade(trade, blockHeight, txid) {
             const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
@@ -157,33 +155,33 @@ class Orderbook {
             // Determine the correct orderbook key
             const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
             //console.log('Normalized Order Book Key:', normalizedOrderBookKey);
-
+           
             // Create an instance of Orderbook for the pair and load its data
             const orderbook = new Orderbook(normalizedOrderBookKey);
-            await orderbook.loadOrCreateOrderBook(this.orderBookKey);
-
+            var orderbookData = await orderbook.loadOrderBook(normalizedOrderBookKey);
+            console.log('loaded orderbook' +JSON.stringify(orderbookData))
             // Calculate the price for the order and round to the nearest tick interval
             const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
             //console.log('Calculated Price:', calculatedPrice);
             order.price = calculatedPrice; // Append the calculated price to the order object
 
             // Determine if the order is a sell order
-            const isSellOrder = order.offeredPropertyId < order.desiredPropertyId;
+            const isSellOrder = Boolean(order.offeredPropertyId < order.desiredPropertyId);
 
             // Add the order to the orderbook
-            const orderConfirmation = await orderbook.insertOrder(order, normalizedOrderBookKey, isSellOrder);
-            //console.log('Order Insertion Confirmation:', orderConfirmation);
+            orderbookData = await orderbook.insertOrder(order, orderbookData, isSellOrder);
+            console.log('Order Insertion Confirmation:', orderbookData);
 
             // Match orders in the orderbook
-            const matchResult = await orderbook.matchTokenOrders(normalizedOrderBookKey);
+            const matchResult = await orderbook.matchTokenOrders(orderbookData);
             if (matchResult.matches && matchResult.matches.length > 0) {
                 //console.log('Match Result:', matchResult);
                 await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
             }else{console.log('No Matches for ' +txid)}
             //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
-
+            console.log('getting ready to save orderbook update '+JSON.stringify(matchResult.orderBook))
             // Save the updated orderbook back to the database
-            await orderbook.saveOrderBook(normalizedOrderBookKey);
+            await orderbook.saveOrderBook(matchResult.orderBook,normalizedOrderBookKey);
 
             return matchResult;
         }
@@ -193,28 +191,87 @@ class Orderbook {
             return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
         }
 
-        async insertOrder(order, orderBookKey, isBuyOrder, isLiq) {
-            if (!this.orderBooks[orderBookKey]) {
-                this.orderBooks[orderBookKey] = { buy: [], sell: [] };
-            }
-            if(order.sender=='feeCache'){
-                console.log('inserting fee order '+JSON.stringify(order))
-            }
-            if(isLiq==true){
-                order.isLiq=true
-            }else if(isLiq==undefined||isLiq==false){
-                order.isLiq=false
-            }
-            const side = isBuyOrder ? 'buy' : 'sell';
-            const bookSide = this.orderBooks[orderBookKey][side];
+       async insertOrder(order, orderbookData, isSellOrder) {
 
+            if (typeof orderbookData === 'string') {
+                try {
+                    orderbookData = JSON.parse(orderbookData);
+                } catch (e) {
+                    console.error('Failed to parse orderbook data:', orderbookData);
+                    return; // Exit if parsing fails to prevent further issues
+                }
+            }
+
+            if (!this.isValidOrderbook(orderbookData)) {
+                console.error('Invalid orderbook data:', JSON.stringify(orderbookData));
+                return orderbookData; // Return early to avoid corrupting the orderbook
+            }
+            if (!orderbookData) {
+                orderbookData = { buy: [], sell: [] };
+            }
+
+            // Log the current state for debugging
+            console.log('Order:', JSON.stringify(order));
+            console.log('Orderbook data before:', JSON.stringify(orderbookData));
+            console.log('Is sell order:', isSellOrder);
+
+            // Determine the side of the order
+            const side = isSellOrder ? 'sell' : 'buy';
+            let bookSide = orderbookData[side];
+
+            // Ensure bookSide is initialized if undefined
+            if (!bookSide) {
+                bookSide = [];
+            }
+
+            // Log the state of bookSide for debugging
+            console.log('Book side before:', JSON.stringify(bookSide));
+
+            // Find the appropriate index to insert the new order
             const index = bookSide.findIndex((o) => o.time > order.time);
             if (index === -1) {
-                bookSide.push(order);
+                bookSide.push(order); // Append to the end if no larger time is found
             } else {
-                bookSide.splice(index, 0, order);
+                bookSide.splice(index, 0, order); // Insert at the found index
             }
-            return `Order added to ${side} side of book ${orderBookKey}`;
+
+            // Reintegrate bookSide back into orderbookData correctly
+            orderbookData[side] = bookSide;
+
+            // Log the updated orderbookData for debugging
+            console.log('Updated orderbook data:', JSON.stringify(orderbookData));
+
+            return orderbookData;
+        }
+
+        isValidOrderbook(data) {
+            if (typeof data !== 'object' || data === null) return false;
+
+            const hasBuySell = data.hasOwnProperty('buy') && data.hasOwnProperty('sell');
+            const isValidBuyArray = Array.isArray(data.buy) && data.buy.every(this.isValidOrder);
+            const isValidSellArray = Array.isArray(data.sell) && data.sell.every(this.isValidOrder);
+
+            return hasBuySell && isValidBuyArray && isValidSellArray;
+        }
+
+        isValidOrder(order) {
+            const hasRequiredFields = order.hasOwnProperty('offeredPropertyId') &&
+                order.hasOwnProperty('desiredPropertyId') &&
+                order.hasOwnProperty('amountOffered') &&
+                order.hasOwnProperty('amountExpected') &&
+                order.hasOwnProperty('blockTime') &&
+                order.hasOwnProperty('sender') &&
+                order.hasOwnProperty('price');
+
+            const hasValidTypes = typeof order.offeredPropertyId === 'number' &&
+                typeof order.desiredPropertyId === 'number' &&
+                typeof order.amountOffered === 'number' &&
+                typeof order.amountExpected === 'number' &&
+                typeof order.blockTime === 'number' &&
+                typeof order.sender === 'string' &&
+                typeof order.price === 'number';
+
+            return hasRequiredFields && hasValidTypes;
         }
 
         calculatePrice(amountOffered, amountExpected) {
@@ -223,94 +280,121 @@ class Orderbook {
             return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
         }
 
-        async matchTokenOrders(orderBookKey) {
+        async matchTokenOrders(orderbookData) {
+            if (!orderbookData) {
+                return { orderBook: { buy: [], sell: [] }, matches: [] }; // Return empty matches
+            }
 
-                const orderBook = this.orderBooks[orderBookKey];
-                if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-                    return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches
+            // Make a deep copy of the orderbookData to avoid unintended mutations
+            let orderBookCopy = JSON.parse(JSON.stringify(orderbookData));
+
+            let matches = [];
+
+            // Sort buy and sell orders
+            orderBookCopy.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime); // Highest price first
+            orderBookCopy.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime); // Lowest price first
+
+            console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
+
+            // Match orders
+            while (orderBookCopy.sell.length > 0 && orderBookCopy.buy.length > 0) {
+                let sellOrder = orderBookCopy.sell[0];
+                let buyOrder = orderBookCopy.buy[0];
+
+                // Skip self-trades
+                if (sellOrder.sender === buyOrder.sender) {
+                    console.log('Skipping self-trade for sender:', sellOrder.sender);
+                    orderBookCopy.sell.shift();
+                    continue; // Skip this trade
                 }
 
-                let matches = [];
-                let matchOccurred = false;
+                // Ensure matching distinct property IDs
+                if (sellOrder.offeredPropertyId === buyOrder.desiredPropertyId && sellOrder.desiredPropertyId === buyOrder.offeredPropertyId) {
+                    let tradePrice;
+                    let bumpTrade = false;
+                    let post = false;
 
-                // Sort buy and sell orders
-                orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
-                orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
-
-                // Match orders
-                while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
-                    let sellOrder = orderBook.sell[0];
-                    let buyOrder = orderBook.buy[0];
-
-                    let tradePrice 
-                    let bumpTrade = false
-                    let post = false
-                    if(sellOrder.blockTime == buyOrder.blockTime){
-                        console.log('trades in the same block, defaulting to buy order')
-                        tradePrice = buyOrder.price
-                        if(sellOrder.post){
-                            tradePrice = sellOrder.price
-                            post = true
-                        }else if(buyOrder.post){
-                            tradePrice = buyOrder.price
-                            post = true
+                    // Handle trades in the same block
+                    if (sellOrder.blockTime === buyOrder.blockTime) {
+                        console.log('trades in the same block, defaulting to buy order');
+                        tradePrice = buyOrder.price;
+                        if (sellOrder.post) {
+                            tradePrice = sellOrder.price;
+                            post = true;
+                        } else if (buyOrder.post) {
+                            tradePrice = buyOrder.price;
+                            post = true;
                         }
-                    }else{
+                    } else {
                         tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
-                        if(sellOrder.blockTime < buyOrder.blockTime&&buyOrder.post==true){
-                            bumpTrade = true
-                        }
-                        if(buyOrder.blockTime < sellOrder.blockTime&&sellOrder.post==true){
-                            bumpTrade = true
+                        if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
+                            (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
+                            bumpTrade = true;
                         }
                     }
 
                     // Check for price match
                     if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                        let sellAmountOffered = new BigNumber(sellOrder.amountOffered);
+                        let sellAmountExpected = new BigNumber(sellOrder.amountExpected);
+                        let buyAmountOffered = new BigNumber(buyOrder.amountOffered);
+                        let buyAmountExpected = new BigNumber(buyOrder.amountExpected);
 
+                        let tradeAmountA = BigNumber.min(sellAmountOffered, buyAmountExpected);
+                        let tradeAmountB = tradeAmountA.times(tradePrice);
 
-                        // Ensure that sellOrder.amountOffered and buyOrder.amountExpected are BigNumber objects
-                        let sellOrderAmountOffered = new BigNumber(sellOrder.amountOffered);
-                        let buyOrderAmountExpected = new BigNumber(buyOrder.amountExpected);
+                        console.log('checking values for order amounts ', sellOrder.amountOffered, buyOrder.amountExpected, sellAmountOffered, buyAmountExpected);
+                        console.log('trade amounts ', tradeAmountA, tradeAmountB);
 
-                        // Use BigNumber methods to perform calculations
-                        let amountOfTokenA = BigNumber.min(sellOrderAmountOffered, buyOrderAmountExpected.times(tradePrice));
-                        let amountOfTokenB = BigNumber(amountOfTokenA).div(tradePrice);
+                        if (!bumpTrade) {
+                            sellOrder.amountOffered = sellAmountOffered.minus(tradeAmountA).toNumber();
+                            buyOrder.amountOffered = buyAmountOffered.minus(tradeAmountB).toNumber();
+                            sellOrder.amountExpected = sellAmountExpected.minus(tradeAmountB).toNumber();
+                            buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
 
-                        // Update orders after the match
-                        sellOrder.amountOffered = BigNumber(sellOrder.amountOffered).minus(amountOfTokenA).toNumber();
-                        buyOrder.amountExpected = BigNumber(buyOrder.amountExpected).minus(amountOfTokenB).toNumber();
+                            matches.push({
+                                sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
+                                buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
+                                amountOfTokenA: tradeAmountA.toNumber(),
+                                amountOfTokenB: tradeAmountB.toNumber(),
+                                tradePrice,
+                                post,
+                                bumpTrade
+                            });
 
-                            if(bumpTrade==false){
-
-                            // Add to matches
-                            matches.push({ sellOrder, 
-                                            buyOrder, 
-                                            amountOfTokenA: amountOfTokenA.toNumber(), 
-                                            amountOfTokenB: amountOfTokenB.toNumber(),
-                                            tradePrice
-                                        });
-                            matchOccurred = true;
-
-
-                            // Remove filled orders from the order book
-                            if (sellOrder.amountOffered==0){orderBook.sell.shift();}
-                            if (buyOrder.amountExpected==0){orderBook.buy.shift();}
-                            }else if(bumpTrade==true){
-                                if(buyOrder.post==true){
-                                    buyOrder.price=sellOrder.price-this.tickSize
-                                }
-                                if(sellOrder.post==true){
-                                    sellOrder.price=buyOrder.price+this.tickSize
-                                }
+                            if (sellOrder.amountOffered === 0) {
+                                orderBookCopy.sell.shift();
+                            } else {
+                                orderBookCopy.sell[0] = sellOrder;
                             }
-                    } else{   
+
+                            if (buyOrder.amountExpected === 0) {
+                                orderBookCopy.buy.shift();
+                            } else {
+                                orderBookCopy.buy[0] = buyOrder;
+                            }
+                        } else {
+                            if (buyOrder.post) {
+                                buyOrder.price = sellOrder.price - this.tickSize;
+                            }
+                            if (sellOrder.post) {
+                                sellOrder.price = buyOrder.price + this.tickSize;
+                            }
+                        }
+                    } else {
                         break; // No more matches possible
                     }
+                } else {
+                    // Orders do not have matching property IDs, break the loop
+                    break;
                 }
+            }
 
-                    return { orderBook: this.orderBooks[orderBookKey], matches };
+            console.log('Final orderBookCopy before returning: ' + JSON.stringify(orderBookCopy));
+            return { orderBook: orderBookCopy, matches };
         }
+
+
 
         async processTokenMatches(matches, blockHeight, txid, channel) {
             const TallyMap = require('./tally.js');
@@ -330,7 +414,7 @@ class Orderbook {
 
                 const sellOrderAddress = match.sellOrder.sender;
                 const buyOrderAddress = match.buyOrder.sender;
-                const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
+                const sellOrderPropertyId = match.sellOrder.desiredPropertyId;
                 const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
                 console.log('checking params in process token match '+buyOrderPropertyId+' '+sellOrderPropertyId)
                 if(match.sellOrder.blockTime<blockHeight){
@@ -452,7 +536,7 @@ class Orderbook {
                     // other relevant trade details...
                 };
                 if(channel==false){
-                    const key = this.normalizedOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
+                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
 
                     console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
                     VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
@@ -506,7 +590,7 @@ class Orderbook {
             const orderBookKey = `${contractId}`;
 
             // Load the order book for the given contract
-            await this.loadOrCreateOrderBook(orderBookKey);
+            await this.loadOrderBook(orderBookKey);
 
             // Insert the contract order into the order book
             await this.insertOrder(contractOrder, orderBookKey, side,isLiq);
@@ -640,7 +724,7 @@ class Orderbook {
             var accepted = false
             const clearlistManager = new ClearlistManager();
             
-            const contractOrPropertyIds = []
+            var contractOrPropertyIds = []
             if(!contract){
                 contractOrPropertyIds=[match.propertyId1, match.propertyId2];
             }else{
@@ -649,8 +733,10 @@ class Orderbook {
             let issuerAddresses = [];
             
             if(contract){
+                const ContractRegistry1 = require('./contractRegistry.js')
+
                     for (const id of contractOrPropertyIds) {
-                        const contractData = await ContractRegistry.getContractData(id); // Assuming you have a similar method for contracts
+                        const contractData = await ContractRegistry1.getContractInfo(id); // Assuming you have a similar method for contracts
                         if (contractData && contractData.issuerAddress) {
                             issuerAddresses.push(contractData.issuerAddress);
                         }
@@ -1148,7 +1234,7 @@ class Orderbook {
         }
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
-            await this.loadOrCreateOrderBook(orderBookKey,true)
+            await this.loadOrderBook(orderBookKey,true)
             //console.log('canceling for key ' +orderBookKey)
             const orderBook = this.orderBooks[orderBookKey]; // Assuming this is the correct reference
             const cancelledOrders = [];
@@ -1420,7 +1506,7 @@ class Orderbook {
 
             try {
                 // Load or create order book data
-                await this.loadOrCreateOrderBook(orderbookId);
+                await this.loadOrderBook(orderbookId);
 
                 const orderbookData = this.orderBooks[orderbookId];
                 const { buy, sell } = orderbookData;

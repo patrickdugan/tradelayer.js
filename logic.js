@@ -475,7 +475,7 @@ const Logic = {
             post: post
         };
 
-        console.log('entering order into book '+JSON.stringify(order), 'txid')
+        //console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
         await orderbook.addTokenOrder(order, blockHeight, txid);
