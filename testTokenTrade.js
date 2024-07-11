@@ -8,12 +8,12 @@ function randomNumber(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-var random = randomNumber(50,100)
-var random2 = randomNumber(5,10)
+var random = randomNumber(1,10)
+var random2 = randomNumber(1,10)
 
     // Sample data for token trades
     const trades = [
-        { offeredPropertyId: 5, desiredPropertyId: 4, amountOffered: random, amountExpected: random2}
+        { offeredPropertyId: 4, desiredPropertyId: 5, amountOffered: random, amountExpected: random2}
     ];
 
     // Iterate over each trade and create a transaction

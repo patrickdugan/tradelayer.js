@@ -9,7 +9,7 @@ const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
 const Channels = require('./channels.js')
 const PropertyManager = require('./property.js')
-//const VolumeIndex = require('./volumeIndex.js')
+const VolumeIndex = require('./volumeIndex.js')
 
 
 class Clearing {

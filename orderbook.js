@@ -1235,9 +1235,8 @@ class Orderbook {
         }
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
-            await this.loadOrderBook(orderBookKey,true)
-            //console.log('canceling for key ' +orderBookKey)
-            const orderBook = this.orderBooks[orderBookKey]; // Assuming this is the correct reference
+            
+            const orderBook = await this.loadOrderBook(orderBookKey); // Assuming this is the correct reference
             const cancelledOrders = [];
             let returnFromReserve = 0
             if(!token){
@@ -1444,7 +1443,7 @@ class Orderbook {
             // Retrieve relevant order details and calculate margin reserved amounts
             const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
             const key =  offeredPropertyId+'-'+desiredPropertyId
-            //console.log('cancelAllTokenOrders key'+key)
+            console.log('cancelAllTokenOrders key'+key)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
 
             for (const order of cancelledOrders) {

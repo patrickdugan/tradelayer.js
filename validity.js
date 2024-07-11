@@ -308,6 +308,11 @@ const Validity = {
                 params.reason += "Vesting tokens cannot be traded"
             }
 
+            if(params.propertyIdOffered==params.propertyIdDesired){
+                params.valid =false
+                params.reason += "Cannot trade token against its own type"
+            }
+
             const TallyMap = require('./tally.js')
             const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, params.propertyIdOffered, params.amountOffered);
             if (!hasSufficientBalance.hasSufficient) {
@@ -370,6 +375,12 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Invalid from address; ';
             }
+
+            if(params.offeredPropertyId==2||params.offeredPropertyId==3||params.desiredPropertyId==2||params.desiredPropertyId==3){
+                params.valid = false
+                params.reason += "Cannot have orderbooks for untradeable vesting tokens"
+            }
+
             if(params.isContract==false){
                 key = params.offeredPropertyId+'-'+params.desiredPropertyId
                 // Validate offered property ID
@@ -1133,6 +1144,11 @@ const Validity = {
             if(isVEST){
                 params.valid =false
                 params.reason += "Vesting tokens cannot be traded"
+            }
+
+            if(params.propertyId1==params.propertyId2){
+                params.valid =false
+                params.reason += "Cannot trade token against its own type"
             }
 
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);

@@ -2,13 +2,13 @@ const TxUtils = require('./txUtils.js');
 
 async function cancelOrders() {
     // Admin address
-    const adminAddress = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'//tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
+    const adminAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr'//tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
 
     // Mode 1: Cancel all contract orders
     const cancelParamsMode1 = {
         fromAddress: adminAddress,
         isContract: 0,
-        offeredPropertyId: 3, // Replace with the correct property ID
+        offeredPropertyId: 5, // Replace with the correct property ID
         desiredPropertyId: 4, // Replace with the correct property ID
         cancelAll: true,
     };
@@ -55,7 +55,7 @@ async function cancelOrders() {
         },*/
     };
 
-    await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode4Sell, 6);
+    await TxUtils.createCancelTransaction(adminAddress, cancelParamsMode1, 6);
 }
 
 // Call the asynchronous function

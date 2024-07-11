@@ -257,7 +257,7 @@ class VolumeIndex {
         try {
          // Fetch the N most recent VWAP entries for the specified property pair
             const vwapData = await db.getDatabase('volumeIndex').findAsync({
-                _id: { $regex: `^vwap-${propertyId1}-${propertyId2}-` }
+                _id: { $regex: `${propertyId1}-${propertyId2}-` }
             }, {
                 sort: { blockHeight: -1 },  // Sort by blockHeight in descending order
                 limit: trailingBlocks      // Limit to the N most recent entries

@@ -500,7 +500,7 @@ const Logic = {
         }
         let orderbook = new Orderbook(key)
         // Handle contract cancellation if only one property ID is provided
-        //console.log('in logic function for cancelOrder '+fromAddress + ' '+isContract +' '+offeredPropertyId+' '+desiredPropertyId +' '+cancelAll+ ' '+JSON.stringify(cancelParams))
+        console.log('in logic function for cancelOrder '+fromAddress + ' '+isContract +' '+offeredPropertyId+' '+desiredPropertyId +' '+cancelAll+ ' '+JSON.stringify(cancelParams))
             if(isContract==true){
                 // Contract cancellation logic here
                 if(cancelAll){
@@ -523,6 +523,7 @@ const Logic = {
 
             if(isContract==false){
                 if (cancelAll && offeredPropertyId && desiredPropertyId) {
+                    console.log('canceling all orders for '+fromAddress + offeredPropertyId+ desiredPropertyId)
                             cancelledOrders = await orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId,block);
                 }
                  // Cancel a specific order by txid
