@@ -19,14 +19,16 @@ class VolumeIndex {
     }
 
     static async saveVolumeDataById(id, volume,price,blockHeight, type) {
+        console.log('saving volume index data '+id, volume, price, blockHeight, type)
         await db.getDatabase('volumeIndex').updateAsync(
             { _id: id },
-            { value: { blockHeight:blockHeight, volume: volume, price:price } },
+            { value: { blockHeight:blockHeight, volume: volume, price:price, type } },
             { upsert: true }
         );
 
         // Update global cumulative volume variables
-        await updateCumulativeVolumes(volume, type,id);
+        await VolumeIndex.updateCumulativeVolumes(volume, type,id);
+        return
     }
 
        static async updateCumulativeVolumes(volume, type, id) {

@@ -542,7 +542,7 @@ class Orderbook {
                     VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
                 }
 
-                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)
+                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
                 var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
                 
                 if(qualifiesBasicLiqReward){
@@ -742,8 +742,9 @@ class Orderbook {
                         }
                     }
             }else{
+                const PropertyManager1 = require('./property.js')
                     for (const id of contractOrPropertyIds) {
-                    const propertyData = await PropertyManager.getPropertyData(id);
+                    const propertyData = await PropertyManager1.getPropertyData(id);
                     if (propertyData && propertyData.issuerAddress) {
                         issuerAddresses.push(propertyData.issuerAddress);
                     }
