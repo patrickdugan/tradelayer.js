@@ -30,7 +30,7 @@ class Orderbook {
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
                     return orderBookData.value
                 }else{
                     return {buy:[],sell:[]}
@@ -159,7 +159,7 @@ class Orderbook {
             // Create an instance of Orderbook for the pair and load its data
             const orderbook = new Orderbook(normalizedOrderBookKey);
             var orderbookData = await orderbook.loadOrderBook(normalizedOrderBookKey);
-            console.log('loaded orderbook' +JSON.stringify(orderbookData))
+            //console.log('loaded orderbook' +JSON.stringify(orderbookData))
             // Calculate the price for the order and round to the nearest tick interval
             const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
             //console.log('Calculated Price:', calculatedPrice);
@@ -170,7 +170,7 @@ class Orderbook {
 
             // Add the order to the orderbook
             orderbookData = await orderbook.insertOrder(order, orderbookData, isSellOrder);
-            console.log('Order Insertion Confirmation:', orderbookData);
+            //console.log('Order Insertion Confirmation:', orderbookData);
 
             // Match orders in the orderbook
             const matchResult = await orderbook.matchTokenOrders(orderbookData);
@@ -179,7 +179,7 @@ class Orderbook {
                 await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
             }else{console.log('No Matches for ' +txid)}
             //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
-            console.log('getting ready to save orderbook update '+JSON.stringify(matchResult.orderBook))
+            //console.log('getting ready to save orderbook update '+JSON.stringify(matchResult.orderBook))
             // Save the updated orderbook back to the database
             await orderbook.saveOrderBook(matchResult.orderBook,normalizedOrderBookKey);
 
@@ -211,9 +211,9 @@ class Orderbook {
             }
 
             // Log the current state for debugging
-            console.log('Order:', JSON.stringify(order));
-            console.log('Orderbook data before:', JSON.stringify(orderbookData));
-            console.log('Is sell order:', isSellOrder);
+            //console.log('Order:', JSON.stringify(order));
+            //console.log('Orderbook data before:', JSON.stringify(orderbookData));
+            //console.log('Is sell order:', isSellOrder);
 
             // Determine the side of the order
             const side = isSellOrder ? 'sell' : 'buy';
@@ -225,7 +225,7 @@ class Orderbook {
             }
 
             // Log the state of bookSide for debugging
-            console.log('Book side before:', JSON.stringify(bookSide));
+            //console.log('Book side before:', JSON.stringify(bookSide));
 
             // Find the appropriate index to insert the new order
             const index = bookSide.findIndex((o) => o.time > order.time);
@@ -239,7 +239,7 @@ class Orderbook {
             orderbookData[side] = bookSide;
 
             // Log the updated orderbookData for debugging
-            console.log('Updated orderbook data:', JSON.stringify(orderbookData));
+            //console.log('Updated orderbook data:', JSON.stringify(orderbookData));
 
             return orderbookData;
         }
@@ -294,7 +294,7 @@ class Orderbook {
             orderBookCopy.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime); // Highest price first
             orderBookCopy.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime); // Lowest price first
 
-            console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
+            //console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
 
             // Match orders
             while (orderBookCopy.sell.length > 0 && orderBookCopy.buy.length > 0) {
@@ -390,7 +390,7 @@ class Orderbook {
                 }
             }
 
-            console.log('Final orderBookCopy before returning: ' + JSON.stringify(orderBookCopy));
+            //console.log('Final orderBookCopy before returning: ' + JSON.stringify(orderBookCopy));
             return { orderBook: orderBookCopy, matches };
         }
 
