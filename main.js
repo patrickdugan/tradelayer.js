@@ -182,133 +182,115 @@ class Main {
         txIndex then apply them to this to update the db and consensus.
     */
 
-   async constructConsensusFromIndex(startHeight, realtime) {
+       async constructConsensusFromIndex(startHeight, realtime) {
+            let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
+            let blockHeight;
+            let maxProcessedHeight = startHeight - 1;
 
-        let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
-        let blockHeight
-        let maxProcessedHeight = startHeight - 1; // Declare maxProcessedHeight here
+            const txIndexDB = db.getDatabase('txIndex');
+            const tallyMapInstance = TallyMap.getInstance();
+            const lastConsensusHeight = await this.loadMaxProcessedHeight();
 
-        const txIndexDB = db.getDatabase('txIndex'); // Access the txIndex database
+            // Fetch all transaction data
+            const allTxData = await txIndexDB.findAsync({});
+            const txDataSet = allTxData.filter(txData => txData._id.startsWith('tx-'));
 
-        const tallyMapInstance = TallyMap.getInstance();
-        const lastConsensusHeight = await this.loadMaxProcessedHeight();
+            // Group transactions by block height
+            const txByBlockHeight = txDataSet.reduce((acc, txData) => {
+                const txBlockHeight = parseInt(txData._id.split('-')[1]);
+                if (!acc[txBlockHeight]) {
+                    acc[txBlockHeight] = [];
+                }
+                acc[txBlockHeight].push(txData);
+                return acc;
+            }, {});
 
-        // Fetch all transaction data
-        const allTxData = await txIndexDB.findAsync({});
-        //console.log('allTxData length '+allTxData.length)
-         const txDataSet = allTxData.filter(txData => 
-                txData._id.startsWith(`tx-`));
-        //console.log('checking example from txDataSet' +JSON.stringify(txDataSet[0])+' '+txDataSet.length)
-              let lastEntry = txDataSet[txDataSet.length-1]
-                const blockHeightMatch = lastEntry._id.match(/^tx-(\d+)-/);
-                
-                lastIndexBlock = blockHeightMatch ? parseInt(blockHeightMatch[1]) : null;
-                //console.log('again lastIndexBlock '+lastIndexBlock)
-        
-      
-        //this one is a bit tricky, if we're building consensus from scratch we start from genesis
-        //otherwise we reference a value stored in the DB called lastConsensusHeight that tracks our progress
-        if(realtime!=true){
-            blockHeight = startHeight
-          console.log('construct Consensus from Index max indexed block '+lastIndexBlock, 'start height '+startHeight)
-        }else if(realtime==true){
-            blockHeight = lastConsensusHeight
-            if(lastIndexBlock != startHeight){
-                //console.log('rt mode '+lastIndexBlock+' '+startHeight)
-                lastIndexBlock=startHeight
+            // Determine the last block height with transactions
+            const blockHeights = Object.keys(txByBlockHeight).map(Number);
+            if (blockHeights.length > 0) {
+                lastIndexBlock = Math.max(...blockHeights);
+            } else {
+                lastIndexBlock = null;
+            }
+
+            if (!lastIndexBlock) {
+                console.log('No transactions to process.');
+                return;
+            }
+
+            if (realtime !== true) {
+                blockHeight = startHeight;
+                console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
+            } else if (realtime === true) {
+                blockHeight = lastConsensusHeight;
+                if (lastIndexBlock !== startHeight) {
+                    lastIndexBlock = startHeight;
+                }
+            }
+
+            for (; blockHeight <= lastIndexBlock; blockHeight++) {
+                await AMM.updateOrdersForAllContractAMMs();
+
+                if (txByBlockHeight[blockHeight]) {
+                    for (const txData of txByBlockHeight[blockHeight]) {
+                        const txId = txData._id.split('-')[2];
+                        if (await Consensus.checkIfTxProcessed(txId)) {
+                            continue;
+                        }
+
+                        var payload = txData.value.payload;
+                        const marker = txData.value.marker;
+                        const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                        payload = payload.slice(1, payload.length).toString(36);
+
+                        const senderAddress = txData.value.sender.senderAddress;
+                        const referenceAddress = txData.value.reference.address;
+                        const senderUTXO = txData.value.sender.amount;
+                        const referenceUTXO = txData.value.reference.amount / COIN;
+                        console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
+                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO);
+                        decodedParams.block = blockHeight;
+
+                        if (decodedParams.type > 0) {
+                            const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
+                            if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
+                                decodedParams.valid = false;
+                                decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
+                            } else if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
+                                decodedParams.valid = false;
+                                decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
+                            }
+                        }
+
+                        if (realtime === true) {
+                            saveHeight = startHeight;
+                        }
+                        if (decodedParams.valid === true) {
+                            await Consensus.markTxAsProcessed(txId, decodedParams);
+                            console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
+                            await Logic.typeSwitch(type, decodedParams);
+                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                        } else {
+                            await Consensus.markTxAsProcessed(txId, decodedParams);
+                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                            console.log('invalid tx ' + decodedParams.reason);
+                        }
+                    }
+                }
+
+                await Channels.processWithdrawals(blockHeight);
+                await Clearing.clearingFunction(blockHeight);
+                maxProcessedHeight = blockHeight;
+            }
+
+            await this.saveMaxProcessedHeight(maxProcessedHeight, realtime);
+
+            if (realtime === false || realtime === undefined || realtime === null) {
+                return this.syncIfNecessary();
+            } else {
+                return maxProcessedHeight;
             }
         }
-       
-        // Apply deltas from the last known block height to the current block height
-        //await tallyMapInstance.applyDeltasSinceLastHeight(lastHeight);
-
-        
-        //console.log('checking lastEntry '+JSON.stringify(lastEntry)+'block '+blockHeight)
-        //console.log(blockHeight, currentBlockHeight, realtime)
-        for (blockHeight; blockHeight <= lastIndexBlock; blockHeight++) {
-            //this keeps the AMM system ahead of incoming orders for the block
-            await AMM.updateOrdersForAllContractAMMs()
-            // Process each transaction
-            for (const txData of txDataSet) {
-                const txId = txData._id.split('-')[2];
-                const txBlockHeight = parseInt(txData._id.split('-')[1]); // Extract the block height from txData
-
-                if (txBlockHeight !== blockHeight) {
-                    continue; // Skip transactions not belonging to the current block height
-                }
-                 // Check if the transaction has already been processed
-                if (await Consensus.checkIfTxProcessed(txId)) {
-                    continue; // Skip this transaction if it's already processed
-                }
-               
-
-                var payload = txData.value.payload;
-                //console.log('reading payload in consensus builder '+payload)
-                const marker = txData.value.marker
-                const type = parseInt(payload.slice(0,1).toString(36),36)
-                payload=payload.slice(1,payload.length).toString(36)
-
-                  // Assuming 'sender' and 'reference' are objects with an 'address' property
-                const senderAddress = txData.value.sender.senderAddress;
-                const referenceAddress = txData.value.reference.address; //a bit different from the older protocol, not always in the tx, sometimes in OP_Return
-                const senderUTXO = txData.value.sender.amount
-                const referenceUTXO = txData.value.reference.amount/COIN
-                console.log('params to go in during consensus builder '+ type + '  ' +payload+' '+senderAddress+blockHeight)
-                //this next one is key, puts the rax txIndex data into decoder and validity logic
-                const decodedParams = await Types.decodePayload(txId, type, marker, payload,senderAddress,referenceAddress,senderUTXO,referenceUTXO);
-                decodedParams.block=blockHeight
-                //console.log('consensus builder displaying params for tx ' +JSON.stringify(decodedParams))
-                if(decodedParams.type >0){
-                      const activationBlock = activationInstance.getActivationBlock(decodedParams.type)
-                      if((blockHeight<activationBlock)&&(decodedParams.valid==true)){
-                        decodedParams.valid = false
-                        decodedParams.reason += 'Tx not yet activated despite being otherwise valid '
-                        //console.log(decodedParams.reason)
-                      }else if ((blockHeight<activationBlock)&&(decodedParams.valid==true)){
-                        decodedParams.valid = false
-                        decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues '
-                        //console.log(decodedParams.reason)
-                        //these blocks enforce that unactivated tx are not valid
-                      }
-                }
-               //console.log('decoded params with validity' +JSON.stringify(decodedParams))
-               let saveHeight 
-               if(realtime==true){
-                saveHeight=startHeight
-               }
-               if(decodedParams.valid==true){
-                  await Consensus.markTxAsProcessed(txId, decodedParams);
-                  console.log('valid tx going in for processing ' +type + JSON.stringify(decodedParams)+ ' ' + txId+'blockHeight '+blockHeight)
-                  await Logic.typeSwitch(type, decodedParams);
-                  await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                }else{
-                  await Consensus.markTxAsProcessed(txId, decodedParams);
-                  await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                  console.log('invalid tx '+decodedParams.reason)}
-                //This block marks processed tx along with their param data in the Consensus.db so we can parse them for
-                //other information retrieval "RPCs" like "tl_gettransaction" which we use in the Explorer and can be useful for wallet
-                //It's also useful for preventing duplicate processings so the DB is only affected by a tx parsing once.
-            }
-            //removes balances from channels, since this happens 7 blocks later than the withdrawal tx is processed
-            await Channels.processWithdrawals(blockHeight)
-            //updates derivatives positions for mark-price, also buys back $TL tokens with fee cache, deletes empty channels
-            await Clearing.clearingFunction(blockHeight)
-            maxProcessedHeight = blockHeight; // Update max processed height after each block
-        }
-
-        // Calculate the delta (changes made to TallyMap) and save it
-        /*const delta = this.calculateDelta();
-        await tallyMapInstance.saveDeltaToDB(currentBlockHeight, delta);
-        await setMaxConsensusHeightInDB(currentBlockHeight);*/
-
-        await this.saveMaxProcessedHeight(maxProcessedHeight, realtime)
-
-        //insert save of maxProcessedHeight in consensus sub-DB
-
-        if(realtime ==false || realtime==undefined || realtime==null){
-          return this.syncIfNecessary();
-        }else{return maxProcessedHeight}
-    }
 
     /*originally was an if-logic based switch function but refactoring real-time mode
       it simply is a part of a flow, could be refactored into one function
