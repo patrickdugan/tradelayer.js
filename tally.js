@@ -89,7 +89,7 @@ class TallyMap {
             // Example for available balance
             const originalAvailableBalance = new BigNumber(addressObj[propertyId].available);
             const newAvailableBalance = originalAvailableBalance.plus(availableChange);
-
+            console.log('balance change '+originalAvailableBalance, newAvailableBalance.toNumber(),availableChange)
             if (newAvailableBalance.isLessThan(0)) {
                 throw new Error("Available balance cannot go negative " + originalAvailableBalance.toString() + ' change ' + availableChange.toString());
             }

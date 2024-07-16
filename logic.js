@@ -435,7 +435,7 @@ const Logic = {
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {
-      
+       console.log('commiting tokens '+tokenAmount)
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 

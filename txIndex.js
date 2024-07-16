@@ -159,7 +159,7 @@ class TxIndex {
                 await this.saveMaxHeight(blockHeight)      
             }
         }
-        return
+        return txDetails
     }
 
     static async fetchTransactionData(txId) {

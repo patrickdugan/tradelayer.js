@@ -226,7 +226,10 @@ class Main {
                 if (lastIndexBlock !== startHeight) {
                     lastIndexBlock = startHeight;
                 }
+                console.log('realtime stats'+blockHeight, lastIndexBlock, startHeight)
             }
+
+             let saveHeight; // Define saveHeight here
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 await AMM.updateOrdersForAllContractAMMs();
@@ -283,13 +286,60 @@ class Main {
                 maxProcessedHeight = blockHeight;
             }
 
-            await this.saveMaxProcessedHeight(maxProcessedHeight, realtime);
+            await this.saveMaxProcessedHeight(maxProcessedHeight, realtime, saveHeight);
 
             if (realtime === false || realtime === undefined || realtime === null) {
                 return this.syncIfNecessary();
             } else {
                 return maxProcessedHeight;
             }
+        }
+
+        async processTx(txData, block){
+                        let txId= txData.txId
+                        if (await Consensus.checkIfTxProcessed(txId)) {
+                            return;
+                        }
+
+                        var payload = txData.payload
+
+                        const marker = 'tl';
+                        const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                        payload = payload.slice(1, payload.length).toString(36);
+
+                        const senderAddress = txData.sender.senderAddress;
+                        const referenceAddress = txData.reference.address;
+                        const senderUTXO = txData.sender.amount;
+                        const referenceUTXO = txData.reference.amount / COIN;
+                        console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
+                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO);
+                        decodedParams.block = blockHeight;
+
+                        if (decodedParams.type > 0) {
+                            const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
+                            if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
+                                decodedParams.valid = false;
+                                decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
+                            } else if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
+                                decodedParams.valid = false;
+                                decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
+                            }
+                        }
+
+                        if (realtime === true) {
+                            saveHeight = startHeight;
+                        }
+                        if (decodedParams.valid === true) {
+                            await Consensus.markTxAsProcessed(txId, decodedParams);
+                            console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
+                            await Logic.typeSwitch(type, decodedParams);
+                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                        } else {
+                            await Consensus.markTxAsProcessed(txId, decodedParams);
+                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                            console.log('invalid tx ' + decodedParams.reason);
+                        }
+                    return 
         }
 
     /*originally was an if-logic based switch function but refactoring real-time mode
@@ -404,9 +454,9 @@ class Main {
     async blockHandlerMid(blockHash, blockHeight) {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
-            await TxIndex.processBlockData(blockData, blockHeight, true);
+            let txData = await TxIndex.processBlockData(blockData, blockHeight, true);
             //console.log('about to call construct consensus in block '+blockHeight)
-            let maxConsensus = await this.constructConsensusFromIndex(blockHeight,true)
+            await this.processTransaction(txData,blockHeight)
             //console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
@@ -453,15 +503,21 @@ class Main {
         // This could involve reverting to a previous state, re-processing blocks, etc.
     }
 
-    async saveMaxProcessedHeight(maxProcessedHeight, realtime){ 
-        try {
-            await db.getDatabase('consensus').updateAsync(
-                { _id: 'MaxProcessedHeight' },
-                { $set: { value: maxProcessedHeight } },
-                { upsert: true }
-            );
-            if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+    async saveMaxProcessedHeight(maxProcessedHeight, realtime, saveHeight){ 
+         try {
+        if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
+               
+             await db.getDatabase('consensus').updateAsync(
+                    { _id: 'MaxProcessedHeight' },
+                    { $set: { value: maxProcessedHeight } },
+                    { upsert: true }
+                );
             }else{
+                await db.getDatabase('consensus').updateAsync(
+                    { _id: 'MaxProcessedHeight' },
+                    { $set: { value: saveHeight } },
+                    { upsert: true }
+                );
                 //console.log('realtime mode update '+maxProcessedHeight)
             }
         } catch (error) {
