@@ -265,7 +265,12 @@ const Validity = {
             }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
-            
+            if(propertyData==null){
+                console.log('offending propertyId value '+params.propertyId)
+                params.valid=false
+                params.reason="Null returning for propertyData"
+                return params
+            }
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
@@ -319,12 +324,13 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Insufficient balance for offered token; ';
             }
-
+            console.log('inside validate commit '+params.propertyIdDesired+' '+params.propertyIdOffered)
             const propertyData1 = await PropertyList.getPropertyData(params.propertyIdDesired)
             const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
 
                     // Whitelist validation logic
             if(propertyData1==null||propertyData2==null){
+                 console.log('offending propertyId value '+params.propertyIdDesired,params.propertyIdOffered)
                 params.valid = false
                 params.reason += 'Null returning for propertyData'
                 return params
@@ -1138,7 +1144,7 @@ const Validity = {
                 return params
             }
 
-
+            console.log(params.expiryBlock,block)
             if(params.expiryBlock<block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"

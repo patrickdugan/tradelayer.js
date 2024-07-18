@@ -1,4 +1,4 @@
-{"_id":"MaxHeight","value":3350638}
+{"_id":"MaxHeight","value":3350645}
 {"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl"},"type":0,"valid":true}
@@ -263,14 +263,14 @@
 {"_id":"tx-3348335-8af2bee3c1c87dd927b9d7194a3a0d824f5bbf1d9068f4d7dc9d3b6d95b77363","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.052488},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":5132400},"payload":"20;tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4;5;h","decodedParams":{},"marker":"tl"},"type":2,"valid":true,"reason":""}
 {"_id":"tx-3348377-ed446af85471b555b03ecbd92df8d9af9ebbd1631cfd3233143c9160543782f7","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65512664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65502664},"payload":"44,rs,tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","decodedParams":{},"marker":"tl"},"type":4,"valid":true,"reason":""}
 {"_id":"tx-3348528-b202465aad93f317402c31234fbbffb8a7262f97108a5ac98a306965197570bb","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65502664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65492664},"payload":"44,rs,tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","decodedParams":{},"marker":"tl"},"type":4,"valid":true,"reason":""}
-{"_id":"tx-3350577-8631756830d51fdbcd534c3eec1fab37eb33ed4665b9ada0b86ed6731a78aa36","value":{"sender":{"senderAddress":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","amount":0.004236},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":307200},"payload":"55,2,tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350578-23d8157d366acc42fb92c21b71ed60f23e75273e724f5326ab42dd4bb32277d1","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.005108},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":394400},"payload":"55,2,tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350578-739b0955997e40840b9201a64e4dff41a32fe05a29a1f3edfe21898b8544064e","value":{"sender":{"senderAddress":"tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","amount":0.000564},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":56400},"payload":"k5,4,2,2,1,NaN","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350591-26188096b96538f04df95913d773299f22c06dd54becbdf40fbb24515d243883","value":{"sender":{"senderAddress":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","amount":0.0094},"reference":{"address":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","satoshis":823600},"payload":"20;tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4;4;34","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350593-0338dbcdfe84b9f88de690a77d02ffcad09caef20a8769758b71ea50cf9a6f2d","value":{"sender":{"senderAddress":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","amount":0.007636},"reference":{"address":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","satoshis":647200},"payload":"20;tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz;5;2s","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350616-63028df25df5b2e54c50a48df6d3ad4643864d57123fdf02b6bbd554dd4b90d7","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.89},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":88883600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350616-c8c3364afcf1b6e70ebfb7227ffb66c464a1c35fc313f79961c095f79510de53","value":{"sender":{"senderAddress":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","amount":0.0994},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":9823600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"}}
-{"_id":"tx-3350617-a3da55d9ef707503d4c963e316b76fef89aa00c3b29a5f5a45c7ed22ca31ae1a","value":{"sender":{"senderAddress":"tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","amount":0.000564},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":56400},"payload":"k5,4,n,n,1,NaN","decodedParams":{},"marker":"tl"}}
+{"_id":"tx-3350577-8631756830d51fdbcd534c3eec1fab37eb33ed4665b9ada0b86ed6731a78aa36","value":{"sender":{"senderAddress":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","amount":0.004236},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":307200},"payload":"55,2,tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Vesting tokens cannot be tradedInsufficient balance for offered token; "}
+{"_id":"tx-3350578-23d8157d366acc42fb92c21b71ed60f23e75273e724f5326ab42dd4bb32277d1","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.005108},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":394400},"payload":"55,2,tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Vesting tokens cannot be tradedInsufficient balance for offered token; "}
+{"_id":"tx-3350578-739b0955997e40840b9201a64e4dff41a32fe05a29a1f3edfe21898b8544064e","value":{"sender":{"senderAddress":"tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","amount":0.000564},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":56400},"payload":"k5,4,2,2,1,NaN","decodedParams":{},"marker":"tl"},"type":20,"valid":false,"reason":"Cannot trade token against its own typeTx sender is not found to be a channel address"}
+{"_id":"tx-3350591-26188096b96538f04df95913d773299f22c06dd54becbdf40fbb24515d243883","value":{"sender":{"senderAddress":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","amount":0.0094},"reference":{"address":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","satoshis":823600},"payload":"20;tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4;4;34","decodedParams":{},"marker":"tl"},"type":2,"valid":true,"reason":""}
+{"_id":"tx-3350593-0338dbcdfe84b9f88de690a77d02ffcad09caef20a8769758b71ea50cf9a6f2d","value":{"sender":{"senderAddress":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","amount":0.007636},"reference":{"address":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","satoshis":647200},"payload":"20;tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz;5;2s","decodedParams":{},"marker":"tl"},"type":2,"valid":true,"reason":""}
+{"_id":"tx-3350616-63028df25df5b2e54c50a48df6d3ad4643864d57123fdf02b6bbd554dd4b90d7","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.89},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":88883600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Insufficient balance for offered token; Null returning for propertyData"}
+{"_id":"tx-3350616-c8c3364afcf1b6e70ebfb7227ffb66c464a1c35fc313f79961c095f79510de53","value":{"sender":{"senderAddress":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","amount":0.0994},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":9823600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Insufficient balance for offered token; Null returning for propertyData"}
+{"_id":"tx-3350617-a3da55d9ef707503d4c963e316b76fef89aa00c3b29a5f5a45c7ed22ca31ae1a","value":{"sender":{"senderAddress":"tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","amount":0.000564},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":56400},"payload":"k5,4,n,n,1,NaN","decodedParams":{},"marker":"tl"},"type":20,"valid":false,"reason":"Cannot trade token against its own typeTx sender is not found to be a channel address"}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl"},"type":0,"valid":true}
 {"_id":"tx-3087539-8ab08b7756378e2645b94147a59fd991f9ef2a46590b33444fcabdb5de48a3bc","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17357864},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117293264},"payload":"0;LhEg3wGFW61G9iM8UUSzTxhrF4HfSsHXXR;2;164o","decodedParams":{},"marker":"tl"},"type":0,"valid":false,"reason":"Tx Type is not an integer"}
 {"_id":"tx-3088220-419e0e7b80c99ed27d929dbbcacf0a7165dfd0ff090fcc803839f26a00834ddc","value":{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17293264},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117228664},"payload":"20;LdwGqbsKHyAPqPqFRfwCWUbDyyoPpToSzr;2;164o","decodedParams":{},"marker":"tl"},"type":2,"valid":false,"reason":"Tx type not yet activated "}
@@ -536,3 +536,76 @@
 {"_id":"tx-3350578-739b0955997e40840b9201a64e4dff41a32fe05a29a1f3edfe21898b8544064e","value":{"sender":{"senderAddress":"tltc1qx8n44qkk66dz5yjrtrsutu0cxjnhk5vr7c98tvtflpt9jm07wdxqv9efgr","amount":0.000564},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":56400},"payload":"k5,4,2,2,1,NaN","decodedParams":{},"marker":"tl"},"type":20,"valid":false,"reason":"Cannot trade token against its own typeTx sender is not found to be a channel address"}
 {"_id":"tx-3350591-26188096b96538f04df95913d773299f22c06dd54becbdf40fbb24515d243883","value":{"sender":{"senderAddress":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","amount":0.0094},"reference":{"address":"tltc1q45ch75q2p0f0v02tvv56pzlneusxw2rpz5e58l","satoshis":823600},"payload":"20;tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4;4;34","decodedParams":{},"marker":"tl"},"type":2,"valid":true,"reason":""}
 {"_id":"tx-3350593-0338dbcdfe84b9f88de690a77d02ffcad09caef20a8769758b71ea50cf9a6f2d","value":{"sender":{"senderAddress":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","amount":0.007636},"reference":{"address":"tltc1qrqj98tenvn0pgrp7shktmcwn7zupxj3rmjfsar","satoshis":647200},"payload":"20;tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz;5;2s","decodedParams":{},"marker":"tl"},"type":2,"valid":true,"reason":""}
+{"_id":"tx-3350616-63028df25df5b2e54c50a48df6d3ad4643864d57123fdf02b6bbd554dd4b90d7","value":{"sender":{"senderAddress":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","amount":0.89},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":88883600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Insufficient balance for offered token; Null returning for propertyData"}
+{"_id":"tx-3350616-c8c3364afcf1b6e70ebfb7227ffb66c464a1c35fc313f79961c095f79510de53","value":{"sender":{"senderAddress":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","amount":0.0994},"reference":{"address":"tltc1qk7gr80pmlh0j840zl0ce5wa3ev995jlcwlq6s4","satoshis":9823600},"payload":"55,n,tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","decodedParams":{},"marker":"tl"},"type":5,"valid":false,"reason":"Insufficient balance for offered token; Null returning for propertyData"}
+{"_id":"tx-3350617-a3da55d9ef707503d4c963e316b76fef89aa00c3b29a5f5a45c7ed22ca31ae1a","value":{"sender":{"senderAddress":"tltc1qqlu7m8qgwlewdl8pl9wlfgqrzcldupqrdfk7ezp8dxxt9az23sasz5mv2k","amount":0.000564},"reference":{"address":"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz","satoshis":56400},"payload":"k5,4,n,n,1,NaN","decodedParams":{},"marker":"tl"},"type":20,"valid":false,"reason":"Cannot trade token against its own typeTx sender is not found to be a channel address"}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350645}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}
+{"_id":"MaxHeight","value":3350646}
+{"_id":"indexExists","value":true}

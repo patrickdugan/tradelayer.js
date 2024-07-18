@@ -251,7 +251,7 @@ class Main {
                         const senderUTXO = txData.value.sender.amount;
                         const referenceUTXO = txData.value.reference.amount / COIN;
                         console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
-                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO);
+                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO,blockHeight);
                         decodedParams.block = blockHeight;
 
                         if (decodedParams.type > 0) {
@@ -312,7 +312,7 @@ class Main {
                         const senderUTXO = txData.sender.amount;
                         const referenceUTXO = txData.reference.amount / COIN;
                         console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
-                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO);
+                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO,block);
                         decodedParams.block = blockHeight;
 
                         if (decodedParams.type > 0) {
