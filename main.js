@@ -236,8 +236,8 @@ class Main {
 
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {
-                        console.log('checking tx Data in main consensus loop '+JSON.stringify(txData))
                         const txId = txData._id.split('-')[2];
+                        console.log('checking txId '+txId)
                         if (await Consensus.checkIfTxProcessed(txId)) {
                             console.log('already logged')
                             continue;
@@ -333,9 +333,6 @@ class Main {
                             }
                         }
 
-                        if (realtime === true) {
-                            saveHeight = startHeight;
-                        }
                         if (decodedParams.valid === true) {
                             await Consensus.markTxAsProcessed(txId, decodedParams);
                             console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
@@ -464,7 +461,7 @@ class Main {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             let txData = await TxIndex.processBlockData(blockData, blockHeight, true);
             if(txData.length>=1){
-                console.log('tx Data for block '+blockHeight + 'txData'+txData)
+                console.log('tx Data for block '+blockHeight + 'txData'+JSON.stringify(txData))
                  await this.processTx(txData,blockHeight)
             }
            //console.log('about to call construct consensus in block '+blockHeight)

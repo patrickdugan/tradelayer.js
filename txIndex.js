@@ -257,7 +257,7 @@ class TxIndex {
         const sender = await TxUtils.getSender(txId);
         const reference = await TxUtils.getReference(txId);
         const decodedParams = Types.decodePayload(txId, marker, payload);
-        return { sender, reference, payload, decodedParams, marker };
+        return { sender, reference, payload, decodedParams, marker, txId};
     }
 
     async saveTransactionData(txId, txData, payload, blockHeight, txDetails) {
