@@ -144,14 +144,16 @@ class TxIndex {
 
     static async processBlockData(blockData, blockHeight) {
             const txIndexDB = db.getDatabase('txIndex');
-            let txDetails
+            let txDetails =[]
         for (const txId of blockData.tx) {
             const txHex = await TxIndex.fetchTransactionData(txId);
             const txData = await TxIndex.DecodeRawTransaction(txHex);
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
-                txDetails = await TxIndex.processTransaction(payload, txId, txData.marker);
+                const thisTx = await TxIndex.processTransaction(payload, txId, txData.marker);
+                txDetails.push(thisTx)
                 console.log('payload '+payload+JSON.stringify(txDetails))
+
                try {
                     await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });
                 } catch (dbError) {

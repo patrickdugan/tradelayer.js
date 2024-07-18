@@ -47,8 +47,12 @@ class ConsensusDatabase {
     }
 
     static async markTxAsProcessed(txId, params) {
-        let value = {processed: true, params}
-        await db.getDatabase('consensus').insertAsync({ _id: txId, value });
+        let value = { processed: true, params };
+        await db.getDatabase('consensus').updateAsync(
+            { _id: txId },
+            { $set: value },
+            { upsert: true }
+        );
     }
 
     static async getTxParamsForAddress(address) {
