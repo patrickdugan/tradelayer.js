@@ -265,7 +265,12 @@ const Validity = {
             }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
-            
+            if(propertyData==null){
+                params.valid = false
+                params.reason += 'Null returning for propertyData'
+                return params
+            }
+
                     // Whitelist validation logic
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
@@ -1195,6 +1200,12 @@ const Validity = {
         // Get property data for both propertyIdOffered and propertyIdDesired
         const propertyDataOffered = await PropertyList.getPropertyData(params.propertyIdOffered);
         const propertyDataDesired = await PropertyList.getPropertyData(params.propertyIdDesired);
+
+        if(propertyData1==null||propertyData2==null){
+                params.valid = false
+                params.reason += 'Null returning for propertyData'
+                return params
+            }
 
         if (propertyDataOffered == null || propertyDataDesired == null) {
             params.valid = false;
