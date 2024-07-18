@@ -107,7 +107,7 @@ const Logic = {
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
-                await Logic.transfer(params.fromChannelAddress, params.toChannelAddress, params.propertyId, params.amount, params.block);
+                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.block);
                 break;
             case 23:
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
@@ -835,27 +835,50 @@ const Logic = {
 	},
 
 
-	transfer(fromChannelAddress, toChannelAddress, propertyId, amount,block) {
-		    const fromChannel = this.channelsRegistry.get(fromChannelAddress);
-		    const toChannel = this.channelsRegistry.get(toChannelAddress);
+	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, block) {
+        let fromChannel = await Channels.getChannel(fromChannelAddress);
+        let toChannel = await Channels.getChannel(toChannelAddress);
 
-		    if (!fromChannel || !toChannel) {
-		        throw new Error('One or both channels not found');
-		    }
+        if (!fromChannel) {
+            throw new Error('From channel not found');
+        }
 
-		    // Check if the fromChannel has enough balance
-		    if (!fromChannel.balances[propertyId] || fromChannel.balances[propertyId] < amount) {
-		        throw new Error('Insufficient balance for transfer');
-		    }
+        if (!toChannel) {
+            console.log(`To channel ${toChannelAddress} not found. Adding to registry.`);
+            await this.addToRegistry(toChannelAddress, null, null);
+            toChannel = await Channels.getChannel(toChannelAddress);
+        }
 
-		    // Update balances in both channels
-		    fromChannel.balances[propertyId] -= amount;
-		    toChannel.balances[propertyId] = (toChannel.balances[propertyId] || 0) + amount;
+        // Determine the correct column to deduct from in the fromChannel
+        const fromColumn = isColumnA ? 'A' : 'B';
 
-		    this.channelsRegistry.set(fromChannelAddress, fromChannel);
-		    this.channelsRegistry.set(toChannelAddress, toChannel);
-		},
+        // Check if the fromChannel has enough balance
+        if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
+            throw new Error('Insufficient balance for transfer');
+        }
 
+        // Assign columns in the toChannel based on the address
+        await this.assignColumnBasedOnAddress(toChannelAddress, toChannelAddress);
+
+        // Update balances in both channels
+        fromChannel[fromColumn][propertyId] -= amount;
+
+        // Determine the column to credit in the toChannel
+        const toColumn = isColumnA ? 'A' : 'B';
+        toChannel[toColumn][propertyId] = (toChannel[toColumn][propertyId] || 0) + amount;
+
+        // Update the commit address for the destination column to be the commit address of the sender
+        if (isColumnA) {
+            toChannel.committerA = fromChannel.committerA;
+        } else {
+            toChannel.committerB = fromChannel.committerB;
+        }
+
+        // Save updated channel states back to the registry
+        Channels.channelsRegistry.set(fromChannelAddress, fromChannel);
+        Channels.channelsRegistry.set(toChannelAddress, toChannel);
+        await Channels.saveChannelsRegistry();
+    }
 
 	settleChannelPNL(channelAddress, txParams,block) {
 		    const {

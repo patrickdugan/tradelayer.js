@@ -1342,9 +1342,10 @@ const Validity = {
         },
 
         // 22: Transfer
-        validateTransfer: async (params, channelRegistry, tallyMap) => {
+        validateTransfer: async (sender, params, block) => {
             params.reason = '';
             params.valid = true;
+            params.block=block
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(22);
             if(isAlreadyActivated==false){
@@ -1352,20 +1353,26 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isValidSourceChannel = channelRegistry.isValidChannel(params.fromChannelAddress);
+            const isValidSourceChannel = channelRegistry.isValidChannel(sender);
             if (!isValidSourceChannel) {
                 params.valid = false;
                 params.reason += 'Invalid source channel; ';
             }
 
-            const isValidDestinationChannel = channelRegistry.isValidChannel(params.toChannelAddress);
-            if (!isValidDestinationChannel) {
-                params.valid = false;
-                params.reason += 'Invalid destination channel; ';
+            //const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender)
+
+            const channel = await Channels.getChannel(sender)
+            const balanceA = channel.A[params.propertyId]
+            const balanceB = channel.B[params.propertyId]
+            let balance =0 
+            if(params.isColumnA){
+                balance= balanceA
+            }else if(!params.isColumnA){
+                balance= balanceB
             }
 
-            const hasSufficientBalance = tallyMap.hasSufficientBalance(params.fromChannelAddress, params.propertyId, params.amount);
-            if (!hasSufficientBalance.hasSufficient==false) {
+            const hasSufficientBalance = Boolean(balance>=params.amount);
+            if (!hasSufficientBalance) {
                 params.valid = false;
                 params.reason += 'Insufficient balance for transfer; ';
             }

@@ -338,7 +338,8 @@ const Decode = {
     return {
       propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
       amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
-      channelAddress: parts[2],
+      isColumnA: parts[2]==="1"
+      toChannelAddress: parts[3],
     };
   },
 

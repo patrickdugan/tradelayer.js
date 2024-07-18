@@ -278,6 +278,9 @@ const Types = {
                 break;
             case 22:
                 params = Decode.decodeTransfer(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateTransfer(sender, params, block)
                 break;
             case 23:
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
