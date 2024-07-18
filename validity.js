@@ -324,6 +324,11 @@ const Validity = {
             const propertyData2 = await PropertyList.getPropertyData(params.propertyIdOffered)
 
                     // Whitelist validation logic
+            if(propertyData1==null||propertyData2==null){
+                params.valid = false
+                params.reason += 'Null returning for propertyData'
+                return params
+            }
             const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
             const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];

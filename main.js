@@ -455,8 +455,12 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             let txData = await TxIndex.processBlockData(blockData, blockHeight, true);
-            //console.log('about to call construct consensus in block '+blockHeight)
-            await this.processTransaction(txData,blockHeight)
+            console.log('tx Data for block '+blockHeight + 'txData'+txData)
+            if(txData!=undefined){
+                 await this.processTx(txData,blockHeight)
+            }
+           //console.log('about to call construct consensus in block '+blockHeight)
+           
             //console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
