@@ -542,7 +542,7 @@ const Validity = {
                 }
 
                 return params;
-            };
+            },
 
         // 9: Issue Attestation
        validateIssueOrRevokeAttestation: async (sender, params, txid) => {
