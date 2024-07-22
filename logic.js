@@ -878,7 +878,7 @@ const Logic = {
         Channels.channelsRegistry.set(fromChannelAddress, fromChannel);
         Channels.channelsRegistry.set(toChannelAddress, toChannel);
         await Channels.saveChannelsRegistry();
-    }
+    },
 
 	settleChannelPNL(channelAddress, txParams,block) {
 		    const {
@@ -889,7 +889,7 @@ const Logic = {
 		        amountSettled,
 		        close,
 		        propertyId2,
-		        amountDelivered
+		        amountDelivered,
 		    } = txParams;
 
 		    // Locate the trade channel
