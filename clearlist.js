@@ -37,6 +37,21 @@ class clearlistManager {
         }
     }
 
+    async getList(id) {
+        try {
+            const clearlist = await db.findOneAsync({ _id: id });
+            if (clearlist) {
+                return clearlist.data;
+            } else {
+                console.log(`No clearlist found for ID: ${id}`);
+                return null;
+            }
+        } catch (error) {
+            console.error(`Error loading clearlist with ID ${id}:`, error);
+            throw error;
+        }
+    }
+    
     async verifyAdmin(clearlistId, adminAddress) {
         const clearlist = this.clearlists.get(clearlistId);
 

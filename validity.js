@@ -497,26 +497,52 @@ const Validity = {
             return params;
         },
 
-        // 8: Update Admin
         validateUpdateAdmin: async (sender, params, txid) => {
-            params.reason = '';
-            params.valid = true;
+                params.reason = '';
+                params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(8);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
-            }
+                const isAlreadyActivated = await activationInstance.isTxTypeActive(8);
+                if (!isAlreadyActivated) {
+                    params.valid = false;
+                    params.reason += 'Tx type not yet activated; ';
+                }
 
-            if (!(typeof params.newAddress === 'string')) {
-                params.valid = false;
-                params.reason += 'Invalid new address; ';
-            }
+                if (!(typeof params.newAddress === 'string')) {
+                    params.valid = false;
+                    params.reason += 'Invalid new address; ';
+                }
 
-            // Additional logic can be added here if needed
+                // Validate admin based on the type
+                if (params.whitelist) {
+                    const whitelistInfo = await ClearListManager.getList(params.id);
+                    if (whitelistInfo.adminAddress !== sender) {
+                        params.valid = false;
+                        params.reason += 'Sender is not the admin of the whitelist; ';
+                    }
+                }
 
-            return params;
-        },
+                if (params.oracle) {
+                    const admin = await OracleList.isAdmin(sender, params.id);
+                    if (!oracleInfo || oracleInfo.adminAddress !== sender) {
+                        params.valid = false;
+                        params.reason += 'Sender is not the admin of the oracle; ';
+                    }
+                }
+
+                if (params.token) {
+                    const tokenInfo = await PropertyList.getPropertyData(params.id)
+                    if (tokenInfo.issuer !== sender||tokenInfo.issuer==undefined) {
+                        params.valid = false;
+                        params.reason += 'Sender is not the admin of the token; ';
+                    }
+                    if(tokenInfo.type!==2){
+                        params.valid = false
+                        params.reason += "Not a managed token with a usable admin address"
+                    }
+                }
+
+                return params;
+            };
 
         // 9: Issue Attestation
        validateIssueOrRevokeAttestation: async (sender, params, txid) => {
