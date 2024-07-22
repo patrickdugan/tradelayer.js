@@ -561,7 +561,7 @@ const Validity = {
             }
 
             // Fetch the clearlistId from params or wherever it's stored
-            const clearlistId = params.clearlistId;
+            const clearlistId = params.id;
 
             // Assuming clearlistManager or an equivalent instance is available
             const clearlist = await clearlistManager.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
@@ -582,6 +582,10 @@ const Validity = {
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
             }
 
+            if(params.revoke==true&&!clearlistManager.isAddressInClearlist(params.targetAddress)){
+                    params.valid = false;
+                    params.reason += `Target Address has no attestation to revoke `;
+            }
 
             // Additional validation logic can be added here
 
@@ -751,7 +755,7 @@ const Validity = {
         // 15: Close Oracle
         validateCloseOracle: async (sender, params, txid) => {
             params.reason = '';
-            params.valid = OracleList.isAdmin(params.senderAddress, params.oracleId);
+            params.valid = OracleList.isAdmin(sender, params.oracleId);
             if (!params.valid) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }

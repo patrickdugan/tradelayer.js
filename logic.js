@@ -687,7 +687,7 @@ const Logic = {
         return
 	},
 
-	async closeOracle(oracleId, oracleRegistry,block) {
+	async closeOracle(oracleId, block) {
 
 	    // Close the specified oracle
 	    await OracleList.closeOracle(oracleId);

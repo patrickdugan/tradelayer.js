@@ -136,8 +136,6 @@ const Decode = {
         };
     },
 
-
-
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {
         const parts = payload.split(',');
@@ -234,8 +232,8 @@ const Decode = {
     },
 
     // Decode Close Oracle Transaction
-    decodeCloseOracle() {
-      return {}; // No parameters
+    decodeCloseOracle(payload) {
+      return oracleId= parseInt(payload, 36); // No parameters
     },
 
     decodeCreateFutureContractSeries: (payload) => {

@@ -48,8 +48,6 @@ const Encode = {
         }
     },
 
-
-
     encodeTradeTokenForUTXO: (params) => {
         const payload = [
             params.propertyId.toString(36),
@@ -121,8 +119,6 @@ const Encode = {
 
         return encodedTx;
     },
-
-
 
     // Encode Create Whitelist Transaction
     encodeCreateWhitelist: (params) => {
@@ -227,8 +223,8 @@ const Encode = {
     },
 
     // Encode Close Oracle Transaction
-    encodeCloseOracle() {
-      return ''; // No parameters
+    encodeCloseOracle(id) {
+      return id.toString(36); // No parameters
     },
 
      // Encode Create Future Contract Series Transaction

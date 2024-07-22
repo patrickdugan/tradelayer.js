@@ -208,7 +208,7 @@ class PropertyManager {
         propertyData.totalInCirculation -= amount;
 
         // Update tally map to debit the amount from recipient
-        await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'redeemToken',block);
+        await TallyMap.updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
 
         // Save changes
         await this.save();
