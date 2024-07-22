@@ -1,5 +1,7 @@
 var db = require('./db')
 
+const Insurance = require('./insurance.js')
+
 class OracleList {
     static instance = null;
 
@@ -268,6 +270,40 @@ class OracleList {
             }));
         } catch (error) {
             console.error(`Error loading oracle data for oracleId ${oracleId}:`, error);
+            throw error;
+        }
+    }
+
+    static async closeOracle(oracleId) {
+        const instance = OracleList.getInstance();
+        const oracleKey = `oracle-${oracleId}`;
+        const oracleDB = db.getDatabase('oracleList');
+
+        try {
+            // Fetch the current oracle data
+            const oracle = await oracleDB.findOneAsync({ _id: oracleKey });
+
+            if (!oracle) {
+                throw new Error('Oracle not found');
+            }
+
+            // Mark the oracle as closed
+            oracle.closed = true;
+
+            // Update the oracle in the database
+            await oracleDB.updateAsync({ _id: oracleKey }, { $set: { closed: true } }, {});
+
+            // Update the in-memory map if maintaining one
+            instance.oracles.set(oracleKey, oracle);
+
+            console.log(`Oracle ID ${oracleId} has been closed`);
+
+            // Call the insurance fund to perform the payout
+            await Insurance.liquidate(oracle.adminAddress,true);
+
+            console.log(`Payout for Oracle ID ${oracleId} completed`);
+        } catch (error) {
+            console.error(`Error closing oracle ${oracleId}:`, error);
             throw error;
         }
     }

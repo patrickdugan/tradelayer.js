@@ -8,7 +8,7 @@ const amount = 0; // Set the amount for the transaction
 
 async function makeActivationTest() {
     try {
-        const activationParam = 6;
+        const activationParam = 15;
         const encodedData = types.encodePayload(0,{ code: activationParam });
 
         // Send the transaction

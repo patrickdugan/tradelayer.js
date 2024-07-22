@@ -1,11 +1,14 @@
 const db = require('./db.js');
 const path = require('path');
+const TxUtils = require('./txUtils.js')
+const TallyMap = require('./tally.js')
 
 class InsuranceFund {
-    constructor(contractSeriesId, balance, hedgeRatio) {
+    constructor(contractSeriesId, balance, hedgeRatio,oracle) {
         this.contractSeriesId = contractSeriesId;
-        this.balances = []; //{propertyId: '',amountAvailable:0,amountVesting:0}
+        this.balances = {}; //{propertyId: '',amountAvailable:0,amountVesting:0}
         this.hedgeRatio = 0.5; // 50/50 hedging with the contract
+        this.oracle=true
         // Additional properties for hedging strategy
     }
 
@@ -38,11 +41,11 @@ class InsuranceFund {
         // Additional logic for hedging strategy (if any)
     }
 
-    async withdraw(amount) {
+    async withdraw(amount,propertyId) {
         if (amount > this.balance) {
             throw new Error("Insufficient balance in the insurance fund");
         }
-        this.balance -= amount;
+        this.balances[propertyId] -= amount;
         await this.saveSnapshot();
         // Adjust hedging strategy if needed
     }
@@ -55,15 +58,20 @@ class InsuranceFund {
     }
 
     async saveSnapshot() {
+        let key = this.contractSeriesId.toString()
+        if(this.oracle){
+            key+=oracle
+        }
+        let block = await TxUtils.getBlockCount()
         const snapshot = {
             balances: this.balances,
             contractSeriesId: this.contractSeriesId, // Use a colon here
             hedgeRatio: this.hedgeRatio, // Use a colon here
-            timestamp: new Date().toISOString()
+            block: block
         };
         console.log('saving to insurance fund '+snapshot)
         await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `snapshot-${snapshot.timestamp}`, value: snapshot }, (err) => {
+            db.getDatabase('insurance').insert({ key: key, value: snapshot }, (err) => {
                 if (err) reject(err);
                 resolve();
             });
@@ -71,9 +79,9 @@ class InsuranceFund {
     }
 
 
-    async getSnapshot(timestamp) {
+    async getSnapshot(key) {
         return new Promise((resolve, reject) => {
-            db.getDatabase('insurance').findOne({ key: `snapshot-${timestamp}` }, (err, doc) => {
+            db.getDatabase('insurance').findOne({ key: key }, (err, doc) => {
                 if (err) {
                     console.error('Error retrieving snapshot:', err);
                     reject(err);
@@ -96,6 +104,38 @@ class InsuranceFund {
                 resolve();
             });
         });
+    }
+
+      // New liquidation function
+    static async liquidate(adminAddress, isOracle) {
+        try {
+            const instance = new InsuranceFund();
+            let key = instance.contractSeriesId.toString();
+            if (isOracle) {
+                key += "oracle";
+            }
+            
+            const snapshot = await instance.getSnapshot(key);
+            if (!snapshot) {
+                throw new Error("Insurance fund snapshot not found");
+            }
+
+            let balance = snapshot.balances[propertyId].amountAvailable; // Assuming propertyId is known
+            const feeCache = balance / 2;
+            const payoutAmount = balance / 2;
+
+            console.log(`Half the balance ${payoutAmount} is sent to admin address ${adminAddress}`);
+            console.log(`Half the balance ${feeCache} is put in the fee cache`);
+
+            await TallyMap.updateBalance(adminAddress, propertyId, payoutAmount, 0, 0, 0, "credit", snapshot.block);
+            await InsuranceFund.updateFeeCache(propertyId, feeCache);
+
+            console.log(`Liquidation for admin address ${adminAddress} completed`);
+        } catch (error) {
+            console.error(`Error liquidating insurance fund for admin address ${adminAddress}:`, error);
+            throw error;
+        }
+        return
     }
 
     async getPayouts(contractId, startBlock, endBlock) {
