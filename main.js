@@ -181,8 +181,7 @@ class Main {
         Real-time==true means we're looping in a delayed timer to check for new blocks and include any new ones in the
         txIndex then apply them to this to update the db and consensus.
     */
-
-       async constructConsensusFromIndex(startHeight, realtime) {
+        async constructConsensusFromIndex(startHeight) {
             let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
             let blockHeight;
             let maxProcessedHeight = startHeight - 1;
@@ -218,18 +217,10 @@ class Main {
                 return;
             }
 
-            if (realtime !== true) {
-                blockHeight = startHeight;
-                console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
-            } else if (realtime === true) {
-                blockHeight = lastConsensusHeight;
-                if (lastIndexBlock !== startHeight) {
-                    lastIndexBlock = startHeight;
-                }
-                console.log('realtime stats'+blockHeight, lastIndexBlock, startHeight)
-            }
+            blockHeight = startHeight;
+            console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
 
-             let saveHeight; // Define saveHeight here
+            let saveHeight; // Define saveHeight here
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 await AMM.updateOrdersForAllContractAMMs();
@@ -237,9 +228,9 @@ class Main {
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {
                         const txId = txData._id.split('-')[2];
-                        console.log('checking txId '+txId)
+                        console.log('checking txId ' + txId);
                         if (await Consensus.checkIfTxProcessed(txId)) {
-                            console.log('already logged')
+                            console.log('already logged');
                             continue;
                         }
 
@@ -255,7 +246,7 @@ class Main {
                             const senderUTXO = valueData.sender.amount;
                             const referenceUTXO = valueData.reference.amount / COIN;
                             console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
-                            const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO,blockHeight);
+                            const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO, blockHeight);
                             decodedParams.block = blockHeight;
 
                             if (decodedParams.type > 0) {
@@ -269,9 +260,6 @@ class Main {
                                 }
                             }
 
-                            if (realtime === true) {
-                                saveHeight = startHeight;
-                            }
                             if (decodedParams.valid === true) {
                                 await Consensus.markTxAsProcessed(txId, decodedParams);
                                 console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
@@ -291,13 +279,9 @@ class Main {
                 maxProcessedHeight = blockHeight;
             }
 
-            await this.saveMaxProcessedHeight(maxProcessedHeight, realtime, saveHeight);
+            await this.saveMaxProcessedHeight(maxProcessedHeight);
 
-            if (realtime === false || realtime === undefined || realtime === null) {
-                return this.syncIfNecessary();
-            } else {
-                return maxProcessedHeight;
-            }
+            return this.syncIfNecessary();
         }
 
         async processTx(txSet, blockHeight){
