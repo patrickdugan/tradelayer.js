@@ -46,7 +46,7 @@ class TradeLayerManager {
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
             const TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting',0)
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId, TLVESTLIQId)
-            var insuranceFund = new InsuranceFund(1,0,0.5)
+            var insuranceFund = new InsuranceFund(1,0,0.5,false)
             // Distribute initial amount to insurance fund
             insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)

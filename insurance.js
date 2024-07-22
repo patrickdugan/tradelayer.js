@@ -6,9 +6,9 @@ const TallyMap = require('./tally.js')
 class InsuranceFund {
     constructor(contractSeriesId, balance, hedgeRatio,oracle) {
         this.contractSeriesId = contractSeriesId;
-        this.balances = {}; //{propertyId: '',amountAvailable:0,amountVesting:0}
+        this.balances = []; //{propertyId: '',amountAvailable:0,amountVesting:0}
         this.hedgeRatio = 0.5; // 50/50 hedging with the contract
-        this.oracle=true
+        this.oracle = oracle
         // Additional properties for hedging strategy
     }
 
@@ -120,8 +120,15 @@ class InsuranceFund {
                 throw new Error("Insurance fund snapshot not found");
             }
 
-            let balance = snapshot.balances[propertyId].amountAvailable; // Assuming propertyId is known
-            const feeCache = balance / 2;
+            let balance = 0;
+
+            for (const balanceEntry of snapshot.balances) {
+                if (balanceEntry.propertyId === propertyId) {
+                    balance = balanceEntry.amountAvailable;
+                    break;
+                }
+            }
+                        const feeCache = balance / 2;
             const payoutAmount = balance / 2;
 
             console.log(`Half the balance ${payoutAmount} is sent to admin address ${adminAddress}`);
