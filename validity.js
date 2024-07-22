@@ -523,7 +523,7 @@ const Validity = {
 
                 if (params.oracle) {
                     const admin = await OracleList.isAdmin(sender, params.id);
-                    if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!===sender) {
+                    if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!==sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the oracle; ';
                     }
@@ -535,7 +535,7 @@ const Validity = {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the token;' 
                     }
-      
+
                     if(tokenInfo.type!==2){
                         params.valid = false
                         params.reason += "Not a managed token with a usable admin address"

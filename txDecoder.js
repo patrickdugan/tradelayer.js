@@ -156,7 +156,7 @@ const Decode = {
             oracle: parts[2] === '1',
             token: parts[3] === '1',
             id: parseInt(parts[4], 36),
-            params.updateBackup === '1'
+            updateBackup: parts[5] === '1'
         };
     },
 
