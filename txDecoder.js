@@ -141,7 +141,9 @@ const Decode = {
         const parts = payload.split(',');
         return {
             backupAddress: parts[0],
-            whitelistId: parseInt(parts[1], 36)
+            name: parts[1],
+            url: parts[2],
+            description: parts[3]
         };
     },
 
@@ -153,7 +155,8 @@ const Decode = {
             whitelist: parts[1] === '1',
             oracle: parts[2] === '1',
             token: parts[3] === '1',
-            id: parseInt(parts[4], 36)
+            id: parseInt(parts[4], 36),
+            params.updateBackup === '1'
         };
     },
 

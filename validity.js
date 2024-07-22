@@ -515,7 +515,7 @@ const Validity = {
                 // Validate admin based on the type
                 if (params.whitelist) {
                     const whitelistInfo = await ClearListManager.getList(params.id);
-                    if (whitelistInfo.adminAddress !== sender) {
+                    if (whitelistInfo.adminAddress !== sender||whitelistInfo.backupAddress!==sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the whitelist; ';
                     }
@@ -523,7 +523,7 @@ const Validity = {
 
                 if (params.oracle) {
                     const admin = await OracleList.isAdmin(sender, params.id);
-                    if (!oracleInfo || oracleInfo.adminAddress !== sender) {
+                    if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!===sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the oracle; ';
                     }
@@ -531,10 +531,11 @@ const Validity = {
 
                 if (params.token) {
                     const tokenInfo = await PropertyList.getPropertyData(params.id)
-                    if (tokenInfo.issuer !== sender||tokenInfo.issuer==undefined) {
+                    if (tokenInfo.issuer !== sender||tokenInfo.backupAddress!==sender){
                         params.valid = false;
-                        params.reason += 'Sender is not the admin of the token; ';
+                        params.reason += 'Sender is not the admin of the token;' 
                     }
+      
                     if(tokenInfo.type!==2){
                         params.valid = false
                         params.reason += "Not a managed token with a usable admin address"

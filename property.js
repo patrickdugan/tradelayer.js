@@ -239,7 +239,7 @@ class PropertyManager {
         }
     }
 
-    static async updateAdmin(propertyId, newAddress) {
+    static async updateAdmin(propertyId, newAddress, backup) {
         try {
             // Ensure the property index is loaded
             await PropertyManager.load();
@@ -252,9 +252,12 @@ class PropertyManager {
             // Get the property data
             const propertyData = await getPropertyData(propertyId);
 
-            // Update the admin address
-             // Update the admin address
-            propertyData.issuer = newAddress;
+            if(backup){
+                properData.backupAddress=newAddress
+            }else{
+                 // Update the admin address
+                propertyData.issuer = newAddress; 
+            }
 
             // Update the property index with the modified property data
             this.propertyIndex.set(propertyId, propertyData);

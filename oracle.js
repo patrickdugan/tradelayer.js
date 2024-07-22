@@ -163,7 +163,7 @@ class OracleList {
     }
 
 
-    static async updateAdmin(oracleId, newAdminAddress) {
+    static async updateAdmin(oracleId, newAdminAddress, backup) {
         const oracleKey = `oracle-${oracleId}`;
         const instance = OracleList.getInstance();
             
@@ -177,8 +177,12 @@ class OracleList {
             throw new Error('Oracle not found');
         }
 
-        // Update the admin address
-        oracle.adminAddress = newAdminAddress;
+        if(backup){
+            oracle.backupAddress=newAdminAddress
+        }else{
+            // Update the admin address
+            oracle.adminAddress = newAdminAddress;
+        }
 
         // Update the oracle in the database
         await oracleDB.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});

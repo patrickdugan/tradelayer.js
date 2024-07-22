@@ -62,10 +62,10 @@ const Logic = {
                 await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
                 break;
            case 7:
-                await Logic.createClearList(params.adminAddress, params.name, params.criteria, params.backupAddress, params.block);
+                await Logic.createClearList(sender, params.name, params.url, params.description, params.backupAddress, params.block);
                 break;
             case 8:
-                await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.block);
+                await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
                 break;
             case 9:
                 await Logic.issueOrRevokeAttestation(params.clearlistId, params.targetAddress, params.clearlistRegistry, params.block);
@@ -564,8 +564,7 @@ const Logic = {
 		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
 		     * @returns {Object} - The result of the clearlist creation
 		     */
-	async createClearList(params) {
-		        const { adminAddress, name, criteria, backupAddress } = params;
+	async createClearList(adminAddress, name, url, description, backupAddress, block){
 
 		        // Validate input parameters
 		        if (!adminAddress) {
@@ -579,7 +578,8 @@ const Logic = {
 		        const clearlistId = await clearListManager.createclearlist({
 		            adminAddress,
 		            name,
-		            criteria,
+		            url,
+                    description,
 		            backupAddress
 		        });
 
@@ -590,16 +590,16 @@ const Logic = {
 		        };
 		},
 
-    async updateAdmin(whitelist,token,oracle, newAddress, id) {
+    async updateAdmin(whitelist,token,oracle, newAddress, id, updateBackup, block) {
 
 
 	    if(whitelist){
                 const clearListManager = new ClearListManager();
-                await clearListManager.updateAdmin(id, newAddress);
+                await clearListManager.updateAdmin(id, newAddress,updateBackup);
         }else if(token){
-                await PropertyList.updateAdmin(id, newAddress);
+                await PropertyList.updateAdmin(id, newAddress,updateBackup);
         }else if(oracle){
-                await OracleList.updateAdmin(entityId, newAddress);
+                await OracleList.updateAdmin(entityId, newAddress, updateBackup);
         }
 
 	    console.log(`Admin updated for ${entityType} ${entityId}`);

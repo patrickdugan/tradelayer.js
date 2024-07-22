@@ -124,6 +124,9 @@ const Encode = {
     encodeCreateWhitelist: (params) => {
         const payload = [
             params.backupAddress,
+            params.name,
+            params.url,
+            params.description
         ];
         return payload.join(',');
     },
@@ -136,6 +139,7 @@ const Encode = {
             params.oracle ? '1' : '0',
             params.token ? '1' : '0',
             params.id.toString(36),
+            params.updateBackup ? '1':'0'
         ];
         return payload.join(',');
     },

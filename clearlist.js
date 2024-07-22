@@ -51,7 +51,7 @@ class clearlistManager {
             throw error;
         }
     }
-    
+
     async verifyAdmin(clearlistId, adminAddress) {
         const clearlist = this.clearlists.get(clearlistId);
 
@@ -62,7 +62,7 @@ class clearlistManager {
         return clearlist.adminAddress === adminAddress;
     }
 
-    async updateAdmin(clearlistId, newAdminAddress) {
+    async updateAdmin(clearlistId, newAdminAddress, backup) {
         const clearlistKey = `${clearlistId}`;
         const clearlist = this.clearlists.get(clearlistId);
 
@@ -70,7 +70,11 @@ class clearlistManager {
             throw new Error('Clearlist not found');
         }
 
-        clearlist.adminAddress = newAdminAddress;
+        if(backup){
+            clearlist.backupAddress=newAdminAddress
+        }else{
+            clearlist.adminAddress = newAdminAddress;
+        }
         await this.db.updateAsync({ _id: clearlistKey }, { $set: { data: clearlist } });
         this.clearlists.set(clearlistId, clearlist);
 
