@@ -239,6 +239,35 @@ class PropertyManager {
         }
     }
 
+    static async updateAdmin(propertyId, newAddress) {
+        try {
+            // Ensure the property index is loaded
+            await PropertyManager.load();
+
+            // Check if the property exists
+            if (!PropertyManager.instance.propertyIndex.has(propertyId)) {
+                throw new Error(`Property with ID ${propertyId} does not exist.`);
+            }
+
+            // Get the property data
+            const propertyData = await getPropertyData(propertyId);
+
+            // Update the admin address
+             // Update the admin address
+            propertyData.issuer = newAddress;
+
+            // Update the property index with the modified property data
+            this.propertyIndex.set(propertyId, propertyData);
+
+            await this.save();
+
+            console.log(`Admin address for property ID ${propertyId} updated to ${newAddress}.`);
+        } catch (error) {
+            console.error(`Error updating admin address for property ID ${propertyId}:`, error);
+            throw error;
+        }
+    }
+
 
     // ... other methods like verifyIfManaged, updateAdmin ...
 }

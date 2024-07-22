@@ -65,7 +65,7 @@ const Logic = {
                 await Logic.createClearList(params.adminAddress, params.name, params.criteria, params.backupAddress, params.block);
                 break;
             case 8:
-                await Logic.updateAdmin(params.entityType, params.entityId, params.newAdminAddress, params.registries, params.block);
+                await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.block);
                 break;
             case 9:
                 await Logic.issueOrRevokeAttestation(params.clearlistId, params.targetAddress, params.clearlistRegistry, params.block);
@@ -590,23 +590,17 @@ const Logic = {
 		        };
 		},
 
-    async updateAdmin(entityType, entityId, newAdminAddress, registries) {
+    async updateAdmin(whitelist,token,oracle, newAddress, id) {
 
 
-	    switch (entityType) {
-	        case 'property':
-	            await registries.propertyRegistry.updateAdmin(entityId, newAdminAddress);
-	            break;
-	        case 'clearlist':
+	    if(whitelist){
                 const clearListManager = new ClearListManager();
-	            await registries.clearListManager.updateAdmin(entityId, newAdminAddress);
-	            break;
-	        case 'oracle':
-	            await registries.oracleRegistry.updateAdmin(entityId, newAdminAddress);
-	            break;
-	        default:
-	            throw new Error('Invalid entity type');
-	    }
+                await clearListManager.updateAdmin(id, newAddress);
+        }else if(token){
+                await PropertyList.updateAdmin(id, newAddress);
+        }else if(oracle){
+                await OracleList.updateAdmin(entityId, newAddress);
+        }
 
 	    console.log(`Admin updated for ${entityType} ${entityId}`);
         return
