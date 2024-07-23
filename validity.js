@@ -1332,7 +1332,7 @@ const Validity = {
             }
 
             const channel = await Channels.getChannel(params.channelAddress)
-            let isColumnA
+            let isColumnA = params.column
             let balance 
             console.log('inside validate withdrawal '+sender+' '+Boolean(sender==channel.participants.A)+Boolean(sender==channel.participants.B))
             if (sender!=channel.participants.A&&sender!=channel.participants.B) {
@@ -1343,7 +1343,7 @@ const Validity = {
                     isColumnA=true
                     balance=channel.A[params.propertyId]
                     console.log('column ' +params.column)
-                    if(params.column==true){
+                    if(params.column==false){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }
@@ -1351,7 +1351,7 @@ const Validity = {
                     console.log('checking this column disqualification logic works '+params.column)
                     isColumnA=false
                     balance=channel.B[params.propertyId]
-                    if(params.column==false){
+                    if(params.column==true){
                         params.valid = false;
                         params.reason += 'Sender does not match with column';
                     }
