@@ -151,6 +151,21 @@ class Channels {
         return channel
     }
 
+    static async isValidChannel(channelAddress) {
+        // Load the channel from the registry if not already loaded
+        let channel = this.channelsRegistry.get(channelAddress);
+        if (!channel) {
+            await this.loadChannelsRegistry();
+            channel = this.channelsRegistry.get(channelAddress);
+        }
+
+        // Check if the channel exists
+        if (!channel) {
+            console.log(`Channel ${channelAddress} does not exist`);
+            return false;
+        }
+    }
+
     static async getCommitAddresses(channelAddress) {
         let channel = this.channelsRegistry.get(channelAddress);
         //console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)

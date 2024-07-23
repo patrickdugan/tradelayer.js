@@ -310,8 +310,8 @@ const Encode = {
 
     // Encode Transfer Transaction
     encodeTransfer: (params) => {
-        const propertyIds = params.propertyIds.map(id => id.toString(36)).join(';');
-        const amounts = params.amounts.map(amount => amount.toString(36)).join(';');
+        const propertyId = params.propertyId.toString(36);
+        const amounts = params.amount.toString(36)
         const isColumnA = params.isColumnA
         const destinationAddr = params.destinationAddr
         return [propertyIds, amounts, isColumnA, destinationAddr].join(',');

@@ -216,7 +216,7 @@ const Logic = {
                     const propertyId = propertyIdNumbers[i];
                     const amount = amounts[i];
                     const recipientAddress = recipientAddresses[i];
-
+                    console.log('checking block before process send' +block)
                     await processSend(senderAddress, recipientAddress, propertyId, amount,block);
                 }
             } else {
@@ -242,8 +242,8 @@ const Logic = {
                         await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
                         await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
                     }else if(propertyIdNumbers!=undefined){
-                        console.log('vanilla single send')
-                        await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts);
+                        console.log('vanilla single send, block '+block)
+                        await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts,block);
                 }
             }
         }
@@ -301,7 +301,7 @@ const Logic = {
     },
 
 
-    async sendSingle(senderAddress, receiverAddress, propertyId, amount) {
+    async sendSingle(senderAddress, receiverAddress, propertyId, amount,block) {
         const tallyMapInstance = await TallyMap.getInstance();
 
         // Check if sender has enough balance
@@ -312,8 +312,8 @@ const Logic = {
         }
 
         // Perform the send operation
-        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0,'send');
-        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receive');
+        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0,'send', block);
+        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receive', block);
 
         // Handle special case for TLVEST
         if (propertyId === 2) {
@@ -434,8 +434,8 @@ const Logic = {
                 }
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken( senderAddress, channelAddress, propertyId, tokenAmount, transactionTime,block) {
-       console.log('commiting tokens '+tokenAmount)
+	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, block) {
+       console.log('commiting tokens '+tokenAmount+' '+block)
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 
@@ -443,7 +443,7 @@ const Logic = {
         await TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive',block);
 
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, transactionTime);
+        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, block);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
         return;
@@ -845,7 +845,7 @@ const Logic = {
 
         // Determine the correct column to deduct from in the fromChannel
         const fromColumn = isColumnA ? 'A' : 'B';
-
+        console.log(fromColumn, amount, fromChannel[fromColumn][propertyId] )
         // Check if the fromChannel has enough balance
         if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
             throw new Error('Insufficient balance for transfer');
@@ -868,9 +868,16 @@ const Logic = {
             toChannel.committerB = fromChannel.committerB;
         }
 
+        TallyMap.updateBalance(fromChannelAddress, propertyId, 0, -amount, 0, 0, 'transferDebit', block)
+        TallyMap.updateBalance(toChannelAddress, propertyId, 0, amount, 0, 0, 'transferCredit', block)
+
         // Save updated channel states back to the registry
         Channels.channelsRegistry.set(fromChannelAddress, fromChannel);
+        // Determine which column (A or B) to assign the tokens in the channel registry
+        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount,block);
         Channels.channelsRegistry.set(toChannelAddress, toChannel);
+      
+        
         await Channels.saveChannelsRegistry();
     },
 

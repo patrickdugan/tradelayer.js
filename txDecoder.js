@@ -337,8 +337,8 @@ const Decode = {
   decodeTransfer: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyIds: parts[0].split(';').map(id => parseInt(id, 36)),
-      amounts: parts[1].split(';').map(amount => parseInt(amount, 36)),
+      propertyId: parseInt(parts[0],36),
+      amount: parseInt(parts[1], 36),
       isColumnA: parts[2]==="1",
       toChannelAddress: parts[3],
     };

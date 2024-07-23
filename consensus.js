@@ -36,9 +36,9 @@ class ConsensusDatabase {
     }
 
     static async checkIfTxProcessed(txId) {
-        console.log('inside checkIfTxProcessed ' + txId);
+        //console.log('inside checkIfTxProcessed ' + txId);
         const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
-        console.log(result);
+        //console.log(result);
         return result && result.processed === true;
     }
 

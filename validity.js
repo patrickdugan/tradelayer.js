@@ -1384,7 +1384,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const isValidSourceChannel = channelRegistry.isValidChannel(sender);
+            const isValidSourceChannel = Channels.isValidChannel(sender);
             if (!isValidSourceChannel) {
                 params.valid = false;
                 params.reason += 'Invalid source channel; ';
@@ -1395,17 +1395,31 @@ const Validity = {
             const channel = await Channels.getChannel(sender)
             const balanceA = channel.A[params.propertyId]
             const balanceB = channel.B[params.propertyId]
+            let commiter = ''
             let balance =0 
             if(params.isColumnA){
                 balance= balanceA
+                commiter = channel.participants.A
             }else if(!params.isColumnA){
                 balance= balanceB
+                commiter = channel.participants.B
             }
-
+            console.log(JSON.stringify(channel))
+            console.log(balanceA,balanceB, params.amount, params.isColumnA)
             const hasSufficientBalance = Boolean(balance>=params.amount);
             if (!hasSufficientBalance) {
                 params.valid = false;
                 params.reason += 'Insufficient balance for transfer; ';
+            }
+
+            const otherChannel = await Channels.getChannel(params.toChannelAddress)
+            if(otherChannel!=undefined||otherChannel!=null){
+                let commitedA = otherChannel.participants.A
+                let commitedB = otherChannel.participants.B
+                if(commitedA!=''&&commitedA!=sender&&commitedB!=''&&commitedB!=sender){
+                    params.valid = false
+                    params.reason += 'Both columns of the desired transferee channel are occupied by commiters other than the commiter owning the transfered tokens.'
+                }
             }
 
             return params;

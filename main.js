@@ -228,16 +228,16 @@ class Main {
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {
                         const txId = txData._id.split('-')[2];
-                        console.log('checking txId ' + txId);
+                        //console.log('checking txId ' + txId);
                         if (await Consensus.checkIfTxProcessed(txId)) {
-                            console.log('already logged');
+                            //console.log('already logged');
                             continue;
                         }
 
                         for (const valueData of txData.value) {
                             var payload = valueData.payload;
-                            console.log(valueData);
-                            console.log(payload);
+                            //console.log(valueData);
+                            //console.log(payload);
                             const marker = valueData.marker;
                             const type = parseInt(payload.slice(0, 1).toString(36), 36);
                             payload = payload.slice(1, payload.length).toString(36);
@@ -245,7 +245,7 @@ class Main {
                             const referenceAddress = valueData.reference.address;
                             const senderUTXO = valueData.sender.amount;
                             const referenceUTXO = valueData.reference.amount / COIN;
-                            console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
+                            //console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
                             const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO, blockHeight);
                             decodedParams.block = blockHeight;
 

@@ -1,5 +1,6 @@
 var dbInstance = require('./db.js')
 var TxIndex = require('./txIndex.js')
+var TxUtils = require('./txUtils.js')
 var PropertyList = require('./property.js')
 const uuid = require('uuid');
 const BigNumber = require('bignumber.js');
@@ -432,10 +433,11 @@ class TallyMap {
     }
 
     // Function to record a delta
-     static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
+    static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
         const newUuid = uuid.v4();
         const db = dbInstance.getDatabase('tallyMapDelta');
-        const deltaKey = `${address}-${propertyId}-${newUuid}`;
+        let deltaKey = `${address}-${propertyId}-${newUuid}`;
+        deltaKey+='-'+block
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
         
         //console.log('saving delta ' + JSON.stringify(delta));
