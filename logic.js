@@ -852,9 +852,9 @@ const Logic = {
         }
 
         // Assign columns in the toChannel based on the address
-        await this.assignColumnBasedOnAddress(toChannelAddress, toChannelAddress);
+        //await Channels.assignColumnBasedOnAddress(toChannelAddress, toChannelAddress);
 
-        // Update balances in both channels
+        // Update balances in from channel
         fromChannel[fromColumn][propertyId] -= amount;
 
         // Determine the column to credit in the toChannel
@@ -868,15 +868,12 @@ const Logic = {
             toChannel.committerB = fromChannel.committerB;
         }
 
-        TallyMap.updateBalance(fromChannelAddress, propertyId, 0, -amount, 0, 0, 'transferDebit', block)
         TallyMap.updateBalance(toChannelAddress, propertyId, 0, amount, 0, 0, 'transferCredit', block)
 
         // Save updated channel states back to the registry
         Channels.channelsRegistry.set(fromChannelAddress, fromChannel);
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount,block);
-        Channels.channelsRegistry.set(toChannelAddress, toChannel);
-      
+        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount,block);      
         
         await Channels.saveChannelsRegistry();
     },
