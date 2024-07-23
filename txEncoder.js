@@ -314,7 +314,7 @@ const Encode = {
         const amounts = params.amount.toString(36)
         const isColumnA = params.isColumnA
         const destinationAddr = params.destinationAddr
-        return [propertyIds, amounts, isColumnA, destinationAddr].join(',');
+        return [propertyId, amounts, isColumnA, destinationAddr].join(',');
     },
 
     // Encode Settle Channel PNL Transaction

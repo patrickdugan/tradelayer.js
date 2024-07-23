@@ -9,7 +9,7 @@ const TxUtils = require('./txUtils');
 
 const params = {
 	propertyId:4,
-	amount: 1000,
+	amount: 998,
 	isColumnA: 0,
 	destinationAddr: 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
 }
