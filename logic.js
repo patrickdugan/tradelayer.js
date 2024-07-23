@@ -107,7 +107,7 @@ const Logic = {
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
-                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.block);
+                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.block);
                 break;
             case 23:
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
@@ -845,7 +845,7 @@ const Logic = {
 
         // Determine the correct column to deduct from in the fromChannel
         const fromColumn = isColumnA ? 'A' : 'B';
-        console.log(fromColumn, amount, fromChannel[fromColumn][propertyId] )
+        console.log(JSON.stringify(fromChannel),fromColumn, isColumnA, amount, fromChannel[fromColumn][propertyId] )
         // Check if the fromChannel has enough balance
         if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
             throw new Error('Insufficient balance for transfer');
