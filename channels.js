@@ -38,7 +38,7 @@ class Channels {
         }
     }
 
-    static async loadChannelsRegistry(retrieve) {
+    static async loadChannelsRegistry() {
         // Load the channels registry from NeDB
         const channelsDB = dbInstance.getDatabase('channels');
         try {
@@ -46,7 +46,6 @@ class Channels {
             //console.log('loading channel DB '+JSON.stringify(entries))
             this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
             //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
-            if(retrieve==true)
             return
         } catch (error) {
             if (error.message.includes('does not exist')) {
@@ -335,6 +334,10 @@ class Channels {
     }
 
     static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, blockHeight) {
+
+          if (!this.channelsRegistry) {
+             await this.loadChannelsRegistry();
+          }
         // Check if the channel exists in the registry
         if (!this.channelsRegistry.has(channelAddress)) {
             // Initialize a new channel record if it doesn't exist
