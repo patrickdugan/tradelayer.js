@@ -170,7 +170,7 @@ class Orderbook {
             const isSellOrder = Boolean(order.offeredPropertyId < order.desiredPropertyId);
 
             // Add the order to the orderbook
-            orderbookData = await orderbook.insertOrder(order, orderbookData, isSellOrder);
+            orderbookData = await orderbook.insertOrder(order, orderbookData, isSellOrder,false);
             //console.log('Order Insertion Confirmation:', orderbookData);
 
             // Match orders in the orderbook
@@ -595,7 +595,7 @@ class Orderbook {
 
             // Insert the contract order into the order book
             console.log('checking orderbook in addcontract order '+JSON.stringify(orderbook))
-            orderbook = await this.insertOrder(contractOrder, orderBookKey, side,isLiq);
+            orderbook = await this.insertOrder(contractOrder, orderbook, side,isLiq);
 
             console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
