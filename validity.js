@@ -424,7 +424,7 @@ const Validity = {
                 //console.log('cancelling contract order '+JSON.stringify(params) + '')
                 // Check the validity of the contract ID
                 if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
-                    console.log('calling get contract Info in validate cancel'+block)
+                    console.log('calling get contract Info in validate cancel'+params.block)
                     const contractExists = await ContractRegistry.getContractInfo(params.offeredPropertyId);
                     console.log('checking contract data for isContract cancel '+params.offeredPropertyId+' '+JSON.stringify(contractExists))
                     if (!contractExists) {
@@ -916,9 +916,11 @@ const Validity = {
 
             const MarginMap = require('./marginMap.js')
             const marginMap = await MarginMap.loadMarginMap(params.contractId);
-
+            console.log(params.contractId, params.price)
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
-            let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
+            console.log('init margin '+initialMarginPerContract)
+            const amountBN = new BigNumber(params.amount);
+            let totalInitialMargin = BigNumber(initialMarginPerContract).times(amountBN).toNumber();
 
             const existingPosition = await marginMap.getPositionForAddress(sender, params.contractId);
             // Determine if the trade reduces the position size for buyer or seller
@@ -928,8 +930,8 @@ const Validity = {
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
 
                 // Check if the sender has enough balance for the initial margin
-                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin)
-                const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin);
+                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+sender, contractDetails.collateralPropertyId, totalInitialMargin)
+                const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, contractDetails.collateralPropertyId, totalInitialMargin);
                 if (hasSufficientBalance.hasSufficient==false) {
                     console.log('Insufficient balance for initial margin');
                     params.valid=false
@@ -950,7 +952,7 @@ const Validity = {
                 flipShort=params.amount-existingPosition.contracts
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
              }
-             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.issuer.collateralPropertyId, totalInitialMargin)
+             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.collateralPropertyId, totalInitialMargin)
              if(hasSufficientBalance.hasSufficient==false){
                  let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                     .dividedBy(initialMarginPerContract)
@@ -960,8 +962,9 @@ const Validity = {
                 params.amount -= contractUndo;
              }
 
-            const collateralPropertyId = contractDetails.issuer.collateralPropertyId;
+            const collateralPropertyId = contractDetails.collateralPropertyId;
             if(collateralPropertyId!=1){
+                console.log(collateralPropertyId)
                        // Get property data for the collateralPropertyId
                 const collateralPropertyData = await PropertyList.getPropertyData(collateralPropertyId);
                 if (collateralPropertyData == null || collateralPropertyData == undefined) {
@@ -1023,7 +1026,7 @@ const Validity = {
                 return params
             }
             console.log(JSON.stringify(contractDetails))
-            const collateralIdString = contractDetails.issuer.collateralPropertyId.toString()
+            const collateralIdString = contractDetails.collateralPropertyId.toString()
             const balanceA = channel.A[collateralIdString]
             const balanceB = channel.B[collateralIdString]
             console.log('checking our channel info is correct: A'+balanceA+' B '+balanceB+' commitAddrA '+commitAddressA+' commitAddrB '+commitAddressB)

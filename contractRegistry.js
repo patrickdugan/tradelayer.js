@@ -259,7 +259,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-        console.log('retrieving db info for contract '+contractId)
+        //console.log('retrieving db info for contract '+contractId)
         const contractListDB = db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -297,7 +297,7 @@ class ContractRegistry {
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
 
-        console.log('inside isInverse')
+        //console.log('inside isInverse')
         const contractInfo = await this.getContractInfo(contractId);
         
         // Check if contractInfo exists and has the 'inverse' property
@@ -311,15 +311,15 @@ class ContractRegistry {
 
      // Function to get initial margin requirement for a contract
     static async getInitialMargin(contractId, price) {
-        console.log('checking contractId inside getInitialMargin '+contractId)
+        //console.log('checking contractId inside getInitialMargin '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-        console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
-        let inverse = contractInfo.issuer.inverse;
-        let notionalValue = contractInfo.issuer.notionalValue
-        let leverage = contractInfo.issuer.leverage
+        //console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
+        let inverse = contractInfo.inverse;
+        let notionalValue = contractInfo.notionalValue
+        let leverage = contractInfo.leverage
         //console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
@@ -355,7 +355,7 @@ class ContractRegistry {
     static async getCollateralId(contractId) {
         // Load contract information
 
-        console.log('inside get collateralPropertyId')
+        //console.log('inside get collateralPropertyId')
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
 
         // Check if contract information is available
@@ -497,9 +497,9 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        console.log('inside is oracle contract '+contractId)
+        //console.log('inside is oracle contract '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        console.log(JSON.stringify(contractInfo))
+        //console.log(JSON.stringify(contractInfo))
         return contractInfo && contractInfo.issuer.native === false;
     }
 

@@ -23,7 +23,7 @@ class AMMPool {
         // Loop through each contract ID
         for (const contractId of contractIds) {
             let id = contractId[1].id
-            console.log('inside AMMs ' +contractId)
+            //console.log('inside AMMs ' +contractId)
             let change = await Clearing.isPriceUpdatedForBlockHeight(id, block)
             if(!change){continue}
             let blob = await Clearing.getPriceChange(blockHeight, id)

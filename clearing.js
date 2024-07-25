@@ -171,7 +171,7 @@ class Clearing {
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
         // Determine if the contract is an oracle contract
         const ContractRegistry = require('./contractRegistry.js')
-        console.log('inside isPrice updated '+contractId, blockHeight)
+        //console.log('inside isPrice updated '+contractId, blockHeight)
         const isOracle = await ContractRegistry.isOracleContract(contractId);
         let latestData;
         //console.log('checking if contract is oracle '+contractId +' '+isOracle)
