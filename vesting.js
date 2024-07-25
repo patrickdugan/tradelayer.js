@@ -60,8 +60,7 @@ class TradeLayerManager {
 
             const NativeHedgeId = await ContractList.createContractSeries(this.adminAddress, hedgeParams.native, 
                 hedgeParams.underlyingOracleId, hedgeParams.onChainData, hedgeParams.notionalPropertyId, hedgeParams.notionalValue, 
-                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, null, block
-            );
+                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, block,null );
 
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
             const TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting',0)

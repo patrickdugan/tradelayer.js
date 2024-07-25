@@ -33,6 +33,7 @@ class Orderbook {
                     //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
                     return orderBookData.value
                 }else{
+                    console.log('new orderbook for '+key)
                     return {buy:[],sell:[]}
                 }
             }   catch (error) {
@@ -191,7 +192,7 @@ class Orderbook {
             return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
         }
 
-       async insertOrder(order, orderbookData, isSellOrder) {
+       async insertOrder(order, orderbookData, isSellOrder, isLiq) {
 
             if (typeof orderbookData === 'string') {
                 try {
@@ -212,7 +213,7 @@ class Orderbook {
 
             // Log the current state for debugging
             //console.log('Order:', JSON.stringify(order));
-            //console.log('Orderbook data before:', JSON.stringify(orderbookData));
+            console.log('Orderbook data before:', JSON.stringify(orderbookData));
             //console.log('Is sell order:', isSellOrder);
 
             // Determine the side of the order
@@ -239,7 +240,7 @@ class Orderbook {
             orderbookData[side] = bookSide;
 
             // Log the updated orderbookData for debugging
-            //console.log('Updated orderbook data:', JSON.stringify(orderbookData));
+            console.log('Updated orderbook data:', JSON.stringify(orderbookData));
 
             return orderbookData;
         }
@@ -590,11 +591,13 @@ class Orderbook {
             const orderBookKey = `${contractId}`;
 
             // Load the order book for the given contract
-            await this.loadOrderBook(orderBookKey);
+            let orderbook = await this.loadOrderBook(orderBookKey);
 
             // Insert the contract order into the order book
-            await this.insertOrder(contractOrder, orderBookKey, side,isLiq);
+            console.log('checking orderbook in addcontract order '+JSON.stringify(orderbook))
+            orderbook = await this.insertOrder(contractOrder, orderBookKey, side,isLiq);
 
+            console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
             var matchResult = await this.matchContractOrders(orderBookKey);
             if(matchResult.matches !=[]){

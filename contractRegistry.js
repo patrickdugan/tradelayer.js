@@ -68,7 +68,7 @@ class ContractRegistry {
         return this.instance;
     }
 
-    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block) {
+    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block,whitelist) {
         // Load the current contract list from the database
         const contractListDB = db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
@@ -313,15 +313,15 @@ class ContractRegistry {
             const contractData = await this.getContractInfo(contractId);
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
-            if (contractData && contractData.native && contractData.issuer.notionalValue !== undefined && contractInfo.inverse==true) {
-                const notionalValue = contractData.issuer.notionalValue;
+            if (contractData && contractData.native && contractData.notionalValue !== undefined && contractInfo.inverse==true) {
+                const notionalValue = contractData.notionalValue;
                 return notionalValue;
-            } else if(contractInfo.issuer.inverse==false && contractInfo.issuer.native==false) {
-                const latestPrice = await OracleRegistry.getOracleData(contractData.issuer.oracleId);
-                return latestPrice.price*contractData.issuer.notonalValue; // or any default value
-            } else if(contractInfo.issuer.inverse==true && contractInfo.issuer.native==false){
-                const latestPrice = await OracleRegistry.getOracleData(contractData.issuer.oracleId);
-                return 1/latestPrice.price*contractData.issuer.notonalValue; // or any default value
+            } else if(contractInfo.inverse==false && contractInfo.native==false) {
+                const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
+                return latestPrice.price*contractData.notonalValue; // or any default value
+            } else if(contractInfo.inverse==true && contractInfo.native==false){
+                const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
+                return 1/latestPrice.price*contractData.notonalValue; // or any default value
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
@@ -397,19 +397,19 @@ class ContractRegistry {
         if (!contractInfo) {
             console.log(`Contract info not found for contract ID: ${contractId}`);
         }
-        //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.issuer.collateralPropertyId))
+        //console.log('getting contract info for '+contractId +' '+JSON.stringify(contractInfo.collateralPropertyId))
         // Return the collateral property ID from the contract information
-        //console.log('returning collateral id '+contractInfo.issuer.collateralPropertyId+ ' type of '+typeof contractInfo.issuer.collateralPropertyId)
-        return contractInfo.issuer.collateralPropertyId;
+        //console.log('returning collateral id '+contractInfo.collateralPropertyId+ ' type of '+typeof contractInfo.collateralPropertyId)
+        return contractInfo.collateralPropertyId;
     }
 
         // In the contract order addition process
     static async moveCollateralToReserve(sender, contractId, amount,price, block) {
         const TallyMap = require('./tally.js')
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
-        //console.log('initialMarginPerContract '+initialMarginPerContract)
+        console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        //console.log('collateralPropertyId '+collateralPropertyId)
+        console.log('collateralPropertyId '+collateralPropertyId)
         const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         console.log('Total Initial Margin to reserve ' +totalInitialMargin+' '+sender+' '+collateralPropertyId)
         // Move collateral to reservd position
@@ -494,8 +494,8 @@ class ContractRegistry {
 
         console.log('inside get price at block')
             let info = await ContractRegistry.getContractInfo(contractId);
-            propertyId1 = info.issuer.onChainData[0];
-            propertyId2 = info.issuer.onChainData[1];
+            propertyId1 = info.onChainData[0];
+            propertyId2 = info.onChainData[1];
             latestData = await VolumeIndex.get
         }
 
@@ -535,14 +535,14 @@ class ContractRegistry {
         //console.log('inside is oracle contract '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         //console.log(JSON.stringify(contractInfo))
-        return contractInfo && contractInfo.issuer.native === false;
+        return contractInfo && contractInfo.native === false;
     }
 
       // Determine a contract's oracle
     static async getOracleId(contractId) {
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        //console.log(contractInfo.issuer.native,Boolean(contractInfo.issuer.native===false))
-        return contractInfo.issuer.underlyingOracleId;
+        //console.log(contractInfo.native,Boolean(contractInfo.native===false))
+        return contractInfo.underlyingOracleId;
     }
 
     static async getLatestOracleData(oracleId){

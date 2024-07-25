@@ -89,7 +89,7 @@ const Logic = {
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry, params.block);
                 break;
             case 16:
-                await Logic.createContractSeries(params.senderAddress, params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.txid);
+                await Logic.createContractSeries(params.senderAddress, params.native, params.underlyingOracleId, params.onChainData, params.notionalPropertyId, params.notionalValue, params.collateralPropertyId, params.leverage, params.expiryPeriod, params.series, params.inverse, params.fee, params.block, params.whitelist);
                 break;
             case 17:
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
@@ -695,10 +695,10 @@ const Logic = {
         return
 	},
 
-    async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block) {
+    async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, whitelist) {
 	    // Create a new future contract series
 	    const futureContractSeriesId = await ContractRegistry.createContractSeries(
-	        sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block
+	        sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, whitelist
 	    );
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;
@@ -717,7 +717,7 @@ const Logic = {
     async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
         // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
-        //console.log('checking contract orderbook ' +JSON.stringify(orderbook))
+        console.log('checking contract orderbook ' +JSON.stringify(orderbook))
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false,reduce,post,stop);
 	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
         return
