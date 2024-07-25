@@ -10,6 +10,7 @@ const Orderbooks = require('./orderbook.js')
 const Channels = require('./channels.js')
 const PropertyManager = require('./property.js')
 const VolumeIndex = require('./volumeIndex.js')
+const Oracles = require('./oracle.js')
 
 
 class Clearing {
@@ -314,6 +315,7 @@ class Clearing {
     }
 
     static async getPriceChange(blockHeight, contractId){
+        const ContractRegistry = require('./contractRegistry.js');
         let isOracleContract = await ContractRegistry.isOracleContract(contractId)
         let oracleId = null
         let propertyId1 = null

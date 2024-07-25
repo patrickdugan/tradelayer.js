@@ -26,7 +26,7 @@ class AMMPool {
             //console.log('inside AMMs ' +contractId)
             let change = await Clearing.isPriceUpdatedForBlockHeight(id, block)
             if(!change){continue}
-            let blob = await Clearing.getPriceChange(blockHeight, id)
+            let blob = await Clearing.getPriceChange(block, id)
             let lastPrice = blob.lastPrice
             // Get the AMM instance for the current contract ID
             const ammInstance = await ContractRegistry.getAMMInstance(id);

@@ -113,6 +113,40 @@ class VolumeIndex {
         return 0.001; // Minimum price
     }
 
+
+    /**
+     * Function to get the last price for a given token pair and block height.
+     * @param {string} tokenPair - The token pair in the format "X-Y".
+     * @param {number} blockHeight - The block height to compare against.
+     * @returns {Promise<number|null>} - The last price if found, otherwise null.
+     */
+    static async getLastPrice(tokenPair, blockHeight) {
+        try {
+            // Query to find the document with the token pair and block height <= specified block height
+            const query = {
+                _id: tokenPair,
+                'value.blockHeight': { $lte: blockHeight }
+            };
+
+            // Sort by blockHeight in descending order to get the most recent one
+            const sort = {
+                'value.blockHeight': -1
+            };
+
+            const tokenData = await db.getDatabase('volumeIndex').findOneAsync(query).sort(sort).exec();
+
+            if (!tokenData || !tokenData.value) {
+                console.error(`No data found for token pair: ${tokenPair} at or below block height ${blockHeight}`);
+                return null;
+            }
+
+            return tokenData.value.price;
+        } catch (error) {
+            console.error('Error fetching last price:', error);
+            return null;
+        }
+    }
+
     static async getCumulativeVolumes() {
         // Check if globalCumulativeVolume and ltcPairTotalVolume are defined and not zero
         if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {

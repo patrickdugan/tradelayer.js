@@ -68,7 +68,7 @@ class ContractRegistry {
         return this.instance;
     }
 
-    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block) {
+    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block) {
         // Load the current contract list from the database
         const contractListDB = db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
@@ -77,6 +77,9 @@ class ContractRegistry {
         // Generate a unique ID for the new contract series
         const seriesId = await ContractRegistry.getNextIdFromMap(contractList);
         const thisAMM = new AMMPool(0,1,10,seriesId)
+        if(whitelist==undefined||whitelist==null){
+            whitelist=0
+        }
         // Create the contract series object
         const contractSeries = {
             id: seriesId,
@@ -92,6 +95,7 @@ class ContractRegistry {
             series: series,
             inverse: inverse,
             fee: fee,
+            whitelist: whitelist,
             contracts: {
                 expired: [],
                 unexpired: await ContractRegistry.generateContracts(expiryPeriod, series, seriesId, block)
@@ -347,7 +351,7 @@ class ContractRegistry {
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
         }
-        //console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
+        console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
         let inverse = contractInfo.inverse;
         let notionalValue = contractInfo.notionalValue
         let leverage = contractInfo.leverage

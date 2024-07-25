@@ -978,7 +978,8 @@ const Validity = {
              }
 
             const collateralPropertyId = contractDetails.collateralPropertyId;
-            if(collateralPropertyId!=1){
+            console.log('clearlist id '+contractDetails.whitelist)
+            if(collateralPropertyId!=1&&contractDetails.whitelist!=undefined&&contractDetails.whitelist!=0&&contractDetails.whitelist!=null){
                 console.log(collateralPropertyId)
                        // Get property data for the collateralPropertyId
                 const collateralPropertyData = await PropertyList.getPropertyData(collateralPropertyId);
@@ -1000,7 +1001,7 @@ const Validity = {
                 }
                 if(!listed){
                     params.valid = false;
-                    params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
+                    params.reason += `Sender address not in clearlist; `;
                 }
             }
          

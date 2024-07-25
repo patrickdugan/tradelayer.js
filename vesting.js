@@ -60,7 +60,7 @@ class TradeLayerManager {
 
             const NativeHedgeId = await ContractList.createContractSeries(this.adminAddress, hedgeParams.native, 
                 hedgeParams.underlyingOracleId, hedgeParams.onChainData, hedgeParams.notionalPropertyId, hedgeParams.notionalValue, 
-                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, block
+                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, null, block
             );
 
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
@@ -109,16 +109,21 @@ class TradeLayerManager {
         const clearlistManager = new ClearListManager();
 
         // Initialize issuer whitelist
-        const issuerClearlistId = await clearlistManager.createClearlist({
-            adminAddress: this.adminAddress,
-            name: 'Issuer Whitelist'
-        });
+        const issuerClearlistId = await clearlistManager.createClearlist(
+            this.adminAddress,
+            'Issuer Whitelist',
+            '',
+            'Oracles and Tokens included in Liquidity Reward',
+            ''
+        );
 
         // Initialize market maker whitelist
-        const marketMakerClearlistId = await clearlistManager.createClearlist({
-            adminAddress: this.adminAddress,
-            name: 'Market Maker Whitelist'
-        });
+        const marketMakerClearlistId = await clearlistManager.createClearlist(
+            this.adminAddress,
+            'Market Maker Whitelist',
+            '',
+            'Market Makers and active traders who do not wash trade.'
+        );
 
         console.log(`Issuer whitelist created with ID: ${issuerClearlistId}`);
         console.log(`Market maker whitelist created with ID: ${marketMakerClearlistId}`);

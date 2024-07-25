@@ -8,7 +8,7 @@ class clearlistManager {
         this.loadClearlists();
     }
 
-    async createClearlist({ adminAddress, name = '', criteria = [], backupAddress = '' }) {
+    async createClearlist( adminAddress, name, url, decription, backupAddress) {
         const clearlistId = await this.getNextId();
         const clearlistData = {
             adminAddress,

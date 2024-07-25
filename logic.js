@@ -695,11 +695,11 @@ const Logic = {
         return
 	},
 
-    async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
+    async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block) {
 	    // Create a new future contract series
-	    const futureContractSeriesId = await ContractRegistry.createContractSeries({
-	        sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid
-	    });
+	    const futureContractSeriesId = await ContractRegistry.createContractSeries(
+	        sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, whitelist, block
+	    );
 	    console.log(`Future contract series created with ID: ${futureContractSeriesId}`);
 	    return futureContractSeriesId;
 	},
