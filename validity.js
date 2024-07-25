@@ -784,11 +784,33 @@ const Validity = {
                 }
             }
 
+             // Check if collateralPropertyId is a valid existing propertyId
+            const validCollateralProperty = await PropertyList.getPropertyData(params.collateralPropertyId) !== null;
+            if (!validCollateralProperty) {
+                params.valid = false;
+                params.reason += "Invalid collateral property ID. ";
+            }
+
             // On-Chain Data Validation
             if (params.native === true && params.onChainData) {
                 let validNatives = true;
+
+                let isDuplicate = await ContractRegistry.isDuplicateNativeContract(params.collateralPropertyId,params.onChainData, params.notionalPropertyId)
+                console.log('is dupe ' +isDuplicate)
+                if(isDuplicate){
+                    params.valid = false;
+                    params.reason += "Collateral or on-chain pair is redundant.";
+                }
+
                 for (const pid of params.onChainData) {
-                    if (pid !== null && !(await PropertyList.getPropertyData(pid))) {
+                    let propertyData1 = PropertyList.getPropertyData(pid[0])
+                    let propertyData2 = PropertyList.getPropertyData(pid[1])
+                    console.log('validating propertyids '+pid)
+                    if (pid[0] !== null && propertyData1==null) {
+                        validNatives = false;
+                        break;
+                    }
+                    if (pid[1] !== null && propertyData2==null) {
                         validNatives = false;
                         break;
                     }
@@ -816,13 +838,6 @@ const Validity = {
                     params.valid = false;
                     params.reason += "Invalid notional property ID. ";
                 }
-            }
-
-            // Check if collateralPropertyId is a valid existing propertyId
-            const validCollateralProperty = await PropertyList.getPropertyData(params.collateralPropertyId) !== null;
-            if (!validCollateralProperty) {
-                params.valid = false;
-                params.reason += "Invalid collateral property ID. ";
             }
 
             // Check if notionalValue is a number

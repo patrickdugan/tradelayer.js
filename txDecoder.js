@@ -249,7 +249,7 @@ const Decode = {
         let onChainDataParts = [];
 
         // Parse onChainData only if the contract is not native
-        if (!isNative) {
+        if (isNative) {
             onChainDataParts = parts[2].split(';').map(pair => 
                 pair.split(':').map(val => val ? parseInt(val, 36) : null)
             );

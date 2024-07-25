@@ -28,6 +28,37 @@ class ContractRegistry {
         }
     }
 
+
+    static async isDuplicateNativeContract(collateralPropertyId, onChainDataPair, notionalPropertyId) {
+            try {
+                // Load contract series if not already loaded
+                if (!ContractRegistry.getInstance().contractSeries) {
+                    await ContractRegistry.loadContractSeries();
+                }
+                const instance = ContractRegistry.getInstance();
+                const contractSeries = instance.contractSeries;
+
+                // Iterate over contract series to find a duplicate
+                for (const [id, contract] of contractSeries) {
+                    console.log('inside isDuplicateNativeContract '+id, JSON.stringify(contract), contract.collateralPropertyId, collateralPropertyId,onChainDataPair)
+                    if (contract.native && contract.collateralPropertyId === collateralPropertyId) {
+                        console.log('ding')
+                        for (const pair of contract.onChainData) {
+                            if ((pair[0] === onChainDataPair[0] && pair[1] === onChainDataPair[1])||(pair[0] === onChainDataPair[1] && pair[1] === onChainDataPair[0])&&contract.notionalPropertyId==notionalPropertyId) {
+                                console.log('dong')
+                                return true;
+                            }
+                        }
+                    }
+                }
+                console.log('contratulations')
+                return false;
+            } catch (error) {
+                console.error('Error checking for duplicate native contract:', error);
+                return false;
+            }
+    }
+
      // Singleton instance getter
     static getInstance() {
         if (!this.instance) {

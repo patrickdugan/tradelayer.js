@@ -10,16 +10,16 @@ async function issueContractSeries(adminAddress, underlyingOracleId, collateralP
 
         // Create Contract Series
         const contractTxId = await TxUtils.createContractSeriesTransaction(adminAddress, {
-            native: false,
-            underlyingOracleId: 1,
+            native: true,
+            underlyingOracleId: 0,
             onChainData: [[4,5]],
-            notionalPropertyId: 5,
+            notionalPropertyId: 4,
             notionalValue: 1,
             collateralPropertyId: 5,
             leverage: leverage,
             expiryPeriod: expiryPeriod,
             series: series,
-            inverse: false,
+            inverse: true,
             fee: false
         });
 
