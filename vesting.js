@@ -2,6 +2,7 @@ const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
 const ClearListManager = require('./clearlist.js')
+const ContractList = require('./contractRegistry.js')
 
 class TradeLayerManager {
     static instance = null;
@@ -22,7 +23,7 @@ class TradeLayerManager {
         return TradeLayerManager.instance;
     }
 
-    async initializeTokens() {
+    async initializeTokens(block) {
         const TallyMap = require('./tally.js');
          const alreadyInitialized = await TallyMap.checkInitializationFlag();
         
@@ -43,7 +44,26 @@ class TradeLayerManager {
             TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed', 0);
             TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting',0);
             
-            console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId)
+            const hedgeParams = {
+                native: true,
+                underlyingOracleId: 0,
+                onChainData: [[0,1]],
+                notionalPropertyId: 0,
+                notionalValue: 0.0001,
+                collateralPropertyId: 1,
+                leverage: 5,
+                expiryPeriod: 4032,
+                series: 5,
+                inverse: true,
+                fee: false
+            }
+
+            const NativeHedgeId = await ContractList.createContractSeries(this.adminAddress, hedgeParams.native, 
+                hedgeParams.underlyingOracleId, hedgeParams.onChainData, hedgeParams.notionalPropertyId, hedgeParams.notionalValue, 
+                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, block
+            );
+
+            console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
             const TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting',0)
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId, TLVESTLIQId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)

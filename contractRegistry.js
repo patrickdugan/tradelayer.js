@@ -37,7 +37,7 @@ class ContractRegistry {
         return this.instance;
     }
 
-    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block, txid) {
+    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block) {
         // Load the current contract list from the database
         const contractListDB = db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
@@ -79,7 +79,8 @@ class ContractRegistry {
     }
 
     static async getAMM(contractId) {
-        const contractInfo = await this.getContractInfo(contractId);
+        console.log('inside get AMM')
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (contractInfo && contractInfo.amm) {
             // Assuming the AMM object is stored inside the contractInfo object
             return contractInfo.amm;
@@ -243,6 +244,7 @@ class ContractRegistry {
 
     
     static async getContractType(contractId) {
+        console.log('inside get contract type')
         const contractInfo = await this.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error("Contract type not found for contract ID: " + contractId);
@@ -251,6 +253,7 @@ class ContractRegistry {
     }
 
     static async isNativeContract(contractId) {
+        console.log('inside isNative')
         const contractInfo = await this.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
     }
@@ -270,6 +273,8 @@ class ContractRegistry {
     static async getNotionalValue(contractId) {
         
             // Assuming contractData is the data structure for the contract
+
+        console.log('inside get notional')
             const contractData = await this.getContractInfo(contractId);
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
@@ -291,6 +296,8 @@ class ContractRegistry {
 
     static async isInverse(contractId) {
         // Call the existing getContractInfo function
+
+        console.log('inside isInverse')
         const contractInfo = await this.getContractInfo(contractId);
         
         // Check if contractInfo exists and has the 'inverse' property
@@ -304,7 +311,7 @@ class ContractRegistry {
 
      // Function to get initial margin requirement for a contract
     static async getInitialMargin(contractId, price) {
-        //console.log('checking contractId inside getInitialMargin '+contractId)
+        console.log('checking contractId inside getInitialMargin '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
             throw new Error(`Contract info not found for contract ID: ${contractId}`);
@@ -347,6 +354,8 @@ class ContractRegistry {
     // Method to get the collateral property ID for a given contract ID
     static async getCollateralId(contractId) {
         // Load contract information
+
+        console.log('inside get collateralPropertyId')
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
 
         // Check if contract information is available
@@ -447,6 +456,8 @@ class ContractRegistry {
             oracleId = await ContractRegistry.getOracleId(contractId);
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
         } else {
+
+        console.log('inside get price at block')
             let info = await ContractRegistry.getContractInfo(contractId);
             propertyId1 = info.issuer.onChainData[0];
             propertyId2 = info.issuer.onChainData[1];
@@ -486,8 +497,9 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
+        console.log('inside is oracle contract '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        //console.log(contractInfo.issuer.native,Boolean(contractInfo.issuer.native===false))
+        console.log(JSON.stringify(contractInfo))
         return contractInfo && contractInfo.issuer.native === false;
     }
 

@@ -171,6 +171,7 @@ class Clearing {
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
         // Determine if the contract is an oracle contract
         const ContractRegistry = require('./contractRegistry.js')
+        console.log('inside isPrice updated '+contractId, blockHeight)
         const isOracle = await ContractRegistry.isOracleContract(contractId);
         let latestData;
         //console.log('checking if contract is oracle '+contractId +' '+isOracle)
@@ -220,21 +221,23 @@ class Clearing {
             const ContractRegistry = require('./contractRegistry.js');
             const contracts = await ContractRegistry.loadContractSeries();
         for (const contract of contracts) {
+            let id = contract[1].id
             // Check if there is updated price information for the contract
-            if (await Clearing.isPriceUpdatedForBlockHeight(contract.id, blockHeight)) {
+            //console.log('inside make settlement '+JSON.stringify(contract), contract[1].id)
+            if (await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)) {
                 console.log('new price')
                 // Proceed with processing for this contract
                 console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
-                let collateralId = await ContractRegistry.getCollateralId(contract.id)
-                let inverse = await ContractRegistry.isInverse(contract.id)
-                const notionalValue = await ContractRegistry.getNotionalValue(contract.id)
+                let collateralId = await ContractRegistry.getCollateralId(id)
+                let inverse = await ContractRegistry.isInverse(id)
+                const notionalValue = await ContractRegistry.getNotionalValue(id)
                 
                 // Update margin maps based on mark prices and current contract positions
-                let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, contract.id, collateralId, inverse,notionalValue); //problem child
+                let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue); //problem child
 
                  // Perform additional tasks like loss socialization if needed
                 if(isLiq){
-                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,contract.id,positions.lastMark);
+                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,id,positions.lastMark);
                 }
             } else {
                 // Skip processing for this contract
@@ -321,6 +324,7 @@ class Clearing {
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
             //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
+            console.log('inside get price change in clearing')
             let info = await ContractRegistry.getContractInfo(contractId)
             propertyId1 = info.native.native.onChainData[0]
             propertyId2 = info.native.native.onChainData[1]

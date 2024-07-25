@@ -20,19 +20,20 @@ class AMMPool {
           return; // No contracts found, return early
         }
 
-        //console.log('displaying contract Ids object in update AMM orders ' +JSON.stringify(contractIds))
         // Loop through each contract ID
         for (const contractId of contractIds) {
-            let change = await Clearing.isPriceUpdatedForBlockHeight(contractId, block)
+            let id = contractId[1].id
+            console.log('inside AMMs ' +contractId)
+            let change = await Clearing.isPriceUpdatedForBlockHeight(id, block)
             if(!change){continue}
-            let blob = await Clearing.getPriceChange(blockHeight, contractId)
+            let blob = await Clearing.getPriceChange(blockHeight, id)
             let lastPrice = blob.lastPrice
             // Get the AMM instance for the current contract ID
-            const ammInstance = await ContractRegistry.getAMMInstance(contractId);
+            const ammInstance = await ContractRegistry.getAMMInstance(id);
             
             // Get the orderbook key for the current contract ID
             const orderBookKey = contractId; // Assuming the orderbook key is the same as the contract ID
-            let inverse = ContractRegistry.isInverse(contractId)
+            let inverse = ContractRegistry.isInverse(id)
             let priceDistance = 0.2
             let token = false
             // Generate orders for the AMM instance

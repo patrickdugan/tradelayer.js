@@ -758,7 +758,7 @@ const TxUtils = {
             const serializedTx = rawTx.serialize();
             const txid = await sendrawtransactionAsync(serializedTx);
             
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            console.log(`Create contract transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
             console.error('Error in sendActivationTransaction:', error);

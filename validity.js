@@ -424,6 +424,7 @@ const Validity = {
                 //console.log('cancelling contract order '+JSON.stringify(params) + '')
                 // Check the validity of the contract ID
                 if (params.offeredPropertyId && Number.isInteger(params.offeredPropertyId)) {
+                    console.log('calling get contract Info in validate cancel'+block)
                     const contractExists = await ContractRegistry.getContractInfo(params.offeredPropertyId);
                     console.log('checking contract data for isContract cancel '+params.offeredPropertyId+' '+JSON.stringify(contractExists))
                     if (!contractExists) {
@@ -796,6 +797,10 @@ const Validity = {
                     params.valid = false;
                     params.reason += "Invalid on-chain data format or property IDs. ";
                 }
+                if(params.onChainData.length==0){
+                    params.valid = false;
+                    params.reason += "Array of on-chain pairs for native settlement data is empty.";
+                }
             }
 
             const isVEST= (parseInt(params.collateralPropertyId)==2&&parseInt(params.notionalPropertyId)==2||parseInt(params.collateralPropertyId)==3)
@@ -900,7 +905,7 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
-
+            console.log('calling get contract Info in validate trade'+block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             console.log('checking contract details validity ' + JSON.stringify(contractDetails))
             if(contractDetails==null||contractDetails=={}){
@@ -956,29 +961,31 @@ const Validity = {
              }
 
             const collateralPropertyId = contractDetails.issuer.collateralPropertyId;
-
-            // Get property data for the collateralPropertyId
-            const collateralPropertyData = await PropertyList.getPropertyData(collateralPropertyId);
-            if (collateralPropertyData == null || collateralPropertyData == undefined) {
-                params.valid = false;
-                params.reason += 'Collateral propertyId not found in Property List; ';
-            }
-            const clearlistManager = new ClearListManager()
-            // Extract whitelist IDs from the collateral property data
-            const senderWhitelists = Array.isArray(collateralPropertyData.whitelistId) ? collateralPropertyData.whitelistId : [collateralPropertyData.whitelistId];
-             // Check if the sender address is in the whitelists
-            var listed = false
-            for (const whitelistId of senderWhitelists) {
-                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
-                if (senderWhitelisted) {
-                    listed=true
-                    break; // No need to check further if one fails
+            if(collateralPropertyId!=1){
+                       // Get property data for the collateralPropertyId
+                const collateralPropertyData = await PropertyList.getPropertyData(collateralPropertyId);
+                if (collateralPropertyData == null || collateralPropertyData == undefined) {
+                    params.valid = false;
+                    params.reason += 'Collateral propertyId not found in Property List; ';
+                }
+                const clearlistManager = new ClearListManager()
+                // Extract whitelist IDs from the collateral property data
+                const senderWhitelists = Array.isArray(collateralPropertyData.whitelistId) ? collateralPropertyData.whitelistId : [collateralPropertyData.whitelistId];
+                 // Check if the sender address is in the whitelists
+                var listed = false
+                for (const whitelistId of senderWhitelists) {
+                    const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                    if (senderWhitelisted) {
+                        listed=true
+                        break; // No need to check further if one fails
+                    }
+                }
+                if(!listed){
+                    params.valid = false;
+                    params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
                 }
             }
-            if(!listed){
-                params.valid = false;
-                params.reason += `Sender address not whitelisted in clearlist ${whitelistId}; `;
-            }
+         
             return params;
         },
 
@@ -1007,7 +1014,8 @@ const Validity = {
                 params.reason = "Tx sender is not found to be a channel address"
                 return params
             }
-            console.log('contractid ' +params.contractId)
+            
+            console.log('calling get contract Info in validate channel trade'+block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             if(contractDetails==null){
                 params.valid=false
@@ -1459,11 +1467,11 @@ const Validity = {
 
 
     // 24: Mint Synthetic
-    validateMintSynthetic: (params) => {
+    validateMintSynthetic: async (params) => {
         params.reason = '';
         params.valid = true;
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
-        const contractInfo = ContractRegistry.getContractInfo(params.contractId);
+        const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
         const collateralPropertyId = contractInfo.collateralPropertyId
         const notional = contractInfo.notionalValue
         if(contractInfo.inverse==false){
