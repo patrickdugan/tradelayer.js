@@ -522,6 +522,12 @@ const Logic = {
             }
 
             if(isContract==false){
+                //normalize the order of propertyIds
+                if(offeredPropertyId>desiredPropertyId){
+                    let placeholder = desiredPropertyId
+                    desiredPropertyId=offeredPropertyId
+                    offeredPropertyId=placeholder
+                }
                 if (cancelAll && offeredPropertyId && desiredPropertyId) {
                     console.log('canceling all orders for '+fromAddress + offeredPropertyId+ desiredPropertyId)
                             cancelledOrders = await orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId,block);
@@ -553,7 +559,6 @@ const Logic = {
         // Return the details of the cancelled orders
         return cancelledOrders;
     },
-
 		    /**
 		     * Creates a new clearlist.
 		     * 
@@ -719,7 +724,7 @@ const Logic = {
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         console.log('checking contract orderbook ' +JSON.stringify(orderbook))
 	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false,reduce,post,stop);
-	    console.log(`Traded contract ${contractId} on-chain with price ${price} and amount ${amount}`);
+	    console.log(`Added contract order ${contractId} on-chain with price ${price} and amount ${amount}`);
         return
 	},
 

@@ -30,7 +30,7 @@ class Orderbook {
                  const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                if (orderBookData && orderBookData.value) {
                     this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    //console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData))
+                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData.value.buy))
                     return orderBookData.value
                 }else{
                     console.log('new orderbook for '+key)
@@ -240,7 +240,7 @@ class Orderbook {
             orderbookData[side] = bookSide;
 
             // Log the updated orderbookData for debugging
-            console.log('Updated orderbook data:', JSON.stringify(orderbookData));
+            //console.log('Updated orderbook data:', JSON.stringify(orderbookData));
 
             return orderbookData;
         }
@@ -392,7 +392,7 @@ class Orderbook {
             }
 
             //console.log('Final orderBookCopy before returning: ' + JSON.stringify(orderBookCopy));
-            return { orderBook: orderBookCopy, matches };
+            return { orderBook: orderBookCopy, matches: matches };
         }
 
 
@@ -531,7 +531,7 @@ class Orderbook {
                   // Construct a trade object for recording
                 const trade = {
                     offeredPropertyId: match.sellOrder.offeredPropertyId,
-                    desiredPropertyId: match.buyOrder.desiredPropertyId,
+                    desiredPropertyId: match.buyOrder.offeredPropertyId,
                     amountOffered: match.amountOfTokenA, // or appropriate amount
                     amountExpected: match.amountOfTokenB, // or appropriate amount
                     // other relevant trade details...
@@ -599,21 +599,20 @@ class Orderbook {
 
             console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
-            var matchResult = await this.matchContractOrders(orderBookKey);
+            var matchResult = await this.matchContractOrders(orderbook);
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
                 await this.processContractMatches(matchResult.matches, blockTime, false)
             }
            
-            //console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.matches)
-            await this.saveOrderBook(orderBookKey);
+            console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.orderBook))
+            await this.saveOrderBook(matchResult.orderBook, orderBookKey);
             return matchResult
         }
 
-        async matchContractOrders(orderBookKey) {
-            const orderBook = this.orderBooks[orderBookKey];
+        async matchContractOrders(orderBook) {
             if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-                return { orderBook: this.orderBooks[orderBookKey], matches: [] }; // Return empty matches if no orders
+                return { orderBook: orderBook, matches: [] }; // Return empty matches if no orders
             }
 
             let matches = [];
@@ -720,7 +719,7 @@ class Orderbook {
                 }
             }
 
-            return { orderBook: this.orderBooks[orderBookKey], matches };
+            return { orderBook: orderBook, matches:matches };
         }
 
         async evaluateBasicLiquidityReward(match, channel, contract) {
@@ -1239,9 +1238,11 @@ class Orderbook {
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
             
-            const orderBook = await this.loadOrderBook(orderBookKey); // Assuming this is the correct reference
+            const JSONorderBook = await this.loadOrderBook(orderBookKey); // Assuming this is the correct reference
+            let orderBook = JSON.parse(JSONorderBook) 
             const cancelledOrders = [];
             let returnFromReserve = 0
+            console.log('orderbook object in cancel ' +JSON.stringify(orderBook))
             if(!token){
                 //console.log('showing orderbook before cancel '+JSON.stringify(orderBook))
             }
