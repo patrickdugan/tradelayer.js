@@ -832,21 +832,15 @@ const Logic = {
 
 	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, block) {
         let fromChannel = await Channels.getChannel(fromChannelAddress);
-        let toChannel = await Channels.getChannel(toChannelAddress);
-
-        if (!fromChannel) {
-            throw new Error('From channel not found');
-        }
-
-        if (!toChannel) {
-            console.log(`To channel ${toChannelAddress} not found. Adding to registry.`);
-            await this.addToRegistry(toChannelAddress, null, null);
-            toChannel = await Channels.getChannel(toChannelAddress);
-        }
+       
+        console.log(`To channel ${toChannelAddress} not found. Adding to registry.`);
+        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount, block);
+        let toChannel = await Channels.getChannel(toChannelAddress);   
 
         // Determine the correct column to deduct from in the fromChannel
         const fromColumn = isColumnA ? 'A' : 'B';
         console.log(JSON.stringify(fromChannel),fromColumn, isColumnA, amount, fromChannel[fromColumn][propertyId] )
+        const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
         // Check if the fromChannel has enough balance
         if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
             throw new Error('Insufficient balance for transfer');
@@ -858,23 +852,17 @@ const Logic = {
         // Update balances in from channel
         fromChannel[fromColumn][propertyId] -= amount;
 
-        // Determine the column to credit in the toChannel
-        const toColumn = isColumnA ? 'A' : 'B';
-        toChannel[toColumn][propertyId] = (toChannel[toColumn][propertyId] || 0) + amount;
-
         // Update the commit address for the destination column to be the commit address of the sender
         if (isColumnA) {
-            toChannel.committerA = fromChannel.committerA;
+            toChannel.participants[channelColumn] = fromChannel.participants['A'];
         } else {
-            toChannel.committerB = fromChannel.committerB;
+            toChannel.participants[channelColumn] = fromChannel.participants['B'];
         }
-
+        TallyMap.updateBalance(fromChannelAddress, propertyId, 0, -amount, 0, 0, 'transferDebit', block)
         TallyMap.updateBalance(toChannelAddress, propertyId, 0, amount, 0, 0, 'transferCredit', block)
 
         // Save updated channel states back to the registry
-        Channels.channelsRegistry.set(fromChannelAddress, fromChannel);
-        // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount,block);      
+        Channels.channelsRegistry.set(fromChannelAddress, fromChannel);   
         
         await Channels.saveChannelsRegistry();
     },

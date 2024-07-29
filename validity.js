@@ -1420,6 +1420,10 @@ const Validity = {
             //const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender)
 
             const channel = await Channels.getChannel(sender)
+            if(!channel){
+                params.valid = false;
+                params.reason += 'Sender is not a channel.';
+            }
             const balanceA = channel.A[params.propertyId]
             const balanceB = channel.B[params.propertyId]
             let commiter = ''
