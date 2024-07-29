@@ -21,33 +21,27 @@ class Orderbook {
             return orderbook;
         }
 
-         async loadOrderBook(key, flag) {
-            //console.log('key before the string treatment '+key)
-            const stringKey = typeof key === 'string' ? key : String(key);
-            const orderBooksDB = dbInstance.getDatabase('orderBooks');
-             //console.log('checking orderbook in this cancel call '+stringKey)
-            try{
-                 const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
-               if (orderBookData && orderBookData.value) {
-                    this.orderBooks[key] = JSON.parse(orderBookData.value);
-                    console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(orderBookData.value.buy))
-                    return orderBookData.value
-                }else{
-                    console.log('new orderbook for '+key)
-                    return {buy:[],sell:[]}
-                }
-            }   catch (error) {
-                 console.error('Error loading or parsing order book data:', error);
-                // Handle the error as needed, e.g., by logging, notifying, or taking corrective actions.
-            }
-           /* else {
-                // If no data found, create a new order book
-                this.orderBooks[key] = { buy: [], sell: [] };
-                console.log('loading fresh orderbook ' + this.orderBooks[key])
+         async loadOrderBook(key) {
+                const stringKey = typeof key === 'string' ? key : String(key);
+                const orderBooksDB = dbInstance.getDatabase('orderBooks');
 
-                await this.saveOrderBook(key);
-            }*/
-        }
+                try {
+                    const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
+                    if (orderBookData && orderBookData.value) {
+                        const parsedOrderBook = JSON.parse(orderBookData.value);
+                        this.orderBooks[key] = parsedOrderBook;
+                        console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
+                        return parsedOrderBook; // Return the parsed order book
+                    } else {
+                        console.log('new orderbook for ' + key);
+                        return { buy: [], sell: [] };
+                    }
+                } catch (error) {
+                    console.error('Error loading or parsing order book data:', error);
+                    return { buy: [], sell: [] }; // Return an empty order book on error
+                }
+            }
+
 
         async saveOrderBook(orderbookData, key) {
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
@@ -1238,8 +1232,7 @@ class Orderbook {
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
             
-            const JSONorderBook = await this.loadOrderBook(orderBookKey); // Assuming this is the correct reference
-            let orderBook = JSON.parse(JSONorderBook) 
+            let orderBook = await this.loadOrderBook(orderBookKey); // Assuming this is the correct reference 
             const cancelledOrders = [];
             let returnFromReserve = 0
             console.log('orderbook object in cancel ' +JSON.stringify(orderBook))
@@ -1287,26 +1280,29 @@ class Orderbook {
 
                     if(criteria.txid!=undefined){
                         //console.log('cancelling by txid '+criteria.txid)
-                      for (let i = orderBook.buy.length - 1; i >= 0; i--) {
-                        const ord = orderBook.buy[i]
-                        if(ord.txid === criteria.txid){
-                                cancelledOrders.push(ord);
+                       if(criteria.buy==true){
+                          for (let i = orderBook.buy.length - 1; i >= 0; i--) {
+                            const ord = orderBook.buy[i]
+                                if(ord.txid === criteria.txid){
+                                    cancelledOrders.push(ord);
 
-                                //console.log('splicing order '+JSON.stringify(ord))
-                                orderBook.buy.splice(i, 1);
-                        }
-                       }
+                                    //console.log('splicing order '+JSON.stringify(ord))
+                                    orderBook.buy.splice(i, 1);
+                                }
+                           }
+                        } 
 
-                       for (let i = orderBook.sell.length - 1; i >= 0; i--) {
-                        const ordi = orderBook.sell[i]
-                        if(ordi.txid === criteria.txid){
-                            //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
-                                cancelledOrders.push(ordi);
+                        if(criteria.buy==false){
+                           for (let i = orderBook.sell.length - 1; i >= 0; i--) {
+                            const ordi = orderBook.sell[i]
+                                if(ordi.txid === criteria.txid){
+                                //console.log('splicing orders out for cancel by txid '+JSON.stringify(ordi))
+                                    cancelledOrders.push(ordi);
 
-                                //console.log('splicing order '+JSON.stringify(ordi))
-                                orderBook.buy.splice(i, 1);
-                        }
-                       }
+                                    //console.log('splicing order '+JSON.stringify(ordi))
+                                    orderBook.buy.splice(i, 1);
+                                }
+                           }
 
                     }else{
                               //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
@@ -1347,8 +1343,8 @@ class Orderbook {
                                     }
                             }
                         }
+                    }
                 }
-
             }
               
                 //console.log('returning tokens from reserve '+returnFromReserve)
@@ -1357,7 +1353,7 @@ class Orderbook {
 
                 this.orderBooks[orderBookKey] = orderBook
                 //console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
-                await this.saveOrderBook(orderBookKey);
+                await this.saveOrderBook(orderBook, orderBookKey);
 
                 // Log the cancellation for record-keeping
                 //console.log(`Cancelled orders: ${JSON.stringify(cancelledOrders)}`);
@@ -1445,9 +1441,14 @@ class Orderbook {
             const TallyMap = require('./tally.js')
             // Logic to cancel all token orders
             // Retrieve relevant order details and calculate margin reserved amounts
-            const criteria = { address: fromAddress }; // Criteria to cancel all orders for a specific address
-            const key =  offeredPropertyId+'-'+desiredPropertyId
+            
+            const key =  this.normalizeOrderBookKey(offeredPropertyId,desiredPropertyId)
             console.log('cancelAllTokenOrders key'+key)
+            let buy = false
+            if(offeredPropertyId>desiredPropertyId){
+                buy=true
+            }
+            const criteria = { address: fromAddress, buy: buy }; // Criteria to cancel all orders for a specific address
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, criteria);
 
             for (const order of cancelledOrders) {
@@ -1464,7 +1465,11 @@ class Orderbook {
             const TallyMap = require('./tally.js')
             // Logic to cancel a specific token order by txid
             // Retrieve order details and calculate margin reserved amount
-            const key =  offeredPropertyId+'-'+desiredPropertyId
+            const key =  this.normalizeOrderBookKey(offeredPropertyId,desiredPropertyId)
+            let buy = false
+            if(offeredPropertyId>desiredPropertyId){
+                buy=true
+            }
             const cancelledOrder = await this.cancelOrdersByCriteria(fromAddress, key, {txid:txid});
             const reserveAmount = order.amountOffered;
             await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
@@ -1477,7 +1482,11 @@ class Orderbook {
             const TallyMap = require('./tally.js')
             // Logic to cancel token buy orders by price
             // Retrieve relevant buy orders and calculate margin reserved amounts
-            const key =  offeredPropertyId+'-'+desiredPropertyId
+            const key =  this.normalizeOrderBookKey(offeredPropertyId,desiredPropertyId)
+            let buy = false
+            if(offeredPropertyId>desiredPropertyId){
+                buy=true
+            }
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, {price:price, buy:true});
 
             for (const order of cancelledOrders) {
@@ -1493,9 +1502,12 @@ class Orderbook {
             const TallyMap = require('./tally.js')
             // Logic to cancel token sell orders by price
             // Retrieve relevant sell orders and calculate margin reserved amounts
-            const key =  offeredPropertyId+'-'+desiredPropertyId
+            const key =  this.normalizeOrderBookKey(offeredPropertyId,desiredPropertyId)
             const cancelledOrders = await this.cancelOrdersByCriteria(fromAddress, key, {price:price, buy:false});
-
+            let buy = false
+            if(offeredPropertyId>desiredPropertyId){
+                buy=true
+            }
             for (const order of cancelledOrders) {
                 const reserveAmount = order.amountOffered;
                 await TallyMap.updateBalance(fromAddress, offeredPropertyId, reserveAmount, -reserveAmount,0,0,'tokenCancel',block);
