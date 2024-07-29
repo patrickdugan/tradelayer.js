@@ -176,7 +176,7 @@ class Orderbook {
                 //console.log('Match Result:', matchResult);
                 await orderbook.processTokenMatches(matchResult.matches, blockHeight, txid, false);
             }else{console.log('No Matches for ' +txid)}
-            //console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
+            console.log('Normalized Order Book Key before saving:', normalizedOrderBookKey);
             //console.log('getting ready to save orderbook update '+JSON.stringify(matchResult.orderBook))
             // Save the updated orderbook back to the database
             await orderbook.saveOrderBook(matchResult.orderBook,normalizedOrderBookKey);
@@ -602,7 +602,7 @@ class Orderbook {
                 await this.processContractMatches(matchResult.matches, blockTime, false)
             }
            
-            console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.orderBook))
+            console.log('about to save orderbook in contract trade '+orderBookKey)
                         await orderbook.saveOrderBook(matchResult.orderBook,orderBookKey);
 ;
             return matchResult
@@ -1356,7 +1356,7 @@ class Orderbook {
                 // Save the updated order book to the database
 
                 this.orderBooks[orderBookKey] = orderBook
-                //console.log('orderbook after cancel operation '+JSON.stringify(this.orderBooks[orderBookKey]))
+                console.log('orderbook after cancel operation '+orderBookKey+' '+JSON.stringify(orderBook))
                 await this.saveOrderBook(orderBook, orderBookKey);
 
                 // Log the cancellation for record-keeping

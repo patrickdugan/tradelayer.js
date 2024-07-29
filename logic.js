@@ -840,7 +840,7 @@ const Logic = {
         // Determine the correct column to deduct from in the fromChannel
         const fromColumn = isColumnA ? 'A' : 'B';
         console.log(JSON.stringify(fromChannel),fromColumn, isColumnA, amount, fromChannel[fromColumn][propertyId] )
-        const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
+        const channelColumn = Channels.assignColumnBasedOnAddress(toChannelAddress, fromChannelAddress);
         // Check if the fromChannel has enough balance
         if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
             throw new Error('Insufficient balance for transfer');
