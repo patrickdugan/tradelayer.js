@@ -227,8 +227,9 @@ class Main {
 
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {
-                        const txId = txData._id.split('-')[2];
-                        //console.log('checking txId ' + txId);
+                        console.log('tx data '+txData)
+                        const txId = txData.value[0].txId;//._id.split('-')[2];
+                        console.log('checking txId ' + txId);
                         if (await Consensus.checkIfTxProcessed(txId)) {
                             //console.log('already logged');
                             continue;

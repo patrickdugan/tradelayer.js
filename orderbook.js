@@ -21,7 +21,7 @@ class Orderbook {
             return orderbook;
         }
 
-         async loadOrderBook(key) {
+         async loadOrderBook(key,contract) {
                 const stringKey = typeof key === 'string' ? key : String(key);
                 const orderBooksDB = dbInstance.getDatabase('orderBooks');
 
@@ -30,7 +30,9 @@ class Orderbook {
                     if (orderBookData && orderBookData.value) {
                         const parsedOrderBook = JSON.parse(orderBookData.value);
                         this.orderBooks[key] = parsedOrderBook;
-                        console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
+                        if(contract){
+                            console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
+                        }
                         return parsedOrderBook; // Return the parsed order book
                     } else {
                         console.log('new orderbook for ' + key);
@@ -153,12 +155,13 @@ class Orderbook {
            
             // Create an instance of Orderbook for the pair and load its data
             const orderbook = new Orderbook(normalizedOrderBookKey);
-            var orderbookData = await orderbook.loadOrderBook(normalizedOrderBookKey);
+            var orderbookData = await orderbook.loadOrderBook(normalizedOrderBookKey,false);
             //console.log('loaded orderbook' +JSON.stringify(orderbookData))
             // Calculate the price for the order and round to the nearest tick interval
             const calculatedPrice = this.calculatePrice(order.amountOffered, order.amountExpected);
-            //console.log('Calculated Price:', calculatedPrice);
+            console.log('Calculated Token  Price:' + calculatedPrice+' '+txid);
             order.price = calculatedPrice; // Append the calculated price to the order object
+            order.txid= txid.slice(0,3)+txid.slice(-4)
 
             // Determine if the order is a sell order
             const isSellOrder = Boolean(order.offeredPropertyId < order.desiredPropertyId);
@@ -207,7 +210,7 @@ class Orderbook {
 
             // Log the current state for debugging
             //console.log('Order:', JSON.stringify(order));
-            console.log('Orderbook data before:', JSON.stringify(orderbookData));
+            //console.log('Orderbook data before:', JSON.stringify(orderbookData));
             //console.log('Is sell order:', isSellOrder);
 
             // Determine the side of the order
@@ -583,24 +586,25 @@ class Orderbook {
 
             // The orderBookKey is based on the contractId since it's a derivative contract
             const orderBookKey = `${contractId}`;
-
+            const orderbook = new Orderbook(contractId);
+            var orderbookData = await orderbook.loadOrderBook(orderBookKey,false);
             // Load the order book for the given contract
-            let orderbook = await this.loadOrderBook(orderBookKey);
-
+        
             // Insert the contract order into the order book
-            console.log('checking orderbook in addcontract order '+JSON.stringify(orderbook))
-            orderbook = await this.insertOrder(contractOrder, orderbook, side,isLiq);
+            console.log('checking orderbook in addcontract order '+txid+JSON.stringify(orderbookData))
+            orderbookData = await this.insertOrder(contractOrder, orderbookData, side,isLiq);
 
             console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
-            var matchResult = await this.matchContractOrders(orderbook);
+            var matchResult = await this.matchContractOrders(orderbookData);
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
                 await this.processContractMatches(matchResult.matches, blockTime, false)
             }
            
             console.log('about to save orderbook in contract trade '+JSON.stringify(matchResult.orderBook))
-            await this.saveOrderBook(matchResult.orderBook, orderBookKey);
+                        await orderbook.saveOrderBook(matchResult.orderBook,orderBookKey);
+;
             return matchResult
         }
 

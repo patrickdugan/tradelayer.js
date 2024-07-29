@@ -475,7 +475,7 @@ const Logic = {
             post: post
         };
 
-        //console.log('entering order into book '+JSON.stringify(order), 'txid')
+        console.log('entering order into book '+JSON.stringify(order), 'txid')
 
         // Add the order to the order book
         await orderbook.addTokenOrder(order, blockHeight, txid);
@@ -523,7 +523,7 @@ const Logic = {
 
             if(isContract==false){
                 //normalize the order of propertyIds
-                
+
                 if (cancelAll && offeredPropertyId && desiredPropertyId) {
                     console.log('canceling all orders for '+fromAddress + offeredPropertyId+ desiredPropertyId)
                             cancelledOrders = await orderbook.cancelAllTokenOrders(fromAddress, offeredPropertyId, desiredPropertyId,block);

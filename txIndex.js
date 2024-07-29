@@ -159,9 +159,10 @@ class TxIndex {
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
                 }
-                await this.saveMaxHeight(blockHeight)      
+                  await this.saveMaxHeight(blockHeight)   
             }
         }
+         
         return txDetails
     }
 
