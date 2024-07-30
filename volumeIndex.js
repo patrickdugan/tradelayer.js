@@ -103,7 +103,7 @@ class VolumeIndex {
 
     static async getTokenPriceInLTC(tokenId) {
         // Attempt to fetch the VWAP price from the database
-        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `vwap-${tokenId}` });
+        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `0-${tokenId}` });
         
         if (vwapData && vwapData.value && vwapData.value.price) {
             return vwapData.value.price;
@@ -124,16 +124,11 @@ class VolumeIndex {
         try {
             // Query to find the document with the token pair and block height <= specified block height
             const query = {
-                _id: tokenPair,
-                'value.blockHeight': { $lte: blockHeight }
+                _id: tokenPair
             };
 
-            // Sort by blockHeight in descending order to get the most recent one
-            const sort = {
-                'value.blockHeight': -1
-            };
-
-            const tokenData = await db.getDatabase('volumeIndex').findOneAsync(query).sort(sort).exec();
+            console.log('inside get last price ' +blockHeight)
+            const tokenData = await db.getDatabase('volumeIndex').findOneAsync(query);
 
             if (!tokenData || !tokenData.value) {
                 console.error(`No data found for token pair: ${tokenPair} at or below block height ${blockHeight}`);

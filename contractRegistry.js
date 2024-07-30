@@ -302,6 +302,7 @@ class ContractRegistry {
 
             return null;
         }
+        //console.log(doc)
         return doc.data;
     }
 
@@ -309,17 +310,17 @@ class ContractRegistry {
         
             // Assuming contractData is the data structure for the contract
 
-        console.log('inside get notional')
+        console.log('inside get notional '+contractId)
             const contractData = await this.getContractInfo(contractId);
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
-            if (contractData && contractData.native && contractData.notionalValue !== undefined && contractInfo.inverse==true) {
+            if (contractData && contractData.native && contractData.notionalValue !== undefined && contractData.inverse==true) {
                 const notionalValue = contractData.notionalValue;
                 return notionalValue;
-            } else if(contractInfo.inverse==false && contractInfo.native==false) {
+            } else if(contractData.inverse==false && contractData.native==false) {
                 const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
                 return latestPrice.price*contractData.notonalValue; // or any default value
-            } else if(contractInfo.inverse==true && contractInfo.native==false){
+            } else if(contractData.inverse==true && contractData.native==false){
                 const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
                 return 1/latestPrice.price*contractData.notonalValue; // or any default value
             }
@@ -492,11 +493,13 @@ class ContractRegistry {
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
         } else {
 
-        console.log('inside get price at block')
             let info = await ContractRegistry.getContractInfo(contractId);
-            propertyId1 = info.onChainData[0];
-            propertyId2 = info.onChainData[1];
-            latestData = await VolumeIndex.get
+            propertyId1 = info.onChainData[0][0];
+            propertyId2 = info.onChainData[0][1];
+            const pair = propertyId1+'-'+propertyId2
+            latestData = await VolumeIndex.getLastPrice(pair,blockHeight)
+            return latestData
+            console.log('inside get price at block '+typeof latestData, JSON.stringify(latestData))
         }
 
         // Filter data to get updates before the given blockHeight
