@@ -2,9 +2,9 @@ const crypto = require('crypto');
 const TxUtils = require('./txUtils.js'); // Assuming TxUtils contains necessary functions
 
 async function generateTrades(adminAddress) {
-    const contractId = 1; // Contract ID for the trades
+    const contractId = 4; // Contract ID for the trades
     const propertyId = 3; // Property ID used in the trades
-    const btcPrice = 49600; // Base price for BTC
+    const btcPrice = 50000; // Base price for BTC
     const priceVariation = 100; // Price variation range (+/-)
 
     for (let i = 0; i < 1; i++) { // Generate 10 random trades
@@ -15,10 +15,9 @@ async function generateTrades(adminAddress) {
         // Prepare trade parameters
         const tradeParams = {
             contractId: contractId,
-            propertyId: propertyId,
             amount: amount,
             price: tradePrice,
-            side: true // Assuming all trades are 'Buy' orders
+            sell: false // TrueAssuming all trades are '' orders
         };
 
         // Create trade transaction
@@ -27,7 +26,11 @@ async function generateTrades(adminAddress) {
 }
 
 // Address for the trades
-const adminAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'//'//tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'//tltc1q8xw3vsvkv77dpj59nqn30rxlc9m3xjw76cgrac'//"tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk";
+const adminAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr' 
+//tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'
+//'//tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
+//tltc1q8xw3vsvkv77dpj59nqn30rxlc9m3xjw76cgrac'
+//"tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk";
 //
 // Execute the function to generate trades
 generateTrades(adminAddress).then(() => {

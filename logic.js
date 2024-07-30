@@ -95,7 +95,7 @@ const Logic = {
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
                 break;
             case 18:
-                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.side, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.sell, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop);
                 break;
             case 19:
                 await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid);
@@ -715,11 +715,11 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, side, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
+    async tradeContractOnchain(contractId, price, amount, sell, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
         // Trade the contract on-chain
         const orderbook = await Orderbook.getOrderbookInstance(contractId);
         console.log('checking contract orderbook ' +JSON.stringify(orderbook))
-	    await orderbook.addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, false,reduce,post,stop);
+	    await orderbook.addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, false,reduce,post,stop);
 	    console.log(`Added contract order ${contractId} on-chain with price ${price} and amount ${amount}`);
         return
 	},

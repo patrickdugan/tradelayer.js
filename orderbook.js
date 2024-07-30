@@ -46,6 +46,10 @@ class Orderbook {
 
 
         async saveOrderBook(orderbookData, key) {
+            console.log('saving orderbook with key '+key)
+            if(key==undefined){
+                return console.log('orderbook save failed with undefined key')
+            }
             const orderBooksDB = dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
                 { _id: key },
@@ -200,23 +204,25 @@ class Orderbook {
                 }
             }
 
-            if (!this.isValidOrderbook(orderbookData)) {
+            /*if (!this.isValidOrderbook(orderbookData,contract)) {
                 console.error('Invalid orderbook data:', JSON.stringify(orderbookData));
                 return orderbookData; // Return early to avoid corrupting the orderbook
-            }
+            }*/
             if (!orderbookData) {
                 orderbookData = { buy: [], sell: [] };
             }
 
             // Log the current state for debugging
-            //console.log('Order:', JSON.stringify(order));
+            console.log('Order:', JSON.stringify(order));
             //console.log('Orderbook data before:', JSON.stringify(orderbookData));
             //console.log('Is sell order:', isSellOrder);
 
             // Determine the side of the order
+            console.log('is sell?'+isSellOrder)
             const side = isSellOrder ? 'sell' : 'buy';
+            console.log('side '+side)
             let bookSide = orderbookData[side];
-
+            console.log('book side '+JSON.stringify(bookSide))
             // Ensure bookSide is initialized if undefined
             if (!bookSide) {
                 bookSide = [];
@@ -242,17 +248,21 @@ class Orderbook {
             return orderbookData;
         }
 
-        isValidOrderbook(data) {
+        isValidOrderbook(data,contract) {
             if (typeof data !== 'object' || data === null) return false;
 
             const hasBuySell = data.hasOwnProperty('buy') && data.hasOwnProperty('sell');
-            const isValidBuyArray = Array.isArray(data.buy) && data.buy.every(this.isValidOrder);
-            const isValidSellArray = Array.isArray(data.sell) && data.sell.every(this.isValidOrder);
+            const isValidBuyArray = Array.isArray(data.buy) && (data.buy.length === 0 || data.buy.every(this.isValidOrder,contract));
+            const isValidSellArray = Array.isArray(data.sell) && (data.sell.length === 0 || data.sell.every(this.isValidOrder,contract));
+
+            console.log(isValidBuyArray, isValidSellArray)
+            console.log(data.buy.length===0, data.sell.length===0)
+
 
             return hasBuySell && isValidBuyArray && isValidSellArray;
         }
 
-        isValidOrder(order) {
+       isValidOrder(order, contract) {
             const hasRequiredFields = order.hasOwnProperty('offeredPropertyId') &&
                 order.hasOwnProperty('desiredPropertyId') &&
                 order.hasOwnProperty('amountOffered') &&
@@ -269,8 +279,31 @@ class Orderbook {
                 typeof order.sender === 'string' &&
                 typeof order.price === 'number';
 
+            if (contract==true||contract==null) {
+                const hasContractFields = order.hasOwnProperty('contractId') &&
+                    order.hasOwnProperty('amount') &&
+                    order.hasOwnProperty('side') &&
+                    order.hasOwnProperty('initMargin') &&
+                    order.hasOwnProperty('txid') &&
+                    order.hasOwnProperty('isLiq') &&
+                    order.hasOwnProperty('reduce') &&
+                    order.hasOwnProperty('post');
+
+                const hasValidContractTypes = typeof order.contractId === 'number' &&
+                    typeof order.amount === 'number' &&
+                    typeof order.side === 'boolean' &&
+                    typeof order.initMargin === 'number' &&
+                    typeof order.txid === 'string' &&
+                    typeof order.isLiq === 'boolean' &&
+                    typeof order.reduce === 'boolean' &&
+                    typeof order.post === 'boolean';
+
+                return hasContractFields && hasValidContractTypes;
+            }
+
             return hasRequiredFields && hasValidTypes;
         }
+
 
         calculatePrice(amountOffered, amountExpected) {
             const priceRatio = new BigNumber(amountOffered).dividedBy(amountExpected);
@@ -563,7 +596,7 @@ class Orderbook {
                 }
         }    
 
-        async addContractOrder(contractId, price, amount, side, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
+        async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
             const ContractRegistry = require('./contractRegistry.js')
             const inverse = ContractRegistry.isInverse(contractId)
             const MarginMap = require('./marginMap.js')
@@ -582,7 +615,7 @@ class Orderbook {
             }
 
             // Create a contract order object with the sell parameter
-            const contractOrder = { contractId, amount, price, blockTime, side, initMargin, sender, txid, isLiq, reduce,post,stop };
+            const contractOrder = { contractId, amount, price, blockTime, sell, initMargin, sender, txid, isLiq, reduce,post,stop };
 
             // The orderBookKey is based on the contractId since it's a derivative contract
             const orderBookKey = `${contractId}`;
@@ -592,19 +625,20 @@ class Orderbook {
         
             // Insert the contract order into the order book
             console.log('checking orderbook in addcontract order '+txid+JSON.stringify(orderbookData))
-            orderbookData = await this.insertOrder(contractOrder, orderbookData, side,isLiq);
+            console.log('is sell? '+sell)
+            orderbookData = await orderbook.insertOrder(contractOrder, orderbookData, sell,isLiq);
 
             console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
-            var matchResult = await this.matchContractOrders(orderbookData);
+            var matchResult = await orderbook.matchContractOrders(orderbookData);
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
-                await this.processContractMatches(matchResult.matches, blockTime, false)
+                await orderbook.processContractMatches(matchResult.matches, blockTime, false)
             }
            
             console.log('about to save orderbook in contract trade '+orderBookKey)
                         await orderbook.saveOrderBook(matchResult.orderBook,orderBookKey);
-;
+
             return matchResult
         }
 
@@ -618,6 +652,7 @@ class Orderbook {
             // Sort buy and sell orders by price and time
             orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
             orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
+
 
             // Match orders
             while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
@@ -687,6 +722,19 @@ class Orderbook {
                     // Update orders after the match
                     sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
                     buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
+                        if (sellOrder.sender === buyOrder.sender) {
+                            // Remove the maker order from the book
+                            if (sellOrder.maker) {
+                                orderBook.sell.shift();
+                                console.log('bumping sell order as a self-trade maker'+buyOrder )
+                            } else if (buyOrder.maker) {
+                                orderBook.buy.shift();
+                                console.log('bumping buy order as a self-trade maker'+buyOrder )
+
+                            }
+                            continue
+                        }
 
 
                     if(bumpTrade==false){
@@ -1309,7 +1357,7 @@ class Orderbook {
                            }
 
                     }else{
-                              //console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
+                            console.log('orderbook prior to cancelling '+JSON.stringify(orderBook))
                         for (let i = orderBook.buy.length - 1; i >= 0; i--) {
 
                             const order = orderBook.buy[i];
@@ -1351,7 +1399,7 @@ class Orderbook {
                 }
             }
               
-                //console.log('returning tokens from reserve '+returnFromReserve)
+                console.log('returning tokens from reserve '+returnFromReserve)
                 cancelledOrders.returnFromReserve=returnFromReserve
                 // Save the updated order book to the database
 

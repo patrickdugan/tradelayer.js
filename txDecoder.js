@@ -287,7 +287,7 @@ const Decode = {
       contractId: parseInt(parts[0], 36),
       price: parseInt(parts[1], 36),
       amount: parseInt(parts[2], 36),
-      side: parts[3] === '1',
+      sell: parts[3] === '1',
       insurance: parts[4] === '1',
       reduce: parts[5]==="1",
       post: parts[6]==="1",

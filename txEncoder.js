@@ -264,7 +264,7 @@ const Encode = {
             params.contractId.toString(36),
             params.price.toString(36),
             params.amount.toString(36),
-            params.side ? '1' : '0',
+            params.sell ? '1' : '0',
             params.insurance ? '1' : '0',
             params.reduce ? '1':'0',
             params.post ? '1':'0',
