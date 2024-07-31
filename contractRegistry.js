@@ -306,23 +306,26 @@ class ContractRegistry {
         return doc.data;
     }
 
-    static async getNotionalValue(contractId) {
+    static async getNotionalValue(contractId, mark) {
         
             // Assuming contractData is the data structure for the contract
 
         console.log('inside get notional '+contractId)
             const contractData = await this.getContractInfo(contractId);
+            const BNMark = new BigNumber(mark)
             //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
         try {
             if (contractData && contractData.native && contractData.notionalValue !== undefined && contractData.inverse==true) {
-                const notionalValue = contractData.notionalValue;
+                const BNnotionalValue = new BigNumber(contractData.notionalValue)
+                const notionalValue = new BigNumber(1).dividedBy(BNMark).multipliedBy(BNnotionalValue).toNumber();
                 return notionalValue;
             } else if(contractData.inverse==false && contractData.native==false) {
                 const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
-                return latestPrice.price*contractData.notonalValue; // or any default value
+                return latestPrice.price*contractData.notionalValue; // or any default value
             } else if(contractData.inverse==true && contractData.native==false){
                 const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
-                return 1/latestPrice.price*contractData.notonalValue; // or any default value
+                const value = new BigNumber(1).dividedBy(latestPrice.price).multipliedBy(contractData.notionalValue);
+                return value // or any default value
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
@@ -425,14 +428,15 @@ class ContractRegistry {
         console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
         //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
-        //console.log('initialMarginPerContract '+initialMarginPerContract)
+        console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         //console.log('collateralPropertyId '+collateralPropertyId)
         let totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).toNumber();
         console.log('Total Initial Margin ' +totalInitialMargin+' '+amount+' '+initialMarginPerContract+ ' '+initMargin+' '+price)
         // Move collateral to reservd position
                     let contractUndo = 0
-                    let excessMargin
+                    let excessMargin = 0
+                    console.log('about to calc. excess margin '+orderPrice +' '+price+ ' '+initMargin + ' '+totalInitialMargin)
             if(orderPrice>price&&side==true&&excessMargin!=0&&channel==false){
                     excessMargin = initMargin -totalInitialMargin
                     console.log('calling move margin in buyer excess margin channel false '+sender+' '+excessMargin)
