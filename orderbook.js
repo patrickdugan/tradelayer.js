@@ -327,8 +327,12 @@ class Orderbook {
 
             //console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
 
+            let counter = 0
+
             // Match orders
             while (orderBookCopy.sell.length > 0 && orderBookCopy.buy.length > 0) {
+                counter+=1
+                console.log(counter, JSON.stringify(orderBookCopy))
                 let sellOrder = orderBookCopy.sell[0];
                 let buyOrder = orderBookCopy.buy[0];
 
@@ -339,8 +343,8 @@ class Orderbook {
                     let tradePrice;
                     let bumpTrade = false;
                     let post = false;
-                    let sellOrder.maker = false
-                    let sellOrder.maker = false
+                    sellOrder.maker = false
+                    buyOrder.maker = false
 
                     // Handle trades in the same block
                     if (sellOrder.blockTime === buyOrder.blockTime) {
@@ -362,9 +366,9 @@ class Orderbook {
                             (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
                             bumpTrade = true;
                         }
-                        if((sellOrder.blockTime < buyOrder.blockTime&&bumpTrade=false)){
+                        if((sellOrder.blockTime < buyOrder.blockTime&&bumpTrade==false)){
                             sellOrder.maker=true
-                        }else if(sellOrder.blockTime > buyOrder.blockTime&&bumpTrade=false){
+                        }else if(sellOrder.blockTime > buyOrder.blockTime&&bumpTrade==false){
                             buyOrder.maker=true
                         }
                     }
@@ -372,11 +376,11 @@ class Orderbook {
                      if (sellOrder.sender === buyOrder.sender) {
                             // Remove the maker order from the book
                             if (sellOrder.maker) {
-                                orderBook.sell.shift();
+                                orderBookCopy.sell.shift();
                                 console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
-                                console.log(JSON.stringify(orderBook))
+                                console.log(JSON.stringify(orderBookCopy))
                             } else if (buyOrder.maker) {
-                                orderBook.buy.shift();
+                                orderBookCopy.buy.shift();
                                 console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
 
                             }

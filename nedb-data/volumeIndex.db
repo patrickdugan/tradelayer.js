@@ -1,6 +1,2 @@
-{"_id":"4-5","value":{"blockHeight":3345368,"volume":[7,24.18181815],"price":3.45454545,"type":"token"}}
-{"_id":"globalCumulativeVolume","value":0.031181818150000002}
-{"_id":"4-5","value":{"blockHeight":3366776,"volume":[4,13.8181818],"price":3.45454545,"type":"token"}}
-{"_id":"globalCumulativeVolume","value":0.04899999995}
-{"_id":"4-5","value":{"blockHeight":3366776,"volume":[6,18.64285716],"price":3.10714286,"type":"token"}}
-{"_id":"globalCumulativeVolume","value":0.07364285710999999}
+{"_id":"4-5","value":{"blockHeight":3370593,"volume":[7,5.44444446],"price":0.77777778,"type":"token"}}
+{"_id":"globalCumulativeVolume","value":0.012444444459999999}

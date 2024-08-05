@@ -29,7 +29,7 @@ class AMMPool {
             let blob = await Clearing.getPriceChange(block, id)
             let lastPrice = blob.lastPrice
             // Get the AMM instance for the current contract ID
-            const ammInstance = await ContractRegistry.getAMMInstance(id);
+            const ammInstance = await ContractRegistry.getAMM(id);
             
             // Get the orderbook key for the current contract ID
             const orderBookKey = contractId; // Assuming the orderbook key is the same as the contract ID

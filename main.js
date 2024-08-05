@@ -223,7 +223,7 @@ class Main {
             let saveHeight; // Define saveHeight here
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
-                await AMM.updateOrdersForAllContractAMMs(blockHeight);
+                //await AMM.updateOrdersForAllContractAMMs(blockHeight);
 
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {

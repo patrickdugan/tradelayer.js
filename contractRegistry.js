@@ -463,7 +463,7 @@ class ContractRegistry {
             }
             console.log('checking feeInfo obj again '+JSON.stringify(feeInfo))
         if(channel==false){
-             console.log('calling move margin standard '+sender+' '+totalInitialMargin)
+             console.log('calling move margin standard '+sender+' '+totalInitialMargin+' '+feeInfo.buyerFee+' '+feeInfo.sellerFee)
              if(feeInfo.buyFeeFromReserve&&side==true){
                 totalInitialMargin-=feeInfo.buyerFee
              }else if(feeInfo.sellFeeFromReserve&&side==false){
