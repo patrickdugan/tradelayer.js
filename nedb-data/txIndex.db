@@ -1,4 +1,4 @@
-{"_id":"MaxHeight","value":3367254}
+{"_id":"MaxHeight","value":3367779}
 {"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl","txId":"0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0"}],"type":0,"valid":true}
@@ -574,18 +574,3 @@
 {"_id":"tx-3366776-70a1b91e15d3b645ca4345652453661edfcfc7281fb962836527f37bfcf8664a","value":[{"sender":{"senderAddress":"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr","amount":0.0955},"reference":{"address":"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr","satoshis":9540000},"payload":"54,5,gjdgxs,6m5dz4,0,0","decodedParams":{},"marker":"tl","txId":"70a1b91e15d3b645ca4345652453661edfcfc7281fb962836527f37bfcf8664a"}],"type":5,"valid":true,"reason":""}
 {"_id":"tx-3366783-814b269c98e63e2371a67009e2c2763c9c410f61e8ac42454b1cb3c945f97db8","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65062664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65052664},"payload":"i4,128n,1,1,0,0,0,0","decodedParams":{},"marker":"tl","txId":"814b269c98e63e2371a67009e2c2763c9c410f61e8ac42454b1cb3c945f97db8"}],"type":18,"valid":true,"reason":""}
 {"_id":"tx-3367198-51cebb59453bbfd2820a369e004346def055b64f5cd9b08c4e65a82ee2e22bfb","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65052664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65042664},"payload":"i4,12am,3,1,0,0,0,0","decodedParams":{},"marker":"tl","txId":"51cebb59453bbfd2820a369e004346def055b64f5cd9b08c4e65a82ee2e22bfb"}],"type":18,"valid":true,"reason":""}
-{"_id":"tx-3367211-720ccdaded0c5b3c1cae63a89fb9e8fa72ee676de65cd52b081566cb902172c7","value":[{"sender":{"senderAddress":"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr","amount":0.0954},"reference":{"address":"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr","satoshis":9530000},"payload":"i4,12jz,3,0,0,0,0,0","decodedParams":{},"marker":"tl","txId":"720ccdaded0c5b3c1cae63a89fb9e8fa72ee676de65cd52b081566cb902172c7"}],"type":18,"valid":true,"reason":""}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3367690}
-{"_id":"indexExists","value":true}

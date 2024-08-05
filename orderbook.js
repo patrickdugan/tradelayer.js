@@ -213,16 +213,16 @@ class Orderbook {
             }
 
             // Log the current state for debugging
-            console.log('Order:', JSON.stringify(order));
+            //console.log('Order:', JSON.stringify(order));
             //console.log('Orderbook data before:', JSON.stringify(orderbookData));
             //console.log('Is sell order:', isSellOrder);
 
             // Determine the side of the order
-            console.log('is sell?'+isSellOrder)
+            //console.log('is sell?'+isSellOrder)
             const side = isSellOrder ? 'sell' : 'buy';
-            console.log('side '+side)
+            //console.log('side '+side)
             let bookSide = orderbookData[side];
-            console.log('book side '+JSON.stringify(bookSide))
+            //console.log('book side '+JSON.stringify(bookSide))
             // Ensure bookSide is initialized if undefined
             if (!bookSide) {
                 bookSide = [];
@@ -332,18 +332,15 @@ class Orderbook {
                 let sellOrder = orderBookCopy.sell[0];
                 let buyOrder = orderBookCopy.buy[0];
 
-                // Skip self-trades
-                if (sellOrder.sender === buyOrder.sender) {
-                    console.log('Skipping self-trade for sender:', sellOrder.sender);
-                    orderBookCopy.sell.shift();
-                    continue; // Skip this trade
-                }
+
 
                 // Ensure matching distinct property IDs
                 if (sellOrder.offeredPropertyId === buyOrder.desiredPropertyId && sellOrder.desiredPropertyId === buyOrder.offeredPropertyId) {
                     let tradePrice;
                     let bumpTrade = false;
                     let post = false;
+                    let sellOrder.maker = false
+                    let sellOrder.maker = false
 
                     // Handle trades in the same block
                     if (sellOrder.blockTime === buyOrder.blockTime) {
@@ -352,17 +349,39 @@ class Orderbook {
                         if (sellOrder.post) {
                             tradePrice = sellOrder.price;
                             post = true;
+                            sellOrder.maker=true
                         } else if (buyOrder.post) {
                             tradePrice = buyOrder.price;
                             post = true;
+                            buyOrder.maker=true
                         }
+                        sellOrder.flat=true
                     } else {
                         tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
                         if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
                             (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
                             bumpTrade = true;
                         }
+                        if((sellOrder.blockTime < buyOrder.blockTime&&bumpTrade=false)){
+                            sellOrder.maker=true
+                        }else if(sellOrder.blockTime > buyOrder.blockTime&&bumpTrade=false){
+                            buyOrder.maker=true
+                        }
                     }
+
+                     if (sellOrder.sender === buyOrder.sender) {
+                            // Remove the maker order from the book
+                            if (sellOrder.maker) {
+                                orderBook.sell.shift();
+                                console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
+                                console.log(JSON.stringify(orderBook))
+                            } else if (buyOrder.maker) {
+                                orderBook.buy.shift();
+                                console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
+
+                            }
+                            continue
+                        }
 
                     // Check for price match
                     if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
@@ -653,12 +672,14 @@ class Orderbook {
             orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
             orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
 
-
+            let counter =0 
             // Match orders
             while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
-
+                counter+=1
+                console.log('matching loop count '+counter)
+                console.log(JSON.stringify(buyOrder))
                 // Remove orders with zero amounts
                 if (BigNumber(sellOrder.amount).isZero()) {
                     orderBook.sell.shift();
@@ -730,22 +751,28 @@ class Orderbook {
                     // Calculate the amount to be traded
                     let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
                     console.log('trade amount calc in contract match '+tradeAmount + ' '+sellOrder.amount + ' '+buyOrder.amount)
-                    // Update orders after the match
-                    sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
-                    buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+                    
+                      console.log('about to do anti-wash trade '+JSON.stringify(sellOrder)+JSON.stringify(buyOrder))
 
                         if (sellOrder.sender === buyOrder.sender) {
                             // Remove the maker order from the book
                             if (sellOrder.maker) {
                                 orderBook.sell.shift();
-                                console.log('bumping sell order as a self-trade maker'+buyOrder )
+                                console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
+                                console.log(JSON.stringify(orderBook))
                             } else if (buyOrder.maker) {
                                 orderBook.buy.shift();
-                                console.log('bumping buy order as a self-trade maker'+buyOrder )
+                                console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
 
                             }
                             continue
                         }
+
+
+                    // Update orders after the match
+                    sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
+                    buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
 
 
                     if(bumpTrade==false){
