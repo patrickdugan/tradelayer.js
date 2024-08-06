@@ -221,7 +221,7 @@ class MarginMap {
         
         const ContractList = require('./contractRegistry.js')
         const TallyMap = require('./tally.js')
-        const contractInfo = ContractList.getContractInfo(collateralId)
+        const contractInfo = ContractList.getContractInfo(contractId)
         //console.log('position now ' + JSON.stringify(position))
         const notionalValue = contractInfo.notionalValue
         const collateralId = contractInfo.collateralId

@@ -593,7 +593,12 @@ class Orderbook {
                     const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
 
                     console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'token')
+                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'onChainToken')
+                }else{
+                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
+
+                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
+                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'channelToken') 
                 }
 
                 var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
@@ -923,7 +928,7 @@ class Orderbook {
 
                     console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                    
-                    let feeInfo = await this.locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee)         
+                    let feeInfo = await this.locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee, isBuyerReducingPosition, isSellerReducingPosition)         
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
                     //the purpose of which is to handle flipping positions long to short or visa versa
                     const isBuyerFlippingPosition =  Boolean((match.buyOrder.amount>Math.abs(match.buyerPosition.contracts))&&match.buyerPosition.contracts<0)
@@ -1187,7 +1192,9 @@ class Orderbook {
                     }
            
                     if(channel==false){
-                       VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,match.tradePrice,currentBlockHeight)
+                       VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,match.tradePrice,currentBlockHeight,'onChainContract')
+                    }else{
+                       VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,match.tradePrice,currentBlockHeight,'channelContract')
                     }
 
                      //see if the trade qualifies for increased Liquidity Reward
@@ -1276,8 +1283,10 @@ class Orderbook {
                 }
         }
 
-        async locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee){
-                      let buyFeeFromMargin = false
+        async locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee,isBuyerReducingPosition,isSellerReducingPosition){
+                    const TallyMap = require('./tally.js');
+
+                    let buyFeeFromMargin = false
                     let buyFeeFromReserve = false
                     let buyFeeFromAvailable = false
                     let sellFeeFromMargin = false

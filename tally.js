@@ -220,7 +220,7 @@ class TallyMap {
             console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.available === undefined) {
-                return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
+                return { hasSufficient: false, reason: 'undefined' };
             }
 
             //console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
@@ -242,13 +242,17 @@ class TallyMap {
             console.log('Checking senderTally in has hasSufficientReserve', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.reserved === undefined) {
-                return { hasSufficient: false, reason: 'Error loading tally or tally not found' };
+                return { hasSufficient: false, reason: 'undefined' };
             }
 
             console.log('Reserve tokens:', senderTally.reserved, 'Required amount:', requiredAmount);
 
             if (senderTally.reserved < requiredAmount) {
-                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: requiredAmount-senderTally.reserved };
+                let requiredBN = new BigNumber(requiredAmount)
+                let reservedBN = new BigNumber(senderTally.reserved)
+                let shortfall= requiredBN.minus(reservedBN).toNumber()
+                console.log('insufficient tokens ' +shortfall)
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: shortfall };
             }
 
             return { hasSufficient: true, reason: '' };

@@ -461,24 +461,50 @@ class ContractRegistry {
                        await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin',block);  
                     }  
             }
+
             console.log('checking feeInfo obj again '+JSON.stringify(feeInfo))
-        if(channel==false){
-             console.log('calling move margin standard '+sender+' '+totalInitialMargin+' '+feeInfo.buyerFee+' '+feeInfo.sellerFee)
-             if(feeInfo.buyFeeFromReserve&&side==true){
+
+            if(feeInfo.buyFeeFromReserve&&side==true){
                 totalInitialMargin-=feeInfo.buyerFee
              }else if(feeInfo.sellFeeFromReserve&&side==false){
                 totalInitialMargin-=feeInfo.sellerFee
              }
-             await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+
+        if(channel==false){
+             let hasReserve = await TallyMap.hasSufficientReserve(sender, collateralPropertyId,totalInitialMargin)
+             console.log('calling move margin standard '+sender+' '+totalInitialMargin+' '+feeInfo.buyerFee+' '+feeInfo.sellerFee)
+             if(hasReserve.hasSufficient){
+                 await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+             }else{
+                if(hasReserve.reason!='undefined'){
+                        console.log(JSON.stringify(hasReserve), totalInitialMargin, amount)
+                        let shortfallBN = new BigNumber(hasReserve.shortfall)
+                        let marginBN = new BigNumber(shortfallBN)
+                        totalInitialMargin = marginBN.minus(shortfallBN).decimalPlaces(8).toNumber()
+                        console.log(totalInitialMargin)
+                       await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                }else{
+                    throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
+                }
+             }
+
         }else if(channel==true){
-            if(feeInfo.buyFeeFromReserve&&side==true){
-                totalInitialMargin-=feeInfo.buyerFee
-            }else if(feeInfo.sellFeeFromReserve&&side==false){
-                totalInitialMargin-=feeInfo.sellerFee
-            }
+            let hasReserve = await TallyMap.hasSufficientReserve(sender, collateralPropertyId,totalInitialMargin)
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
-            await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
-            await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+            if(hasReserve.hasSufficient){
+                await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
+                await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+            }else{
+                if(hasReserve.reason!='undefined'){
+                        let shortfallBN = new BigNumber(hasReserve.shortfall)
+                        let marginBN = new BigNumber(shortfallBN)
+                        totalInitialMargin = marginBN.minus(shortfallBN).decimalPlaces(8).toNumber()      
+                        await TallyMap.updateBalance(channelAddr, collateralPropertyId, 0, -totalInitialMargin, 0, 0, 'contractTradeInitMargin',block);
+                        await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                }else{
+                    throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
+                }
+            }
         }  
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
         return position
