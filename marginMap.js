@@ -221,10 +221,10 @@ class MarginMap {
         
         const ContractList = require('./contractRegistry.js')
         const TallyMap = require('./tally.js')
-        const contractInfo = ContractList.getContractInfo(contractId)
-        //console.log('position now ' + JSON.stringify(position))
+        const contractInfo = await ContractList.getContractInfo(contractId)
+        console.log('contract Info in updateContractBalances' + JSON.stringify(contractInfo))
         const notionalValue = contractInfo.notionalValue
-        const collateralId = contractInfo.collateralId
+        const collateralId = contractInfo.collateralPropertyId
         console.log('about to call getTally in updateContractBalances '+address +' '+collateralId)
         const balances = await TallyMap.getTally(address,collateralId)
         const available = balances.available
@@ -322,13 +322,20 @@ class MarginMap {
         const contracts = new BigNumber(position.contracts || 0);
         const amountBN = new BigNumber(amount);
         const priceBN = new BigNumber(price);
-
-        // Calculate the updated average price
-        const updatedAvgPrice = avgPrice
-            .times(contracts)
-            .plus(amountBN.times(priceBN))
-            .dividedBy(contracts.plus(amountBN));
-
+        console.log('inside update Avg. '+position.avgPrice+' '+position.contracts+' '+amount+' '+price)
+               
+        if (contracts.isZero()) {
+            // If there are no contracts yet, the average price should just be the price of the new amount
+            const updatedAvgPrice = priceBN;
+            console.log('updated avg', updatedAvgPrice.toFixed(8)); // Use toFixed to print 8 decimal places
+        } else {
+            // Calculate the updated average price
+            const updatedAvgPrice = avgPrice
+                .times(contracts)
+                .plus(amountBN.times(priceBN))
+                .dividedBy(contracts.plus(amountBN));
+            console.log('updated avg', updatedAvgPrice.toFixed(8)); // Use toFixed to print 8 decimal places
+        }
         // Update the position object with the new values
         position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
         //position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
