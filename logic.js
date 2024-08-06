@@ -1142,51 +1142,6 @@ const Logic = {
         return strikePrices;
     },
 
-    async tradeBaiUrbun(channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercent, amount, expiryBlock, tradeExpiryBlock) {
-    // Ensure the trade is conducted inside a channel
-    if (!this.channelsRegistry.has(channelAddress)) {
-        throw new Error('Trade channel not found');
-    }
-
-    // Calculate the down payment amount based on the percentage
-    const downPaymentAmount = amount * (downPaymentPercent / 10000); // Assuming basis points
-
-    // Retrieve current market price for the two property IDs from the token DEX
-    const currentMarketPrice = await this.tokenDex.getMarketPrice(propertyIdToBeSold, propertyIdDownPayment);
-    if (!currentMarketPrice) {
-        throw new Error('Market price not available for the given property IDs');
-    }
-
-    // Validate that the Bai Urbun is not out of the money
-    if (downPaymentAmount < currentMarketPrice * amount) {
-        throw new Error('Bai Urbun contract is out of the money');
-    }
-
-    // Create the Bai Urbun contract
-    const baiUrbunContract = {
-        type: 'BaiUrbun',
-        propertyIdDownPayment,
-        propertyIdToBeSold,
-        downPaymentPercent,
-        downPaymentAmount,
-        totalAmount: amount,
-        expiryBlock,
-        tradeExpiryBlock,
-        contractId: `B-${propertyIdToBeSold}-${propertyIdDownPayment}-${expiryBlock}`
-    };
-
-    // Add the contract to the Bai Urbun registry
-    await this.baiUrbunRegistry.addContract(baiUrbunContract);
-
-    // Process token commitments in the channel
-    this.channelsRegistry.commitToChannel(channelAddress, propertyIdDownPayment, downPaymentAmount, 'BaiUrbunDownPayment');
-
-
-
-    console.log(`Bai Urbun contract created: ${JSON.stringify(baiUrbunContract)}`);
-    return baiUrbunContract;
-	},
-
 	async tradeBaiUrbun(tallyMap, marginMap, channelRegistry, channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercentage, price, amount, expiryBlock, tradeExpiryBlock) {
 	    // Validate inputs and check balances
 	    if (!channelRegistry.hasChannel(channelAddress)) {

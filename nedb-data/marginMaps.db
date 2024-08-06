@@ -1,0 +1,3 @@
+{"_id":"{\"seriesId\":4}","value":"[[\"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr\",{\"contracts\":0,\"margin\":0.1}]]"}
+{"_id":"{\"seriesId\":4}","value":"[[\"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr\",{\"contracts\":0,\"margin\":0.1}],[\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",{\"contracts\":0,\"margin\":0.09999999000000001}]]"}
+{"_id":"{\"seriesId\":4}","value":"[[\"tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr\",{\"contracts\":1,\"margin\":0.1,\"avgPrice\":49559,\"liqPrice\":null}],[\"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8\",{\"contracts\":-1,\"margin\":0.09999999000000001,\"avgPrice\":49559,\"liqPrice\":null}]]"}

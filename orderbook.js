@@ -915,9 +915,9 @@ class Orderbook {
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
 
-                    let buyerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
-                    let sellerFee = this.calculateFee(match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
-        
+                    let buyerFee = this.calculateFee(match.buyOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
+                    let sellerFee = this.calculateFee(match.buyOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
+                    
                     await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
                     await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
 
@@ -1268,35 +1268,42 @@ class Orderbook {
             }
         }
 
-        calculateFee(sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue, channel){
+        calculateFee(amount, sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue, channel){
                 let fee = 0
+                let BNnotionalValue=new BigNumber(notionalValue)
+                let BNlastMark = new BigNumber(lastMark)
+                let BNamount = new BigNumber(amount)
                 console.log('inside calc fee ' +lastMark+' '+notionalValue)
               if((sellMaker==false&&buyMaker==false)||channel==true){
                         if(isInverse) {
                             fee = new BigNumber(0.000025)
-                                .times(notionalValue)
-                                .times(lastMark)
+                                .times(BNnotionalValue)
+                                .dividedBy(BNlastMark)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         } else {
                             fee = new BigNumber(lastMark)
-                                .dividedBy(notionalValue)
+                                .dividedBy(BNnotionalValue)
                                 .times(0.000025)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         }
                         return fee    
                 }else if(sellMaker==true&&buyMaker==false){
                     if(isInverse) {
                             fee = new BigNumber(0.00005)
-                                .times(notionalValue)
-                                .times(lastMark)
+                                .times(BNnotionalValue)
+                                .dividedBy(BNlastMark)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                             if(isBuyer==true){
                                 return fee
                             }
                         } else {
                             fee = new BigNumber(lastMark)
-                                .dividedBy(notionalValue)
+                                .dividedBy(BNnotionalValue)
                                 .times(0.00005)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                         }  
                         if(isBuyer==true){
@@ -1307,13 +1314,15 @@ class Orderbook {
                 }else if(sellMaker==false&&buyMaker==true){
                     if(isInverse) {
                             fee = new BigNumber(0.00005)
-                                .times(notionalValue)
-                                .times(lastMark)
+                                .times(BNnotionalValue)
+                                .dividedBy(BNlastMark)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                     } else {
                             fee = new BigNumber(lastMark)
-                                .dividedBy(notionalValue)
+                                .dividedBy(BNnotionalValue)
                                 .times(0.00005)
+                                .times(BNamount)
                                 .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
                     }    
                     if(isBuyer==false){
