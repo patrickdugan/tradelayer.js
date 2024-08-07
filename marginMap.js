@@ -308,8 +308,8 @@ class MarginMap {
                                                     }
           }
         }
-        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.toNumber())
-        let liquidationPrice = Math.abs(liquidationPriceBN.toNumber())
+        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber())
+        let liquidationPrice = Math.abs(liquidationPriceBN.decimalPlaces(4).toNumber())
         
         return {
             bankruptcyPrice,
@@ -341,7 +341,7 @@ class MarginMap {
         console.log('updated avg ' + updatedAvgPrice);
         
         // Update the position object with the new values
-        position.avgPrice = updatedAvgPrice.abs().toNumber(); // Keep the avgPrice positive
+        position.avgPrice = updatedAvgPrice.abs().decimalPlaces(4).toNumber(); // Keep the avgPrice positive
         position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
         await this.recordMarginMapDelta(position.address, contractId, 0, 0, 0, 0, (avgPrice.toNumber() - updatedAvgPrice.abs().toNumber()), 'newAvgPrice');
@@ -368,7 +368,7 @@ class MarginMap {
         }
 
         // Return 10% of the notional value as the margin requirement
-        return notional.multipliedBy(0.1).toNumber();
+        return notional.multipliedBy(0.1).decimalPlaces(8).toNumber();
     }
 
      /**
@@ -391,7 +391,7 @@ class MarginMap {
         let initialMarginBN = new BigNumber(initialMargin)
         let contractsBN = new BigNumber(position.contracts)
         let maintenanceMarginFactorBN = new BigNumber(0.8)
-        let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).toNumber();
+        let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
 
         if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
@@ -439,7 +439,7 @@ class MarginMap {
             posMargin = posMargin.minus(reduction);
 
             // Assign the updated pos.margin
-            pos.margin = posMargin.toNumber();    
+            pos.margin = posMargin.decimalPlaces(8).toNumber();    
             if(feeDebit){
                 console.log('debiting fee in reduce margin '+fee)
                 pos.margin-=fee
@@ -487,7 +487,7 @@ class MarginMap {
                 .minus(1)
                 .dividedBy(avgPriceBN.minus(1))
                 .times(contractsBN)
-                .times(notionalValueBN);
+                .times(notionalValueBN).decimalPlaces(8).toNumber();
 
             //console.log('pnl ' + pnl.toNumber());
         } else {
@@ -495,7 +495,7 @@ class MarginMap {
             pnl = priceBN
                 .minus(avgPriceBN)
                 .times(contractsBN)
-                .times(notionalValueBN);
+                .times(notionalValueBN).decimalPlaces(8).toNumber();
 
             //console.log('pnl ' + pnl.toNumber());
         }
@@ -600,7 +600,7 @@ class MarginMap {
             this.margins.set(address, pos)
             await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   
-            return pnl.toNumber();
+            return pnl.decimalPlaces(8).toNumber();
     }
 
     async clear(position, address, pnlChange, avgPrice,contractId) {
