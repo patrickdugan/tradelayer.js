@@ -349,7 +349,7 @@ class ContractRegistry {
     }
 
      // Function to get initial margin requirement for a contract
-    static async getInitialMargin(contractId, price) {
+    static async getInitialMargin(contractId, price){
         //console.log('checking contractId inside getInitialMargin '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
         if (!contractInfo) {
@@ -359,17 +359,23 @@ class ContractRegistry {
         let inverse = contractInfo.inverse;
         let notionalValue = contractInfo.notionalValue
         let leverage = contractInfo.leverage
+        let priceBN = new BigNumber(price)
+        let leverageBN = new BigNumber(leverage)
+        let notionalBN = new BigNumber(notionalValue)
         //console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
-            return BigNumber(notionalValue).div(leverage).toNumber();
+            console.log('calc. init. margin inverse '+notionalValue+' '+priceBN+' '+leverage)
+            let margin = notionalBN.dividedBy(priceBN).div(leverageBN).decimalPlaces(8).toNumber();
+            console.log(margin)
+            return margin
         } else {
             /*
             // For linear contracts, check collateral and calculate based on oracle price or property value
             const collateralValue = await ContractRegistry.getCollateralValue(contractInfo);
             return BigNumber(collateralValue).div(leverage);
             */
-            return BigNumber(notionalValue).times(price).div(leverage).toNumber();
+            return notionalBN.div(leverageBN).toNumber();
         }
     }
 

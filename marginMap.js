@@ -204,11 +204,11 @@ class MarginMap {
                 }
             }else{
                 console.log('about to call updateAveragePrice '+amount+' '+price+' '+contractId)
-                position.avgPrice=this.updateAveragePrice(position,amount,price,contractId)
+                position.avgPrice=await this.updateAveragePrice(position,amount,price,contractId, isBuyOrder)
                 console.log('after the avg price function '+position.avgPrice)
 
             }
-        }else if(flip==true){
+        }else if(flip==true&&close==false){
             //this is the first trade in the new direction of the flip so its price is the avg. entry price
             position.avgPrice=price
         }
@@ -233,9 +233,10 @@ class MarginMap {
         console.log('isLong '+isLong)
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log('liquidation info ' +JSON.stringify(liquidationInfo));
-        if(liquidationInfo==null){
-            position.liqPrice=null
-            position.bankruptcyPrice=null
+        if(liquidationInfo==null&&position.contracts==0){
+            position.liqPrice=0
+            position.bankruptcyPrice=0
+            position.avgPrice=price
         }else{
             position.liqPrice = liquidationInfo.liquidationPrice
             position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice   
@@ -316,31 +317,35 @@ class MarginMap {
         };
     }
 
-    updateAveragePrice(position, amount, price,contractId) {
+    async updateAveragePrice(position, amount, price, contractId, isBuy) {
+        // Make sure our absolute value order amounts for sells register
+        if (!isBuy) {
+            amount *= -1;
+        }
+
         // Convert existing values to BigNumber
         const avgPrice = new BigNumber(position.avgPrice || 0);
         const contracts = new BigNumber(position.contracts || 0);
         const amountBN = new BigNumber(amount);
         const priceBN = new BigNumber(price);
-        console.log('inside update Avg. '+position.avgPrice+' '+position.contracts+' '+amount+' '+price)
-               
-        if (contracts.isZero()) {
-            // If there are no contracts yet, the average price should just be the price of the new amount
-            const updatedAvgPrice = priceBN;
-            console.log('updated avg', updatedAvgPrice.toFixed(8)); // Use toFixed to print 8 decimal places
-        } else {
-            // Calculate the updated average price
-            const updatedAvgPrice = avgPrice
-                .times(contracts)
-                .plus(amountBN.times(priceBN))
-                .dividedBy(contracts.plus(amountBN));
-            console.log('updated avg', updatedAvgPrice.toFixed(8)); // Use toFixed to print 8 decimal places
-        }
+   
+       console.log('inside update Avg. ' + position.avgPrice + ' ' + position.contracts + ' ' + amount + ' ' + price);
+        
+        // Calculate the numerator and denominator separately for clarity
+        const numerator = avgPrice.times(contracts).plus(amountBN.times(priceBN));
+        const denominator = contracts.plus(amountBN);
+        
+        // Calculate the updated average price
+        const updatedAvgPrice = numerator.dividedBy(denominator);
+            
+        console.log('updated avg ' + updatedAvgPrice);
+        
         // Update the position object with the new values
-        position.avgPrice = updatedAvgPrice.toNumber(); // Convert back to number if needed
-        //position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
+        position.avgPrice = updatedAvgPrice.abs().toNumber(); // Keep the avgPrice positive
+        position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
-        this.recordMarginMapDelta(position.address, contractId,0,0,0,0,(avgPrice.toNumber()-updatedAvgPrice.toNumber()),'newAvgPrice')
+        await this.recordMarginMapDelta(position.address, contractId, 0, 0, 0, 0, (avgPrice.toNumber() - updatedAvgPrice.abs().toNumber()), 'newAvgPrice');
+        
         // Return the updated position object
         return position.avgPrice;
     }
@@ -463,7 +468,7 @@ class MarginMap {
         return pos;
     }
 
-    realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
+    async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
         if (!pos) return new BigNumber(0);
 
         let pnl;
@@ -503,7 +508,7 @@ class MarginMap {
         // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
 
         //console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
-        this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
+        await this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
       
         return pnl;
     }
