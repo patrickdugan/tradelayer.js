@@ -125,8 +125,11 @@ class MarginMap {
 
         //console.log('margin before '+position.margin)
         // Update the margin for the existing or new position
-        position.margin += totalInitialMargin;
-        //console.log('margin after '+position.margin)
+        position.margin = new BigNumber(position.margin)
+        .plus(totalInitialMargin)
+        .decimalPlaces(8)
+        .toNumber();
+        console.log('aftermargin  '+position.margin)
         // Update the MarginMap with the modified position
         this.margins.set(sender, position);
         //console.log('margin should be topped up '+JSON.stringify(position))
@@ -440,6 +443,7 @@ class MarginMap {
 
             // Assign the updated pos.margin
             pos.margin = posMargin.decimalPlaces(8).toNumber();    
+            console.log('updating margin in reduce '+pos.margin)
             if(feeDebit){
                 console.log('debiting fee in reduce margin '+fee)
                 pos.margin-=fee
@@ -459,8 +463,9 @@ class MarginMap {
 
     async feeMarginReduce(address,pos, reduction,contractId){
              // Now you can use the minus method
-        pos.margin -= reduction
-                   
+        pos.margin = new BigNumber(pos.margin).minus(reduction).decimalPlaces(8)
+        .toNumber(); // Update the margin for the existing or new position
+        console.log('updating margin in fee'+pos.margin)           
         this.margins.set(address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginFeeReduction')
         //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
