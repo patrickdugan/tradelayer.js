@@ -1457,7 +1457,7 @@ const Validity = {
         },
 
         // 23: Settle Channel PNL
-        validateSettleChannelPNL: async (params, channelRegistry, marginMap) => {
+        validateSettleChannelPNL: async (sender, params, block) => {
             params.reason = '';
             params.valid = true;
 
@@ -1490,13 +1490,13 @@ const Validity = {
 
 
     // 24: Mint Synthetic
-    validateMintSynthetic: async (params) => {
+    validateMintSynthetic: async (sender, params, block) => {
         params.reason = '';
         params.valid = true;
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
         const collateralPropertyId = contractInfo.collateralPropertyId
-        const notional = contractInfo.notionalValue
+        const notionalValue = contractInfo.notionalValue
         if(contractInfo.inverse==false){
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with linear contracts'
@@ -1505,13 +1505,16 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
         }
-        const contractsBalance = WalletCache.getContractPositionForAddressAndContractId(param.sender,params.contractId)
-        if(contractsBalance*notional>=params.amount){
+        const marginMap = await MarginMap.getInstance(params.contractId)
+        const position = await marginMap.getPositionForAddress(sender, params.contractId)
+        let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
+        if(grossNotional>=params.amount){
                 params.valid=false
                 params.reason += 'insufficient contracts to hedge the amount requested'
         }
         // Ensure the sender has sufficient balance of the underlying property
-        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.sender, collateralPropertyId, params.amount*notional);
+        let grossRequired = BigNumber(params.amount).times(notionalValue).decimalPlaces(8).toNumber()
+        const hasSufficientBalance = TallyMap.hasSufficientBalance(sender, collateralPropertyId, grossRequired);
         if(hasSufficientBalance.hasSufficient==false){
                 params.valid=false
                 params.reason += 'insufficient collateral to create a 1x hedge position'
@@ -1521,7 +1524,7 @@ const Validity = {
     },
 
     // 25: Redeem Synthetic
-    validateRedeemSynthetic: (params) => {
+    validateRedeemSynthetic: (sender, params,block) => {
         params.reason = '';
         params.valid = true;
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)

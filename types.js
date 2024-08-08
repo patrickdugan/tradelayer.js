@@ -284,15 +284,27 @@ const Types = {
                 break;
             case 23:
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateSettleChannelPNL(sender, params, block)
                 break;
             case 24:
                 params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateMintSynthetic(sender, params, block)
                 break;
             case 25:
                 params = Decode.decodeRedeemSynthetic(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validateRedeemSynthetic(sender, params, block)
                 break;
             case 26:
                 params = Decode.decodePayToTokens(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
+                params = await Validity.validatePayToTokens(sender, params, block)
                 break;
             case 27:
                 params = Decode.decodeCreateOptionChain(encodedPayload.substr(index));

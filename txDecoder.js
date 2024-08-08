@@ -363,8 +363,8 @@ const Decode = {
   decodeMintSynthetic: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyIdUsed: parseInt(parts[0], 36),
-      contractIdUsed: parseInt(parts[1], 36),
+      propertyId: parseInt(parts[0], 36),
+      contractId: parseInt(parts[1], 36),
       amount: parseInt(parts[2], 36),
     };
   },

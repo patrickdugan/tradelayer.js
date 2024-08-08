@@ -11,6 +11,7 @@ class PropertyManager {
 
         this.propertyIndex = new Map();
         this.ammIndex = new Map(); // Initialize AMM index
+        //this.synthIndex= new Map()
         PropertyManager.instance = this;
     }
 
@@ -87,6 +88,29 @@ class PropertyManager {
 
         if (!propertyTypeIndexes[type]) {
             throw new Error('Invalid property type.');
+        }
+
+            // Retrieve existing property entry if it exists
+        let existingProperty = this.propertyIndex.get(propertyId);
+
+        if (existingProperty) {
+            // If property exists, update totalInCirculation and other fields if necessary
+            existingProperty.totalInCirculation = totalInCirculation;
+            existingProperty.ticker = ticker || existingProperty.ticker;
+            existingProperty.type = propertyTypeIndexes[type];
+            existingProperty.whitelistId = whitelistId || existingProperty.whitelistId;
+            existingProperty.issuer = issuer || existingProperty.issuer;
+            existingProperty.backupAddress = backupAddress || existingProperty.backupAddress;
+        } else {
+            // If property does not exist, create a new one
+            existingProperty = {
+                ticker,
+                totalInCirculation,
+                type: propertyTypeIndexes[type],
+                whitelistId: whitelistId,
+                issuer: issuer,
+                backupAddress: backupAddress
+            };
         }
 
         this.propertyIndex.set(propertyId, {
