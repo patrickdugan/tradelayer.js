@@ -427,11 +427,11 @@ class ContractRegistry {
         return totalInitialMargin
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker){
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker,flag){
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
-        console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
+        //console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
         //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         const compareInitMargin = await ContractRegistry.getInitialMargin(contractId,orderPrice)
@@ -467,6 +467,7 @@ class ContractRegistry {
                     console.log('calling move margin in seller excess margin channel false, insufficient Balance '+sender+' '+excessMargin)
                         await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin',block);    
                     }else{
+                        totalInitialMargin = BigNumber(initMargin).minus(excessMargin).decimalPlaces(8).toNumber();
                     console.log('calling move margin in seller excess margin channel false, sufficient Balance '+sender+' '+excessMargin)                
                        await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin',block);  
                     }  
