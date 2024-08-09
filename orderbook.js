@@ -332,7 +332,7 @@ class Orderbook {
             // Match orders
             while (orderBookCopy.sell.length > 0 && orderBookCopy.buy.length > 0) {
                 counter+=1
-                console.log(counter, JSON.stringify(orderBookCopy))
+                //console.log(counter, JSON.stringify(orderBookCopy))
                 let sellOrder = orderBookCopy.sell[0];
                 let buyOrder = orderBookCopy.buy[0];
 
@@ -652,11 +652,11 @@ class Orderbook {
             // Load the order book for the given contract
         
             // Insert the contract order into the order book
-            console.log('checking orderbook in addcontract order '+txid+JSON.stringify(orderbookData))
+            //console.log('checking orderbook in addcontract order '+txid+JSON.stringify(orderbookData))
             console.log('is sell? '+sell)
             orderbookData = await orderbook.insertOrder(contractOrder, orderbookData, sell,isLiq);
 
-            console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
+            //console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
             var matchResult = await orderbook.matchContractOrders(orderbookData);
             if(matchResult.matches !=[]){
@@ -687,8 +687,8 @@ class Orderbook {
                 let sellOrder = orderBook.sell[0];
                 let buyOrder = orderBook.buy[0];
                 counter+=1
-                console.log('matching loop count '+counter)
-                console.log(JSON.stringify(buyOrder))
+                //console.log('matching loop count '+counter)
+                //console.log(JSON.stringify(buyOrder))
                 // Remove orders with zero amounts
                 if (BigNumber(sellOrder.amount).isZero()) {
                     orderBook.sell.shift();
@@ -759,19 +759,19 @@ class Orderbook {
                 if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
                     // Calculate the amount to be traded
                     let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
-                    console.log('trade amount calc in contract match '+tradeAmount + ' '+sellOrder.amount + ' '+buyOrder.amount)
+                    //console.log('trade amount calc in contract match '+tradeAmount + ' '+sellOrder.amount + ' '+buyOrder.amount)
                     
-                      console.log('about to do anti-wash trade '+JSON.stringify(sellOrder)+JSON.stringify(buyOrder))
+                      //console.log('about to do anti-wash trade '+JSON.stringify(sellOrder)+JSON.stringify(buyOrder))
 
                         if (sellOrder.sender === buyOrder.sender) {
                             // Remove the maker order from the book
                             if (sellOrder.maker) {
                                 orderBook.sell.shift();
-                                console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
+                                //console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
                                 console.log(JSON.stringify(orderBook))
                             } else if (buyOrder.maker) {
                                 orderBook.buy.shift();
-                                console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
+                                //console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
 
                             }
                             continue
@@ -910,13 +910,18 @@ class Orderbook {
                     const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId,lastMark)
                     let reserveBalanceA = await TallyMap.getTally(match.sellOrder.sellerAddress,collateralPropertyId)
                     let reserveBalanceB = await TallyMap.getTally(match.buyOrder.buyerAddress,collateralPropertyId)
-                    console.log('checking reserves in process contract matches '+JSON.stringify(reserveBalanceA)+' '+JSON.stringify(reserveBalanceB))
+                    //console.log('checking reserves in process contract matches '+JSON.stringify(reserveBalanceA)+' '+JSON.stringify(reserveBalanceB))
                       //console.log('checking the marginMap for contractId '+ marginMap )
                     // Get the existing position sizes for buyer and seller
                     match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
                     match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
-
-                    console.log('checking positions '+JSON.stringify(match.buyerPosition)+' '+JSON.stringify(match.sellerPosition))
+                    if(match.buyerPosition.address==undefined){
+                        match.buyerPosition.address=match.buyOrder.buyerAddress
+                    }
+                    if(match.sellerPosition.address==undefined){
+                        match.sellerPosition.address=match.sellOrder.sellerAddress
+                    }
+                    //console.log('checking positions '+JSON.stringify(match.buyerPosition)+' '+JSON.stringify(match.sellerPosition))
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
 
@@ -926,7 +931,7 @@ class Orderbook {
                     await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
                     await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
 
-                    console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
+                    //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                    
                     let feeInfo = await this.locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee, isBuyerReducingPosition, isSellerReducingPosition)         
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
@@ -1298,9 +1303,9 @@ class Orderbook {
 
                     let feeInfo =  {sellFeeFromAvailable: sellFeeFromAvailable, sellFeeFromReserve: sellFeeFromReserve, sellFeeFromMargin: sellFeeFromMargin, 
                         buyFeeFromAvailable: buyFeeFromAvailable, buyFeeFromReserve: buyFeeFromReserve, buyFeeFromMargin: buyFeeFromMargin, sellerFee: sellerFee, buyerFee: buyerFee}
-                    
-                    let buyerAvail = TallyMap.hasSufficientBalance(match.buyerAddress,buyerFee)
-                    let sellerAvail = TallyMap.hasSufficientBalance(match.sellerAddress,sellerFee)
+                    console.log('locating fee')
+                    let buyerAvail = TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress,collateralPropertyId, buyerFee)
+                    let sellerAvail = TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress,collateralPropertyId, sellerFee)
                     buyerAvail = buyerAvail.hasSufficient
                     sellerAvail = sellerAvail.hasSufficient
                     if(buyerAvail){
