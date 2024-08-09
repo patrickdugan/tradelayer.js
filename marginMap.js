@@ -206,6 +206,7 @@ class MarginMap {
                     position.avgPrice=price
                 }
             }else{
+                if(!position.address){position.address=address}
                 console.log('about to call updateAveragePrice '+amount+' '+price+' '+contractId)
                 position.avgPrice=await this.updateAveragePrice(position,amount,price,contractId, isBuyOrder)
                 console.log('after the avg price function '+position.avgPrice)

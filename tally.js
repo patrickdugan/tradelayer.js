@@ -143,7 +143,7 @@ class TallyMap {
 
 
         static calculateTotal(balanceObj) {
-            return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.vesting);
+            return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.vesting).decimalPlaces(8).toNumber();
         }
 
         static roundToEightDecimals(number) {
