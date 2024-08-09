@@ -1493,6 +1493,7 @@ const Validity = {
     validateMintSynthetic: async (sender, params, block) => {
         params.reason = '';
         params.valid = true;
+        console.log(JSON.stringify(params))
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
         const collateralPropertyId = contractInfo.collateralPropertyId

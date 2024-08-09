@@ -30,6 +30,7 @@ const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = requ
 const db = require('./db.js'); // Adjust the path if necessary
 const BigNumber = require('bignumber.js')
 const VolumeIndex = require('./volumeIndex.js')
+const SynthRegistry = require('./vaults.js')
 // logic.js
 const Logic = {
     //here we have a kinda stupid structure where instead of passing the params obj. I break it down into its sub-properties
@@ -113,10 +114,10 @@ const Logic = {
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
                 break;
             case 24:
-                await Logic.mintSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress, params.block);
+                await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block);
                 break;
             case 25:
-                await Logic.redeemSynthetic(params.propertyId, params.contractId, params.amount, params.senderAddress, params.block);
+                await Logic.redeemSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block);
                 break;
             case 26:
                 await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount, params.block);
@@ -989,40 +990,43 @@ const Logic = {
             this.removeContract(contractId);
         },
 
-		async mintSynthetic(propertyId, contractId, amount,address, block) {
+		async mintSynthetic(address, propertyId, contractId, amount, block) {
 		    // Check if it's the first instance of this synthetic token
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
+            const propertyManager = PropertyManager.getInstance()
+
 		    let vaultId;
-		    if (!synthRegistry.exists(syntheticTokenId)) {
-		        vaultId = synthRegistry.createVault(propertyId, contractId);
-		        synthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
+		    if (!SynthRegistry.exists(syntheticTokenId)) {
+                console.log('creating new synth '+syntheticTokenId)
+		        vaultId = SynthRegistry.createVault(propertyId, contractId);
+		        SynthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
 		    } else {
-		        vaultId = synthRegistry.getVaultId(syntheticTokenId);
-		        synthRegistry.updateVault(vaultId, amount);
+		        vaultId = SynthRegistry.getVaultId(syntheticTokenId);
+		        SynthRegistry.updateVault(vaultId, amount);
 		    }
 
 		    // Issue the synthetic token
-		    PropertyManager.addProperty(syntheticTokenId, `Synth-${propertyId}-${contractId}`, amount, 'Synthetic');
-            TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
+		    await propertyManager.addProperty(syntheticTokenId, `${propertyId}-${contractId}`, amount, 'Synthetic');
+            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 		},
 
-		async redeemSynthetic(propertyId, contractId, amount,address,block) {
+		async redeemSynthetic(address, propertyId, contractId, amount,block) {
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
-		    const vaultId = synthRegistry.getVaultId(syntheticTokenId);
+		    const vaultId = SynthRegistry.getVaultId(syntheticTokenId);
 
 		    if (!vaultId) {
 		        throw new Error('Synthetic token vault not found');
 		    }
 
 		    // Redeem the synthetic token
-		    const vault = synthRegistry.getVault(vaultId);
+		    const vault = SynthRegistry.getVault(vaultId);
 		    if (vault.amount < amount) {
 		        throw new Error('Insufficient synthetic token balance for redemption');
 		    }
 
-		    synthRegistry.updateVault(vaultId, -amount);
+		    SynthRegistry.updateVault(vaultId, -amount);
             MarginMap.getInstance(contractId)
 		    // Update margin and contract balances in MarginMap
 		    marginMap.updateMarginBalance(vault.address, propertyId, -amount);
