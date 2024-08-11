@@ -433,13 +433,12 @@ class ContractRegistry {
         const marginMap = await MarginMap.getInstance(contractId)
         //console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
         //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
-        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         const compareInitMargin = await ContractRegistry.getInitialMargin(contractId,orderPrice)
         console.log('comparing realized price margin with orderPrice margin '+initialMarginPerContract+' '+compareInitMargin)
         console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         //console.log('collateralPropertyId '+collateralPropertyId)
-        let totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).decimalPlaces(8).toNumber();
+        let totalInitialMargin = initMargin;
         let totalComparedMargin = BigNumber(compareInitMargin).times(amount).decimalPlaces(8).toNumber() 
                console.log('Total Initial Margin ' +totalInitialMargin+' '+amount+' '+initialMarginPerContract+ ' '+initMargin+' '+price)
         // Move collateral to reservd position
