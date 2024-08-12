@@ -761,6 +761,7 @@ const Logic = {
         await VolumeIndex.saveVolumeDataById(contractId,amount,price,block,'contract')
 
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
+        return
 	},
 
 	async tradeTokensChannel(offeredPropertyId, desiredPropertyId, amountOffered, amountDesired, expiryBlock, columnAIsOfferer, channelAddress, block, txid){
@@ -866,6 +867,7 @@ const Logic = {
         Channels.channelsRegistry.set(fromChannelAddress, fromChannel);   
         
         await Channels.saveChannelsRegistry();
+        return
     },
 
 	settleChannelPNL(channelAddress, txParams,block) {
@@ -997,6 +999,9 @@ const Logic = {
             if(amount<0){
                 amount = Math.abs(amount)
             }
+            if(margin<0){
+                margin = Math.abs(margin)
+            }
 
             const marginMap = await MarginMap.getInstance(contractId)
             let propertyInfo = await PropertyManager.getPropertyData(propertyId)
@@ -1008,50 +1013,59 @@ const Logic = {
 		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
             let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin)
 
-             if (!SynthRegistry.exists(syntheticTokenId)) {
-                console.log('creating new synth '+syntheticTokenId)
-                await SynthRegistry.createVault(propertyId, contractId);
-                await SynthRegistry.registerSyntheticToken(syntheticTokenId, contractId, propertyId);
-                await SynthRegistry.updateVault(syntheticTokenId,contractsAndMargin)
-            } else {
-                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin);
-            }
             console.log('calculating adjustment to grossRequired '+grossRequired+contractsAndMargin.excess)
             grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
             await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
             await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-margin,0,'issueSynth',block)
-
+            if (!SynthRegistry.exists(syntheticTokenId)) {
+                console.log('creating new synth '+syntheticTokenId)
+                await SynthRegistry.createVault(propertyId, contractId);
+                await SynthRegistry.registerSyntheticToken(syntheticTokenId, contractId, propertyId);
+                await SynthRegistry.updateVault(syntheticTokenId,contractsAndMargin,amount)
+            } else {
+                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin,amount);
+            }
             
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
+
+            return
 		},
 
 		async redeemSynthetic(address, propertyId, contractId, amount,block) {
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
-		    const vaultId = SynthRegistry.getVaultId(syntheticTokenId);
-
-		    if (!vaultId) {
-		        throw new Error('Synthetic token vault not found');
-		    }
 
 		    // Redeem the synthetic token
 		    const vault = SynthRegistry.getVault(vaultId);
+
+            if (!vault) {
+                throw new Error('Synthetic token vault not found');
+            }
+
 		    if (vault.amount < amount) {
 		        throw new Error('Insufficient synthetic token balance for redemption');
 		    }
 
-		    SynthRegistry.updateVault(vaultId, -amount);
-            MarginMap.getInstance(contractId)
+            const marginMap = await MarginMap.getInstance(contractId)
+            const contractInfo = await ContractRegistry.getContractInfo(contractId)
+            const notionalValue = contractInfo.notionalValue
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForRedeem(address, propertyId, contractId, amount,vault,notionalValue)
+
+
+		    SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin,-amount);
+            
 		    // Update margin and contract balances in MarginMap
 		    marginMap.updateMarginBalance(vault.address, propertyId, -amount);
 		    marginMap.updateContractBalance(vault.address, contractId, -amount);
 
 		    // Update synthetic token property
-		    PropertyManager.updatePropertyBalance(syntheticTokenId, -amount);
+		    PropertyManager.updateTotalInCirculation(syntheticTokenId, -amount);
             TallyMap.updateBalance(address, syntheticTokenId,-amount,0,0,0,'redeemSynth',block)
+            TallyMap.updateBalance(address, syntheticTokenId,contractsAndMargin.excess,0,contractsAndMargin.margin,0,'redeemSynth',block)
 
 		    // Log the redemption of the synthetic token
 		    console.log(`Redeemed ${amount} of synthetic token ${syntheticTokenId}`);
+            return
 		},
 
 	// payToTokens: Distributes propertyIdUsed tokens to holders of propertyIdTarget tokens

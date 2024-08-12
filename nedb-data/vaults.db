@@ -1,4 +1,2 @@
 {"_id":"vault-1","value":"{\"propertyId\":5,\"contractId\":4,\"amount\":0,\"address\":\"\"}"}
 {"_id":"vault-s-5-4","value":"{\"propertyId\":5,\"contractId\":4,\"contracts\":-2,\"margin\":-0.25714286}"}
-{"_id":"vault-s-5-4"}
-{"_id":"vault-s-5-4","value":"{\"propertyId\":5,\"contractId\":4,\"contracts\":-2,\"margin\":-0.25714286}"}

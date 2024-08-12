@@ -27,7 +27,7 @@ class SynthRegistry {
     }
 
     // Update the amount in a vault
-    static async updateVault(vaultId, contractsAndMargin) {
+    static async updateVault(vaultId, contractsAndMargin,amount) {
                 this.initializeIfNeeded();
         const vault = this.vaults.get(vaultId);
         if (!vault) {
@@ -35,6 +35,7 @@ class SynthRegistry {
         }
         vault.contracts += contractsAndMargin.contracts;
         vault.margin += contractsAndMargin.margin
+        vault.oustanding+=amount
         await this.saveVault(vaultId, vault);
     }
 

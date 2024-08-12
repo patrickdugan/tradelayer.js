@@ -157,6 +157,28 @@ class PropertyManager {
         }
     }
 
+    static async updateTotalInCirculation(propertyId, amountChange) {
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+
+        if (!propertyData) {
+            throw new Error('Property not found');
+        }
+
+        propertyData.totalInCirculation = BigNumber(propertyData.totalInCirculation).plus(amountChange).toNumber();
+
+        // Update the property data in the database
+        const propertyIndex = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+        const parsedData = JSON.parse(propertyIndex.value);
+
+        const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
+        if (propertyEntry) {
+            propertyEntry[1] = propertyData;
+            await db.getDatabase('propertyList').updateAsync({ _id: 'propertyIndex' }, { $set: { value: JSON.stringify(parsedData) } });
+        } else {
+            throw new Error('Failed to update totalInCirculation, property not found in index');
+        }
+    }
+
 
     async save() {
 

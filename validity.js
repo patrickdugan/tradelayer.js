@@ -12,6 +12,7 @@ const Channels = require('./channels.js')
 const MarginMap = require('./marginMap.js')
 const ClearListManager = require('./clearlist.js')
 const VolumeIndex = require('./VolumeIndex.js')
+const SyntheticRegistry = require('./vaults.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -1561,7 +1562,7 @@ const Validity = {
         params.reason = '';
         params.valid = true;
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
-        const canRedeem = TallyMap.isSynthetic(params.propertyId);
+        const canRedeem = SyntheticRegistry.exists(params.propertyId);
         if(canRedeem==false){
                 params.valid=false
                 params.reason += 'Token is not of a synthetic nature'
@@ -1572,7 +1573,7 @@ const Validity = {
                 params.valid=false
                 params.reason += 'insufficient tokens to redeem in this amount'
         }
-        return canRedeem && hasSufficientBalance;
+        return params;
     },
 
     // 26: Pay to Tokens
