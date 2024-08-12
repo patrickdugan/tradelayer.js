@@ -114,7 +114,7 @@ const Logic = {
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
                 break;
             case 24:
-                await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block);
+                await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block, params.grossRequired, params.margin);
                 break;
             case 25:
                 await Logic.redeemSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block);
@@ -990,27 +990,30 @@ const Logic = {
             this.removeContract(contractId);
         },
 
-		async mintSynthetic(address, propertyId, contractId, amount, block) {
+		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, margin,contracts) {
 		    // Check if it's the first instance of this synthetic token
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
             const propertyManager = PropertyManager.getInstance()
-
-		    let vaultId;
-		    if (!SynthRegistry.exists(syntheticTokenId)) {
-                console.log('creating new synth '+syntheticTokenId)
-		        vaultId = SynthRegistry.createVault(propertyId, contractId);
-		        SynthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
-		    } else {
-		        vaultId = SynthRegistry.getVaultId(syntheticTokenId);
-		        SynthRegistry.updateVault(vaultId, amount);
-		    }
 
             const marginMap = MarginMaps.getInstance(contractId)
 
 		    // Issue the synthetic token
 		    await propertyManager.addProperty(syntheticTokenId, `${propertyId}-${contractId}`, amount, 'Synthetic');
-            let margin = await marginMap.moveMarginForMint(propertyId, contractId, amount, grossRequire)
-            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,-margin,0,'issueSynth',block)
+            let margin = await marginMap.moveMarginAndContractsForMint(propertyId, contractId, contracts, margin)
+
+            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
+            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-margin,0,'issueSynth',block)
+
+
+            let vaultId;
+            if (!SynthRegistry.exists(syntheticTokenId)) {
+                console.log('creating new synth '+syntheticTokenId)
+                vaultId = SynthRegistry.createVault(propertyId, contractId);
+                SynthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
+            } else {
+                vaultId = SynthRegistry.getVaultId(syntheticTokenId);
+                SynthRegistry.updateVault(vaultId, amount);
+            }
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 		},

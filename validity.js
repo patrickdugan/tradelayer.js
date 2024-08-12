@@ -1512,9 +1512,9 @@ const Validity = {
         const position = await marginMap.getPositionForAddress(sender, params.contractId)
         let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
         console.log('validating mint '+grossNotional+' '+params.amount+' '+position.contracts+' '+notionalValue)
-        let inverted = grossNotional*-1
-        if(params.amount>inverted){
-                if(inverted>=1){
+               
+        if(params.amount>grossNotional){
+                if(grossNotional<=-1){
                     params.amount = BigNumber(inverted).decimalPlaces(0).toNumber()
                     params.reason += 'insufficient contracts to hedge total, minting based on available contracts'        
                 }else{
@@ -1545,6 +1545,9 @@ const Validity = {
                 params.reason += 'insufficient collateral to create a 1x hedge position'
         }
         params.grossRequired = grossRequired
+        params.margin = totalMargin
+        params.contracts = BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0).toNumber()
+
         return params
     },
 
