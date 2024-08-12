@@ -88,6 +88,7 @@ class TallyMap {
             // Check and update available balance
             // Assuming addressObj[propertyId] and the respective change variables are already BigNumber instances
             // Example for available balance
+            
             const originalAvailableBalance = new BigNumber(addressObj[propertyId].available);
             const newAvailableBalance = originalAvailableBalance.plus(availableChange);
             console.log('balance change '+originalAvailableBalance, newAvailableBalance.toNumber(),availableChange)

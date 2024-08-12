@@ -114,7 +114,7 @@ const Logic = {
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
                 break;
             case 24:
-                await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block, params.grossRequired, params.margin);
+                await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block, params.grossRequired, params.contracts, params.margin);
                 break;
             case 25:
                 await Logic.redeemSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block);
@@ -990,30 +990,38 @@ const Logic = {
             this.removeContract(contractId);
         },
 
-		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, margin,contracts) {
+		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, contracts, margin,) {
 		    // Check if it's the first instance of this synthetic token
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
             const propertyManager = PropertyManager.getInstance()
+            if(amount<0){
+                amount = Math.abs(amount)
+            }
 
-            const marginMap = MarginMaps.getInstance(contractId)
-
+            const marginMap = await MarginMap.getInstance(contractId)
+            let propertyInfo = await PropertyManager.getPropertyData(propertyId)
+            let ticker = propertyInfo.ticker
+            let synthTicker = 's'+ticker+'-'+contractId
+            console.log('fetched collateral ticker in mint synthetic '+ticker)
+            const contractInfo = await ContractRegistry.getContractInfo(contractId)
 		    // Issue the synthetic token
-		    await propertyManager.addProperty(syntheticTokenId, `${propertyId}-${contractId}`, amount, 'Synthetic');
-            let margin = await marginMap.moveMarginAndContractsForMint(propertyId, contractId, contracts, margin)
+		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin)
 
+             if (!SynthRegistry.exists(syntheticTokenId)) {
+                console.log('creating new synth '+syntheticTokenId)
+                await SynthRegistry.createVault(propertyId, contractId);
+                await SynthRegistry.registerSyntheticToken(syntheticTokenId, contractId, propertyId);
+                await SynthRegistry.updateVault(syntheticTokenId,contractsAndMargin)
+            } else {
+                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin);
+            }
+            console.log('calculating adjustment to grossRequired '+grossRequired+contractsAndMargin.excess)
+            grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
             await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
             await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-margin,0,'issueSynth',block)
 
-
-            let vaultId;
-            if (!SynthRegistry.exists(syntheticTokenId)) {
-                console.log('creating new synth '+syntheticTokenId)
-                vaultId = SynthRegistry.createVault(propertyId, contractId);
-                SynthRegistry.registerSyntheticToken(syntheticTokenId, vaultId, amount);
-            } else {
-                vaultId = SynthRegistry.getVaultId(syntheticTokenId);
-                SynthRegistry.updateVault(vaultId, amount);
-            }
+            
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 		},

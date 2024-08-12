@@ -95,7 +95,7 @@ class PropertyManager {
 
         if (existingProperty) {
             // If property exists, update totalInCirculation and other fields if necessary
-            existingProperty.totalInCirculation = totalInCirculation;
+            existingProperty.totalInCirculation = BigNumber(existingProperty.totalInCirculation).plus(totalInCirculation).toNumber();
             existingProperty.ticker = ticker || existingProperty.ticker;
             existingProperty.type = propertyTypeIndexes[type];
             existingProperty.whitelistId = whitelistId || existingProperty.whitelistId;
@@ -113,14 +113,16 @@ class PropertyManager {
             };
         }
 
-        this.propertyIndex.set(propertyId, {
+        let blob =  {
             ticker,
             totalInCirculation,
             type: propertyTypeIndexes[type],
             whitelistId: whitelistId,
             issuer: issuer,
             backupAddress: backupAddress
-        });
+        }
+
+        this.propertyIndex.set(propertyId,blob);
         await this.save();
         return console.log('updated Property Index '+this.propertyIndex)
     }

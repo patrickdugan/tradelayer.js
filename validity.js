@@ -1510,12 +1510,16 @@ const Validity = {
         }
         const marginMap = await MarginMap.getInstance(params.contractId)
         const position = await marginMap.getPositionForAddress(sender, params.contractId)
+        if(position.contracts==null||!position.contracts){
+            params.valid=false
+            params.reason += 'Null contracts cannot hedge a mint'
+        }
         let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
         console.log('validating mint '+grossNotional+' '+params.amount+' '+position.contracts+' '+notionalValue)
                
         if(params.amount>grossNotional){
                 if(grossNotional<=-1){
-                    params.amount = BigNumber(inverted).decimalPlaces(0).toNumber()
+                    params.amount = BigNumber(grossNotional).decimalPlaces(0).toNumber()
                     params.reason += 'insufficient contracts to hedge total, minting based on available contracts'        
                 }else{
                     params.valid=false
@@ -1526,7 +1530,7 @@ const Validity = {
         const markPrice = await VolumeIndex.getLastPrice(tokenPair, block)
         const initMargin = await ContractRegistry.getInitialMargin(params.contractId, markPrice)
         let totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
-        let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).toNumber()
+        let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).abs().toNumber()
         const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, grossRequired);
         console.log(hasSufficientBalance.hasSufficient+' '+grossRequired)
         if(hasSufficientBalance.hasSufficient==false){
@@ -1546,6 +1550,7 @@ const Validity = {
         }
         params.grossRequired = grossRequired
         params.margin = totalMargin
+        console.log('about to calculate contracts ' +params.amount+' '+notionalValue + ' '+BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0).toNumber())
         params.contracts = BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0).toNumber()
 
         return params

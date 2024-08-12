@@ -20,21 +20,22 @@ class SynthRegistry {
     // Create a new vault for a synthetic token
     static async createVault(propertyId, contractId) {
         this.initializeIfNeeded();
-        const vaultId = this.generateVaultId();
-        this.vaults.set(vaultId, { propertyId, contractId, amount: 0, address: '' });
+        const vaultId = `s-${propertyId}-${contractId}`
+        this.vaults.set(vaultId, {propertyId, contractId, contracts:0, margin:0});
         await this.saveVault(vaultId);
         return vaultId;
     }
 
     // Update the amount in a vault
-    static async updateVault(vaultId, amount) {
+    static async updateVault(vaultId, contractsAndMargin) {
                 this.initializeIfNeeded();
         const vault = this.vaults.get(vaultId);
         if (!vault) {
-            return new Error('Vault not found');
+            return console.log('error no vault found for '+vaultId)
         }
-        vault.amount += amount;
-        await this.saveVault(vaultId);
+        vault.contracts += contractsAndMargin.contracts;
+        vault.margin += contractsAndMargin.margin
+        await this.saveVault(vaultId, vault);
     }
 
     // Get vault information
@@ -44,9 +45,9 @@ class SynthRegistry {
     }
 
     // Register a new synthetic token
-    static async registerSyntheticToken(syntheticTokenId, vaultId, initialAmount) {
+    static async registerSyntheticToken(syntheticTokenId, contractId, propertyId) {
                 this.initializeIfNeeded();
-        this.syntheticTokens.set(syntheticTokenId, { vaultId, amount: initialAmount });
+        this.syntheticTokens.set(syntheticTokenId, {contract: contractId, property: propertyId});
         await this.saveSyntheticToken(syntheticTokenId);
     }
 
@@ -62,19 +63,13 @@ class SynthRegistry {
         return this.syntheticTokens.get(syntheticTokenId)?.vaultId;
     }
 
-    // Generate a new vault ID
-    static generateVaultId() {
-                this.initializeIfNeeded();
-        return this.nextVaultId++; // Increment and return the next vault ID
-    }
-
     // Persist vault data to the database
-    static async saveVault(vaultId) {
+    static async saveVault(vaultId, vault) {
                 this.initializeIfNeeded();
         const vaultDB = db.getDatabase('vaults');
         await vaultDB.updateAsync(
             { _id: `vault-${vaultId}` },
-            { _id: `vault-${vaultId}`, value: JSON.stringify(this.vaults.get(vaultId)) },
+            { _id: `vault-${vaultId}`, value: JSON.stringify(vault) },
             { upsert: true }
         );
     }

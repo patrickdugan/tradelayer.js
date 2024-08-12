@@ -1,3 +1,3 @@
 {"_id":"synth-5-4","value":"{\"vaultId\":{},\"amount\":3}"}
-{"_id":"synth-s-5-4","value":"{\"vaultId\":{},\"amount\":3}"}
-{"_id":"synth-s-5-4","value":"{\"vaultId\":{},\"amount\":2}"}
+{"_id":"synth-s-5-4","value":"{\"contract\":4,\"property\":5}"}
+{"_id":"synth-s-5-4","value":"{\"contract\":4,\"property\":5}"}

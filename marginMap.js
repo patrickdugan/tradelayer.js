@@ -355,6 +355,41 @@ class MarginMap {
         // Return the updated position object
         return position.avgPrice;
     }
+
+    async moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin) {
+        // Check if the margin map exists for the given contractId
+        const position = this.margins.get(address);
+        // If no position exists for the propertyId, initialize a new one
+        if (!position) {
+            return console.log('error: no position found for mint with '+propertyId+' collateral and contract '+contractId)
+        }
+        let excess = 0
+
+        console.log('inside moveMarginAndContractsForMint '+contracts, margin, position.margin)
+        // Update the existing position
+        position.contracts = BigNumber(position.contracts).minus(contracts).toNumber();
+        if(margin>position.margin){
+            if(Math.abs(position.contracts)>Math.abs(contracts)){
+                //instead of trying to calculate init/main. margin in between trade and mark prices, let's keep it simple and liquidation safer
+                //and just not take from margin, mmkay
+                excess = margin
+                margin = 0
+            }else{
+                excess = BigNumber(margin).minus(position.margin).decimalPlaces(8).toNumber()
+                margin = position.margin
+            }
+        }
+        let prevMargin = position.margin
+        position.margin = BigNumber(position.margin).minus(margin).decimalPlaces(8).toNumber();
+        let marginChange = BigNumber(prevMargin).minus(position.margin)
+        // Save the updated position
+        this.margins.set(address, position);
+        await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contracts*-1, margin, 0, 0, 'moveMarginAndContractsForMint');
+        await this.saveMarginMap(true);
+
+        return {contracts, margin,excess};
+    }
+
         
     calculateMarginRequirement(contracts, price, inverse) {
         
@@ -396,7 +431,7 @@ class MarginMap {
         let initialMargin = await ContractRegistry.getInitialMargin(contractId);
         let initialMarginBN = new BigNumber(initialMargin)
         let contractsBN = new BigNumber(position.contracts)
-        let maintenanceMarginFactorBN = new BigNumber(0.8)
+        let maintenanceMarginFactorBN = new BigNumber(0.5)
         let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
 
         if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
