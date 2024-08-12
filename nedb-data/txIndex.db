@@ -1,4 +1,4 @@
-{"_id":"MaxHeight","value":3376907}
+{"_id":"MaxHeight","value":3377700}
 {"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl","txId":"0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0"}],"type":0,"valid":true}
@@ -587,5 +587,3 @@
 {"_id":"tx-3375581-37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65022664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65012664},"payload":"025","decodedParams":{},"marker":"tl","txId":"37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f"}],"type":0,"valid":true}
 {"_id":"tx-3375585-f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65012664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65002664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769"}],"type":24,"valid":true,"reason":""}
 {"_id":"tx-3375592-92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65002664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64992664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30"}],"type":24,"valid":true,"reason":""}
-{"_id":"MaxHeight","value":3377659}
-{"_id":"indexExists","value":true}

@@ -163,7 +163,8 @@ class MarginMap {
 
 
     async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
-        //console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
+        console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
+        console.log('with match '+JSON.stringify(match))
         let buyerPosition = await this.updateContractBalances(
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
@@ -219,8 +220,9 @@ class MarginMap {
 
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
-        let newPositionSize = isBuyOrder ? position.contracts + amount : position.contracts - amount;
-        //console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
+        console.log('position size before update '+position.contracts)
+        let newPositionSize = isBuyOrder ? BigNumber(position.contracts).plus(amount).toNumber() : BigNumber(position.contracts).minus(amount).toNumber();
+        console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
         
         const ContractList = require('./contractRegistry.js')
@@ -346,7 +348,7 @@ class MarginMap {
         
         // Update the position object with the new values
         position.avgPrice = updatedAvgPrice.abs().decimalPlaces(4).toNumber(); // Keep the avgPrice positive
-        position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
+        //position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
 
         await this.recordMarginMapDelta(position.address, contractId, 0, 0, 0, 0, (avgPrice.toNumber() - updatedAvgPrice.abs().toNumber()), 'newAvgPrice');
         

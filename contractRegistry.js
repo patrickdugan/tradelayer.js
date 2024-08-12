@@ -433,6 +433,7 @@ class ContractRegistry {
         const marginMap = await MarginMap.getInstance(contractId)
         //console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
         //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
         const compareInitMargin = await ContractRegistry.getInitialMargin(contractId,orderPrice)
         console.log('comparing realized price margin with orderPrice margin '+initMargin+' '+compareInitMargin)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
@@ -515,7 +516,8 @@ class ContractRegistry {
                     throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
                 }
             }
-        }  
+        } 
+        console.log('about to setInitialMargin '+sender+contractId+' '+totalInitialMargin) 
         var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
         return position
     }           
