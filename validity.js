@@ -11,6 +11,7 @@ const Orderbook = require('./orderbook.js')
 const Channels = require('./channels.js')
 const MarginMap = require('./marginMap.js')
 const ClearListManager = require('./clearlist.js')
+const VolumeIndex = require('./VolumeIndex.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -1496,6 +1497,7 @@ const Validity = {
         console.log(JSON.stringify(params))
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
+        const tokenPair = contractInfo.onChainData[0][0]+'-'+contractInfo.onChainData[0][1]
         const collateralPropertyId = contractInfo.collateralPropertyId
         const notionalValue = contractInfo.notionalValue
         if(contractInfo.inverse==false){
@@ -1509,18 +1511,40 @@ const Validity = {
         const marginMap = await MarginMap.getInstance(params.contractId)
         const position = await marginMap.getPositionForAddress(sender, params.contractId)
         let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
-        if(grossNotional>=params.amount){
-                params.valid=false
-                params.reason += 'insufficient contracts to hedge the amount requested'
+        console.log('validating mint '+grossNotional+' '+params.amount+' '+position.contracts+' '+notionalValue)
+        let inverted = grossNotional*-1
+        if(params.amount>inverted){
+                if(inverted>=1){
+                    params.amount = BigNumber(inverted).decimalPlaces(0).toNumber()
+                    params.reason += 'insufficient contracts to hedge total, minting based on available contracts'        
+                }else{
+                    params.valid=false
+                    params.reason += 'insufficient contracts to hedge the amount requested'
+                }        
         }
         // Ensure the sender has sufficient balance of the underlying property
-        let grossRequired = BigNumber(params.amount).times(notionalValue).decimalPlaces(8).toNumber()
-        const hasSufficientBalance = TallyMap.hasSufficientBalance(sender, collateralPropertyId, grossRequired);
+        const markPrice = await VolumeIndex.getLastPrice(tokenPair, block)
+        const initMargin = await ContractRegistry.getInitialMargin(params.contractId, markPrice)
+        let totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
+        let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).toNumber()
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, grossRequired);
+        console.log(hasSufficientBalance.hasSufficient+' '+grossRequired)
         if(hasSufficientBalance.hasSufficient==false){
+            if(hasSufficientBalance.available>=initMargin){
+                let newAmount = BigNumber(hasSufficientBalance.available).dividedBy(initMargin).decimalPlaces(0).toNumber()
+                if(newAmount<=params.amount){
+                    params.amount = newAmount
+                    totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
+                    grossRequired= BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).toNumber()
+                    params.reason += 'insufficient collateral to mint total, minting based on available collateral' 
+                }else{
+                    params.reason += 'insufficient collateral to mint total, minting based on available collateral capped at contracts'
+                }
+            }
                 params.valid=false
                 params.reason += 'insufficient collateral to create a 1x hedge position'
         }
-
+        params.grossRequired = grossRequired
         return params
     },
 

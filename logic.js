@@ -1005,9 +1005,12 @@ const Logic = {
 		        SynthRegistry.updateVault(vaultId, amount);
 		    }
 
+            const marginMap = MarginMaps.getInstance(contractId)
+
 		    // Issue the synthetic token
 		    await propertyManager.addProperty(syntheticTokenId, `${propertyId}-${contractId}`, amount, 'Synthetic');
-            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
+            let margin = await marginMap.moveMarginForMint(propertyId, contractId, amount, grossRequire)
+            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,-margin,0,'issueSynth',block)
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 		},
