@@ -267,6 +267,18 @@ app.get('/tl_tradehistory', async (req, res) => {
     }
 });
 
+// Get initial margin for wallet UI and associated parameters (like commiting to channel for a contract trade)
+app.get('/tl_getinitmargin', async (req, res) => {
+    try {
+        const { contractId, price } = req.query;
+        const initialMargin = await ContractRegistry.getInitialMargin(contractId, price);
+        console.log('Init. Margin for contract at price ' + JSON.stringify(initialMargin));
+        res.json(initialMargin);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // Get contract trade history
 app.get('/tl_contracttradehistory', async (req, res) => {
     try {
