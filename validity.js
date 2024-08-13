@@ -95,6 +95,8 @@ const Validity = {
             params.reason = '';
             params.valid= true
 
+            //console.log('send params ' +JSON.stringify(params))
+
             const isAlreadyActivated = await activationInstance.isTxTypeActive(2);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -132,7 +134,7 @@ const Validity = {
             if(senderTally.available<params.amounts||senderTally.available==undefined){
                 params.valid=false
                 params.reason += 'Insufficient available balance'
-                console.log(params.valid, params.reason)
+                //console.log(params.valid, params.reason)
             }
             /*const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amounts)
             console.log('validating send '+JSON.stringify(hasSufficientBalance))
@@ -1496,6 +1498,16 @@ const Validity = {
         params.reason = '';
         params.valid = true;
         console.log(JSON.stringify(params))
+
+         const roundedAmount = Math.floor(params.amount);
+
+    // Check if the rounded amount is still >= 1
+        if (roundedAmount < 1) {
+            params.valid=false
+            params.reason += 'Amount less than one'
+        }
+
+        params.amount = roundedAmount
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
         const tokenPair = contractInfo.onChainData[0][0]+'-'+contractInfo.onChainData[0][1]
@@ -1561,6 +1573,16 @@ const Validity = {
     validateRedeemSynthetic: (sender, params,block) => {
         params.reason = '';
         params.valid = true;
+
+         const roundedAmount = Math.floor(params.amount);
+
+        // Check if the rounded amount is still >= 1
+        if (roundedAmount < 1) {
+            params.valid=false
+            params.reason += 'Amount less than one'
+        }
+
+        params.amount = roundedAmount
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
         const canRedeem = SyntheticRegistry.exists(params.propertyId);
         if(canRedeem==false){

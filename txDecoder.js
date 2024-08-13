@@ -22,26 +22,36 @@ const Decode = {
 
     // Decode Send Transaction
     decodeSend: (payload) => {
-      //console.log('send payload to decode '+ payload)
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
         const address = parts[1];
 
         if (sendAll) {
-            return { sendAll:sendAll, address:address };
+            return { sendAll: sendAll, address: address };
         } else if (parts.length === 4) {
-            // Single send
-            const propertyId = parseInt(parts[2], 36); // Decode propertyId from base36
-            const amount = parseInt(parts[3], 36); // Decode amount from base36
-            //console.log('decoding single send amount ' +amount + ' '+ parts[3])
-            return { sendAll: sendAll, address:address, propertyIds:propertyId, amounts:amount };
+            const propertyId = Decode.decodePropertyId(parts[2]);
+            const amount = parseInt(parts[3], 36);
+            return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount };
         } else {
-            // Multi-send
-            const propertyIds = parts[2].split(',').map(id => parseInt(id, 36));
+            const propertyIds = parts[2].split(',').map(id => this.decodePropertyId(id));
             const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
-            return { sendAll:sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
+            return { sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
     },
+
+    decodePropertyId(encodedPropertyId) {
+        if (encodedPropertyId.startsWith('s')) {
+          console.log('decoding synth send')
+            const [_, encodedCollateralId, encodedContractId] = encodedPropertyId.split('-');
+            const collateralId = parseInt(encodedCollateralId, 36);
+            const contractId = parseInt(encodedContractId, 36);
+            console.log(`s-${collateralId}-${contractId}`)
+            return `s-${collateralId}-${contractId}`;
+        } else {
+            return parseInt(encodedPropertyId, 36);
+        }
+    },
+
 
 
     // Decode Trade Token for UTXO Transaction

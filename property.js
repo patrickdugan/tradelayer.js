@@ -264,19 +264,33 @@ class PropertyManager {
     }
 
 
-    // Add the getPropertyData function
-    static async getPropertyData(propertyId) {
+   static async getPropertyData(propertyId) {
         try {
             const propertyData = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
 
             if (propertyData && propertyData.value) {
                 const parsedData = JSON.parse(propertyData.value);
-                const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
+                console.log(propertyId)
+                // Check if propertyId is a synthetic ID
+                if (typeof propertyId === 'string' && propertyId.startsWith('s')) {
+                    console.log('inside get property synthetic '+propertyId)
+                    const syntheticEntry = parsedData.find(entry => entry[0] === propertyId);
+                    console.log(JSON.stringify(syntheticEntry))
+                    if (syntheticEntry) {
+                        return syntheticEntry[1];
+                    }/* else {
+                        // Optionally, look for the synthetic ID in a separate registry
+                        const syntheticData = await db.getDatabase('syntheticTokens').findOneAsync({ _id: propertyId });
+                        return syntheticData ? JSON.parse(syntheticData.value) : null;
+                    }*/
+                }
 
+                // Check for integer-based property ID
+                const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
                 if (propertyEntry) {
-                    return propertyEntry[1]; // Return the object stored at index 1 of the found entry
+                    return propertyEntry[1];
                 } else {
-                    return null; // Return null if propertyId is not found
+                    return null;
                 }
             } else {
                 return null; // Return null if no property data found in the database
@@ -286,6 +300,7 @@ class PropertyManager {
             return null; // Return null in case of any errors
         }
     }
+
 
     static async updateAdmin(propertyId, newAddress, backup) {
         try {

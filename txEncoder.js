@@ -24,29 +24,39 @@ const Encode = {
     // Encode Send Transaction
     encodeSend(params) {
         if (params.sendAll) {
-            // Handle sendAll case
             return `1;${params.address}`;
         } else if (Array.isArray(params.propertyId) && Array.isArray(params.amount)) {
-            // Handle multi-send
             const payload = [
                 '0', // Not sendAll
                 '', // Address is omitted for multi-send
-                params.propertyId.map(id => id.toString(36)).join(','),
+                params.propertyId.map(id => Encode.encodePropertyId(id)).join(','),
                 params.amount.map(amt => amt.toString(36)).join(',')
             ];
             return payload.join(';');
         } else {
-            // Handle single send
-            console.log('encoding single send amount '+params.amount + 'encoded '+params.amount.toString(36))
+            const encodedPropertyId = this.encodePropertyId(params.propertyId);
+
             const payload = [
                 '0', // Not sendAll
                 params.address,
-                params.propertyId.toString(36),
+                encodedPropertyId,
                 params.amount.toString(36)
             ];
             return payload.join(';');
         }
     },
+
+    encodePropertyId(propertyId) {
+        if (typeof propertyId === 'string' && propertyId.startsWith('s-')) {
+            const [_, collateralId, contractId] = propertyId.split('-');
+            const encodedCollateralId = parseInt(collateralId).toString(36);
+            const encodedContractId = parseInt(contractId).toString(36);
+            return `s-${encodedCollateralId}-${encodedContractId}`;
+        } else {
+            return propertyId.toString(36);
+        }
+    },
+
 
     encodeTradeTokenForUTXO: (params) => {
         const payload = [

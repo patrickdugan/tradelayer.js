@@ -1,4 +1,4 @@
-{"_id":"MaxHeight","value":3378820}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"genesisBlock","value":3082500}
 {"_id":"indexExists","value":true}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl","txId":"0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0"}],"type":0,"valid":true}
@@ -338,6 +338,10 @@
 {"_id":"tx-3375581-37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65022664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65012664},"payload":"025","decodedParams":{},"marker":"tl","txId":"37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f"}],"type":0,"valid":true}
 {"_id":"tx-3375585-f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65012664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65002664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769"}],"type":24,"valid":true,"reason":"insufficient contracts to hedge total, minting based on available contracts"}
 {"_id":"tx-3375592-92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65002664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64992664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30"}],"type":24,"valid":false,"reason":"Null contracts cannot hedge a mintinsufficient contracts to hedge the amount requested"}
+{"_id":"tx-3379282-a82dffc24a793559a2b3d19be5ba71aca8077dbfbe8f0a0ba449f28daa7936de","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64992664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64982664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"a82dffc24a793559a2b3d19be5ba71aca8077dbfbe8f0a0ba449f28daa7936de"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379315-ccf2f77269cdd310fc94a196791cd07a5459a6ce38c1d77c67ff192b3c3505d2","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64982664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64972664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"ccf2f77269cdd310fc94a196791cd07a5459a6ce38c1d77c67ff192b3c3505d2"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379354-ff8f6e5cc8bae9f25af8072bffb3cc19cefe34cb653588052afb7c4c881977fb","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64972664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64962664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"ff8f6e5cc8bae9f25af8072bffb3cc19cefe34cb653588052afb7c4c881977fb"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379356-fd952237361ecdd596625e5542669acb9cbd413fd0190dfbdedb033d4f9e5158","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64962664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64952664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"fd952237361ecdd596625e5542669acb9cbd413fd0190dfbdedb033d4f9e5158"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
 {"_id":"tx-3082502-0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17432464},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117422464},"payload":"00","decodedParams":{},"marker":"tl","txId":"0513576fa72ffdd721176dfc5a971af50958102070f55fce6d50aa604c6d0cb0"}],"type":0,"valid":true}
 {"_id":"tx-3087539-8ab08b7756378e2645b94147a59fd991f9ef2a46590b33444fcabdb5de48a3bc","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17357864},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117293264},"payload":"0;LhEg3wGFW61G9iM8UUSzTxhrF4HfSsHXXR;2;164o","decodedParams":{},"marker":"tl","txId":"8ab08b7756378e2645b94147a59fd991f9ef2a46590b33444fcabdb5de48a3bc"}],"type":0,"valid":false,"reason":"Tx Type is not an integer"}
 {"_id":"tx-3088220-419e0e7b80c99ed27d929dbbcacf0a7165dfd0ff090fcc803839f26a00834ddc","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":1.17293264},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":117228664},"payload":"20;LdwGqbsKHyAPqPqFRfwCWUbDyyoPpToSzr;2;164o","decodedParams":{},"marker":"tl","txId":"419e0e7b80c99ed27d929dbbcacf0a7165dfd0ff090fcc803839f26a00834ddc"}],"type":2,"valid":false,"reason":"Tx type not yet activated "}
@@ -587,61 +591,49 @@
 {"_id":"tx-3375581-37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65022664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65012664},"payload":"025","decodedParams":{},"marker":"tl","txId":"37427103c493c076364af56c8daf71ca8c1ffefa487415a1313efb59db82c12f"}],"type":0,"valid":true}
 {"_id":"tx-3375585-f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65012664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":65002664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"f49f84bfae86b8d381f6a3198b7ad4596e1cb69c41259f2a04566c510559d769"}],"type":24,"valid":true,"reason":"insufficient contracts to hedge total, minting based on available contracts"}
 {"_id":"tx-3375592-92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.65002664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64992664},"payload":"o5,4,3","decodedParams":{},"marker":"tl","txId":"92c369bbb02d1b139ec857e2aeb426db3148328004ab2d2fe1dc57caca67ae30"}],"type":24,"valid":false,"reason":"Null contracts cannot hedge a mintinsufficient contracts to hedge the amount requested"}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"tx-3379282-a82dffc24a793559a2b3d19be5ba71aca8077dbfbe8f0a0ba449f28daa7936de","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64992664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64982664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"a82dffc24a793559a2b3d19be5ba71aca8077dbfbe8f0a0ba449f28daa7936de"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379315-ccf2f77269cdd310fc94a196791cd07a5459a6ce38c1d77c67ff192b3c3505d2","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64982664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64972664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"ccf2f77269cdd310fc94a196791cd07a5459a6ce38c1d77c67ff192b3c3505d2"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379354-ff8f6e5cc8bae9f25af8072bffb3cc19cefe34cb653588052afb7c4c881977fb","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64972664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64962664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"ff8f6e5cc8bae9f25af8072bffb3cc19cefe34cb653588052afb7c4c881977fb"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"tx-3379356-fd952237361ecdd596625e5542669acb9cbd413fd0190dfbdedb033d4f9e5158","value":[{"sender":{"senderAddress":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","amount":0.64962664},"reference":{"address":"tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8","satoshis":64952664},"payload":"20;tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr;s5-4;1.i","decodedParams":{},"marker":"tl","txId":"fd952237361ecdd596625e5542669acb9cbd413fd0190dfbdedb033d4f9e5158"}],"type":2,"valid":false,"reason":"propertyId not found in Property List"}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379369}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379370}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379370}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379370}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379370}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379370}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379255}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379256}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379256}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379256}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379256}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379257}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379257}
-{"_id":"indexExists","value":true}
-{"_id":"MaxHeight","value":3379257}
+{"_id":"MaxHeight","value":3379371}
 {"_id":"indexExists","value":true}
