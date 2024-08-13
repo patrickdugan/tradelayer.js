@@ -384,7 +384,7 @@ class MarginMap {
         let marginChange = BigNumber(prevMargin).minus(position.margin)
         // Save the updated position
         this.margins.set(address, position);
-        await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contracts*-1, margin, 0, 0, 'moveMarginAndContractsForMint');
+        await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contracts*-1, -margin, 0, 0, 'moveMarginAndContractsForMint');
         await this.saveMarginMap(true);
 
         return {contracts, margin,excess};
@@ -407,7 +407,7 @@ class MarginMap {
         if(position.contracts>0&&contractShort<position.contracts){
             longClosed = BigNumber(position.contracts).minus(longClosed).toNumber()
             covered = contractShort
-        }else if(position.contracts>0&&contractShort=position.contracts){
+        }else if(position.contracts>0&&contractShort==position.contracts){
             longClosed = contractShort
             covered = contractShort
         }else if(position.contracts>0&&contractShort>position.contracts){

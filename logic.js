@@ -1013,10 +1013,10 @@ const Logic = {
 		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
             let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin)
 
-            console.log('calculating adjustment to grossRequired '+grossRequired+contractsAndMargin.excess)
+            console.log('calculating adjustment to grossRequired '+grossRequired+' '+contractsAndMargin.excess+' '+contractsAndMargin.margin)
             grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
             await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
-            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-margin,0,'issueSynth',block)
+            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-contractsAndMargin.margin,0,'issueSynth',block)
             if (!SynthRegistry.exists(syntheticTokenId)) {
                 console.log('creating new synth '+syntheticTokenId)
                 await SynthRegistry.createVault(propertyId, contractId);
