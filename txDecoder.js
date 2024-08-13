@@ -41,16 +41,29 @@ const Decode = {
 
     decodePropertyId(encodedPropertyId) {
         if (encodedPropertyId.startsWith('s')) {
-          console.log('decoding synth send')
-            const [_, encodedCollateralId, encodedContractId] = encodedPropertyId.split('-');
+            console.log('decoding synth send:', encodedPropertyId);
+             // Explicitly remove the 's' from the beginning
+            const trimmedEncodedPropertyId = encodedPropertyId.substring(1);
+
+            // Split the remaining part by '-'
+            const [encodedCollateralId, encodedContractId] = trimmedEncodedPropertyId.split('-');
+            console.log(encodedCollateralId)
+            console.log(encodedContractId)
+
+            // Decode both parts from base36 to integers
             const collateralId = parseInt(encodedCollateralId, 36);
             const contractId = parseInt(encodedContractId, 36);
-            console.log(`s-${collateralId}-${contractId}`)
-            return `s-${collateralId}-${contractId}`;
+
+            const decodedPropertyId = `s-${collateralId}-${contractId}`;
+            console.log('Decoded Property ID:', decodedPropertyId);
+
+            return decodedPropertyId;
         } else {
             return parseInt(encodedPropertyId, 36);
         }
     },
+
+
 
 
 
