@@ -29,7 +29,7 @@ class SynthRegistry {
     }
 
     // Update the amount in a vault
-    static async updateVault(vaultId, contractsAndMargin,amount) {
+    static async updateVault(vaultId, contractsAndMargin,amount,grossRequired) {
             await this.initializeIfNeeded();
         const vault = this.vaults.get(vaultId);
         if (!vault) {
@@ -37,6 +37,24 @@ class SynthRegistry {
         }
         vault.contracts += contractsAndMargin.contracts;
         vault.margin += contractsAndMargin.margin
+        vault.margin += grossRequired
+
+        //console.log('about to alter outstanding in vault '+JSON.stringify(vault)+' '+amount+' '+vault.outstanding)
+        vault.outstanding+=amount
+        //console.log(vault.outstanding)
+        await this.saveVault(vaultId, vault);
+    }
+
+    // Update the amount in a vault
+    static async updateVaultRedeem(vaultId, contractsAndMargin,amount) {
+            await this.initializeIfNeeded();
+        const vault = this.vaults.get(vaultId);
+        if (!vault) {
+            return console.log('error no vault found for '+vaultId)
+        }
+        vault.contracts += contractsAndMargin.contracts;
+        vault.margin -= contractsAndMargin.margin
+
         //console.log('about to alter outstanding in vault '+JSON.stringify(vault)+' '+amount+' '+vault.outstanding)
         vault.outstanding+=amount
         //console.log(vault.outstanding)

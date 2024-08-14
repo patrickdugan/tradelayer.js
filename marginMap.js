@@ -391,73 +391,61 @@ class MarginMap {
     }
 
     async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional) {
-        const position = this.margins.get(address);
+            const position = this.margins.get(address);
 
-        if (!position) {
-            throw new Error(`No position found for redemption with ${propertyId} collateral and contract ${contractId}`);
+            if (!position) {
+                throw new Error(`No position found for redemption with ${propertyId} collateral and contract ${contractId}`);
+            }
+
+            let excess = 0;
+            let contracts = vault.contracts;
+            let margin = vault.margin;
+            let contractShort = BigNumber(amount).dividedBy(notional).toNumber();
+            let longClosed = 0;
+            let covered = 0;
+            let notCovered = 0;
+
+            if (position.contracts > 0 && contractShort < position.contracts) {
+                longClosed = contractShort;
+                covered = contractShort;
+            } else if (position.contracts > 0 && contractShort === position.contracts) {
+                longClosed = contractShort;
+                covered = contractShort;
+            } else if (position.contracts > 0 && contractShort > position.contracts) {
+                longClosed = position.contracts;
+                notCovered = BigNumber(contractShort).minus(longClosed).toNumber();
+                covered = longClosed;
+            }
+
+            // Adjust the contract and margin positions for redemption
+            position.contracts = BigNumber(position.contracts).plus(contracts).toNumber();
+
+            // Calculate pro-rata factor and margin to return
+            let totalOutstanding = vault.outstanding;
+            let proRataFactor = BigNumber(amount).dividedBy(totalOutstanding).decimalPlaces(8).toNumber();
+            let marginToReturn = BigNumber(vault.margin).multipliedBy(proRataFactor).decimalPlaces(8).toNumber();
+            
+
+            // Determine available margin
+            let availableMargin = marginToReturn;
+            if (notCovered > 0) {
+                availableMargin = marginToReturn - (marginToReturn * (notCovered / contractShort));
+            }
+
+            // Record any excess margin
+            excess = BigNumber(margin).minus(marginToReturn).decimalPlaces(8).toNumber();
+
+            // Adjust the margin position for redemption (add margin back to the position)
+            position.margin = BigNumber(position.margin).plus(marginToReturn).decimalPlaces(8).toNumber();
+            position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
+
+            this.margins.set(address, position);
+            await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contractShort, marginToReturn, availableMargin, 0, 'moveMarginAndContractsForRedeem');
+            await this.saveMarginMap(true);
+
+            return { contracts: contractShort, margin: marginToReturn, availableMargin: availableMargin, excess: excess };
         }
 
-        let excess = 0;
-        let contracts = vault.contracts;
-        let margin = vault.margin;
-        let contractShort = BigNumber(amount).dividedBy(notional).toNumber()
-        let longClosed = 0
-        let covered = 0
-        let notCovered = 0
-        if(position.contracts>0&&contractShort<position.contracts){
-            longClosed = BigNumber(position.contracts).minus(longClosed).toNumber()
-            covered = contractShort
-        }else if(position.contracts>0&&contractShort==position.contracts){
-            longClosed = contractShort
-            covered = contractShort
-        }else if(position.contracts>0&&contractShort>position.contracts){
-            longClose=position.contracts
-            notCovered = BigNumber(longClose).abs().minus(contractShort).toNumber()
-            covered = BigNumber(contractShort).minus(notCovered)
-        }
-
-        // Adjust the contract and margin positions for redemption
-        position.contracts = BigNumber(position.contracts).plus(contracts).toNumber();
-
-        //for each integer value of covered we realize PNL on that many long contracts
-
-        //for each notCovered we keep initMargin in the position and margin value of tallymap
-        //otherwise for the difference between contractShort and notCovered we move them all to available
-      // Logic for calculating margin and available amounts to return
-        let totalOutstanding = Math.abs(vault.contracts); // Total contracts in the vault, assuming negative for short positions
-        let proRataFactor = BigNumber(amount).dividedBy(totalOutstanding).decimalPlaces(8).toNumber();
-
-        // Calculate the margin to return, based on the pro-rata factor
-        let marginToReturn = BigNumber(vault.margin).multipliedBy(proRataFactor).decimalPlaces(8).toNumber();
-        let availableMargin = 0;
-
-        if (notCovered > 0) {
-            // If there are uncovered contracts, leave initMargin in the position and margin value in TallyMap
-            availableMargin = marginToReturn - (marginToReturn * (notCovered / contractShort));
-        } else {
-            // Move the entire margin to available for the redeemed portion
-            availableMargin = marginToReturn;
-        }
-
-        // Adjust the vault's contracts and margin based on the redemption
-        vault.contracts = BigNumber(vault.contracts).minus(contractShort).toNumber();
-        vault.margin = BigNumber(vault.margin).minus(marginToReturn).decimalPlaces(8).toNumber();
-
-        // Record any excess margin (if any) and update the position and margin map
-        excess = BigNumber(margin).minus(marginToReturn).decimalPlaces(8).toNumber();
-
-        // Update the position and vault in the margin map
-        position.margin = BigNumber(position.margin).minus(marginToReturn).decimalPlaces(8).toNumber();
-        position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
-
-        // Save the updated position and vault
-        this.margins.set(address, position);
-        await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contractShort, marginToReturn, availableMargin, 0, 'moveMarginAndContractsForRedeem');
-        await this.saveMarginMap(true);
-
-        return { contracts: contractShort, margin: marginToReturn, availableMargin, excess };
-
-    }
 
 
         

@@ -68,17 +68,24 @@ class OracleList {
         console.log(`Oracle data not found for oracle ID: ${oracleId}`);
         return null;
     }
-
+    
     static async getOraclePrice(oracleId) {
-        // Oracle key to search for
-        const oracleKey = `oracle-${oracleId}`;
-
-        // If not found in-memory, optionally check the database
+        // Prepare the query to find all entries with the specified oracleId
         const oracleDB = db.getDatabase('oracleData');
-        const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
-        console.log('db oracle '+ JSON.stringify(dbOracle))
-         return oracleData.data;
+        const oracleData = await oracleDB.findAsync({ oracleId: oracleId });
+        
+        // Check if any data was returned
+        if (oracleData.length === 0) {
+            throw new Error(`No data found for oracleId ${oracleId}`);
+        }
+        
+        // Find the latest data point by blockHeight
+        const latestDataPoint = oracleData.reduce((latest, entry) => {
+            return (entry.blockHeight > latest.blockHeight) ? entry : latest;
+        });
 
+        console.log('Latest oracle data:', JSON.stringify(latestDataPoint));
+        return latestDataPoint.data;
     }
 
 
