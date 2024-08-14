@@ -223,7 +223,8 @@ app.post('/tl_getcontractorderbook', async (req, res) => {
 app.post('/tl_listcontractseries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
-        const contractSeriesArray = await ContractRegistry.getAllContracts();
+        const { contractId } = req.body;
+        const contractSeriesArray = await ContractRegistry.getContractInfo(contractId);
         console.log('Contract series array ' + JSON.stringify(contractSeriesArray));
         res.json(contractSeriesArray);
     } catch (error) {
@@ -313,7 +314,7 @@ app.get('/tl_oraclehistory', async (req, res) => {
     }
 });
 
-// Get oracle history
+// Get channel info
 app.get('/tl_getchannel', async (req, res) => {
     try {
         const { channelAddress } = req.query;

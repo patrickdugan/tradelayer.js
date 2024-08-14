@@ -1007,16 +1007,12 @@ const Logic = {
             let propertyInfo = await PropertyManager.getPropertyData(propertyId)
             let ticker = propertyInfo.ticker
             let synthTicker = 's'+ticker+'-'+contractId
-            console.log('fetched collateral ticker in mint synthetic '+ticker)
+            //console.log('fetched collateral ticker in mint synthetic '+ticker)
             const contractInfo = await ContractRegistry.getContractInfo(contractId)
 		    // Issue the synthetic token
 		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
             let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin)
 
-            console.log('calculating adjustment to grossRequired '+grossRequired+' '+contractsAndMargin.excess+' '+contractsAndMargin.margin)
-            grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
-            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
-            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-contractsAndMargin.margin,0,'issueSynth',block)
             if (!SynthRegistry.exists(syntheticTokenId)) {
                 console.log('creating new synth '+syntheticTokenId)
                 await SynthRegistry.createVault(propertyId, contractId);
@@ -1025,6 +1021,13 @@ const Logic = {
             } else {
                 await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin,amount);
             }
+
+            //console.log('calculating adjustment to grossRequired '+grossRequired+' '+contractsAndMargin.excess+' '+contractsAndMargin.margin)
+            grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
+            //console.log('about to issue amount '+amount)
+            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
+            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-contractsAndMargin.margin,0,'issueSynth',block)
+            
             
 		    // Log the minting of the synthetic token
 		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);

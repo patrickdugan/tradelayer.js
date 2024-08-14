@@ -44,13 +44,17 @@ class TallyMap {
     }
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block) {
+            //console.log('inside updateBalance for '+propertyId+' '+availableChange)
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
 
-            if (!Number.isInteger(propertyId)) {
-                return Error(`Invalid propertyId: ${propertyId}`);
+            if (typeof propertyId === 'string' && propertyId.startsWith('s-')) {
+                    // Handle synthetic token
+            } else if (!Number.isInteger(propertyId)) {
+                    return Error(`Invalid propertyId: ${propertyId}`);
             }
+
 
             if (typeof availableChange !== 'number'){
                 console.log(`string passed in: ${availableChange}`);
@@ -76,19 +80,17 @@ class TallyMap {
                 instance.addresses.set(address, {});
             }
             const addressObj = instance.addresses.get(address);
-            //saveconsole.log('addressObj being changed '+JSON.stringify(addressObj) + ' for addr '+address)
+            
+            //console.log('addressObj being changed '+propertyId + ' for addr '+Boolean(addressObj[propertyId]))
+
             if (!addressObj[propertyId]) {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
-            }
-
-            if(type=='contractTradeSettlement'){
-                //console.log('about to return PNL inside tallyMap '+availableChange+ ' '+JSON.stringify(addressObj[propertyId]))
             }
 
             // Check and update available balance
             // Assuming addressObj[propertyId] and the respective change variables are already BigNumber instances
             // Example for available balance
-            
+
             const originalAvailableBalance = new BigNumber(addressObj[propertyId].available);
             const newAvailableBalance = originalAvailableBalance.plus(availableChange);
             console.log('balance change '+originalAvailableBalance, newAvailableBalance.toNumber(),availableChange)
