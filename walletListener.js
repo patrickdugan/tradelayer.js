@@ -11,6 +11,7 @@ const OracleList = require('./oracle.js');
 const MarginMap = require('./marginMap.js');
 const TxUtils = require('./txUtils.js')
 const Consensus = require('./consensus.js')
+const Channels = require('./channels.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -307,6 +308,17 @@ app.get('/tl_oraclehistory', async (req, res) => {
         const { contractId } = req.query;
         const oracleHistory = await Oracles.getHistory(contractId);
         res.json(oracleHistory);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+// Get oracle history
+app.get('/tl_getchannel', async (req, res) => {
+    try {
+        const { channelAddress } = req.query;
+        const channel = await Channels.getChannel(channelAddress);
+        res.json(channel);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
     }
