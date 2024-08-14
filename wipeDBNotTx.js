@@ -39,6 +39,8 @@ const feeCacheDbPath = path.join(__dirname, 'Nedb-data','feeCache.db')
 const volumeIndexDbPath = path.join(__dirname, 'Nedb-data','volumeIndex.db')
 const clearListDbPath = path.join(__dirname, 'Nedb-data','clearLists.db')
 const attestationsDbPath = path.join(__dirname, 'Nedb-data','attestations.db')
+const vaultsDbPath = path.join(__dirname, 'Nedb-data','vaults.db')
+const syntheticTokensDbPath = path.join(__dirname, 'Nedb-data','syntheticTokens.db')
 
 
 // Clear entries from each database
@@ -62,3 +64,5 @@ clearDatastore(feeCacheDbPath, 'feeCache')
 clearDatastore(volumeIndexDbPath, 'volumeIndex')
 clearDatastore(clearListDbPath,'clearLists')
 clearDatastore(attestationsDbPath,'attestations')
+clearDatastore(vaultsDbPath,'vaults')
+clearDatastore(syntheticTokensDbPath,'syntheticTokens')

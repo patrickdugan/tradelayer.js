@@ -41,7 +41,7 @@ const Decode = {
 
     decodePropertyId(encodedPropertyId) {
         if (encodedPropertyId.startsWith('s')) {
-            console.log('decoding synth send:', encodedPropertyId);
+            //console.log('decoding synth send:', encodedPropertyId);
              // Explicitly remove the 's' from the beginning
             const trimmedEncodedPropertyId = encodedPropertyId.substring(1);
 
@@ -55,7 +55,7 @@ const Decode = {
             const contractId = parseInt(encodedContractId, 36);
 
             const decodedPropertyId = `s-${collateralId}-${contractId}`;
-            console.log('Decoded Property ID:', decodedPropertyId);
+            //console.log('Decoded Property ID:', decodedPropertyId);
 
             return decodedPropertyId;
         } else {
@@ -396,8 +396,8 @@ const Decode = {
   decodeRedeemSynthetic: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyIdUsed: parseInt(parts[0], 36),
-      contractIdUsed: parseInt(parts[1], 36),
+      propertyId: parseInt(parts[0], 36),
+      contractId: parseInt(parts[1], 36),
       amount: parseInt(parts[2], 36),
     };
   },

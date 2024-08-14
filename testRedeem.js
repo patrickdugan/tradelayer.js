@@ -1,11 +1,11 @@
 const txUtils = require('./txUtils'); // Make sure this path matches where txUtils.js is located
 
 async function createRedeemTransaction() {
-     const thisAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; // Replace with your address
+     const thisAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr'; // Replace with your address
     const params = {
         propertyIdUsed: 5,      // Replace with the actual property ID
         contractIdUsed: 4,      // Replace with the actual contract ID
-        amount: 3,               // Replace with the amount to mint
+        amount: 1.8,               // Replace with the amount to mint
     };
 
 

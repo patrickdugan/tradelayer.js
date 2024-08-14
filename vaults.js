@@ -11,6 +11,7 @@ class SynthRegistry {
     // Ensure the maps are initialized
     static async initializeIfNeeded() {
         if (!this.vaults || !this.syntheticTokens) {
+            console.log('initializing vaults and synth reg.')
             this.vaults = new Map();
             this.syntheticTokens = new Map();
             await this.loadFromDatabase();  // Load data from the database
@@ -19,89 +20,111 @@ class SynthRegistry {
 
     // Create a new vault for a synthetic token
     static async createVault(propertyId, contractId) {
-        this.initializeIfNeeded();
+           await this.initializeIfNeeded();
+           //console.log('creating vault')
         const vaultId = `s-${propertyId}-${contractId}`
-        this.vaults.set(vaultId, {propertyId, contractId, contracts:0, margin:0});
+        this.vaults.set(vaultId, {propertyId, contractId, contracts:0, margin:0, outstanding:0});
         await this.saveVault(vaultId);
         return vaultId;
     }
 
     // Update the amount in a vault
     static async updateVault(vaultId, contractsAndMargin,amount) {
-                this.initializeIfNeeded();
+            await this.initializeIfNeeded();
         const vault = this.vaults.get(vaultId);
         if (!vault) {
             return console.log('error no vault found for '+vaultId)
         }
         vault.contracts += contractsAndMargin.contracts;
         vault.margin += contractsAndMargin.margin
-        vault.oustanding+=amount
+        //console.log('about to alter outstanding in vault '+JSON.stringify(vault)+' '+amount+' '+vault.outstanding)
+        vault.outstanding+=amount
+        //console.log(vault.outstanding)
         await this.saveVault(vaultId, vault);
     }
 
     // Get vault information
-    static getVault(vaultId) {
-                this.initializeIfNeeded();
+    static async getVault(vaultId) {
+                await this.initializeIfNeeded();
+
         return this.vaults.get(vaultId);
     }
 
     // Register a new synthetic token
     static async registerSyntheticToken(syntheticTokenId, contractId, propertyId) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         this.syntheticTokens.set(syntheticTokenId, {contract: contractId, property: propertyId});
         await this.saveSyntheticToken(syntheticTokenId);
     }
 
     // Check if a synthetic token exists
-    static exists(syntheticTokenId) {
-                this.initializeIfNeeded();
-        return this.syntheticTokens.has(syntheticTokenId);
+    static async exists(syntheticTokenId) {
+        const vaultsData = await db.getDatabase('syntheticTokens').findOneAsync({ _id: syntheticTokenId });
+        //console.log('inside exists ' + syntheticTokenId + ' ' + JSON.stringify(vaultsData));
+        return vaultsData !== null;
     }
 
+
     // Get vault ID for a synthetic token
-    static getVaultId(syntheticTokenId) {
-                this.initializeIfNeeded();
+    static async getVaultId(syntheticTokenId) {
+                await this.initializeIfNeeded();
         return this.syntheticTokens.get(syntheticTokenId)?.vaultId;
     }
 
     // Persist vault data to the database
     static async saveVault(vaultId, vault) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         const vaultDB = db.getDatabase('vaults');
         await vaultDB.updateAsync(
-            { _id: `vault-${vaultId}` },
-            { _id: `vault-${vaultId}`, value: JSON.stringify(vault) },
+            { _id: vaultId },
+            { _id: vaultId, value: JSON.stringify(vault) },
             { upsert: true }
         );
     }
 
     // Persist synthetic token data to the database
     static async saveSyntheticToken(syntheticTokenId) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         const synthDB = db.getDatabase('syntheticTokens');
         await synthDB.updateAsync(
-            { _id: `synth-${syntheticTokenId}` },
-            { _id: `synth-${syntheticTokenId}`, value: JSON.stringify(this.syntheticTokens.get(syntheticTokenId)) },
+            { _id: `${syntheticTokenId}` },
+            { _id: `${syntheticTokenId}`, value: JSON.stringify(this.syntheticTokens.get(syntheticTokenId)) },
             { upsert: true }
         );
     }
 
-    // Load vaults and synthetic tokens from the database
+   // Load vaults and synthetic tokens from the database
     static async loadFromDatabase() {
-        const vaultsData = await db.getDatabase('vaults').findAsync();
-        vaultsData.forEach(vault => {
-            this.vaults.set(vault._id, vault.data);
-        });
+        console.log('about to load');
 
-        const syntheticTokensData = await db.getDatabase('syntheticTokens').findAsync();
-        syntheticTokensData.forEach(synth => {
-            this.syntheticTokens.set(synth._id, synth.data);
-        });
+        // Ensure the database queries are awaited properly
+        const vaultsData = await db.getDatabase('vaults').findAsync({});
+        //console.log('Vaults Data:', Array.isArray(vaultsData) ? vaultsData.length : 0, 'items');
+        
+        if (Array.isArray(vaultsData) && vaultsData.length > 0) {
+            vaultsData.forEach(vault => {
+                this.vaults.set(vault._id, vault.data);
+            });
+        } else {
+            console.log('No vaults found or vaultsData is not an array.');
+        }
+
+        const syntheticTokensData = await db.getDatabase('syntheticTokens').findAsync({});
+        //console.log('Synthetic Tokens Data:', Array.isArray(syntheticTokensData) ? syntheticTokensData.length : 0, 'items');
+        
+        if (Array.isArray(syntheticTokensData) && syntheticTokensData.length > 0) {
+            syntheticTokensData.forEach(synth => {
+                this.syntheticTokens.set(synth._id, synth.data);
+            });
+        } else {
+            console.log('No synthetic tokens found or syntheticTokensData is not an array.');
+        }
     }
+
 
     // Method to transfer synthetic currency units
     static async sendSyntheticCurrency(senderAddress, receiverAddress, syntheticTokenId, amount, channelTransfer) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         const vaultId = this.getVaultId(syntheticTokenId);
         if (!vaultId) {
             throw new Error('Vault not found for the given synthetic token ID');
@@ -128,7 +151,7 @@ class SynthRegistry {
 
     // Method to trade synthetic currency
     static async tradeSyntheticCurrency(tradeDetails, channelTrade) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         const { syntheticTokenId, amount, price, sellerAddress, buyerAddress } = tradeDetails;
 
         if (!channelTrade) {
@@ -152,7 +175,7 @@ class SynthRegistry {
 
     // Method to post synthetic currency as margin
     static async postMargin(address, syntheticTokenId, amount, contractId) {
-                this.initializeIfNeeded();
+                await this.initializeIfNeeded();
         const { underlyingPropertyId, hedgeContractId, vaultId } = SynthRegistry.parseSyntheticTokenId(syntheticTokenId);
         if (!SynthRegistry.isValidSyntheticTokenId(underlyingPropertyId, hedgeContractId, vaultId)) {
             throw new Error('Invalid synthetic token ID');
@@ -189,8 +212,8 @@ class SynthRegistry {
     }
 
     // Method to find a vault based on a compound synthetic token identifier
-    static findVaultIdByCompoundIdentifier(underlyingPropertyId, hedgeContractId) {
-                this.initializeIfNeeded();
+    static async findVaultIdByCompoundIdentifier(underlyingPropertyId, hedgeContractId) {
+               await this.initializeIfNeeded();
         for (const [vaultId, vaultData] of this.vaults.entries()) {
             if (vaultData.underlyingPropertyId === underlyingPropertyId && 
                 vaultData.hedgeContractId === hedgeContractId) {
@@ -201,8 +224,8 @@ class SynthRegistry {
     }
 
     // Method to reuse vault numbers
-    static reuseVaultNumber() {
-        this.initializeIfNeeded();
+    static async reuseVaultNumber() {
+        await this.initializeIfNeeded();
         const availableVaults = Array.from(this.vaults.keys()).filter(vaultId => {
             const vault = this.vaults.get(vaultId);
             return vault.isEmpty || vault.isExpired; // Assuming vaults have 'isEmpty' or 'isExpired' properties
@@ -212,8 +235,8 @@ class SynthRegistry {
     }
 
     // Function to check if a property ID is a synthetic token
-    static isSyntheticProperty(propertyId) {
-        this.initializeIfNeeded();
+    static async isSyntheticProperty(propertyId) {
+        await this.initializeIfNeeded();
         if (propertyId.toString().includes('-')) {
             const [underlyingPropertyId, hedgeContractId] = propertyId.toString().split('-');
             return this.isValidPropertyId(underlyingPropertyId) && this.isValidContractId(hedgeContractId);
@@ -223,7 +246,7 @@ class SynthRegistry {
 
 
     // Function to parse a compound synthetic token ID
-    static parseSyntheticTokenId(syntheticTokenId) {
+    static async parseSyntheticTokenId(syntheticTokenId) {
         const parts = syntheticTokenId.split('-');
         if (parts.length === 3) {
             const [underlyingPropertyId, hedgeContractId, vaultId] = parts;
@@ -288,7 +311,7 @@ class SynthRegistry {
     }
 
     static async rebaseSyntheticCurrency(vaultId, changeInValue) {
-                this.initializeIfNeeded();
+               await this.initializeIfNeeded();
         const syntheticTokenId = this.findSyntheticTokenIdByVaultId(vaultId);
         if (!syntheticTokenId) {
             throw new Error('Synthetic token not found for the given vault ID');
@@ -311,8 +334,8 @@ class SynthRegistry {
         console.log(`Rebased synthetic currency ${syntheticTokenId}: new amount ${newAmount}`);
     }
 
-    static findSyntheticTokenIdByVaultId(vaultId) {
-                this.initializeIfNeeded();
+    static async findSyntheticTokenIdByVaultId(vaultId) {
+                await this.initializeIfNeeded();
         // Logic to find the synthetic token ID associated with a given vault ID
         for (const [synthId, tokenInfo] of this.syntheticTokens.entries()) {
             if (tokenInfo.vaultId === vaultId) {

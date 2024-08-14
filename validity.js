@@ -1570,12 +1570,12 @@ const Validity = {
     },
 
     // 25: Redeem Synthetic
-    validateRedeemSynthetic: (sender, params,block) => {
+    validateRedeemSynthetic: async (sender, params,block) => {
         params.reason = '';
         params.valid = true;
-
+        console.log('validating redeem '+JSON.stringify(params))
          const roundedAmount = Math.floor(params.amount);
-
+         params.propertyId='s-'+params.propertyId+'-'+params.contractId
         // Check if the rounded amount is still >= 1
         if (roundedAmount < 1) {
             params.valid=false
@@ -1584,16 +1584,20 @@ const Validity = {
 
         params.amount = roundedAmount
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
-        const canRedeem = SyntheticRegistry.exists(params.propertyId);
+        const canRedeem = await SyntheticRegistry.exists(params.propertyId);
         if(canRedeem==false){
                 params.valid=false
                 params.reason += 'Token is not of a synthetic nature'
         }
         // Ensure the sender has sufficient balance of the synthetic property
-        const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
         if(hasSufficientBalance.hasSufficient==false){
-                params.valid=false
-                params.reason += 'insufficient tokens to redeem in this amount'
+                if(hasSufficientBalance.available>=1){
+                    params.amount = Math.floor(hasSufficientBalance.available)
+                }else{
+                    params.valid=false
+                    params.reason += 'insufficient tokens to redeem in this amount'    
+                }        
         }
         return params;
     },

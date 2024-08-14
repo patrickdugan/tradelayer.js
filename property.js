@@ -1,5 +1,6 @@
 const db = require('./db.js');
 const path = require('path');
+const BigNumber = require('bignumber.js')
 
 class PropertyManager {
     static instance = null;
