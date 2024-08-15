@@ -1584,6 +1584,14 @@ const Validity = {
 
         params.amount = roundedAmount
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
+
+        let marginMap= await MarginMap.getInstance(params.contractId)
+        let position = await marginMap.getPositionForAddress(sender, params.contractId)
+        if(position.contracts>0){
+                params.valid=false
+                params.reason += 'Redemption will close existing longs, move synths to a new address to redeem'
+        }
+
         const canRedeem = await SyntheticRegistry.exists(params.propertyId);
         if(canRedeem==false){
                 params.valid=false

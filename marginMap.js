@@ -359,12 +359,22 @@ class MarginMap {
     async moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin) {
         // Check if the margin map exists for the given contractId
         const position = this.margins.get(address);
+        const synthId = 's-'+propertyId+'-'+contractId
+
+        let vaultPosition = this.margins.get(synthId)
+        let first = false
+
+        if(!vaultPosition){
+            console.log('first time establishing vault on marginMap '+synthId)
+            first = true
+            vaultPosition = {contracts:0,margin:0,avgPrice:0,liqPrice:null,address:synthId}
+        }
         // If no position exists for the propertyId, initialize a new one
         if (!position) {
             return console.log('error: no position found for mint with '+propertyId+' collateral and contract '+contractId)
         }
         let excess = 0
-
+        //we're assuming contracts is a negative number reflecting funky math in the validity function
         console.log('inside moveMarginAndContractsForMint '+contracts, margin, position.margin)
         // Update the existing position
         position.contracts = BigNumber(position.contracts).minus(contracts).toNumber();
@@ -382,8 +392,25 @@ class MarginMap {
         let prevMargin = position.margin
         position.margin = BigNumber(position.margin).minus(margin).decimalPlaces(8).toNumber();
         let marginChange = BigNumber(prevMargin).minus(position.margin)
+        let avgDelta = 0
+        if(first==false){
+            vaultPosition.contracts = BigNumber(vaultPosition.contracts).plus(contracts).toNumber();
+            vaultPosition.margin = BigNumber(position.margin).plus(margin).decimalPlaces(8).toNumber();
+            let oldAvg = vaultPosition.avgPrice
+            if(!oldAvg){oldAvg=0}
+            vaultPosition.avgPrice = this.updatedAvgPrice(vaultPosition, amount, position.avgPrice, contractId, false)
+            avgDelta = vaultPosition.avgPrice-oldAvg    
+        }else if(first==true){
+            vaultPosition.contracts = contracts
+            vaultPosition.margin = margin
+            vaultPosition.avgPrice = position.avgPrice
+            avgDelta = vaultPosition.avgPrice   
+        }
+        
         // Save the updated position
         this.margins.set(address, position);
+        this.margins.set(synthId,vaultPosition)
+        await this.recordMarginMapDelta(synthId, contractId, vaultPosition.contracts, contracts, margin, 0, avgDelta, 'mintMarginAndContractsToVault');
         await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contracts*-1, -margin, 0, 0, 'moveMarginAndContractsForMint');
         await this.saveMarginMap(true);
 
@@ -392,7 +419,7 @@ class MarginMap {
 
     async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin,mark) {
             const position = this.margins.get(address);
-
+            const vaultPosition = this.margins.get(propertyId)
             if (!position) {
                 throw new Error(`No position found for redemption with ${propertyId} collateral and contract ${contractId}`);
             }
@@ -403,8 +430,9 @@ class MarginMap {
             let contractShort = BigNumber(amount).dividedBy(notional).toNumber();
             let longClosed = 0;
             let covered = 0;
-            let notCovered = 0;
-
+            let shortsAdded = 0
+            let transferAvg = false
+            let modifyAvg = false
             if (position.contracts > 0 && contractShort < position.contracts) {
                 longClosed = contractShort;
                 covered = contractShort;
@@ -413,10 +441,19 @@ class MarginMap {
                 covered = contractShort;
             } else if (position.contracts > 0 && contractShort > position.contracts) {
                 longClosed = position.contracts;
-                notCovered = BigNumber(contractShort).minus(longClosed).toNumber();
+                shortsAdded = BigNumber(contractShort).minus(longClosed).toNumber();
                 covered = longClosed;
+                //this is going to simply transpose the avg. price in the vault position to the user as it opens a short
+                transferAvg = true
+            } else if(position.contract<0){
+                //this is going to modify the avg. price as it increases the short position
+                modifyAvg = true
+                shortsAdded = contractShort
             }
 
+            if(shortsAdded>0){
+                position.avgPrice = this.updatedAvgPrice(position, amount, vaultPosition.avgPrice, contractId, false)
+            }
             // Adjust the contract and margin positions for redemption
             position.contracts = BigNumber(position.contracts).plus(contracts).toNumber();
 
@@ -424,6 +461,7 @@ class MarginMap {
             let totalOutstanding = vault.outstanding;
             let proRataFactor = BigNumber(amount).dividedBy(totalOutstanding).decimalPlaces(8).toNumber();
             let marginToReturn = BigNumber(vault.margin).multipliedBy(proRataFactor).decimalPlaces(8).toNumber();
+            let availToReturn = BigNumber(vault.available).multipliedBy(proRataFactor).decimalPlaces(8).toNumber()
             
             let returnMargin = BigNumber(contractShort).times(initMargin).decimalPlaces(8).toNumber()
             let returnAvail = BigNumber(marginToReturn).minus(returnMargin).decimalPlaces(8).toNumber()
@@ -436,23 +474,38 @@ class MarginMap {
             excess = BigNumber(margin).minus(marginToReturn).decimalPlaces(8).toNumber();
 
             // Adjust the margin position for redemption (add margin back to the position)
-            position.margin = BigNumber(position.margin).plus(returnMargin).decimalPlaces(8).toNumber();
-            position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
-            vault.contracts+=contractShort
+                position.margin = BigNumber(position.margin).plus(returnMargin).decimalPlaces(8).toNumber();
+            if(!modifyAvg&&!transferAvg){
+                position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();   
+            }
+            let oldAvg = position.avgPrice
+            let avgDelta = 0
+            if(!oldAvg){oldAvg=0}
+            if(transferAvg){
+                position.avgPrice=vaultPosition.avgPrice
+                position.contracts=BigNumber(position.contracts).minus(longClosed).minus(shortsAdded).toNumber()
+            }
+            if(modifyAvg){
+                position.avgPrice=this.updatedAvgPrice(position, amount, vaultPosition.avgPrice, contractId, false)
+                position.contracts= BigNumber(position.contracts).minus(shortsAdded).toNumber()
+            }
             let accountingPNL =0
             let reduction = 0
             if(longClosed>0){
-                  accountingPNL = await this.realizePnl(address, longClosed, mark, position.avgPrice, true, notional, position, false,contractId);
+                  accountingPNL = await this.realizePnl(address, longClosed, vaultPosition.avgPrice, position.avgPrice, true, notional, position, false,contractId);
                   console.log('calculating rPNL in redeem '+accountingPNL)
                   reduction = await this.reduceMargin(position, longClosed, accountingPNL, true, contractId, address, false,false,0);
+                  //somehow adding logic to realize profits on the shorts on this address as they are inherited/covered
+                  //going to remove this edge case in validity for now then return later
             }
+
             console.log('updating margin map in redeem '+address+' '+JSON.stringify(position))
             this.margins.set(address, position);
-            await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -returnAvail, 0, 'redeemMarginAndContractsFromVault');
-            await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, returnAvail,0,'moveMarginAndContractsForRedeem')
+            await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -accountingPNL, 0, 'redeemMarginAndContractsFromVault');
+            await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, accountingPNL,0,'moveMarginAndContractsForRedeem')
             await this.saveMarginMap(true);
 
-            return { contracts: contractShort, margin: returnMargin, available: returnAvail, excess: excess, rPNL: accountingPNL, reduction:reduction };
+            return { contracts: contractShort, margin: marginToReturn, available: availToReturn, excess: excess, rPNL: accountingPNL, reduction:reduction };
         }
 
 
