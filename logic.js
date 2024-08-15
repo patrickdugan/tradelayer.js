@@ -1039,7 +1039,14 @@ const Logic = {
 		},
 
 		async redeemSynthetic(address, propertyId, contractId, amount,block) {
-		    // Redeem the synthetic token
+		    
+            // Split the string by hyphens
+            const parts = propertyId.split('-');
+
+            // The middle part (index 1) is the collateral property
+            const collateralProperty = parseInt(parts[1], 10);
+
+            // Redeem the synthetic token
 		    const vault = await SynthRegistry.getVault(propertyId);
             console.log('inside redeem synthetic logic '+vault.outstanding+' '+JSON.stringify(vault))
             if (!vault) {
@@ -1073,7 +1080,7 @@ const Logic = {
 		    // Update synthetic token property
 		    await PropertyManager.updateTotalInCirculation(propertyId, -amount);
             await TallyMap.updateBalance(address, propertyId,-amount,0,0,0,'redeemSynth',block)
-            await TallyMap.updateBalance(address, propertyId,returnAvail,0,returnMargin,0,'redeemSynth',block)
+            await TallyMap.updateBalance(address, collateralProperty,returnAvail,0,returnMargin,0,'redeemSynth',block)
 
 		    // Log the redemption of the synthetic token
 		    console.log(`Redeemed ${amount} of synthetic token ${propertyId}`);

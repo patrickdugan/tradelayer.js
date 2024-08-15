@@ -438,9 +438,11 @@ class MarginMap {
             // Adjust the margin position for redemption (add margin back to the position)
             position.margin = BigNumber(position.margin).plus(marginToReturn).decimalPlaces(8).toNumber();
             position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
+            vault.contracts+=contractShort
 
             this.margins.set(address, position);
-            await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contractShort, marginToReturn, availableMargin, 0, 'moveMarginAndContractsForRedeem');
+            await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -marginToReturn, -availableMargin, 0, 'redeemMarginAndContractsFromVault');
+            await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,marginToReturn, availableMargin,0,'moveMarginAndContractsForRedeem')
             await this.saveMarginMap(true);
 
             return { contracts: contractShort, margin: marginToReturn, availableMargin: availableMargin, excess: excess };
