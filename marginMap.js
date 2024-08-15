@@ -390,7 +390,7 @@ class MarginMap {
         return {contracts, margin,excess};
     }
 
-    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin) {
+    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin,mark) {
             const position = this.margins.get(address);
 
             if (!position) {
@@ -439,13 +439,19 @@ class MarginMap {
             position.margin = BigNumber(position.margin).plus(returnMargin).decimalPlaces(8).toNumber();
             position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
             vault.contracts+=contractShort
-
+            let accountingPNL =0
+            let reduction = 0
+            if(longClosed>0){
+                  accountingPNL = await marginMap.realizePnl(address, longClosed, mark, position.avgEntry, true, notional, position, false,contractId);
+                  reduction = await marginMap.reduceMargin(position, longClosed, accountingPNL, true, contractId, address, false,false,0);
+            }
+            console.log('updating margin map in redeem '+address+' '+JSON.stringify(position))
             this.margins.set(address, position);
-            await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -marginToReturn, -availableMargin, 0, 'redeemMarginAndContractsFromVault');
-            await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,marginToReturn, availableMargin,0,'moveMarginAndContractsForRedeem')
+            await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -returnAvail, 0, 'redeemMarginAndContractsFromVault');
+            await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, returnAvail,0,'moveMarginAndContractsForRedeem')
             await this.saveMarginMap(true);
 
-            return { contracts: contractShort, margin: returnMargin, available: returnAvail, excess: excess };
+            return { contracts: contractShort, margin: returnMargin, available: returnAvail, excess: excess, rPNL: accountingPNL, reduction:reduction };
         }
 
 

@@ -1071,8 +1071,15 @@ const Logic = {
             const initMarginPerContract= await ContractRegistry.getInitialMargin(contractId, mark)
 
             const notionalValue = contractInfo.notionalValue
-            let contractsAndMargin = await marginMap.moveMarginAndContractsForRedeem(address, propertyId, contractId, amount,vault,notionalValue,initMargin)
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForRedeem(address, propertyId, contractId, amount,vault,notionalValue,initMarginPerContract,mark)
             
+            if(contractsAndMargin.rPNL!=0){
+                 await TallyMap.updateBalance(address, collateralProperty, contractsAndMargin.rPNL, 0, 0, 0, 'closingLongsWithRedemption',block)
+            }
+            
+            if(contractsAndMargin.reduction!=0){
+                 await TallyMap.updateBalance(address, collateralProperty, contractsAndMargin.reduction, 0, -contractsAndMargin.reduction, 0, 'contractRedeemMarginReturn',block)              
+            }
 
 		    await SynthRegistry.updateVaultRedeem(propertyId, contractsAndMargin,-amount);
 
