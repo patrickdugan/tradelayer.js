@@ -442,8 +442,9 @@ class MarginMap {
             let accountingPNL =0
             let reduction = 0
             if(longClosed>0){
-                  accountingPNL = await marginMap.realizePnl(address, longClosed, mark, position.avgEntry, true, notional, position, false,contractId);
-                  reduction = await marginMap.reduceMargin(position, longClosed, accountingPNL, true, contractId, address, false,false,0);
+                  accountingPNL = await this.realizePnl(address, longClosed, mark, position.avgPrice, true, notional, position, false,contractId);
+                  console.log('calculating rPNL in redeem '+accountingPNL)
+                  reduction = await this.reduceMargin(position, longClosed, accountingPNL, true, contractId, address, false,false,0);
             }
             console.log('updating margin map in redeem '+address+' '+JSON.stringify(position))
             this.margins.set(address, position);
@@ -582,6 +583,7 @@ class MarginMap {
 
         let pnl;
         //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
+        
         if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
             console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
         }
