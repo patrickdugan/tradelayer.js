@@ -1071,16 +1071,15 @@ const Logic = {
             const initMarginPerContract= await ContractRegistry.getInitialMargin(contractId, mark)
 
             const notionalValue = contractInfo.notionalValue
-            let contractsAndMargin = await marginMap.moveMarginAndContractsForRedeem(address, propertyId, contractId, amount,vault,notionalValue)
-            let returnMargin = BigNumber(contractsAndMargin.contracts).times(initMarginPerContract).decimalPlaces(8).toNumber()
-            let returnAvail = BigNumber(contractsAndMargin.margin).minus(returnMargin).decimalPlaces(8).toNumber()
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForRedeem(address, propertyId, contractId, amount,vault,notionalValue,initMargin)
+            
 
 		    await SynthRegistry.updateVaultRedeem(propertyId, contractsAndMargin,-amount);
 
 		    // Update synthetic token property
 		    await PropertyManager.updateTotalInCirculation(propertyId, -amount);
             await TallyMap.updateBalance(address, propertyId,-amount,0,0,0,'redeemSynth',block)
-            await TallyMap.updateBalance(address, collateralProperty,returnAvail,0,returnMargin,0,'redeemSynth',block)
+            await TallyMap.updateBalance(address, collateralProperty,contractsAndMargin.available,0,contractsAndMargin.margin,0,'redeemSynth',block)
 
 		    // Log the redemption of the synthetic token
 		    console.log(`Redeemed ${amount} of synthetic token ${propertyId}`);

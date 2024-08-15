@@ -390,7 +390,7 @@ class MarginMap {
         return {contracts, margin,excess};
     }
 
-    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional) {
+    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin) {
             const position = this.margins.get(address);
 
             if (!position) {
@@ -425,18 +425,18 @@ class MarginMap {
             let proRataFactor = BigNumber(amount).dividedBy(totalOutstanding).decimalPlaces(8).toNumber();
             let marginToReturn = BigNumber(vault.margin).multipliedBy(proRataFactor).decimalPlaces(8).toNumber();
             
+            let returnMargin = BigNumber(contractShort).times(initMargin).decimalPlaces(8).toNumber()
+            let returnAvail = BigNumber(marginToReturn).minus(returnMargin).decimalPlaces(8).toNumber()
 
-            // Determine available margin
-            let availableMargin = marginToReturn;
             if (notCovered > 0) {
-                availableMargin = marginToReturn - (marginToReturn * (notCovered / contractShort));
+                returnAvail = marginToReturn - (marginToReturn * (notCovered / contractShort));
             }
 
             // Record any excess margin
             excess = BigNumber(margin).minus(marginToReturn).decimalPlaces(8).toNumber();
 
             // Adjust the margin position for redemption (add margin back to the position)
-            position.margin = BigNumber(position.margin).plus(marginToReturn).decimalPlaces(8).toNumber();
+            position.margin = BigNumber(position.margin).plus(returnMargin).decimalPlaces(8).toNumber();
             position.contracts = BigNumber(position.contracts).minus(longClosed).toNumber();
             vault.contracts+=contractShort
 
@@ -445,7 +445,7 @@ class MarginMap {
             await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,marginToReturn, availableMargin,0,'moveMarginAndContractsForRedeem')
             await this.saveMarginMap(true);
 
-            return { contracts: contractShort, margin: marginToReturn, availableMargin: availableMargin, excess: excess };
+            return { contracts: contractShort, margin: returnMargin, available: returnAvail, excess: excess };
         }
 
 
