@@ -192,14 +192,14 @@ const Validity = {
         },
 
         // 3: Trade Token for UTXO
-        validateTradeTokenForUTXO: async (sender, params,txid) => {
+        validateTradeTokenForUTXO: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(3);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
+            if (!isAlreadyActivated) {
+                params.valid = false;
+                params.reason += 'Tx type not yet activated ';
             }
 
             if (!Number.isInteger(params.propertyIdNumber)) {
@@ -207,38 +207,60 @@ const Validity = {
                 params.reason += 'Invalid property ID; ';
             }
             if (!(Number.isInteger(params.amount) && params.amount > 0)) {
-                params.valid = false
+                params.valid = false;
                 params.reason += 'Invalid amount; ';
             }
 
-            let has = TallyMap.hasSufficientReserve(sender,params.propertyId,params.amount)
+            let has = TallyMap.hasSufficientReserve(sender, params.propertyId, params.amount);
 
-            if(!has.hasSufficient){
-                parms.valid= true
-                params.reason += ' Insufficient Tokens '
-                params.amount -= has.shortfall
+            if (!has.hasSufficient) {
+                params.valid = true; // Adjust according to logic
+                params.reason += ' Insufficient Tokens ';
+                params.amount -= has.shortfall;
             }
 
             if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
-                params.valid = true; //if we invalidate for things being off we will lose people's UTXO spends but we log the reason
+                params.valid = true; // Maintain the transaction but log the issue
                 params.reason += 'Invalid sats expected; ';
             }
 
-            if(params.payToAddress!=params.satsPaymentAddress){
+            // Decode the transaction to retrieve the outputs
+            const outputs = await TxUtils.getTransactionOutputs(txid)
+
+            if (outputs == 0) {
                 params.valid = false
-                params.reason = ' vOut[0] address does not match payToAddress'
+                params.reason += 'No outputs; ';
+                return
             }
 
-            if(params.tokenOutput==0){
-                params.valid = false
-                params.reason = ' cannot self-trade, token delivery output value is same as 0, UTXO delivery output'
+            // Validate the payToAddress corresponds to the correct vOut
+            const vOut = outputs[params.payToAddress];
+            if (!vOut) {
+                params.valid = false;
+                params.reason += 'Invalid payToAddress, vOut not found; ';
+            } else {
+                const ltcReceived = parseFloat(vOut.value);
+                const satsExpectedFloat = BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
+                if (ltcReceived < satsExpectedFloat) { // convert satsExpected to LTC
+                    params.valid = true;
+                    params.reason += `Received LTC (${ltcReceived}) is less than expected; `;
+                    params.paymentPercent = BigNumber(ltcReceived).times(100000000).dividedBy(params.satsExpected).decimalPlaces(8).toNumber()
+                }else{
+                    params.paymentPercent=1
+                }
+                params.satsPaymentAddress = vOut.scriptPubKey.addresses[0];
             }
 
-            if(!(Number.isInteger(params.tokenOut))){
-                params.valid = true
-                params.reason = 'tokenOutput not an integer so the address to deliver tokens cannot be parsed, defaults to 1'
-                params.tokenOutput = 1 
-                params.tokenDeliveryAddress = decode.vOut[params.tokenOutput].scriptPubKey.addresses[1]
+            if (params.tokenOutput === 0) {
+                params.valid = false;
+                params.reason += 'Cannot self-trade, token delivery output is the same as UTXO delivery output; ';
+            }
+
+            if (!Number.isInteger(params.tokenOut)) {
+                params.valid = true;
+                params.reason += 'tokenOutput not an integer, defaulting to 1; ';
+                params.tokenOutput = 1;
+                params.tokenDeliveryAddress = decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
             }
 
             return params;

@@ -23,11 +23,13 @@ const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'));
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client, 'sendrawtransaction'));
 
 async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
+    let send = amountToSend*100000000
     try {
         // Fetch the private key for the sender address
         const privateKeyWIF = await dumpprivkeyAsync(senderAddress);
+        console.log('privateKeyWIF '+privateKeyWIF)
         const privateKey = new litecore.PrivateKey.fromWIF(privateKeyWIF);
-
+        console.log('privatekey '+privateKey)
         // Fetch UTXOs for the sender address
         const utxos = await listUnspentAsync(1, 9999999, [senderAddress]);
         if (!utxos || utxos.length === 0) {
@@ -37,7 +39,7 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
         // Create a new transaction
         const tx = new litecore.Transaction()
             .from(utxos)
-            .to(recipientAddress, 10000000)
+            .to(recipientAddress, send)
             .change(senderAddress)
             .fee(STANDARD_FEE)
             .sign(privateKey);
@@ -52,9 +54,9 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 }
 
 // Replace with actual values
-const senderAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
-const recipientAddress = "tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
-const amountToSend = 0.1; // Amount of LTC to send
+const senderAddress = "tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr"; //tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8
+const recipientAddress = "tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
+const amountToSend = 0.005; // Amount of LTC to send
 
 // Execute the function to send Litecoin
 sendLitecoin(senderAddress, recipientAddress, amountToSend);

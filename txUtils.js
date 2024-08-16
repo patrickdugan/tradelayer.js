@@ -149,6 +149,37 @@ const TxUtils = {
             return error;
         }
     },
+
+    async getTransactionOutputs(txId) {
+        let tx;
+        try {
+            tx = await getRawTransactionAsync(txId, true);
+            if (!tx || !tx.vout) {
+                return new Error(`Invalid transaction data for ${txId}`);
+            }
+
+            const outputs = [];
+
+            // Iterate over all outputs to gather address and satoshi values
+            for (const output of tx.vout) {
+                if (output.scriptPubKey.type !== 'nulldata') { // Skip 'nulldata' (OP_RETURN) outputs
+                    const address = output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null; // Assuming single address
+                    const satoshis = Math.round(output.value * COIN); // Convert LTC to satoshis
+
+                    outputs.push({ address, satoshis, vout: output.n });
+                }
+            }
+
+            if (outputs.length > 0) {
+                return outputs;
+            } else {
+                return 0
+            }
+        } catch (error) {
+            console.error(`Error in getTransactionOutputs for transaction ${txId}:`, error);
+            return error;
+        }
+    },
  
     async getReferenceAddresses(txId) {
         let tx;
@@ -499,6 +530,56 @@ const TxUtils = {
         // Return the partially constructed and signed raw transaction
         return signedTx;
     },
+
+    async tradeUTXO(params, senderChannel) {
+        // Retrieve and verify the channel for the sender address
+        const channel = await getChannel('tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m');
+        if (!channel) throw new Error('Channel not found');
+        
+        const isColumnA = channel['A'][params.propertyId] !== undefined;
+        const tokenColumn = isColumnA ? 'A' : 'B';
+        
+        // Retrieve the UTXO for both sender addresses
+        const utxosSender = await listUnspentAsync('listunspent', 0, 9999999, ['tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m']);
+        const utxosBuyer = await listUnspentAsync('listunspent', 0, 9999999, ['tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr']);
+        
+        if (utxosSender.length === 0 || utxosBuyer.length === 0) {
+            return new Error('No UTXOs found for one or both addresses');
+        }
+        
+        // Select appropriate UTXOs (basic selection logic, modify as needed)
+        const selectedUtxoSender = utxosSender[0];
+        const selectedUtxoBuyer = utxosBuyer[0];
+        
+        // Construct the OP_RETURN payload
+        let payload = "tl5";
+        payload += Encoding.encodeTradeTokenForUTXO({
+            ...params,
+            referenceAddress: senderChannel, // Update as required
+        });
+        
+        // Create the raw transaction
+        let rawTx = await client.cmd('createrawtransaction', [
+            [
+                { txid: selectedUtxoSender.txid, vout: selectedUtxoSender.vout },
+                { txid: selectedUtxoBuyer.txid, vout: selectedUtxoBuyer.vout }
+            ],
+            []
+        ]);
+
+        // Add the OP_RETURN payload
+        rawTx = await addPayload(payload, rawTx);
+        
+        // Add change outputs for both addresses
+        rawTx = await setChange(params.sellerChangeAddress, params.sellerChangeAmount, rawTx);
+        rawTx = await setChange(params.buyerChangeAddress, params.buyerChangeAmount, rawTx);
+        
+        // Sign the transaction
+        const signedTx = await client.cmd('signrawtransactionwithwallet', rawTx);
+        
+        return signedTx;
+    },
+
 
    async finalizeTradeTokenTx(initialRawTx, additionalParams) {
         // additionalParams might include additionalUtxos, buyerChangeAddress, referenceAddress, etc.
