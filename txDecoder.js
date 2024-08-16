@@ -33,7 +33,7 @@ const Decode = {
             const amount = parseInt(parts[3], 36);
             return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount };
         } else {
-            const propertyIds = parts[2].split(',').map(id => this.decodePropertyId(id));
+            const propertyIds = parts[2].split(',').map(id => Decode.decodePropertyId(id));
             const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
             return { sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
@@ -71,7 +71,7 @@ const Decode = {
     decodeTradeTokenForUTXO: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: decodePropertyId(parts[0]),
+            propertyId: Decode.decodePropertyId(parts[0]),
             amount: parseInt(parts[1], 36),
             columnA: parts[2]==="1",
             satsExpected: parseInt(parts[3], 36),
@@ -84,7 +84,7 @@ const Decode = {
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: decodePropertyId(parts[0]),
+            propertyId: Decode.decodePropertyId(parts[0]),
             amount: parseInt(parts[1], 36),
             channelAddress: parts[2]
         };
@@ -94,8 +94,8 @@ const Decode = {
     decodeOnChainTokenForToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdOffered: decodePropertyId(parts[0]),
-            propertyIdDesired: decodePropertyId(parts[1]),
+            propertyIdOffered: Decode.decodePropertyId(parts[0]),
+            propertyIdDesired: Decode.decodePropertyId(parts[1]),
             amountOffered: new BigNumber(parts[2], 36).div(1e8).toNumber(), // Divide by 100 million
             amountExpected: new BigNumber(parts[3], 36).div(1e8).toNumber(), // Divide by 100 million
             stop: parts[4] === "1",
@@ -116,7 +116,7 @@ const Decode = {
         let cancelAll
         if (isContract==1) {
             isContract=true
-            offeredPropertyId = parseInt(elements[1], 36);
+            offeredPropertyId = Decode.decodePropertyId(elements[1]);
             desiredPropertyId = null;
             cancelAll = parseInt(elements[2], 36);
 
@@ -129,8 +129,8 @@ const Decode = {
             }
         } else {
             isContract=false
-            offeredPropertyId = parseInt(elements[1], 36);
-            desiredPropertyId = isContract ? null : parseInt(elements[2], 36);
+            offeredPropertyId = Decode.decodePropertyId(elements[1]);
+            desiredPropertyId = isContract ? null : Decode.decodePropertyId(elements[2]);
             cancelAll = parseInt(elements[3], 36);
 
             // Check if elements[4] exists before accessing its length property
@@ -200,9 +200,9 @@ const Decode = {
         return {
             isRedeem: parts[0] === '1',
             isContract: parts[1] === '1',
-            id: parseInt(parts[2],36),
+            id: Decode.decodePropertyId(parts[2]),
             amount: parseInt(parts[3],36),
-            id2: parseInt(parts[4],36),
+            id2: Decode.decodePropertyId(parts[4]),
             amount2: parseInt(parts[5],36)
         };
     },
@@ -211,7 +211,7 @@ const Decode = {
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: parseInt(parts[0],36),
+            propertyId: Decode.decodePropertyId(parts[0]),
             amountGranted: parseInt(parts[1], 36),
             addressToGrantTo: parts[2]
         };
@@ -221,7 +221,7 @@ const Decode = {
     decodeRedeemManagedToken: (payload) => {
       const parts = payload.split(',');
         return {
-            propertyId: parseInt(parse[0],36),
+            propertyId: Decode.decodePropertyId(parse[0]),
             amountDestroyed: parseInt(parts[1], 36)
         };
     },
@@ -282,9 +282,9 @@ const Decode = {
             native: isNative,
             underlyingOracleId: parseInt(parts[1], 36),
             onChainData: onChainDataParts,
-            notionalPropertyId: parseInt(parts[3], 36),
+            notionalPropertyId: Decode.decodePropertyId(parts[3]),
             notionalValue: parseFloat(parts[4]), // Assuming notionalValue should be a float
-            collateralPropertyId: parseInt(parts[5], 36),
+            collateralPropertyId: Decode.decodePropertyId(parts[5]),
             leverage: parseFloat(parts[6]), // Assuming leverage should be a float
             expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
             series: parts[8] ? parseInt(parts[8], 36) : null,
@@ -335,8 +335,8 @@ const Decode = {
   decodeTradeTokensChannel: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyIdOffered: parseInt(parts[0], 36),
-      propertyIdDesired: parseInt(parts[1], 36),
+      propertyIdOffered: Decode.decodePropertyId(parts[0]),
+      propertyIdDesired: Decode.decodePropertyId(parts[1]),
       amountOffered: parseInt(parts[2], 36),
       amountDesired: parseInt(parts[3], 36),
       columnAIsOfferer: parts[4] === '1',
@@ -349,7 +349,7 @@ const Decode = {
     const parts = payload.split(',');
     return {
       withdrawAll: parts[0]==="1",
-      propertyId: parseInt(parts[1],36),
+      propertyId: Decode.decodePropertyId(parts[1]),
       amount: parseInt(parts[2],36),
       column: parts[3]==="1",
       channelAddress: parts[4],
@@ -360,7 +360,7 @@ const Decode = {
   decodeTransfer: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyId: parseInt(parts[0],36),
+      propertyId: Decode.decodePropertyId(parts[0]),
       amount: parseInt(parts[1], 36),
       isColumnA: parts[2]==="1",
       toChannelAddress: parts[3],
@@ -374,10 +374,10 @@ const Decode = {
       txidNeutralized: parts[0],
       contractId: parseInt(parts[1], 36),
       amountCancelled: parseInt(parts[2], 36),
-      propertyId: parseInt(parts[3], 36),
+      propertyId: Decode.decodePropertyId(parts[3]),
       amountSettled: parseInt(parts[4], 36),
       close: parts[5] === '1',
-      propertyId2: parts[6] ? parseInt(parts[6], 36) : null,
+      propertyId2: parts[6] ? Decode.decodePropertyId(parts[6]) : null,
       amountDelivered: parts[7] ? parseInt(parts[7], 36) : null,
     };
   },
@@ -386,7 +386,7 @@ const Decode = {
   decodeMintSynthetic: (payload) => {
     const parts = payload.split(',');
     return {
-      propertyId: parseInt(parts[0], 36),
+      propertyId: Decode.decodePropertyId(parts[0]),
       contractId: parseInt(parts[1], 36),
       amount: parseInt(parts[2], 36),
     };
