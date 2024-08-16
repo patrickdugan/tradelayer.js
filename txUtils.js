@@ -13,6 +13,7 @@ const client = new Litecoin.Client({
     pass: 'pass',
     timeout: 10000
 });
+const Channels = require('./channels.js')
 
 // Promisify the necessary client functions
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
@@ -531,23 +532,23 @@ const TxUtils = {
         return signedTx;
     },
 
-    async tradeUTXO(params, senderChannel) {
+    async tradeUTXO(params, senderChannel, senderLTC) {
         // Retrieve and verify the channel for the sender address
-        const channel = await getChannel('tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m');
+        const channel = await Channels.getChannel(senderChannel);
         if (!channel) throw new Error('Channel not found');
         
-        const isColumnA = channel['A'][params.propertyId] !== undefined;
+        const isColumnA = channel.data['A'][params.propertyId] !== undefined;
         const tokenColumn = isColumnA ? 'A' : 'B';
         
         // Retrieve the UTXO for both sender addresses
-        const utxosSender = await listUnspentAsync('listunspent', 0, 9999999, ['tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m']);
-        const utxosBuyer = await listUnspentAsync('listunspent', 0, 9999999, ['tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr']);
+        const utxosSender = await listUnspentAsync('listunspent', 0, 9999999, [senderChannel]);
+        const utxosBuyer = await listUnspentAsync('listunspent', 0, 9999999, [senderLTC]);
         
         if (utxosSender.length === 0 || utxosBuyer.length === 0) {
             return new Error('No UTXOs found for one or both addresses');
         }
         
-        // Select appropriate UTXOs (basic selection logic, modify as needed)
+        // Select appropriate UTXOs
         const selectedUtxoSender = utxosSender[0];
         const selectedUtxoBuyer = utxosBuyer[0];
         
@@ -558,28 +559,36 @@ const TxUtils = {
             referenceAddress: senderChannel, // Update as required
         });
         
-        // Create the raw transaction
+        // Create the raw transaction with inputs and an empty outputs array
         let rawTx = await client.cmd('createrawtransaction', [
             [
                 { txid: selectedUtxoSender.txid, vout: selectedUtxoSender.vout },
                 { txid: selectedUtxoBuyer.txid, vout: selectedUtxoBuyer.vout }
             ],
-            []
+            {}
         ]);
 
         // Add the OP_RETURN payload
         rawTx = await addPayload(payload, rawTx);
         
         // Add change outputs for both addresses
-        rawTx = await setChange(params.sellerChangeAddress, params.sellerChangeAmount, rawTx);
-        rawTx = await setChange(params.buyerChangeAddress, params.buyerChangeAmount, rawTx);
+        rawTx.vout.push({ 
+            [senderChannel]: (selectedUtxoSender.amount - STANDARD_FEE) / COIN // vOut[0]
+        });
+        rawTx.vout.push({
+            [params.buyerChangeAddress]: (selectedUtxoBuyer.amount - params.satsExpected) / COIN // vOut[1]
+        });
         
+        // Add the payToAddress output (vOut[2])
+        rawTx.vout.push({
+            [params.payToAddress]: params.satsExpected / COIN // Assuming satsExpected is in satoshis
+        });
+
         // Sign the transaction
         const signedTx = await client.cmd('signrawtransactionwithwallet', rawTx);
         
         return signedTx;
     },
-
 
    async finalizeTradeTokenTx(initialRawTx, additionalParams) {
         // additionalParams might include additionalUtxos, buyerChangeAddress, referenceAddress, etc.

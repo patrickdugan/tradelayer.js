@@ -51,7 +51,7 @@ const Logic = {
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
                 break;
             case 3:
-                await Logic.tradeTokenForUTXO(params.senderAddress, params.payToAddress, params.propertyId, params.amount, params.utxoAmount, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.block);
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.paymentPercent, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.block, params.paymentPercent);
                 break;
             case 4:
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
@@ -368,7 +368,7 @@ const Logic = {
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, utxoAmount, satsExpected, tokenDeliveryAddress, satsReceived, block) {
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, utxoAmount, satsExpected, tokenDeliveryAddress, satsReceived, block, paymentPercent) {
 	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);

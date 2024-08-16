@@ -71,7 +71,7 @@ const Decode = {
     decodeTradeTokenForUTXO: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: parseInt(parts[0], 36),
+            propertyId: decodePropertyId(parts[0]),
             amount: parseInt(parts[1], 36),
             columnA: parts[2]==="1",
             satsExpected: parseInt(parts[3], 36),
@@ -84,7 +84,7 @@ const Decode = {
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: parseInt(parts[0], 36),
+            propertyId: decodePropertyId(parts[0]),
             amount: parseInt(parts[1], 36),
             channelAddress: parts[2]
         };
@@ -94,8 +94,8 @@ const Decode = {
     decodeOnChainTokenForToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdOffered: parseInt(parts[0], 36),
-            propertyIdDesired: parseInt(parts[1], 36),
+            propertyIdOffered: decodePropertyId(parts[0]),
+            propertyIdDesired: decodePropertyId(parts[1]),
             amountOffered: new BigNumber(parts[2], 36).div(1e8).toNumber(), // Divide by 100 million
             amountExpected: new BigNumber(parts[3], 36).div(1e8).toNumber(), // Divide by 100 million
             stop: parts[4] === "1",

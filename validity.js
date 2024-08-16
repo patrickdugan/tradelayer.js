@@ -246,17 +246,15 @@ const Validity = {
                     params.reason += `Received LTC (${ltcReceived}) is less than expected; `;
                     params.paymentPercent = BigNumber(ltcReceived).times(100000000).dividedBy(params.satsExpected).decimalPlaces(8).toNumber()
                 }else{
-                    params.paymentPercent=1
+                    params.paymentPercent=BigNumber(ltcReceived).times(100000000)
                 }
+                params.satsReceived = BigNumber(ltcReceived).times(100000000).toNumber()
                 params.satsPaymentAddress = vOut.scriptPubKey.addresses[0];
             }
+            const tokenOutput = outputs[params.tokenOutput]
+            params.tokenDeliveryAddress = decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
 
-            if (params.tokenOutput === 0) {
-                params.valid = false;
-                params.reason += 'Cannot self-trade, token delivery output is the same as UTXO delivery output; ';
-            }
-
-            if (!Number.isInteger(params.tokenOut)) {
+            if (!Number.isInteger(params.tokenOutput)) {
                 params.valid = true;
                 params.reason += 'tokenOutput not an integer, defaulting to 1; ';
                 params.tokenOutput = 1;
