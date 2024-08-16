@@ -13,8 +13,8 @@ async function generateTradeTransaction() {
 
     // Determine the correct column for the property
     const channel = await Channels.getChannel('tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m');
-    //const isColumnA = channel['A'][params.propertyId] !== undefined;
-    //params.columnA = isColumnA ? 'A' : 'B';
+    const isColumnA = channel['A'][params.propertyId] !== undefined;
+    params.columnA = isColumnA ? 'A' : 'B';
     
     const senderChannel = 'tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m';
     const senderLTC = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr';

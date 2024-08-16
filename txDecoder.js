@@ -39,33 +39,62 @@ const Decode = {
         }
     },
 
-    decodePropertyId(encodedPropertyId) {
+     decodePropertyId(encodedPropertyId) {
         if (encodedPropertyId.startsWith('s')) {
-            //console.log('decoding synth send:', encodedPropertyId);
-             // Explicitly remove the 's' from the beginning
+            // Remove the 's' from the beginning
             const trimmedEncodedPropertyId = encodedPropertyId.substring(1);
 
-            // Split the remaining part by '-'
-            const [encodedCollateralId, encodedContractId] = trimmedEncodedPropertyId.split('-');
-            console.log(encodedCollateralId)
-            console.log(encodedContractId)
+            // Handle both formats: s5-4 and s-5-4
+            let encodedCollateralId, encodedContractId;
+            if (trimmedEncodedPropertyId.includes('-')) {
+                // Format: s-5-4 or s5-4
+                const parts = trimmedEncodedPropertyId.split('-');
+                
+                // Determine the correct format
+                if (parts.length === 2) {
+                    // Format: s5-4
+                    [encodedCollateralId, encodedContractId] = parts;
+                } else if (parts.length === 3 && parts[0] === '') {
+                    // Format: s-5-4
+                    encodedCollateralId = parts[1];
+                    encodedContractId = parts[2];
+                } else {
+                    console.warn('Unexpected encodedPropertyId format:', trimmedEncodedPropertyId);
+                    return `s-NaN-NaN`; // Returning NaN as a fallback
+                }
+            } else {
+                // Unexpected format
+                console.warn('Unexpected encodedPropertyId format:', trimmedEncodedPropertyId);
+                return `s-NaN-NaN`; // Returning NaN as a fallback
+            }
+
+            console.log('Encoded Collateral ID:', encodedCollateralId); // Debugging log
+            console.log('Encoded Contract ID:', encodedContractId); // Debugging log
 
             // Decode both parts from base36 to integers
             const collateralId = parseInt(encodedCollateralId, 36);
             const contractId = parseInt(encodedContractId, 36);
 
+            // Handle NaN cases gracefully
+            if (isNaN(collateralId) || isNaN(contractId)) {
+                console.warn('Failed to parse encoded parts:', { encodedCollateralId, encodedContractId });
+                return `s-NaN-NaN`; // Returning NaN to indicate parsing failure
+            }
+
             const decodedPropertyId = `s-${collateralId}-${contractId}`;
-            //console.log('Decoded Property ID:', decodedPropertyId);
+            console.log('Decoded Property ID:', decodedPropertyId);
 
             return decodedPropertyId;
         } else {
-            return parseInt(encodedPropertyId, 36);
+            // For non-synthetic property IDs
+            const result = parseInt(encodedPropertyId, 36);
+            if (isNaN(result)) {
+                console.warn('Failed to parse non-synthetic property ID:', encodedPropertyId);
+                return NaN; // Returning NaN to indicate failure
+            }
+            return result;
         }
     },
-
-
-
-
 
     // Decode Trade Token for UTXO Transaction
     decodeTradeTokenForUTXO: (payload) => {
