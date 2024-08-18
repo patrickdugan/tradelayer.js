@@ -232,7 +232,9 @@ class Clearing {
                 let collateralId = await ContractRegistry.getCollateralId(id)
                 let inverse = await ContractRegistry.isInverse(id)
                 const notionalValue = await ContractRegistry.getNotionalValue(id)
-                
+                if(notionalValue==1){
+                    continue
+                }
                 // Update margin maps based on mark prices and current contract positions
                 let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue); //problem child
 

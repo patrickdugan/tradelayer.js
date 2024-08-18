@@ -76,7 +76,7 @@ class OracleList {
         
         // Check if any data was returned
         if (oracleData.length === 0) {
-            throw new Error(`No data found for oracleId ${oracleId}`);
+            return 1
         }
         
         // Find the latest data point by blockHeight

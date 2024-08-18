@@ -6,6 +6,7 @@ const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 const AMMPool = require('./AMM.js')
 const VolumeIndex = require('./volumeIndex.js')
+const OracleRegistry = require('./oracle.js')
 
 class ContractRegistry {
     constructor() {
@@ -310,20 +311,22 @@ class ContractRegistry {
         
             // Assuming contractData is the data structure for the contract
 
-        console.log('inside get notional '+contractId)
+        //console.log('inside get notional '+contractId)
             const contractData = await this.getContractInfo(contractId);
             const BNMark = new BigNumber(mark)
-            //console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
+            if(contractId==3){
+                console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
+            }
         try {
             if (contractData && contractData.native && contractData.notionalValue !== undefined && contractData.inverse==true) {
                 const BNnotionalValue = new BigNumber(contractData.notionalValue)
                 const notionalValue = new BigNumber(1).dividedBy(BNMark).multipliedBy(BNnotionalValue).decimalPlaces(8).toNumber();
                 return notionalValue;
             } else if(contractData.inverse==false && contractData.native==false) {
-                const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
+                const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
                 return latestPrice.price*contractData.notionalValue; // or any default value
             } else if(contractData.inverse==true && contractData.native==false){
-                const latestPrice = await OracleRegistry.getOracleData(contractData.oracleId);
+                const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
                 const value = new BigNumber(1).dividedBy(latestPrice.price).multipliedBy(contractData.notionalValue);
                 return value // or any default value
             }
@@ -383,14 +386,14 @@ class ContractRegistry {
     static async getCollateralValue(contractInfo) {
         const PropertyManager = require('./property.js')
         const OracleList = require('./oracle.js')
-        const { collateralPropertyId, oracleId } = contractInfo;
+        const { collateralPropertyId, underlyingOracleId } = contractInfo;
         if (collateralPropertyId) {
             // If collateral is a property, use its value
             const propertyData = await PropertyManager.getPropertyData(collateralPropertyId);
             return propertyData ? propertyData.value : 0; // Example value fetching logic
-        } else if (oracleId) {
+        } else if (underlyingOracleId) {
             // If collateral is based on an oracle, use the latest price
-            const latestPrice = await OracleRegistry.getOracleData(oracleId);
+            const latestPrice = await OracleRegistry.getOracleData(underlyingOracleId);
             return latestPrice || 0; // Example oracle price fetching logic
         }
         return 0; // Default to 0 if no valid collateral source
