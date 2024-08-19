@@ -551,7 +551,7 @@ const TxUtils = {
 
         console.log('Selected UTXOs:', selectedUtxoSender, selectedUtxoBuyer);
 
-        let payload = "tl5" + Encode.encodeTradeTokenForUTXO({
+        let payload = "tl3" + Encode.encodeTradeTokenForUTXO({
             ...params,
             referenceAddress: senderChannel,
         });
@@ -589,7 +589,7 @@ const TxUtils = {
 
         console.log('Serializing the transaction...');
         
-        const serializedTx = transaction.uncheckedSerialize();
+        const serializedTx = transaction.esrialize();
         const txid = await sendrawtransactionAsync(serializedTx);
         console.log('Trade transaction sent:', txid);
 

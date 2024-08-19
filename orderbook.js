@@ -5,7 +5,7 @@ const TradeHistory = require('./tradeHistoryManager.js')
 const ContractRegistry = require('./contractRegistry.js')
 const VolumeIndex= require('./volumeIndex.js')
 const Channels = require('./channels.js')
-const ClearlistManager = require('./clearlist.js')
+const ClearList = require('./clearlist.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -835,8 +835,7 @@ class Orderbook {
 
         async evaluateBasicLiquidityReward(match, channel, contract) {
             var accepted = false
-            const clearlistManager = new ClearlistManager();
-            
+
             var contractOrPropertyIds = []
             if(!contract){
                 contractOrPropertyIds=[match.propertyId1, match.propertyId2];
@@ -866,7 +865,7 @@ class Orderbook {
             }
             
             for (const address of issuerAddresses) {
-                const isWhitelisted = await clearlistManager.isAddressInClearlist(1, address);
+                const isWhitelisted = await ClearList.isAddressInClearlist(1, address);
                 if (isWhitelisted) {
                     accepted=true
                 }
@@ -877,7 +876,6 @@ class Orderbook {
 
         async evaluateEnhancedLiquidityReward(match, channel) {
             var accepted = false
-            const clearlistManager = new ClearlistManager();
             
             let addressesToCheck = [];
             
@@ -889,7 +887,7 @@ class Orderbook {
             }
             
             for (const address of addressesToCheck) {
-                const isWhitelisted = await clearlistManager.isAddressInClearlist(2, address);
+                const isWhitelisted = await ClearList.isAddressInClearlist(2, address);
                 if (isWhitelisted) {
                     accepted=true;
                 }

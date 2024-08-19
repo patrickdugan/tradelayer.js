@@ -104,8 +104,8 @@ const Decode = {
             amount: parseInt(parts[1], 36),
             columnA: parts[2]==="1",
             satsExpected: parseInt(parts[3], 36),
-            tokenOutput: parts[4],
-            payToAddress: parts[5]
+            tokenOutput: parseInt(parts[4]),
+            payToAddress: parseInt(parts[5])
         };
     },
 

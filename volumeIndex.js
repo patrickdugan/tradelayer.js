@@ -33,6 +33,7 @@ class VolumeIndex {
     }
 
        static async updateCumulativeVolumes(volume, type, id) {
+        await this.getCumulativeVolumes()
         if (type === "contract") {
             const collateralId = await Contracts.getCollateralId(id);
             const priceInLTC = await this.getTokenPriceInLTC(collateralId);
@@ -150,6 +151,8 @@ class VolumeIndex {
                 const globalCumulativeVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'globalCumulativeVolume' });
                 if (globalCumulativeVolumeFromDB) {
                     this.globalCumulativeVolume = globalCumulativeVolumeFromDB.value;
+                }else{
+                    this.globalCumulativeVolume= 0
                 }
             } catch (error) {
                 console.error('Error fetching global cumulative volume:', error);
@@ -163,6 +166,8 @@ class VolumeIndex {
                 const contractCumulativeVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'contractCumulativeVolume' });
                 if (contractCumulativeVolumeFromDB) {
                     this.contractCumulativeVolume = contractCumulativeVolumeFromDB.value;
+                }else{
+                    this.contractCumulativeVolume= 0
                 }
             } catch (error) {
                 console.error('Error fetching global cumulative volume:', error);
@@ -176,6 +181,8 @@ class VolumeIndex {
                 const ltcPairTotalVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'ltcPairCumulativeVolume' });
                 if (ltcPairTotalVolumeFromDB) {
                     this.ltcPairTotalVolume = ltcPairTotalVolumeFromDB.value;
+                }else{
+                    this.ltcPairTotalVolume= 0
                 }
             } catch (error) {
                 console.error('Error fetching LTC pair total volume:', error);

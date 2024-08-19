@@ -10,7 +10,7 @@ const BigNumber = require('bignumber.js')
 const Orderbook = require('./orderbook.js')
 const Channels = require('./channels.js')
 const MarginMap = require('./marginMap.js')
-const ClearListManager = require('./clearlist.js')
+const ClearList = require('./clearlist.js')
 const VolumeIndex = require('./VolumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
 //const whiteLists = require('./whitelists.js')
@@ -145,8 +145,7 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
-            const clearlistManager = new ClearListManager(); // Ensure the correct path
-            let propertyIds = [];
+             let propertyIds = [];
 
                 if (Array.isArray(params.propertyIds)) {
                     propertyIds = params.propertyIds;
@@ -157,13 +156,13 @@ const Validity = {
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
             // Get recipient whitelist IDs from the attestation map
-            const recipientAttestations = await clearlistManager.getAttestations(params.recipientAddress);
+            const recipientAttestations = await ClearList.getAttestations(params.recipientAddress);
             const recipientWhitelists = recipientAttestations.map(att => att.data.clearlistId);
             var passesSend = false
 
             for (const whitelistId of senderWhitelists) {
                 
-                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passesSend=true
                 }
@@ -176,7 +175,7 @@ const Validity = {
             var passesReceive = false
 
             for (const whitelistId of recipientWhitelists) {
-                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, params.recipientAddress);
+                const recipientWhitelisted = await ClearList.isAddressInClearlist(whitelistId, params.recipientAddress);
                 if (recipientWhitelisted) {
                     passesReceive=true
                 
@@ -192,17 +191,19 @@ const Validity = {
         },
 
         // 3: Trade Token for UTXO
-        validateTradeTokenForUTXO: async (sender, params, txid) => {
+        validateTradeTokenForUTXO: async (sender, params, txid,outputs) => {
             params.reason = '';
             params.valid = true;
-
+            console.log('inside validate UTXO trade '+JSON.stringify(params))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(3);
             if (!isAlreadyActivated) {
                 params.valid = false;
                 params.reason += 'Tx type not yet activated ';
             }
 
-            if (!Number.isInteger(params.propertyIdNumber)) {
+            const property = PropertyList.getPropertyData(params.propertyId)
+
+            if (property==null) {
                 params.valid = false;
                 params.reason += 'Invalid property ID; ';
             }
@@ -211,11 +212,12 @@ const Validity = {
                 params.reason += 'Invalid amount; ';
             }
 
-            let has = TallyMap.hasSufficientReserve(sender, params.propertyId, params.amount);
+            let has = await TallyMap.hasSufficientReserve(sender, params.propertyId, params.amount);
 
             if (!has.hasSufficient) {
                 params.valid = true; // Adjust according to logic
                 params.reason += ' Insufficient Tokens ';
+                console.log('reducing tokens to available '+params.amount+' '+has.shortfall)
                 params.amount -= has.shortfall;
             }
 
@@ -223,9 +225,6 @@ const Validity = {
                 params.valid = true; // Maintain the transaction but log the issue
                 params.reason += 'Invalid sats expected; ';
             }
-
-            // Decode the transaction to retrieve the outputs
-            const outputs = await TxUtils.getTransactionOutputs(txid)
 
             if (outputs == 0) {
                 params.valid = false
@@ -241,10 +240,11 @@ const Validity = {
             } else {
                 const ltcReceived = parseFloat(vOut.value);
                 const satsExpectedFloat = BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
+                params.price = BigNumber(satsExpectedFloat).dividedBy(params.amount).decimalPlaces(8).toNumber()
                 if (ltcReceived < satsExpectedFloat) { // convert satsExpected to LTC
                     params.valid = true;
                     params.reason += `Received LTC (${ltcReceived}) is less than expected; `;
-                    params.paymentPercent = BigNumber(ltcReceived).times(100000000).dividedBy(params.satsExpected).decimalPlaces(8).toNumber()
+                    params.paymentPercent = BigNumber(ltcReceived).dividedBy(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
                 }else{
                     params.paymentPercent=BigNumber(ltcReceived).times(100000000)
                 }
@@ -252,15 +252,15 @@ const Validity = {
                 params.satsPaymentAddress = vOut.scriptPubKey.addresses[0];
             }
             const tokenOutput = outputs[params.tokenOutput]
-            params.tokenDeliveryAddress = decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
+            params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
 
             if (!Number.isInteger(params.tokenOutput)) {
                 params.valid = true;
-                params.reason += 'tokenOutput not an integer, defaulting to 1; ';
-                params.tokenOutput = 1;
-                params.tokenDeliveryAddress = decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
+                params.reason += 'tokenOutput not an integer, defaulting to 3; ';
+                params.tokenOutput = 3;
+                params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
             }
-
+            console.log('inside validate UTXO trade '+JSON.stringify(params))
             return params;
         },
 
@@ -296,11 +296,11 @@ const Validity = {
                 return params
             }
                     // Whitelist validation logic
-            const clearlistManager = new ClearListManager(); // Ensure the correct path
+  
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
             var passes = false
             for (const whitelistId of senderWhitelists) {
-                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passes=true
                     break
@@ -359,13 +359,13 @@ const Validity = {
                 params.reason += 'Null returning for propertyData'
                 return params
             }
-            const clearlistManager = new ClearListManager(); // Ensure the correct path
+
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
             const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
 
             var passes1 = false
             for (const whitelistId of senderWhitelists) {
-                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passes1 = true
                     break
@@ -379,7 +379,7 @@ const Validity = {
             var passes2 = false
 
             for (const whitelistId of desiredLists) {
-                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const recipientWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (recipientWhitelisted) {
                     passes2 = true
                     break
@@ -539,7 +539,7 @@ const Validity = {
 
                 // Validate admin based on the type
                 if (params.whitelist) {
-                    const whitelistInfo = await ClearListManager.getList(params.id);
+                    const whitelistInfo = await ClearList.getList(params.id);
                     if (whitelistInfo.adminAddress !== sender||whitelistInfo.backupAddress!==sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the whitelist; ';
@@ -589,8 +589,8 @@ const Validity = {
             // Fetch the clearlistId from params or wherever it's stored
             const clearlistId = params.id;
 
-            // Assuming clearlistManager or an equivalent instance is available
-            const clearlist = await clearlistManager.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
+            // Assuming ClearList or an equivalent instance is available
+            const clearlist = await ClearList.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
 
             if (!clearlist&&clearlistId!=0) {
                 params.valid = false;
@@ -608,7 +608,7 @@ const Validity = {
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
             }
 
-            if(params.revoke==true&&!clearlistManager.isAddressInClearlist(params.targetAddress)){
+            if(params.revoke==true&&!ClearList.isAddressInClearlist(params.targetAddress)){
                     params.valid = false;
                     params.reason += `Target Address has no attestation to revoke `;
             }
@@ -643,13 +643,12 @@ const Validity = {
                 params.reason="Cannot trade vesting tokens"
             }
                     // Whitelist validation logic
-            const clearlistManager = new ClearListManager(); // Ensure the correct path
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
             const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
 
             var passes1 = false
             for (const whitelistId of senderWhitelists) {
-                const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (senderWhitelisted) {
                     passes1 = true
                 }
@@ -662,7 +661,7 @@ const Validity = {
             var passes2 = false
 
             for (const whitelistId of desiredLists) {
-                const recipientWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                const recipientWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                 if (recipientWhitelisted) {
                     passes2 = true
                 }
@@ -1011,13 +1010,13 @@ const Validity = {
                     params.valid = false;
                     params.reason += 'Collateral propertyId not found in Property List; ';
                 }
-                const clearlistManager = new ClearListManager()
+                
                 // Extract whitelist IDs from the collateral property data
                 const senderWhitelists = Array.isArray(collateralPropertyData.whitelistId) ? collateralPropertyData.whitelistId : [collateralPropertyData.whitelistId];
                  // Check if the sender address is in the whitelists
                 var listed = false
                 for (const whitelistId of senderWhitelists) {
-                    const senderWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, sender);
+                    const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
                     if (senderWhitelisted) {
                         listed=true
                         break; // No need to check further if one fails
@@ -1282,9 +1281,6 @@ const Validity = {
                 }
             }
 
-        // Whitelist validation logic
-        const clearlistManager = new ClearListManager();
-
         // Get property data for both propertyIdOffered and propertyIdDesired
         const propertyDataOffered = await PropertyList.getPropertyData(params.propertyIdOffered);
         const propertyDataDesired = await PropertyList.getPropertyData(params.propertyIdDesired);
@@ -1305,7 +1301,7 @@ const Validity = {
 
         // Check whitelists for commitAddressA
         for (const whitelistId of whitelistsOffered) {
-            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressA);
+            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressA);
             if (isWhitelisted) {
                 listed1=true
                 break;
@@ -1317,7 +1313,7 @@ const Validity = {
         }
 
         for (const whitelistId of whitelistsDesired) {
-            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressA);
+            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressA);
             if (isWhitelisted) {
                 listed2=true
             
@@ -1331,7 +1327,7 @@ const Validity = {
 
         // Check whitelists for commitAddressB
         for (const whitelistId of whitelistsOffered) {
-            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressB);
+            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressB);
             if (isWhitelisted) {
                 listed3=true
                 break;
@@ -1343,7 +1339,7 @@ const Validity = {
         }
 
         for (const whitelistId of whitelistsDesired) {
-            const isWhitelisted = await clearlistManager.isAddressInClearlist(whitelistId, commitAddressB);
+            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressB);
             if (isWhitelisted) {
                 listed4 =true
                 break;

@@ -235,7 +235,7 @@ class PropertyManager {
         propertyData.totalInCirculation += amount;
 
         // Update tally map to credit the amount to recipient
-        await TallyMap.credit(recipient, propertyId, amount,0,0,0,'grantToken',block);
+        await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
 
         // Save changes
         await this.save();

@@ -5,6 +5,7 @@ const Encode = require('./txEncoder'); // Update the path to your txEncoder.js f
 const Decode = require('./txDecoder'); // Update the path to your txDecoder.js file
 const Validity = require('./validity');
 const TxUtils = require('./txUtils')
+const TxIndex = require('./txIndex.js')
 
 const Types = {
   // Function to encode a payload based on the transaction ID and parameters
@@ -160,17 +161,41 @@ const Types = {
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 3:
-                //this one is a bit different because we're also looking at TxUtil deconstruction of the UTXOs
-                //If we're working in API mode we may need a flag to check, like if(params.API){outcall}else{TxUtils.decode}
-                params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
-                params.senderAddress= sender
-                params.txid=txId
-                let decode = await TxUtils.decoderawtransaction(txId)
-                params.satsPaymentAddress = decode.vOut[0].scriptPubKey.addresses[0]
-                params.utxoAmount = decode.vOut[0].value
-                params.tokenDeliveryAddress = decode.vOut[params.tokenOutput].scriptPubKey.addresses[0]
-                params = await Validity.validatevalidateTradeTokenForUTXO(sender, params, decode)
+                try {
+                    // This one is a bit different because we're also looking at TxUtil deconstruction of the UTXOs
+                    // If we're working in API mode, we may need a flag to check, like if(params.API){outcall}else{TxUtils.decode}
+                    params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
+                    params.senderAddress = sender;
+                    params.txid = txId;
+
+                    let decode;
+                    try {
+                              const txHex = await TxIndex.fetchTransactionData(txId);
+                              decode = await TxIndex.DecodeRawTransaction(txHex);
+                        //console.log('Decoding UTXO trade: ' + JSON.stringify(decode));
+                    } catch (error) {
+                        if (error.code === -22) {
+                            //console.error('Error decoding raw transaction: ', error);
+                            decode = null; // Handle the error gracefully
+                        } else {
+                            throw error; // Rethrow if it's a different error
+                        }
+                    }
+                    //console.log(decode.decodedTx)
+                    if (decode) {
+                        params.satsPaymentAddress = decode.decodedTx.vout[params.payToAddress].scriptPubKey.addresses[0];
+                        params.satsDelivered = decode.decodedTx.vout[params.payToAddress].value;
+                        params.tokenDeliveryAddress = decode.decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
+                        //console.log(params.satsPaymentAddress,params.satsDelivered,params.tokenDeliveryAddress)
+                        params = await Validity.validateTradeTokenForUTXO(sender, params, txId, decode.decodedTx.vout);
+                    } else {
+                        console.log('Skipping UTXO trade processing due to decode failure.');
+                    }
+                } catch (error) {
+                    console.error('An error occurred while processing case 3:', error);
+                }
                 break;
+
             case 4:
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));
                 params.senderAddress= sender

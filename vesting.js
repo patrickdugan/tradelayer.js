@@ -1,7 +1,7 @@
 const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
 const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
-const ClearListManager = require('./clearlist.js')
+const ClearList = require('./clearlist.js')
 const ContractList = require('./contractRegistry.js')
 
 class TradeLayerManager {
@@ -105,10 +105,9 @@ class TradeLayerManager {
     }
 
      static async initializeClearlists() {
-        const clearlistManager = new ClearListManager();
 
         // Initialize issuer whitelist
-        const issuerClearlistId = await clearlistManager.createClearlist(
+        const issuerClearlistId = ClearList.createClearlist(
             this.adminAddress,
             'Issuer Whitelist',
             '',
@@ -117,7 +116,7 @@ class TradeLayerManager {
         );
 
         // Initialize market maker whitelist
-        const marketMakerClearlistId = await clearlistManager.createClearlist(
+        const marketMakerClearlistId = ClearList.createClearlist(
             this.adminAddress,
             'Market Maker Whitelist',
             '',

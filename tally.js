@@ -93,7 +93,7 @@ class TallyMap {
 
             const originalAvailableBalance = new BigNumber(addressObj[propertyId].available);
             const newAvailableBalance = originalAvailableBalance.plus(availableChange);
-            console.log('balance change '+originalAvailableBalance, newAvailableBalance.toNumber(),availableChange)
+            console.log('avail. balance change '+originalAvailableBalance, newAvailableBalance.toNumber(),availableChange)
             if (newAvailableBalance.isLessThan(0)) {
                 throw new Error("Available balance cannot go negative " + originalAvailableBalance.toString() + ' change ' + availableChange.toString());
             }
@@ -105,7 +105,8 @@ class TallyMap {
             // Example for reserved balance
             const originalReservedBalance = new BigNumber(addressObj[propertyId].reserved);
             const newReservedBalance = originalReservedBalance.plus(reservedChange);
-
+            console.log('reserve. balance change '+originalReservedBalance, newReservedBalance.toNumber(),availableChange)
+        
             if (newReservedBalance.isLessThan(0)) {
                 throw new Error("Reserved balance cannot go negative " + originalReservedBalance.toString() + ' change ' + reservedChange.toString());
             }

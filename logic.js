@@ -21,7 +21,7 @@ const TallyMap = require('./tally.js'); // Manages Tally Mapping
 const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
-const ClearListManager = require('./clearlist.js')
+const ClearList = require('./clearlist.js')
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -51,7 +51,8 @@ const Logic = {
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
                 break;
             case 3:
-                await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.paymentPercent, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.block, params.paymentPercent);
+                //console.log('about to call utxo trade logic '+JSON.stringify(params))
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.block, params.txid);
                 break;
             case 4:
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
@@ -368,20 +369,18 @@ const Logic = {
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, utxoAmount, satsExpected, tokenDeliveryAddress, satsReceived, block, paymentPercent) {
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, block, txid) {
 	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
         const satsExpectedBigNumber = new BigNumber(satsExpected);
         const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
 
-        const tokensToDeliver = receiverLTCReceivedBigNumber
-            .dividedBy(satsExpectedBigNumber)
-            .times(decodedTokenAmountBigNumber)
-            .integerValue(BigNumber.ROUND_FLOOR);
-
-        const price = satsExpectedBigNumber.dividedBy(decodedTokenAmountBigNumber).toNumber()
-        //look at the channel balance where the commited tokens we're selling for LTC exist
+        const tokensToDeliver = tokenAmount
+            //console.log('values in utxo logic '+tokenAmount+' '+decodedTokenAmountBigNumber+' '+satsExpected+' '+satsExpectedBigNumber+' '+satsReceived+' '+receiverLTCReceivedBigNumber)
+               //look at the channel balance where the commited tokens we're selling for LTC exist
+        
+        console.log('inside logic for UTXO trade '+tokensToDeliver+' '+price, columnA)
             let channel = await Channels.getChannel(senderAddress)
             let channelBalance 
             if(columnA==true){
@@ -396,6 +395,7 @@ const Logic = {
             if(tokensToDeliver>channelBalance){
                 tokensToDeliver=channelBalance
             }
+            console.log(tokensToDeliver+' '+channelBalance)
 
             //Debits the tokens from the correct column of the channel
             if(columnA==true){
@@ -403,21 +403,40 @@ const Logic = {
             }else if(columnA==false){
                 channel["B"][propertyId]-=tokensToDeliver
             }
-
+            Channels.setChannel(senderAddress,channel)
+            console.log('channel adjusted for token sale '+JSON.stringify(channel["A"])+' '+JSON.stringify(channel["B"]))
             //the tokens exist both as channel object balances and reserve balance on the channel address, which is the sender
             //So we debit there and then credit them to the token delivery address, which we took in the parsing
             //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
             await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
             const key = '0-'+propertyId
-            await VolumeIndex.saveVolumeDataById(key,utxoAmount,price,block,'UTXO')
-            const clearlistManager = new ClearlistManager();
+            console.log('saving volume in volume Index '+key+' '+satsReceived)
+            await VolumeIndex.saveVolumeDataById(key,satsReceived,price,block,'UTXO')
 
-            const isListedA = await clearlistManager.isAddressInClearlist(2, senderAddress);
-            const isListedB = await clearlistManager.isAddressInClearlist(2, receiverAddress)
+             const trade = {
+                    offeredPropertyId: propertyId,
+                    desiredPropertyId: 0,
+                    amountOffered: tokensToDeliver, // or appropriate amount
+                    amountExpected: satsReceived, // or appropriate amount
+                    // other relevant trade details...
+                };
+            const orderbook = await Orderbook.getOrderbookInstance(key)
+            await orderbook.recordTokenTrade(trade,block,txid)
 
-             const isTokenListed = await clearlistManager.isAddressInClearlist(1, address);
-                            
+            const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
+            const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
+            let isTokenListed = false
+            if(propertyId.startsWith('s-')){
+                isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
+                                    // and then look up if those tokens are listed
+            }else{
+                let propertyInfo = PropertyManager.getPropertyData(propertyId)
+                if(propertyInfo.issuer){
+                    isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
+                }
+            }
+            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
                 if(isTokenListed){
                         const liqRewardBaseline1= VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
                         const liqRewardBaseline2= VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
@@ -433,6 +452,7 @@ const Logic = {
                     TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
 
                 }
+                return
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, block) {
@@ -573,11 +593,9 @@ const Logic = {
 		            throw new Error('Admin address is required to create a clearlist');
 		        }
 
-		        // Instantiate the clearlistManager
-		        const clearListManager = new ClearListManager();
 
 		        // Create the clearlist
-		        const clearlistId = await clearListManager.createclearlist({
+		        const clearlistId = await ClearList.createclearlist({
 		            adminAddress,
 		            name,
 		            url,
@@ -596,8 +614,7 @@ const Logic = {
 
 
 	    if(whitelist){
-                const clearListManager = new ClearListManager();
-                await clearListManager.updateAdmin(id, newAddress,updateBackup);
+                await ClearList.updateAdmin(id, newAddress,updateBackup);
         }else if(token){
                 await PropertyList.updateAdmin(id, newAddress,updateBackup);
         }else if(oracle){
@@ -610,13 +627,12 @@ const Logic = {
 
 
     async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, metaData, revoke) {
-        const clearListManager = new ClearListManager();
 
         if(!revoke){
-             await clearListManager.addAttestion(clearlistId, targetAddress,metaData);
+             await ClearList.addAttestion(clearlistId, targetAddress,metaData);
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
-            await clearListManager.revokeAttestation(clearlistId,targetAddress,metaData)
+            await ClearList.revokeAttestation(clearlistId,targetAddress,metaData)
         }
         return
 	},

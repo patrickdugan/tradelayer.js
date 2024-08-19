@@ -19,6 +19,15 @@ class Channels {
         await this.saveChannelsRegistry();
     }
 
+       // Function to set a channel object and save it in the registry
+    static async setChannel(channelId, channelData) {
+        // Set the channel object in the registry
+        this.channelsRegistry.set(channelId, channelData);
+
+        // Save the updated channels registry to the database
+        await this.saveChannelsRegistry();
+    }
+
     static async saveChannelsRegistry() {
         // Persist the channels registry to NeDB
         const channelsDB = dbInstance.getDatabase('channels');
