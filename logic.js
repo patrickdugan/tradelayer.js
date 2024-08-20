@@ -438,17 +438,17 @@ const Logic = {
             }
             console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
                 if(isTokenListed){
-                        const liqRewardBaseline1= VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
-                        const liqRewardBaseline2= VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
-                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
+                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
+                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
+                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline1,0,0,0,'baselineLiquidityReward')
+                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline2,0,0,0,'baselineLiquidityReward')
                 }
                 if(isListedA){
-                    const liqReward1= VolumeIndex.calculateLiquidityReward(satsReceived,0)    
+                    const liqReward1= await VolumeIndex.calculateLiquidityReward(satsReceived,0)    
                     TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
                 }
                 if(isListedB){
-                    const liqReward2= VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
+                    const liqReward2= await VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
                     TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
 
                 }

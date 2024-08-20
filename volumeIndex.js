@@ -362,13 +362,14 @@ class VolumeIndex {
 
     static async baselineLiquidityReward(tradeVolume, fee, token) {
         const totalVolume = this.globalCumulativeVolume - tradeVolume;
+        let tlPriceInLTC = 0.001 
         if(token!=0){
 
             // Step 1: Get LTC price of the token in question
             const tokenPriceInLTC = await this.getTokenPriceInLTC(token);
 
             // Step 2: Get TL/LTC price (assuming TL is a specific token or currency)
-            const tlPriceInLTC = await this.getTLPriceInLTC();
+            tlPriceInLTC = await this.getTLPriceInLTC();
 
             // Step 3: Calculate fee in TL
             const feeInTL = fee * tokenPriceInLTC * tlPriceInLTC;
