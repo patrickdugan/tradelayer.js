@@ -90,6 +90,17 @@ app.post('/tl_getMaxProcessedHeight', async (req, res) => {
     }
 });
 
+app.post('/tl_getMaxParsedHeight', async (req, res) => {
+    try {
+        const {} = req.body;
+        const height = await TxIndex.findMaxIndexedBlock()
+        res.json(height);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 app.post('/tl_pause', async (req, res) => {
     try {
         const {} = req.body;
