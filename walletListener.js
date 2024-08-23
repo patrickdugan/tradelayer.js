@@ -55,6 +55,16 @@ app.post('/tl_gettransaction', async (req, res) => {
     }
 });
 
+app.post('./tl_loadwallet', async (req, res) => {
+    try {
+        const {} = req.body;
+        const wallet = await TxUtils.load()
+        res.json(wallet);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
 app.post('/tl_gettransactionsforaddress', async (req, res) => {
     try {

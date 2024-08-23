@@ -26,6 +26,9 @@ const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
 const validateAddress = util.promisify(client.cmd.bind(client,'validateaddress'))
 const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
+const loadWalletAsync = util.promisify(client.cmd.bind(client, 'loadwallet'))
+
+
 const DUST_THRESHOLD= 54600
 
 const TxUtils = {
@@ -68,6 +71,11 @@ const TxUtils = {
         }
         return height;
     },
+
+    async function load(){
+        const loadwallet = await loadWalletAsync('wallet.dat')
+        return loadwallet
+    }
 
     /*async fetchTransactionData(txId) {
         console.log('fetching tx data '+txId)
