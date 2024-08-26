@@ -72,10 +72,10 @@ const TxUtils = {
         return height;
     },
 
-    async function load(){
+    async load(){
         const loadwallet = await loadWalletAsync('wallet.dat')
         return loadwallet
-    }
+    },
 
     /*async fetchTransactionData(txId) {
         console.log('fetching tx data '+txId)
