@@ -12,3 +12,4 @@ oldTests/dbDiag.js
 *.db
 *.db
 nedb-data/txIndex.db
+/nedb-data

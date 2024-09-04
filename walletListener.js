@@ -12,6 +12,7 @@ const MarginMap = require('./marginMap.js');
 const TxUtils = require('./txUtils.js')
 const Consensus = require('./consensus.js')
 const Channels = require('./channels.js')
+const Types = require('./types.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -44,7 +45,7 @@ app.post('/tl_validateaddress', async (req, res) => {
 });
 
 
-app.post('/tl_gettransaction', async (req, res) => {
+app.post('/tl_getTransaction', async (req, res) => {
     try {
         const { txid } = req.body;
         const txInfo = await Consensus.getTxParams(txid)
@@ -55,7 +56,31 @@ app.post('/tl_gettransaction', async (req, res) => {
     }
 });
 
-app.post('./tl_loadwallet', async (req, res) => {
+app.post('/tl_getChannelColumn', async (req,res) =>{
+    try {
+        const { channelAddress, cpAddress } = req.body;
+        const column = await Channels.assignColumnBasedOnAddress(channelAddress,cpAddress)
+        res.json(column);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+})
+
+/*app.post('/tl_decodeTx', async (req, res) => {
+    try {
+        const { txid } = req.body;
+        const txData = await TxIndex.getTx(txid)
+        const txId = txData.value[0].txId;
+
+        res.json(txInfo);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});*/
+
+app.post('./tl_loadWallet', async (req, res) => {
     try {
         const {} = req.body;
         const wallet = TxUtils.load()
@@ -123,7 +148,7 @@ app.post('/tl_pause', async (req, res) => {
 });
 
 // Get all balances for an address
-app.post('/tl_getallbalancesforaddress', async (req, res) => {
+app.post('/tl_getAllBalancesForAddress', async (req, res) => {
     console.log('Trying to load balances for: ' + req.body.params);
 
     try {
@@ -153,7 +178,7 @@ app.post('/tl_getallbalancesforaddress', async (req, res) => {
     }
 });
 
-app.post('/tl_getproperty', async (req, res) => {
+app.post('/tl_getProperty', async (req, res) => {
     try {
         const pid = req.body.params;
         console.log('tl_getproperty: ' + pid);
@@ -166,7 +191,7 @@ app.post('/tl_getproperty', async (req, res) => {
 });
 
 // List properties
-app.post('/tl_listproperties', async (req, res) => {
+app.post('/tl_listProperties', async (req, res) => {
     try {
         console.log('Express calling property list');
         const propertiesArray = await PropertyManager.getPropertyIndex();
@@ -200,7 +225,7 @@ app.post('/tl_propertyFeeCache', async(req,res)=>{
 })
 
 // Get activations
-app.post('/tl_getactivations', async (req, res) => {
+app.post('/tl_getActivations', async (req, res) => {
     try {
         console.log('Express calling activations');
         const activations = await Activations.getInstance().loadActivationsList();
@@ -212,7 +237,7 @@ app.post('/tl_getactivations', async (req, res) => {
 });
 
 // Get order book
-app.post('/tl_getorderbook', async (req, res) => {
+app.post('/tl_getOrderbook', async (req, res) => {
     try {
         const { propertyId1, propertyId2 } = req.body;
         const orderBookKey = `${propertyId1}-${propertyId2}`;
@@ -226,7 +251,7 @@ app.post('/tl_getorderbook', async (req, res) => {
 });
 
 // Get contract order book
-app.post('/tl_getcontractorderbook', async (req, res) => {
+app.post('/tl_getContractOrderbook', async (req, res) => {
     try {
         const { contractId } = req.body;
         const orderBookKey = `contract-${contractId}`;
@@ -241,7 +266,7 @@ app.post('/tl_getcontractorderbook', async (req, res) => {
 });
 
 // List contract series
-app.post('/tl_listcontractseries', async (req, res) => {
+app.post('/tl_listContractSeries', async (req, res) => {
     try {
         console.log('Fetching contract series list');
         const { contractId } = req.body;
@@ -255,7 +280,7 @@ app.post('/tl_listcontractseries', async (req, res) => {
 });
 
 // List oracles
-app.post('/tl_listoracles', async (req, res) => {
+app.post('/tl_listOracles', async (req, res) => {
     try {
         console.log('Fetching oracle list');
         const oracleArray = await OracleList.getAllOracles();
@@ -267,7 +292,7 @@ app.post('/tl_listoracles', async (req, res) => {
 });
 
 // Get contract position for address and contract ID
-app.get('/tl_contractposition', async (req, res) => {
+app.get('/tl_contractPosition', async (req, res) => {
     try {
         const { address, contractId } = req.query;
         const marginMap = await MarginMap.getInstance(contractId);
@@ -279,7 +304,7 @@ app.get('/tl_contractposition', async (req, res) => {
 });
 
 // Get trade history
-app.get('/tl_tradehistory', async (req, res) => {
+app.get('/tl_tradeHistory', async (req, res) => {
     try {
         const { propertyId1, propertyId2 } = req.query;
         const tradeHistory = await Orderbook.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2);
@@ -291,7 +316,7 @@ app.get('/tl_tradehistory', async (req, res) => {
 });
 
 // Get initial margin for wallet UI and associated parameters (like commiting to channel for a contract trade)
-app.get('/tl_getinitmargin', async (req, res) => {
+app.get('/tl_getInitMargin', async (req, res) => {
     try {
         const { contractId, price } = req.query;
         const initialMargin = await ContractRegistry.getInitialMargin(contractId, price);
@@ -303,7 +328,7 @@ app.get('/tl_getinitmargin', async (req, res) => {
 });
 
 // Get contract trade history
-app.get('/tl_contracttradehistory', async (req, res) => {
+app.get('/tl_contractTradeHistory', async (req, res) => {
     try {
         const { contractId } = req.query;
         const contractTradeHistory = await Orderbook.getContractTradeHistoryByContractId(contractId);
@@ -314,7 +339,7 @@ app.get('/tl_contracttradehistory', async (req, res) => {
 });
 
 // Get funding history
-app.get('/tl_fundinghistory', async (req, res) => {
+app.get('/tl_fundingHistory', async (req, res) => {
     try {
         const { contractId } = req.query;
         const fundingHistory = await ContractsRegistry.loadFundingEvents(contractId);
@@ -325,7 +350,7 @@ app.get('/tl_fundinghistory', async (req, res) => {
 });
 
 // Get oracle history
-app.get('/tl_oraclehistory', async (req, res) => {
+app.get('/tl_oracleHistory', async (req, res) => {
     try {
         const { contractId } = req.query;
         const oracleHistory = await Oracles.getHistory(contractId);
@@ -336,7 +361,7 @@ app.get('/tl_oraclehistory', async (req, res) => {
 });
 
 // Get channel info
-app.get('/tl_getchannel', async (req, res) => {
+app.get('/tl_getChannel', async (req, res) => {
     try {
         const { channelAddress } = req.query;
         const channel = await Channels.getChannel(channelAddress);
