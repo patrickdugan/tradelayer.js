@@ -101,7 +101,7 @@ const Decode = {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0]),
-            amount: parseInt(parts[1], 36),
+                amount: new BigNumber(parts[1], 36).div(1e8).toNumber(), // Parse as BigNumber and divide by 100 million
             columnA: parts[2]==="1",
             satsExpected: parseInt(parts[3], 36),
             tokenOutput: parseInt(parts[4]),

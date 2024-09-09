@@ -1,0 +1,4 @@
+{"_id":4,"value":{"blockHeight":3370611,"volume":1,"price":49630,"type":"onChainContract"}}
+{"_id":"0-s-5-4","value":{"blockHeight":3384665,"volume":100000,"price":0.001,"type":"UTXO"}}
+{"_id":"4-5","value":{"blockHeight":3370593,"volume":[7,5.44444446],"price":0.77777778,"type":"onChainToken"}}
+{"_id":"globalCumulativeVolume","value":0}
