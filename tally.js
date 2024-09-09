@@ -203,6 +203,7 @@ class TallyMap {
                         amount: balanceObj.amount,
                         available: balanceObj.available,
                         reserved: balanceObj.reserved,
+                        margin: balanceObj.margin,
                         vesting: balanceObj.vesting
                     });
                 }
