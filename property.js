@@ -213,6 +213,25 @@ class PropertyManager {
         }));
     }
 
+
+    /**
+     * Checks if the given ticker already exists in the property index.
+     * @param {string} ticker - The ticker to check for existence.
+     * @returns {boolean} - True if the ticker exists, false otherwise.
+     */
+    static async isTickerExist(ticker) {
+        // Ensure the property index is loaded before checking
+        await PropertyManager.load();
+
+        for (let [propertyId, propertyData] of this.propertyIndex.entries()) {
+            if (propertyData.ticker === ticker) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
      /**
      * Checks if the given propertyId is a synthetic token.
      * @param {number} propertyId - The ID of the property to check.

@@ -77,6 +77,20 @@ const Validity = {
                 params.reason += 'Invalid ticker; ';
             }
 
+            // Add check for existing ticker using the isTickerExist method
+
+            const tickerExists = await PropertyManager.isTickerExist(params.ticker);
+            if (tickerExists) {
+                params.valid = false;
+                params.reason += 'Ticker already exists; ';
+            }
+
+             // Invalidate if the ticker starts with "s"
+            if (params.ticker.startsWith('s')) {
+                params.valid = false;
+                params.reason += 'Ticker cannot start with "s"; ';
+            }
+
             if (params.type === 'native' && params.propertyId !== 1) {
                 params.valid=false
                 params.reason += 'Invalid property ID for native type; ';
