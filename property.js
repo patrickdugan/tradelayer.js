@@ -219,7 +219,7 @@ class PropertyManager {
      * @param {string} ticker - The ticker to check for existence.
      * @returns {boolean} - True if the ticker exists, false otherwise.
      */
-    static async isTickerExist(ticker) {
+    static async doesTickerExist(ticker) {
         // Ensure the property index is loaded before checking
         await PropertyManager.load();
 

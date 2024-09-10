@@ -79,7 +79,7 @@ const Validity = {
 
             // Add check for existing ticker using the isTickerExist method
 
-            const tickerExists = await PropertyManager.isTickerExist(params.ticker);
+            const tickerExists = await PropertyList.doesTickerExist(params.ticker);
             if (tickerExists) {
                 params.valid = false;
                 params.reason += 'Ticker already exists; ';
@@ -321,6 +321,23 @@ const Validity = {
                 }
             }
 
+            const channelData =await Channels.getChannel(params.channelAddress)
+              const participants = channelData.data.participants;
+              const commits = channelData.data.commits;
+
+              // Check if both participants (A and B) are full
+              const participantAFilled = participants.A && Object.keys(channelData.data.A).length > 0;
+              const participantBFilled = participants.B && Object.keys(channelData.data.B).length > 0;
+
+              // Check if sender is neither A nor B
+              const senderIsParticipantA = participants.A === senderAddress;
+              const senderIsParticipantB = participants.B === senderAddress;
+
+              // Invalidate if both participants are full and sender is neither A nor B
+              if (participantAFilled && participantBFilled && !senderIsParticipantA && !senderIsParticipantB) {
+                isValid = false;
+                reason = 'Both participants are full and the sender is not a participant.';
+              }
             if(!passes&&propertyData.whitelistId!=0){
              params.valid = false;
                     params.reason += `Sender address not listed in clearlist for the token`;

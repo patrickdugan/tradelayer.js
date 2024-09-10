@@ -196,10 +196,12 @@ class TallyMap {
             //console.log(`Data for address ${address}:`, addressObj);
             const balances = [];
             for (const propertyId in addressObj) {
+                const info = await PropertyList.getPropertyData(propertyId)
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
                     const balanceObj = addressObj[propertyId];
                     balances.push({
                         propertyId: propertyId,
+                        ticker: info.ticker,
                         amount: balanceObj.amount,
                         available: balanceObj.available,
                         reserved: balanceObj.reserved,

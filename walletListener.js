@@ -152,13 +152,21 @@ app.post('/tl_getAllBalancesForAddress', async (req, res) => {
     console.log('Trying to load balances for: ' + req.body.params);
 
     try {
-        const tallyMapInstance = await TallyMap.getInstance();
-        if (!tallyMapInstance) {
-            throw new Error("Failed to get TallyMap instance");
-        }
-        await tallyMapInstance.loadFromDB();
-        const balances = tallyMapInstance.getAddressBalances(req.body.params);
+        const balances = await TallyMap.getAddressBalances(req.body.params);
         res.status(200).json(balances);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_getChannel', async (req, res) => {
+    console.log('Trying to load balances for: ' + req.body.params);
+
+    try {
+
+        const channel = await Channels.getChannel(req.body.params);
+        res.status(200).json(channel);
     } catch (error) {
         console.error(error);
         res.status(500).send('Error: ' + error.message);
