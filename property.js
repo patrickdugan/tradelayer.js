@@ -221,9 +221,13 @@ class PropertyManager {
      */
     static async doesTickerExist(ticker) {
         // Ensure the property index is loaded before checking
-        await PropertyManager.load();
-
-        for (let [propertyId, propertyData] of this.propertyIndex.entries()) {
+        const index = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+        
+        // Parse the JSON string to get the actual array
+        const parsedIndex = JSON.parse(index.value);
+        
+        // Iterate over the parsed array to check for the ticker
+        for (let [propertyId, propertyData] of parsedIndex) {
             if (propertyData.ticker === ticker) {
                 return true;
             }
@@ -306,7 +310,9 @@ class PropertyManager {
                 }
 
                 // Check for integer-based property ID
-                const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
+                console.log('propertyId:', propertyId, 'type:', typeof propertyId);
+                const propertyEntry = parsedData.find(entry => Number(entry[0]) === Number(propertyId));
+                console.log('retrieving property data '+JSON.stringify(propertyEntry))
                 if (propertyEntry) {
                     return propertyEntry[1];
                 } else {

@@ -322,22 +322,25 @@ const Validity = {
             }
 
             const channelData =await Channels.getChannel(params.channelAddress)
-              const participants = channelData.data.participants;
-              const commits = channelData.data.commits;
+            if (channelData) {
+                console.log(JSON.stringify(channelData))
+              const participants = channelData.participants;
+              const commits = channelData.commits;
 
               // Check if both participants (A and B) are full
-              const participantAFilled = participants.A && Object.keys(channelData.data.A).length > 0;
-              const participantBFilled = participants.B && Object.keys(channelData.data.B).length > 0;
+              const participantAFilled = participants.A && Object.keys(channelData.A).length > 0;
+              const participantBFilled = participants.B && Object.keys(channelData.B).length > 0;
 
               // Check if sender is neither A nor B
-              const senderIsParticipantA = participants.A === senderAddress;
-              const senderIsParticipantB = participants.B === senderAddress;
+              const senderIsParticipantA = participants.A === sender;
+              const senderIsParticipantB = participants.B === sender;
 
               // Invalidate if both participants are full and sender is neither A nor B
               if (participantAFilled && participantBFilled && !senderIsParticipantA && !senderIsParticipantB) {
                 isValid = false;
-                reason = 'Both participants are full and the sender is not a participant.';
+                reason = 'Both participants are full and the sender is not a participant, try making a new multisig.';
               }
+            }
             if(!passes&&propertyData.whitelistId!=0){
              params.valid = false;
                     params.reason += `Sender address not listed in clearlist for the token`;
