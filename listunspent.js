@@ -17,13 +17,20 @@ const client = new litecoin.Client(clientConfig);
 // Promisify client functions for `listunspent` and `getaddressesbylabel`
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const getAddressesByLabelAsync = util.promisify(client.cmd.bind(client, 'getaddressesbylabel'));
+const getListReceivedByAddressAsync = util.promisify(client.cmd.bind(client, 'listreceivedbyaddress'))
 
 // Fetch UTXOs for all addresses in the wallet
 async function listUnspentForAllAddresses() {
+
+    const allAddresses = await getListReceivedByAddressAsync(0, true)
+
+        console.log('all addresses '+JSON.stringify(allAddresses))
+
     try {
         // Fetch all wallet addresses with a label (e.g., "" means all addresses)
         const label = ""; // Empty string means fetch all addresses
         const addressesByLabel = await getAddressesByLabelAsync(label);
+        
 
         const addresses = Object.keys(addressesByLabel);
 

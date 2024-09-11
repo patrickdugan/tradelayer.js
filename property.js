@@ -310,9 +310,9 @@ class PropertyManager {
                 }
 
                 // Check for integer-based property ID
-                console.log('propertyId:', propertyId, 'type:', typeof propertyId);
+                //console.log('propertyId:', propertyId, 'type:', typeof propertyId);
                 const propertyEntry = parsedData.find(entry => Number(entry[0]) === Number(propertyId));
-                console.log('retrieving property data '+JSON.stringify(propertyEntry))
+                //console.log('retrieving property data '+JSON.stringify(propertyEntry))
                 if (propertyEntry) {
                     return propertyEntry[1];
                 } else {

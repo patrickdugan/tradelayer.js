@@ -161,17 +161,26 @@ app.post('/tl_getAllBalancesForAddress', async (req, res) => {
 });
 
 app.post('/tl_getChannel', async (req, res) => {
-    console.log('Trying to load balances for: ' + req.body.params);
+    console.log('Trying to load channel for: ' + req.body.params);
 
     try {
-
+        // Fetch the channel information
         const channel = await Channels.getChannel(req.body.params);
-        res.status(200).json(channel);
+
+        // Handle the case where the channel is undefined or null (no channel exists)
+        if (!channel) {
+            return res.status(200).json({ message: 'No channel found for the given address', channel: null });
+        }
+
+        // If the channel exists, return it as a successful response
+        return res.status(200).json(channel);
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error: ' + error.message);
+        // Handle other unexpected errors and return a 500 status for genuine server-side issues
+        console.error('Error loading channel:', error);
+        return res.status(500).send('Error: ' + error.message);
     }
 });
+
 
 // Add OP_Return to tx blob
  app.post('/tl_createrawtx_opreturn', async (req, res) => {
@@ -363,17 +372,6 @@ app.get('/tl_oracleHistory', async (req, res) => {
         const { contractId } = req.query;
         const oracleHistory = await Oracles.getHistory(contractId);
         res.json(oracleHistory);
-    } catch (error) {
-        res.status(500).send('Error: ' + error.message);
-    }
-});
-
-// Get channel info
-app.get('/tl_getChannel', async (req, res) => {
-    try {
-        const { channelAddress } = req.query;
-        const channel = await Channels.getChannel(channelAddress);
-        res.json(channel);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
     }
