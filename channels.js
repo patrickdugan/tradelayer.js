@@ -148,12 +148,12 @@ class Channels {
     static async getChannel(channelId) {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
-        //console.log('inside getChannel '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
-        //console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
+        console.log('inside getChannel '+channelId+' '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
+        console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
             channel = this.channelsRegistry.get(channelId)
-            //console.log('in getChannel 2nd hit '+JSON.stringify(channel));
+            console.log('in getChannel 2nd hit '+JSON.stringify(channel));
         }
 
         return channel
@@ -343,7 +343,7 @@ class Channels {
     }
 
     static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, blockHeight) {
-
+        console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
           }
@@ -363,6 +363,7 @@ class Channels {
 
         // Get the channel from the registry
         const channel = this.channelsRegistry.get(channelAddress);
+        console.log(JSON.stringify(channel))
         // Determine the column for the sender address
         const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
 
@@ -386,7 +387,7 @@ class Channels {
         // Update the last commitment time and used column
         channel.lastCommitmentTime = blockHeight;
         channel.lastUsedColumn = channelColumn;
-
+        console.log(JSON.stringify(channel))
         // Save the updated channel information
         this.channelsRegistry.set(channelAddress,channel)
         await this.saveChannelsRegistry();

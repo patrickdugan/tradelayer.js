@@ -223,7 +223,12 @@ const Validity = {
             }
             if (!(Number.isInteger(params.amount) && params.amount > 0)) {
                 params.valid = false;
-                params.reason += 'Invalid amount; ';
+                params.reason += 'Invalid amount';
+            }
+
+            if(!amount||amount==0||isNaN(amount)){
+                params.valid = false;
+                params.reason += 'Invalid amount'
             }
 
             let has = await TallyMap.hasSufficientReserve(sender, params.propertyId, params.amount);
@@ -273,6 +278,14 @@ const Validity = {
                 params.reason += 'tokenOutput not an integer, defaulting to 3; ';
                 params.tokenOutput = 3;
                 params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
+            }
+
+            let channel = await Channels.getChannel(sender)
+            console.log ('utxo validity channel '+channel["A"][propertyId]+' '+channel["B"][propertyId])
+            if(!channel||(columnA==true&&!channel["A"][propertyId])||(columnA==false&&!channel["B"][propertyId])){
+                console.log('inside missing channel property trigger in validate UTXO '+columnA+' '+channel["A"][propertyId]+' '+channel["B"][propertyId])
+                params.valid=false
+                params.reason = 'No balance on the indicated channel and column'
             }
             console.log('inside validate UTXO trade '+JSON.stringify(params))
             return params;
@@ -1472,25 +1485,31 @@ const Validity = {
             }
 
             //const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender)
-
+            console.log('calling channel in validity for '+sender)
             const channel = await Channels.getChannel(sender)
+            console.log(JSON.stringify(channel) +' '+Boolean(!channel))
+            let balance =0 
             if(!channel){
                 params.valid = false;
                 params.reason += 'Sender is not a channel.';
+            }else{
+              const balanceA = channel.A[params.propertyId] || 0;
+              const balanceB = channel.B[params.propertyId] || 0;
+
+                let commiter = ''
+               
+                if(params.isColumnA){
+                    balance= balanceA
+                    commiter = channel.participants.A
+                }else if(!params.isColumnA){
+                    balance= balanceB
+                    commiter = channel.participants.B
+                }
+                console.log(JSON.stringify(channel))
+                console.log(balanceA,balanceB, params.amount, params.isColumnA, balance)
             }
-            const balanceA = channel.A[params.propertyId]
-            const balanceB = channel.B[params.propertyId]
-            let commiter = ''
-            let balance =0 
-            if(params.isColumnA){
-                balance= balanceA
-                commiter = channel.participants.A
-            }else if(!params.isColumnA){
-                balance= balanceB
-                commiter = channel.participants.B
-            }
-            console.log(JSON.stringify(channel))
-            console.log(balanceA,balanceB, params.amount, params.isColumnA)
+           
+            
             const hasSufficientBalance = Boolean(balance>=params.amount);
             if (!hasSufficientBalance) {
                 params.valid = false;

@@ -59,7 +59,8 @@ const Encode = {
 
 
     encodeTradeTokenForUTXO: (params) => {
-        const payload = [
+        const amount = new BigNumber(params.amountOffered).times(1e8).toNumber();
+            const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
             params.columnA,
@@ -72,6 +73,7 @@ const Encode = {
 
     // Encode Commit Token Transaction
     encodeCommit: (params) => {
+        const amount = new BigNumber(params.amount).times(1e8).toNumber();
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
@@ -195,9 +197,10 @@ const Encode = {
 
     // Encode Grant Managed Token Transaction
     encodeGrantManagedToken:(params) => {
+      const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
       const payload = [
         params.propertyid.toString(36),
-        params.amountGranted.toString(36),
+        amountGranted.toString(36),
         params.addressToGrantTo,
       ];
       return payload.join(',');
@@ -205,9 +208,10 @@ const Encode = {
 
     // Encode Redeem Managed Token Transaction
     encodeRedeemManagedToken:(params) => {
+      const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
       const payload = [
         params.propertyid.toString(36),
-        params.amountGranted.toString(36),
+        amountGranted.toString(36),
         params.addressToGrantTo,
       ];
       return payload.join(',');
@@ -298,11 +302,13 @@ const Encode = {
 
     // Encode Trade Tokens in Channel Transaction
     encodeTradeTokensChannel: (params) => {
+        const amountOffered = new BigNumber(params.amountOffered1).times(1e8).toNumber();
+        const amountDesired = new BigNumber(params.amountDesired2).times(1e8).toNumber();
         const payload = [
             params.propertyId1.toString(36),
             params.propertyId2.toString(36),
-            params.amountOffered1.toString(36),
-            params.amountDesired2.toString(36),
+            amountOffered.toString(36),
+            amountDesired.toString(36),
             params.columnAIsOfferer ? '1':'0',
             params.expiryBlock.toString(36),
         ];
@@ -311,9 +317,9 @@ const Encode = {
 
     // Encode Withdrawal Transaction
     encodeWithdrawal: (params) => {
+        const amounts = new BigNumber(params.amountOffered).times(1e8).toNumber().toString();
         const withdrawAll = params.withdrawAll
         const propertyIds = params.propertyId.toString(36)/*.map(id => id.toString(36)).join(';')*/;
-        const amounts = params.amount.toString(36)/*.map(amount => amount.toString(36)).join(';')*/;
         const column = params.column //0 is A, 1 is B
         return [withdrawAll, propertyIds, amounts, column, params.channelAddress].join(',');
     },
@@ -321,7 +327,7 @@ const Encode = {
     // Encode Transfer Transaction
     encodeTransfer: (params) => {
         const propertyId = params.propertyId.toString(36);
-        const amounts = params.amount.toString(36)
+        const amounts = new BigNumber(params.amount).times(1e8).toNumber();
         const isColumnA = params.isColumnA
         const destinationAddr = params.destinationAddr
         return [propertyId, amounts, isColumnA, destinationAddr].join(',');
