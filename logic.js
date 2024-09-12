@@ -408,8 +408,8 @@ const Logic = {
             //the tokens exist both as channel object balances and reserve balance on the channel address, which is the sender
             //So we debit there and then credit them to the token delivery address, which we took in the parsing
             //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
-            await TallyMap.updateBalance(senderAddress,propertyId,0,-tokensToDeliver,0,0,'UTXOTokenTradeDebit')
-            await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit')
+            await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
+            await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
             const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
             await VolumeIndex.saveVolumeDataById(key,satsReceived,price,block,'UTXO')
@@ -461,7 +461,7 @@ const Logic = {
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 
         // Add tokens to the channel's balance
-        await TallyMap.updateBalance(channelAddress, propertyId, 0, tokenAmount, 0, 0,'channelReceive',block);
+        await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
 
         // Determine which column (A or B) to assign the tokens in the channel registry
         await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, block);
@@ -876,8 +876,8 @@ const Logic = {
         } else {
             toChannel.participants[channelColumn] = fromChannel.participants['B'];
         }
-        TallyMap.updateBalance(fromChannelAddress, propertyId, 0, -amount, 0, 0, 'transferDebit', block)
-        TallyMap.updateBalance(toChannelAddress, propertyId, 0, amount, 0, 0, 'transferCredit', block)
+        TallyMap.updateChannelBalance(fromChannelAddress, propertyId, -amount,'transferDebit', block)
+        TallyMap.updateChannelBalance(toChannelAddress, propertyId, amount, 'transferCredit', block)
 
         // Save updated channel states back to the registry
         Channels.channelsRegistry.set(fromChannelAddress, fromChannel);   

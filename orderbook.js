@@ -545,21 +545,20 @@ class Orderbook {
                         0, 0,'tokenTrade',blockHeight);
 
                 if(channel==true){
-
-                    await TallyMap.updateBalance(
+                    await TallyMap.updateChannelBalance(
                         match.channel,
                         match.sellOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -match.amountOfTokenA, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight
+                        -match.amountOfTokenA,
+                        'tokenTrade',
+                        blockHeight
                     );
 
-                    await TallyMap.updateBalance(
+                    await TallyMap.updateChannelBalance(
                         match.channel,
                         match.buyOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -match.amountOfTokenB, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight);
+                        -match.amountOfTokenB,
+                        'tokenTrade',
+                        blockHeight);
 
                 }else{
                     // Debit the traded amount from the seller's reserve 

@@ -154,6 +154,9 @@ class Channels {
             await this.loadChannelsRegistry();
             channel = this.channelsRegistry.get(channelId)
             console.log('in getChannel 2nd hit '+JSON.stringify(channel));
+            if(!channel){
+              channel=null
+            }
         }
 
         return channel
@@ -576,7 +579,7 @@ class Channels {
       console.log(amount, has.shortfall)
       channel[column][propertyId] -= amount;
       console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
-      await TallyMap.updateBalance(channel.channel, propertyId, 0, -amount, 0, 0, 'channelWithdrawalPull',block)
+      await TallyMap.updateChannelBalance(channel.channel, propertyId, -amount, 'channelWithdrawalPull',block)
       await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete',block)
       this.channelsRegistry.set(channel.channel, channel);
       return

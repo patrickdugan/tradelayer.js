@@ -135,6 +135,12 @@ class TallyMap {
 
             // Update the total amount
             addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
+
+            if (typeof addressObj[propertyId].channelBalance === 'undefined') {
+                addressObj[propertyId].channelBalance = 0;
+            }
+
+
             if(availableChange==0&&reservedChange==0&&marginChange==0&&vestingChange==0){
 
             }else{
@@ -143,6 +149,57 @@ class TallyMap {
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
+        }
+
+        static async updateChannelBalance(address, propertyId, channelChange, type,block) {
+            const instance = await this.getInstance();
+            
+            // Initialize the address if it doesn't exist
+            if (!instance.addresses.has(address)) {
+                instance.addresses.set(address, {});
+            }
+            const addressObj = instance.addresses.get(address);
+            
+            // Initialize the propertyId if it doesn't exist
+            if (!addressObj[propertyId]) {
+                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0, channelBalance: 0 };
+            }
+            
+            // Handle undefined channel balance and set it to 0 if necessary
+            if (typeof addressObj[propertyId].channelBalance === 'undefined') {
+                addressObj[propertyId].channelBalance = 0;
+            }
+            
+            // Update channel balance
+            const originalChannelBalance = new BigNumber(addressObj[propertyId].channelBalance);
+            const newChannelBalance = originalChannelBalance.plus(channelChange);
+            
+            if (newChannelBalance.isLessThan(0)) {
+                throw new Error(`Channel balance cannot go negative for property ${propertyId}`);
+            }
+
+            // Update the channel balance
+            addressObj[propertyId].channelBalance = newChannelBalance.toNumber();
+
+            // Record the channel balance change
+            if (channelChange !== 0) {
+                await TallyMap.recordTallyMapDelta(
+                    address, 
+                    block, 
+                    propertyId, 
+                    addressObj[propertyId].amount, 
+                    0, // No change in available
+                    0, // No change in reserved
+                    0, // No change in margin
+                    0, // No change in vesting
+                    channelChange, 
+                    type
+                );
+            }
+
+            // Save the updated object back to the map
+            instance.addresses.set(address, addressObj);
+            await instance.saveToDB(); // Save the updated balance to the database
         }
 
 
