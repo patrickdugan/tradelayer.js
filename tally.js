@@ -264,7 +264,8 @@ class TallyMap {
                         available: balanceObj.available,
                         reserved: balanceObj.reserved,
                         margin: balanceObj.margin,
-                        vesting: balanceObj.vesting
+                        vesting: balanceObj.vesting,
+                        channel: balanceObj.channel
                     });
                 }
             }
