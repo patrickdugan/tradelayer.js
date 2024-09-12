@@ -502,7 +502,7 @@ class TallyMap {
     }
 
     // Function to record a delta
-    static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, type){
+    static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, type){
         const newUuid = uuid.v4();
         const db = dbInstance.getDatabase('tallyMapDelta');
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
