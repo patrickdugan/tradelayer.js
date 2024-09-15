@@ -18,7 +18,7 @@ const client = new litecoin.Client(clientConfig);
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const getAddressesByLabelAsync = util.promisify(client.cmd.bind(client, 'getaddressesbylabel'));
 const getListReceivedByAddressAsync = util.promisify(client.cmd.bind(client, 'listreceivedbyaddress'))
-
+const getMempool = util.promisify(client.cmd.bind(client, 'getrawmempool'))
 // Fetch UTXOs for all addresses in the wallet
 async function listUnspentForAllAddresses() {
 
@@ -28,7 +28,7 @@ async function listUnspentForAllAddresses() {
 
     try {
         // Fetch all wallet addresses with a label (e.g., "" means all addresses)
-        const label = ""; // Empty string means fetch all addresses
+        const label = "tl-wallet"; // Empty string means fetch all addresses
         const addressesByLabel = await getAddressesByLabelAsync(label);
         
 
@@ -55,6 +55,8 @@ async function listUnspentForAllAddresses() {
                 console.log(`No UTXOs available for address: ${address}`);
             }
         }
+        const mempool = await getMempool(true)
+        console.log('checking mempool '+JSON.stringify(mempool))
     } catch (error) {
         console.error('Error fetching addresses or UTXOs:', error);
     }

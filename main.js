@@ -28,6 +28,8 @@ const Clearing = require('./clearing.js')
 const Channels = require('./channels.js')
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractsRegistry = require('./contractRegistry.js'); // Registry for contracts
+const VolumeIndex = require('./volumeIndex.js')
+const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Activation = require('./activation.js')
 const activationInstance = Activation.getInstance()
@@ -224,7 +226,6 @@ class Main {
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 //await AMM.updateOrdersForAllContractAMMs(blockHeight);
-
                 if (txByBlockHeight[blockHeight]) {
                     for (const txData of txByBlockHeight[blockHeight]) {
                         console.log('tx data '+txData)
@@ -274,7 +275,11 @@ class Main {
                         }
                     }
                 }
-
+                const cumVolumes = await VolumeIndex.getCumulativeVolumes()
+                const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
+                const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
+                const applyVesting = await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
+                const applyVesting = await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
                 await Channels.processWithdrawals(blockHeight);
                 await Clearing.clearingFunction(blockHeight);
                 maxProcessedHeight = blockHeight;
@@ -471,6 +476,12 @@ class Main {
     the main tx processing. But since I've stuck the clearing function, channel removal and others in the constructConsensus function
     this is currently also redundant */
     async blockHandlerEnd(blockHash, blockHeight) {
+
+        const cumVolumes = await VolumeIndex.getCumulativeVolumes()
+        const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
+        const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
+        const applyVesting = await TallyMap.applyVesting(2,updateVesting.two,block)
+        const applyVesting = await TallyMap.applyVesting(3,updateVesting.three,block)
         //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
 

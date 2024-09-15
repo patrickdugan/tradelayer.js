@@ -265,7 +265,7 @@ class TallyMap {
                         reserved: balanceObj.reserved,
                         margin: balanceObj.margin,
                         vesting: balanceObj.vesting,
-                        channel: balanceObj.channel
+                        channel: balanceObj.channelBalance
                     });
                 }
             }
@@ -605,8 +605,12 @@ class TallyMap {
      * @param {number} propertyId - The property ID to check balances for.
      * @return {Array} - An array of addresses that have a balance for the specified property.
      */
-    static getAddressesWithBalanceForProperty(propertyId) {
+    static async getAddressesWithBalanceForProperty(propertyId) {
         const addressesWithBalances = [];
+
+        if(!this.addresses){
+            this.loadFromDB()
+        }
 
             for (const [address, balances] of this.addresses.entries()) {
                 if (balances[propertyId]) {
@@ -615,7 +619,10 @@ class TallyMap {
                         addressesWithBalances.push({
                             address: address,
                             amount: balanceInfo.amount,
-                            reserved: balanceInfo.reserved
+                            reserved: balanceInfo.reserved,
+                            margin: balanceInfo.margin,
+                            vesting: balanceInfo.vesting,
+                            channel: balanceInfo.channel
                         });
                     }
                 }

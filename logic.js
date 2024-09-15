@@ -224,7 +224,7 @@ const Logic = {
             } else {
                 // Special handling for TLVEST (Property ID 2)
                 //console.log('propertyIdnumbers ' +propertyIdNumbers)
-                    if (propertyIdNumbers == 2) {
+                    if (propertyIdNumbers == 2||propertyIdNumbers==3) {
                         console.log('vesting single send '+senderAddress)
                         // Get TLVEST and TL balances for the sender
                         const tlVestTally = await TallyMap.getTally(senderAddress, 2);
@@ -238,11 +238,11 @@ const Logic = {
                         // Calculate the amount of TL to move from vesting to available
                         const tlVestingMovement = tlTally.vesting * proportion;
 
-                        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend',block);
-                        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingReceive',block);
+                        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, -amounts, 0, 0, 0,'vestingSend',block);
+                        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, amounts, 0, 0, 0,'vestingReceive',block);
 
-                        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
-                        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
+                        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
+                        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send, block '+block)
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts,block);
@@ -275,8 +275,8 @@ const Logic = {
         await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend',block);
         await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingSend',block);
 
-        await TallyMap.updateBalance(senderAddress, 1, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
-        await TallyMap.updateBalance(recipientAddresses, 1, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
+        await TallyMap.updateBalance(senderAddress, 2, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
+        await TallyMap.updateBalance(recipientAddresses, 2, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
         return
     },
 
@@ -839,11 +839,8 @@ const Logic = {
 
 	withdrawal(withdrawAll, channelAddress, propertyId, amount, sender, block, columnIsB) {
 		    const channel = Channels.getChannel(channelAddress);
-	
-		    // Assuming channel object has a map of property balances
-		  
+		    // Assuming channel object has a map of property balances		  
             Channels.addToWithdrawalQueue(block, sender, amount, channelAddress,propertyId, withdrawAll, columnIsB)
-
             return
 	},
 

@@ -199,6 +199,33 @@ class VolumeIndex {
         };
     }
 
+    static async getBlockVolumes(blockHeight) {
+        try {
+            // Query the VolumeIndex.db for trades with the given blockHeight
+            const trades = await db.getDatabase('volumeIndex').findAsync({ 
+                "value.blockHeight": blockHeight
+            });
+
+            // If no trades are found, return 0
+            if (!trades || trades.length === 0) {
+                return 0;
+            }
+
+            // Sum the total volume from the trades found
+            let totalVolume = new BigNumber(0);
+            trades.forEach(trade => {
+                const tradeVolume = new BigNumber(trade.value.volume);
+                totalVolume = totalVolume.plus(tradeVolume);
+            });
+
+            // Return the total volume for the block
+            return totalVolume.toNumber();
+        } catch (error) {
+            console.error(`Error fetching block volumes for block ${blockHeight}:`, error);
+            throw new Error(`Failed to fetch block volumes for block ${blockHeight}`);
+        }
+    }
+
 
 
     static async getVolumeDataById(id) {
