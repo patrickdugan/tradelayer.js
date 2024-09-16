@@ -34,17 +34,18 @@ class TradeLayerManager {
          
         if (!alreadyInitialized) {
             var TLTokenId = 1;
-            const TLTotalAmount = 1500000;
-
+            const TLTotalAmount = 500000;
             var TLVESTTokenId = 2;
-            const TLVESTTotalAmount = 1250000;
-            var amountToInsuranceFund = 250000;
-            const TLInitialLiquidity = 250000;
+            const TLVESTTotalAmount = 250000;
+            var amountToInsuranceFund = 150000;
+            const TLInitialLiquidity = 100000;
             const TLVESTReserve = TLTotalAmount-amountToInsuranceFund-TLInitialLiquidity
             const propertyManager = PropertyManager.getInstance()
             TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed', 0);
             TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting',0);
-            
+            const TLIVESTToken = await propertyManager.createToken('TLIVEST', 1500000, 'Vesting', 0)
+            const TLI = await propertyManager.createToken('TLI', 1500001, 'Native',0)
+
             const hedgeParams = {
                 native: true,
                 underlyingOracleId: 0,
@@ -68,12 +69,13 @@ class TradeLayerManager {
             console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId, TLVESTLIQId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)
             // Distribute initial amount to insurance fund
-            insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
             
             await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, 0);
-            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, TLVESTReserve);
-            
+            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount, 0, 0, TLVESTTotalAmount);
+            await TallyMap.updateBalance(this.adminAddress, TLIVESTToken, 1500000, 0,0, 1500000)
+            await TallyMap.updateBalance(this.adminAddress, TLI, 1,0,0,0)
+
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
             //await initializeContractSeries()

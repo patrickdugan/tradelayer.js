@@ -229,27 +229,11 @@ const Logic = {
                 //console.log('propertyIdnumbers ' +propertyIdNumbers)
                     if (propertyIdNumbers == 2||propertyIdNumbers==3) {
                         console.log('vesting single send '+senderAddress)
-                        // Get TLVEST and TL balances for the sender
-                        const tlVestTally = await TallyMap.getTally(senderAddress, 2);
-                        const tlTally = await TallyMap.getTally(senderAddress, 1);
-
-                       // console.log('tallys for vesting '+ JSON.stringify(tlVestTally)+' '+JSON.stringify(tlTally))
-
-                        // Calculate the proportion of TLVEST being moved
-                        const proportion = amounts / tlVestTally.available;
-
-                        // Calculate the amount of TL to move from vesting to available
-                        const tlVestingMovement = tlTally.vesting * proportion;
-
-                        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, -amounts, 0, 0, 0,'vestingSend',block);
-                        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, amounts, 0, 0, 0,'vestingReceive',block);
-
-                        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
-                        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
+                        await this.vestingSend(senderAddress,recipientAddresses,propertyIdNumbers,amounts,block)
                     }else if(propertyIdNumbers!=undefined){
                         console.log('vanilla single send, block '+block)
                         await this.sendSingle(senderAddress, recipientAddresses, propertyIdNumbers, amounts,block);
-                }
+                    }
             }
         }
 
@@ -264,30 +248,30 @@ const Logic = {
         const BigNumber = require('bignumber.js');
 
             // Ensuring amount is a whole number
-            const roundedAmount = new BigNumber(amount).integerValue(BigNumber.ROUND_DOWN);
+            const roundedAmount = new BigNumber(amounts).integerValue(BigNumber.ROUND_DOWN);
 
             if (roundedAmount.isLessThanOrEqualTo(0)) {
                 throw new Error("Amount must be greater than zero");
             }
 
-        const tlVestTally = await TallyMap.getTally(senderAddress, 2);
-        const tlTally = await TallyMap.getTally(senderAddress, 1);
+        const tlVestTally = await TallyMap.getTally(senderAddress, propertyIdNumbers);
 
         // Calculate the amount of TL to move from vesting to available
-        const tlVestingMovement = calculateVestingMovement(amounts, tlVestTally,tlTally)
-        await TallyMap.updateBalance(senderAddress, 2, -amounts, 0, 0, 0,'vestingSend',block);
-        await TallyMap.updateBalance(recipientAddresses, 2, amounts, 0, 0, 0,'vestingSend',block);
+        const tlVestingMovement = this.calculateVestingMovement(amounts, tlVestTally)
 
-        await TallyMap.updateBalance(senderAddress, 2, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
-        await TallyMap.updateBalance(recipientAddresses, 2, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
+        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, -amounts, 0, 0, 0,'vestingSend',block);
+        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, amounts, 0, 0, 0,'vestingSend',block);
+
+        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
+        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
         return
     },
 
-    calculateVestingMovement(amount, tlVestTally, tlTally) {
+    calculateVestingMovement(amount, tlVestTally) {
     // Convert all values to BigNumber for accurate calculation
         const amountBN = new BigNumber(amount);
         const tlVestAvailableBN = new BigNumber(tlVestTally.available);
-        const tlVestingBN = new BigNumber(tlTally.vesting);
+        const tlVestingBN = new BigNumber(tlVestTally.vesting);
 
         // Calculate the proportion of TLVEST being moved
         // Using BigNumber's division method for precision
@@ -296,7 +280,7 @@ const Logic = {
         // Calculate the amount of TL to move from vesting to available
         // Ensure result is rounded down to avoid fractional vesting movement
         const tlVestingMovementBN = tlVestingBN.multipliedBy(proportionBN).integerValue(BigNumber.ROUND_DOWN);
-
+        console.log('inside calc vesting mov '+tlVestingMovementBN+' '+tlVestingBN+' '+proportionBN+' '+amountBN+' '+tlVestAvailableBN+' '+amount+' '+tlVestTally.available+' '+tlVestTally.vesting)
         return tlVestingMovementBN.toString(); // Convert back to string for further processing
     },
 

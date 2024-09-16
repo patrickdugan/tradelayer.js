@@ -91,12 +91,12 @@ const Validity = {
                 params.reason += 'Ticker cannot start with "s"; ';
             }
 
-            if (params.type === 'native' && params.propertyId !== 1) {
+            if (params.type === 'native' && (params.propertyId !== 1||params.propertyId !==4)) {
                 params.valid=false
                 params.reason += 'Invalid property ID for native type; ';
             }
 
-            if (params.type === 'vesting' && params.propertyId !== 2) {
+            if (params.type === 'vesting' && (params.propertyId !== 2||params.propertyId !==3)){
                 params.valid=false
                 params.reason += 'Invalid property ID for vesting type; ';
             }

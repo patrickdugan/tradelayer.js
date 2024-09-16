@@ -44,7 +44,7 @@ class TallyMap {
     }
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block) {
-            //console.log('inside updateBalance for '+propertyId+' '+availableChange)
+            console.log('inside updateBalance for '+address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block)
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
@@ -144,7 +144,7 @@ class TallyMap {
             if(availableChange==0&&reservedChange==0&&marginChange==0&&vestingChange==0){
 
             }else{
-                await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, type) 
+                await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, 0, type) 
             }
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -508,9 +508,9 @@ class TallyMap {
         const db = dbInstance.getDatabase('tallyMapDelta');
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
-        const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, type };
+        const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type };
         
-        //console.log('saving delta ' + JSON.stringify(delta));
+        console.log('saving delta ' + JSON.stringify(delta));
 
         try {
             // Try to find an existing document based on the key
@@ -611,7 +611,7 @@ class TallyMap {
         try {
             // Query the database for addresses containing the given propertyId
             const results = await dbInstance.getDatabase('tallyMap').findAsync({ [`balances.${propertyId}`]: { $exists: true } });
-            console.log('checking get all address for property '+JSON.stringify(results))
+            console.log('checking get all address for property '+propertyId+' '+JSON.stringify(results))
             // Iterate over the results and extract the balances for each address
             for (const result of results) {
                 const balanceInfo = result.balances[propertyId];

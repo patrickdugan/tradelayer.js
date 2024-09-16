@@ -99,7 +99,7 @@ const Decode = {
     // Decode Trade Token for UTXO Transaction
     decodeTradeTokenForUTXO: (payload) => {
         const parts = payload.split(',');
-        const amount =  new BigNumber(parts[1], 36).div(1e8).toNumber()
+        const amount = new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
         console.log('amount in UTXO trade decode '+amount)
         return {
             propertyId: Decode.decodePropertyId(parts[0]),
@@ -116,7 +116,7 @@ const Decode = {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0]),
-            amount: new BigNumber(parts[1], 36).div(1e8).toNumber(),
+            amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             channelAddress: parts[2]
         };
     },
@@ -127,8 +127,8 @@ const Decode = {
         return {
             propertyIdOffered: Decode.decodePropertyId(parts[0]),
             propertyIdDesired: Decode.decodePropertyId(parts[1]),
-            amountOffered: new BigNumber(parts[2], 36).div(1e8).toNumber(), // Divide by 100 million
-            amountExpected: new BigNumber(parts[3], 36).div(1e8).toNumber(), // Divide by 100 million
+            amountOffered: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), // Divide by 100 million
+            amountExpected: new BigNumber(parts[3], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), // Divide by 100 million
             stop: parts[4] === "1",
             post: parts[5] === "1",
         };
@@ -169,8 +169,8 @@ const Decode = {
                 // It's a non-contract cancellation with additional parameters
                 cancelParams.txid = elements[4];
             } else {
-                const priceDecoded = new BigNumber(elements[3]).dividedBy(8).toNumber(); // Decode and divide by 8
-                cancelParams.price = priceDecoded;   cancelParams.side = elements[5];
+                const priceDecoded = new BigNumber(elements[3]).dividedBy(8).toNumber() // Decode and divide by 8
+                cancelParams.price = priceDecoded;   cancelParams.side = elements[5]
                 if(cancelParams.side==1){
                   cancelParams.side=true
                 }else{
@@ -243,7 +243,7 @@ const Decode = {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0]),
-            amountGranted: new BigNumber(parts[1], 36).div(1e8).toNumber(),
+            amountGranted: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             addressToGrantTo: parts[2]
         };
     },
@@ -253,7 +253,7 @@ const Decode = {
       const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parse[0]),
-            amountDestroyed: new BigNumber(parts[1], 36).div(1e8).toNumber()
+            amountDestroyed: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
         };
     },
 
@@ -368,8 +368,8 @@ const Decode = {
     return {
       propertyIdOffered: Decode.decodePropertyId(parts[0]),
       propertyIdDesired: Decode.decodePropertyId(parts[1]),
-      amountOffered: new BigNumber(parts[2], 36).div(1e8).toNumber(),
-      amountDesired: new BigNumber(parts[3], 36).div(1e8).toNumber(),
+      amountOffered: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+      amountDesired: new BigNumber(parts[3], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
       columnAIsOfferer: parts[4] === '1',
       expiryBlock: parseInt(parts[5], 36),
     };
@@ -381,7 +381,7 @@ const Decode = {
     return {
       withdrawAll: parts[0]==="1",
       propertyId: Decode.decodePropertyId(parts[1]),
-      amount: new BigNumber(parts[1], 36).div(1e8).toNumber(),
+      amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
       column: parts[3]==="1",
       channelAddress: parts[4],
     };
@@ -392,7 +392,7 @@ const Decode = {
     const parts = payload.split(',');
     return {
       propertyId: Decode.decodePropertyId(parts[0]),
-      amount: new BigNumber(parts[1], 36).div(1e8).toNumber(),
+      amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
       isColumnA: parts[2]==="1",
       toChannelAddress: parts[3],
     };
@@ -406,7 +406,7 @@ const Decode = {
       contractId: parseInt(parts[1], 36),
       amountCancelled: parseInt(parts[2], 36),
       propertyId: Decode.decodePropertyId(parts[3]),
-      amountSettled: new BigNumber(parts[4], 36).div(1e8).toNumber(),
+      amountSettled: new BigNumber(parts[4], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
       close: parts[5] === '1',
       propertyId2: parts[6] ? Decode.decodePropertyId(parts[6]) : null,
       amountDelivered: parts[7] ? new BigNumber(parts[7], 36).div(1e8).toNumber() : null,
@@ -419,7 +419,7 @@ const Decode = {
     return {
       propertyId: Decode.decodePropertyId(parts[0]),
       contractId: parseInt(parts[1], 36),
-      amount: new BigNumber(parts[2], 36).div(1e8).toNumber(),
+      amount: parseInt(parts[2], 36),
     };
   },
 
@@ -429,7 +429,7 @@ const Decode = {
     return {
       propertyId: parseInt(parts[0], 36),
       contractId: parseInt(parts[1], 36),
-      amount: new BigNumber(parts[2], 36).div(1e8).toNumber(),
+      amount: parseInt(parts[2], 36),
     };
   },
 
@@ -439,7 +439,7 @@ const Decode = {
     return {
       propertyIdTarget: parseInt(parts[0], 36),
       propertyIdUsed: parseInt(parts[1], 36),
-      amount: new BigNumber(parts[2], 36).div(1e8).toNumber(),
+      amount: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
     };
   },
 
