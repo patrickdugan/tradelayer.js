@@ -608,27 +608,71 @@ class TallyMap {
     static async getAddressesWithBalanceForProperty(propertyId) {
         const addressesWithBalances = [];
 
-        if(!this.addresses){
-            this.loadFromDB()
-        }
-
-            for (const [address, balances] of this.addresses.entries()) {
-                if (balances[propertyId]) {
-                    const balanceInfo = balances[propertyId];
-                    if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
-                        addressesWithBalances.push({
-                            address: address,
-                            amount: balanceInfo.amount,
-                            reserved: balanceInfo.reserved,
-                            margin: balanceInfo.margin,
-                            vesting: balanceInfo.vesting,
-                            channel: balanceInfo.channel
-                        });
-                    }
+        try {
+            // Query the database for addresses containing the given propertyId
+            const results = await dbInstance.getDatabase('addresses').findAsync({ [`balances.${propertyId}`]: { $exists: true } });
+            console.log('checking get all address for property '+JSON.stringify(results))
+            // Iterate over the results and extract the balances for each address
+            for (const result of results) {
+                const balanceInfo = result.balances[propertyId];
+                if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
+                    addressesWithBalances.push({
+                        address: result.address,
+                        amount: balanceInfo.amount,
+                        reserved: balanceInfo.reserved,
+                        margin: balanceInfo.margin,
+                        vesting: balanceInfo.vesting,
+                        channel: balanceInfo.channel
+                    });
                 }
             }
+        } catch (error) {
+            console.error('Error querying addresses with balance for propertyId:', propertyId, error);
+        }
 
-            return addressesWithBalances;
+        return addressesWithBalances;
+    }
+
+
+    static async applyVesting(propertyId, vestingAmount, block) {
+        // Get the list of addresses with balances for the given propertyId
+        const addressesWithBalances = await this.getAddressesWithBalanceForProperty(propertyId);
+        const propertyInfo = await PropertyList.getPropertyData(propertyId)
+        // Retrieve the total number of tokens for the propertyId from the propertyList
+        const totalTokens = propertyInfo.totalInCirculation;
+
+        // Iterate over each address to apply the vesting amount
+        for (const balanceInfo of addressesWithBalances) {
+            const { address, amount, reserved } = balanceInfo;
+
+            // Calculate the total balance for this address (amount + reserved)
+            const totalBalanceForAddress = new BigNumber(amount).plus(reserved);
+
+            // Calculate the percentage this balance represents of the total tokens
+            const percentageOfTotalTokens = totalBalanceForAddress.dividedBy(totalTokens);
+
+            // Apply the vesting amount proportionally to this address
+            const vestingShare = vestingAmount.multipliedBy(percentageOfTotalTokens);
+
+            // Depending on propertyId, apply the vesting rules:
+            if (propertyId === 2) {
+                // Move tokens from vesting in propertyId 2 to available in propertyId 1
+                await this.updateBalance(
+                    address, 2, 0, 0, 0, vestingShare.negated().toNumber(), 'vestingDebit', block // Debit vesting from propertyId 2
+                );
+                await this.updateBalance(
+                    address, 1, vestingShare.toNumber(), 0, 0, 0, 'vestingCredit', block // Credit available in propertyId 1
+                );
+            } else if (propertyId === 3) {
+                // Move tokens from vesting in propertyId 3 to available in propertyId 4
+                await this.updateBalance(
+                    address, 3, 0, 0, 0, vestingShare.negated().toNumber(), 'vestingDebit', block // Debit vesting from propertyId 3
+                );
+                await this.updateBalance(
+                    address, 4, vestingShare.toNumber(), 0, 0, 0, 'vestingCredit', block // Credit available in propertyId 4
+                );
+            }
+        }
     }
 }
 

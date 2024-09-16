@@ -10,8 +10,6 @@ const util = require('util')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
 //const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
-//const VolumeIndex = require('./VolumeIndex.js'); // Tracks and indexes trading volumes
-const TradeLayerManager = require('./vesting.js'); // Handles vesting logic
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
 // Additional modules
@@ -278,8 +276,11 @@ class Main {
                 const cumVolumes = await VolumeIndex.getCumulativeVolumes()
                 const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
                 const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
-                const applyVesting = await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
-                const applyVesting = await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
+                //console.log('update Vesting in block' +blockHeight+ ' '+updateVesting )
+                if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){
+                    await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
+                    await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
+                }
                 await Channels.processWithdrawals(blockHeight);
                 await Clearing.clearingFunction(blockHeight);
                 maxProcessedHeight = blockHeight;
@@ -480,8 +481,8 @@ class Main {
         const cumVolumes = await VolumeIndex.getCumulativeVolumes()
         const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
         const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
-        const applyVesting = await TallyMap.applyVesting(2,updateVesting.two,block)
-        const applyVesting = await TallyMap.applyVesting(3,updateVesting.three,block)
+        await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
+        await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
         //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
 

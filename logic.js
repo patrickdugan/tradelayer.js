@@ -31,6 +31,9 @@ const db = require('./db.js'); // Adjust the path if necessary
 const BigNumber = require('bignumber.js')
 const VolumeIndex = require('./volumeIndex.js')
 const SynthRegistry = require('./vaults.js')
+const TradeHistory = require('./tradeHistoryManager.js')
+
+
 // logic.js
 const Logic = {
     //here we have a kinda stupid structure where instead of passing the params obj. I break it down into its sub-properties
@@ -51,7 +54,7 @@ const Logic = {
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
                 break;
             case 3:
-                //console.log('about to call utxo trade logic '+JSON.stringify(params))
+                console.log('about to call utxo trade logic '+JSON.stringify(params))
                 await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.block, params.txid);
                 break;
             case 4:
@@ -375,6 +378,7 @@ const Logic = {
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
         const satsExpectedBigNumber = new BigNumber(satsExpected);
         const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
+        const tradeHistoryManager = new TradeHistory()
 
         const tokensToDeliver = tokenAmount
             //console.log('values in utxo logic '+tokenAmount+' '+decodedTokenAmountBigNumber+' '+satsExpected+' '+satsExpectedBigNumber+' '+satsReceived+' '+receiverLTCReceivedBigNumber)
@@ -427,7 +431,7 @@ const Logic = {
             const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
             const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
             let isTokenListed = false
-            if(propertyId.startsWith('s-')){
+            if (String(propertyId).startsWith('s-')) {
                 isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
                                     // and then look up if those tokens are listed
             }else{

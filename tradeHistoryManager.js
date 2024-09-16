@@ -377,6 +377,34 @@ async calculateLIFOEntry(address, amount, contractId) {
       console.log(`Position History for Address ${address} and Contract ID ${contractId}:`);
       console.table(positionHistory);
     }
+
+    async saveTrade(tradeRecord) {
+            const tradeDB = dbInstance.getDatabase('tradeHistory');
+
+            const uuid = uuidv4();
+
+            // Use the key provided in the trade record for storage
+            const tradeId = `${tradeRecord.key}-${uuid}-${tradeRecord.blockHeight}`;
+
+            // Construct the document to be saved
+            const tradeDoc = {
+                _id: tradeId,
+                ...tradeRecord
+            };
+
+            // Save or update the trade record in the database
+            try {
+                await tradeDB.updateAsync(
+                    { _id: tradeId },
+                    tradeDoc,
+                    { upsert: true }
+                );
+                //console.log(`Trade record saved successfully: ${tradeId}`);
+            } catch (error) {
+                //console.error(`Error saving trade record: ${tradeId}`, error);
+                throw error; // Rethrow the error for handling upstream
+            }
+    }
 }
 
 module.exports = TradeHistory;

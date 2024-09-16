@@ -111,7 +111,7 @@ class Orderbook {
                 //console.error(`Error saving trade record: ${tradeId}`, error);
                 throw error; // Rethrow the error for handling upstream
             }
-    }
+        }
 
         // Retrieve token trading history by propertyId pair
         static async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {

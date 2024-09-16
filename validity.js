@@ -208,7 +208,7 @@ const Validity = {
         validateTradeTokenForUTXO: async (sender, params, txid,outputs) => {
             params.reason = '';
             params.valid = true;
-            console.log('inside validate UTXO trade '+JSON.stringify(params))
+            console.log('inside validate UTXO  outputs'+JSON.stringify(outputs))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(3);
             if (!isAlreadyActivated) {
                 params.valid = false;
@@ -221,12 +221,8 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Invalid property ID; ';
             }
-            if (!(Number.isInteger(params.amount) && params.amount > 0)) {
-                params.valid = false;
-                params.reason += 'Invalid amount';
-            }
 
-            if(!amount||amount==0||isNaN(amount)){
+            if(!params.amount||params.amount==0||isNaN(params.amount)){
                 params.valid = false;
                 params.reason += 'Invalid amount'
             }
@@ -280,14 +276,33 @@ const Validity = {
                 params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
             }
 
-            let channel = await Channels.getChannel(sender)
-            console.log ('utxo validity channel '+channel["A"][propertyId]+' '+channel["B"][propertyId])
-            if(!channel||(columnA==true&&!channel["A"][propertyId])||(columnA==false&&!channel["B"][propertyId])){
-                console.log('inside missing channel property trigger in validate UTXO '+columnA+' '+channel["A"][propertyId]+' '+channel["B"][propertyId])
-                params.valid=false
-                params.reason = 'No balance on the indicated channel and column'
+          let channel = await Channels.getChannel(sender);
+
+            // Check if the channel is null or undefined
+            if (!channel || channel === null) {
+                console.log('Channel is null or undefined for sender:', sender);
+                params.valid = false;
+                params.reason = 'Channel not found for the sender';
+                return params;
             }
-            console.log('inside validate UTXO trade '+JSON.stringify(params))
+
+            // Check if the necessary propertyId exists in channel["A"] or channel["B"]
+            if (
+                (columnA === true && (!channel["A"] || !channel["A"][propertyId])) ||
+                (columnA === false && (!channel["B"] || !channel["B"][propertyId]))
+            ) {
+                console.log(
+                    'Inside missing channel property trigger in validate UTXO',
+                    columnA,
+                    channel["A"] ? channel["A"][propertyId] : 'undefined',
+                    channel["B"] ? channel["B"][propertyId] : 'undefined'
+                );
+                params.valid = false;
+                params.reason = 'No balance on the indicated channel and column';
+                return params;
+            }
+
+            console.log('Inside validate UTXO trade', JSON.stringify(params));
             return params;
         },
 
@@ -316,6 +331,7 @@ const Validity = {
             }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
+            console.log('getting propertyId in validate commit '+JSON.stringify(propertyData))
             if(propertyData==null){
                 console.log('offending propertyId value '+params.propertyId)
                 params.valid=false

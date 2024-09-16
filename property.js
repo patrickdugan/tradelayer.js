@@ -91,8 +91,12 @@ class PropertyManager {
             throw new Error('Invalid property type.');
         }
 
-            // Retrieve existing property entry if it exists
         let existingProperty = this.propertyIndex.get(propertyId);
+
+        if(type=="Synthetic"){
+            console.log('creating synth property '+propertyId+' '+totalInCirculation+' '+existingProperty)
+            // Retrieve existing property entry if it exists
+        }
 
         if (existingProperty) {
             // If property exists, update totalInCirculation and other fields if necessary
@@ -123,7 +127,7 @@ class PropertyManager {
             backupAddress: backupAddress
         }
 
-        this.propertyIndex.set(propertyId,blob);
+        this.propertyIndex.set(propertyId,existingProperty);
         await this.save();
         return console.log('updated Property Index '+this.propertyIndex)
     }
@@ -312,7 +316,7 @@ class PropertyManager {
                 // Check for integer-based property ID
                 //console.log('propertyId:', propertyId, 'type:', typeof propertyId);
                 const propertyEntry = parsedData.find(entry => Number(entry[0]) === Number(propertyId));
-                //console.log('retrieving property data '+JSON.stringify(propertyEntry))
+                //console.log('retrieving property data '+JSON.stringify(propertyEntry)+' '+JSON.stringify(parsedData))
                 if (propertyEntry) {
                     return propertyEntry[1];
                 } else {

@@ -71,8 +71,8 @@ class TradeLayerManager {
             insuranceFund.deposit(TLVESTTokenId, amountToInsuranceFund);
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
             
-            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, TLVESTReserve);
-            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, 0);
+            await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, 0);
+            await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount - amountToInsuranceFund, 0, 0, TLVESTReserve);
             
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
@@ -128,66 +128,66 @@ class TradeLayerManager {
         console.log(`Market maker whitelist created with ID: ${marketMakerClearlistId}`);
     }
 
-    
-  const BigNumber = require('bignumber.js');
+    static async updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC, cumulativeVolumeGlobal, currentBlockVolumeGlobal) {
+        const propertyData1 = await PropertyManager.getPropertyData(2)
+        const propertyData2 = await PropertyManager.getPropertyData(3)
+        if(propertyData1==null){
+            return null    
+        }
+        let maxTokens2 = propertyData1.totalInCirculation
+        let maxTokens3 = propertyData2.totalInCirculation
+        // Constants for the first tranche (LTC volume)
+        const logScaleMin1 = new BigNumber(1000);
+        const logScaleMax1 = new BigNumber(100000000);
 
-static updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC, cumulativeVolumeGlobal, currentBlockVolumeGlobal) {
-    const propertyData1 = await propertyManager.getPropertyData(2)
-    const propertyData2 = await propertyManager.getPropertyData(3)
-    const maxTokens2 = propertyData1.totalInCirculation
-    const maxTokens3 = propertyData2.totalInCirculation
-    // Constants for the first tranche (LTC volume)
-    const logScaleMin1 = new BigNumber(1000);
-    const logScaleMax1 = new BigNumber(100000000);
+        // Constants for the second tranche (Global volume)
+        const logScaleMin2 = new BigNumber(10000000);
+        const logScaleMax2 = new BigNumber(1000000000000);
 
-    // Constants for the second tranche (Global volume)
-    const logScaleMin2 = new BigNumber(10000000);
-    const logScaleMax2 = new BigNumber(1000000000000);
+        // Convert inputs to BigNumber
+        cumulativeVolumeLTC = new BigNumber(cumulativeVolumeLTC);
+        currentBlockVolumeLTC = new BigNumber(currentBlockVolumeLTC);
+        cumulativeVolumeGlobal = new BigNumber(cumulativeVolumeGlobal);
+        currentBlockVolumeGlobal = new BigNumber(currentBlockVolumeGlobal);
+        maxTokens2 = new BigNumber(maxTokens2);
+        maxTokens3 = new BigNumber(maxTokens3)
 
-    // Convert inputs to BigNumber
-    cumulativeVolumeLTC = new BigNumber(cumulativeVolumeLTC);
-    currentBlockVolumeLTC = new BigNumber(currentBlockVolumeLTC);
-    cumulativeVolumeGlobal = new BigNumber(cumulativeVolumeGlobal);
-    currentBlockVolumeGlobal = new BigNumber(currentBlockVolumeGlobal);
-    maxVestingTokens = new BigNumber(maxVestingTokens);
+        // Calculate cumulative volume after this block
+        const newCumulativeVolumeLTC = cumulativeVolumeLTC.plus(currentBlockVolumeLTC);
+        const newCumulativeVolumeGlobal = cumulativeVolumeGlobal.plus(currentBlockVolumeGlobal);
 
-    // Calculate cumulative volume after this block
-    const newCumulativeVolumeLTC = cumulativeVolumeLTC.plus(currentBlockVolumeLTC);
-    const newCumulativeVolumeGlobal = cumulativeVolumeGlobal.plus(currentBlockVolumeGlobal);
+               // First Tranche Vesting (Based on LTC volume)
+        let vestingFactorPrev1 = new BigNumber(Math.log(cumulativeVolumeLTC.toNumber())).div(Math.log(logScaleMax1.toNumber()));
+        vestingFactorPrev1 = BigNumber.min(BigNumber.max(vestingFactorPrev1, new BigNumber(0)), new BigNumber(1));
 
-    // First Tranche Vesting (Based on LTC volume)
-    let vestingFactorPrev1 = BigNumber.log(cumulativeVolumeLTC).div(BigNumber.log(logScaleMax1));
-    vestingFactorPrev1 = BigNumber.min(BigNumber.max(vestingFactorPrev1, new BigNumber(0)), new BigNumber(1));
+        let vestingFactorNew1 = new BigNumber(Math.log(newCumulativeVolumeLTC.toNumber())).div(Math.log(logScaleMax1.toNumber()));
+        vestingFactorNew1 = BigNumber.min(BigNumber.max(vestingFactorNew1, new BigNumber(0)), new BigNumber(1));
 
-    let vestingFactorNew1 = BigNumber.log(newCumulativeVolumeLTC).div(BigNumber.log(logScaleMax1));
-    vestingFactorNew1 = BigNumber.min(BigNumber.max(vestingFactorNew1, new BigNumber(0)), new BigNumber(1));
+        const vestingFactorDifference1 = vestingFactorNew1.minus(vestingFactorPrev1);
 
-    const vestingFactorDifference1 = vestingFactorNew1.minus(vestingFactorPrev1);
+        // Second Tranche Vesting (Based on Global volume)
+        let vestingFactorPrev2 = new BigNumber(Math.log(cumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
+        vestingFactorPrev2 = BigNumber.min(BigNumber.max(vestingFactorPrev2, new BigNumber(0)), new BigNumber(1));
 
-    // Second Tranche Vesting (Based on Global volume)
-    let vestingFactorPrev2 = BigNumber.log(cumulativeVolumeGlobal).div(BigNumber.log(logScaleMax2));
-    vestingFactorPrev2 = BigNumber.min(BigNumber.max(vestingFactorPrev2, new BigNumber(0)), new BigNumber(1));
+        let vestingFactorNew2 = new BigNumber(Math.log(newCumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
+        vestingFactorNew2 = BigNumber.min(BigNumber.max(vestingFactorNew2, new BigNumber(0)), new BigNumber(1));
 
-    let vestingFactorNew2 = BigNumber.log(newCumulativeVolumeGlobal).div(BigNumber.log(logScaleMax2));
-    vestingFactorNew2 = BigNumber.min(BigNumber.max(vestingFactorNew2, new BigNumber(0)), new BigNumber(1));
+        const vestingFactorDifference2 = vestingFactorNew2.minus(vestingFactorPrev2);
 
-    const vestingFactorDifference2 = vestingFactorNew2.minus(vestingFactorPrev2);
+          // Calculate the vesting amount based on the total difference and max vesting tokens
+        let vestingAmount = vestingFactorDifference1.multipliedBy(maxTokens2);
 
-      // Calculate the vesting amount based on the total difference and max vesting tokens
-    let vestingAmount1 = totalVestingFactorDifference1.multipliedBy(maxTokens2);
+        // Round vesting amount to 8 decimal places
+        vestingAmount = vestingAmount.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
 
-    // Round vesting amount to 8 decimal places
-    vestingAmount1 = vestingAmount.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+        // Calculate the vesting amount based on the total difference and max vesting tokens
+        let vestingAmount2 = vestingFactorDifference2.multipliedBy(maxTokens3);
 
-    // Calculate the vesting amount based on the total difference and max vesting tokens
-    let vestingAmount2 = totalVestingFactorDifference2.multipliedBy(maxTokens3);
+        // Round vesting amount to 8 decimal places
+        vestingAmount2 = vestingAmount2.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
 
-    // Round vesting amount to 8 decimal places
-    vestingAmount2 = vestingAmount.decimalPlaces(8, BigNumber.ROUND_DOWN);
-
-    return {two:vestingAmount,three:vestingAmount2};
-}
-
+        return {two:vestingAmount,three:vestingAmount2};
+    }
 
     static calculateTradeRebates(cumulativeVolumeLTC) {
 	    const baseVolume = 1000; // The volume where rebate calculation starts

@@ -1,3 +1,14 @@
-{"_id":4,"value":{"blockHeight":3370611,"volume":1,"price":49630,"type":"onChainContract"}}
 {"_id":"4-5","value":{"blockHeight":3370593,"volume":[7,5.44444446],"price":0.77777778,"type":"onChainToken"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":4,"value":{"blockHeight":3370611,"volume":1,"price":49559,"type":"onChainContract"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":4,"value":{"blockHeight":3370611,"volume":1,"price":49630,"type":"onChainContract"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":"0-1","value":{"blockHeight":3395557,"volume":5460,"price":null,"type":"UTXO"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":"0-1","value":{"blockHeight":3395559,"volume":33000,"price":null,"type":"UTXO"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":"0-1","value":{"blockHeight":3395567,"volume":10000,"price":null,"type":"UTXO"}}
+{"_id":"globalCumulativeVolume","value":0}
+{"_id":"0-1","value":{"blockHeight":3395571,"volume":991540,"price":null,"type":"UTXO"}}
 {"_id":"globalCumulativeVolume","value":0}

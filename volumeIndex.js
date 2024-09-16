@@ -3,7 +3,7 @@ const db = require('./db.js')
 const Litecoin = require('litecoin')
 const util = require('util')
 const Contracts = require('./contractRegistry.js')
-
+const BigNumber = require('bignumber.js');
 
 class VolumeIndex {
     constructor(db) {
