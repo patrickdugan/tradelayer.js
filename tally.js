@@ -180,7 +180,7 @@ class TallyMap {
 
             // Update the channel balance
             addressObj[propertyId].channelBalance = newChannelBalance.toNumber();
-
+            addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
             // Record the channel balance change
             if (channelChange !== 0) {
                 await TallyMap.recordTallyMapDelta(
@@ -204,7 +204,7 @@ class TallyMap {
 
 
         static calculateTotal(balanceObj) {
-            return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.vesting).decimalPlaces(8).toNumber();
+            return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();
         }
 
         static roundToEightDecimals(number) {
@@ -328,6 +328,31 @@ class TallyMap {
         }
     }
 
+    static async hasSufficientChannel(senderAddress, propertyId, requiredAmount) {
+        try {
+            const senderTally = await this.getTally(senderAddress, propertyId);
+            console.log('Checking senderTally in has hasSufficientChannel', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
+
+            if (!senderTally || senderTally.reserved === undefined) {
+                return { hasSufficient: false, reason: 'undefined' };
+            }
+
+            console.log('Channel tokens:', senderTally.channel, 'Required amount:', requiredAmount);
+
+            if (senderTally.channel < requiredAmount) {
+                let requiredBN = new BigNumber(requiredAmount)
+                let channelBN = new BigNumber(senderTally.channel)
+                let shortfall= requiredBN.minus(channelBN).toNumber()
+                console.log('insufficient tokens ' +shortfall)
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: shortfall };
+            }
+
+            return { hasSufficient: true, reason: '' };
+        } catch (error) {
+            console.error('Error in hasSufficientBalance:', error);
+            return { hasSufficient: false, reason: 'Unexpected error checking balance' };
+        }
+    }
 
     async saveToDB() {
         try {
@@ -578,11 +603,17 @@ class TallyMap {
             console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
             return 0;
         }
-        return {amount: addressObj[propertyId].amount, 
+
+        const returnObj = {amount: addressObj[propertyId].amount, 
             available: addressObj[propertyId].available, 
             reserved: addressObj[propertyId].reserved, 
             margin: addressObj[propertyId].margin, 
-            vesting:addressObj[propertyId].vesting}; // or other specific fields like available, reserved
+            vesting:addressObj[propertyId].vesting,
+            channel: addressObj[propertyId].channelBalance}
+
+            console.log('return obj '+JSON.stringify(returnObj))
+
+        return returnObj
     }
 
     getAddressBalances(address) {
@@ -606,54 +637,68 @@ class TallyMap {
      * @return {Array} - An array of addresses that have a balance for the specified property.
      */
     static async getAddressesWithBalanceForProperty(propertyId) {
-        const addressesWithBalances = [];
+            const addressesWithBalances = [];
 
-        try {
-            // Query the database for addresses containing the given propertyId
-            const results = await dbInstance.getDatabase('tallyMap').findAsync({ [`balances.${propertyId}`]: { $exists: true } });
-            console.log('checking get all address for property '+propertyId+' '+JSON.stringify(results))
-            // Iterate over the results and extract the balances for each address
-            for (const result of results) {
-                const balanceInfo = result.balances[propertyId];
-                if (balanceInfo.amount > 0 || balanceInfo.reserved > 0) {
-                    addressesWithBalances.push({
-                        address: result.address,
-                        amount: balanceInfo.amount,
-                        reserved: balanceInfo.reserved,
-                        margin: balanceInfo.margin,
-                        vesting: balanceInfo.vesting,
-                        channel: balanceInfo.channel
-                    });
+            try {
+                // Get the tallyMap document
+                const tallyMapDoc = await dbInstance.getDatabase('tallyMap').findOneAsync({ _id: 'tallyMap' });
+
+                // Ensure we got the document and the data field exists
+                if (!tallyMapDoc || !tallyMapDoc.data) {
+                    console.error('No tallyMap document found or data is missing');
+                    return addressesWithBalances;
                 }
+
+                // Parse the stringified data into a usable array
+                const parsedData = JSON.parse(tallyMapDoc.data);
+
+                // Iterate over the parsed data and find addresses with the specified propertyId
+                for (const [address, balances] of parsedData) {
+                    if (balances[propertyId]) {
+                        const balanceInfo = balances[propertyId];
+                        if (balanceInfo.available > 0 || balanceInfo.vesting > 0) {
+                            addressesWithBalances.push({
+                                address: address,
+                                available: balanceInfo.available,
+                                reserved: balanceInfo.reserved,
+                                margin: balanceInfo.margin,
+                                vesting: balanceInfo.vesting,
+                                channelBalance: balanceInfo.channelBalance
+                            });
+                        }
+                    }
+                }
+
+                console.log('Found addresses for property', propertyId, addressesWithBalances);
+            } catch (error) {
+                console.error('Error querying addresses with balance for propertyId:', propertyId, error);
             }
-        } catch (error) {
-            console.error('Error querying addresses with balance for propertyId:', propertyId, error);
+
+            return addressesWithBalances;
         }
 
-        return addressesWithBalances;
-    }
-
-
     static async applyVesting(propertyId, vestingAmount, block) {
+        console.log('insideApply vesting '+vestingAmount)
         // Get the list of addresses with balances for the given propertyId
         const addressesWithBalances = await this.getAddressesWithBalanceForProperty(propertyId);
         const propertyInfo = await PropertyList.getPropertyData(propertyId)
         // Retrieve the total number of tokens for the propertyId from the propertyList
         const totalTokens = propertyInfo.totalInCirculation;
-
+        vestingAmount = new BigNumber(vestingAmount)
         // Iterate over each address to apply the vesting amount
-        for (const balanceInfo of addressesWithBalances) {
-            const { address, amount, reserved } = balanceInfo;
-
+    for (const { address, available, reserved, margin, vesting, channelBalance } of addressesWithBalances) {
+            console.log(JSON.stringify(addressesWithBalances))
+            console.log('inside apply vesting '+address+' '+available+' '+vesting+' '+totalTokens)
             // Calculate the total balance for this address (amount + reserved)
-            const totalBalanceForAddress = new BigNumber(amount).plus(reserved);
+            const totalBalanceForAddress = new BigNumber(available);
 
             // Calculate the percentage this balance represents of the total tokens
             const percentageOfTotalTokens = totalBalanceForAddress.dividedBy(totalTokens);
-
+            console.log('percentage '+percentageOfTotalTokens, vestingAmount)
             // Apply the vesting amount proportionally to this address
             const vestingShare = vestingAmount.multipliedBy(percentageOfTotalTokens);
-
+            console.log(vestingAmount)
+            console.log(vestingShare.toNumber()+' '+totalBalanceForAddress+' '+percentageOfTotalTokens)
             // Depending on propertyId, apply the vesting rules:
             if (propertyId === 2) {
                 // Move tokens from vesting in propertyId 2 to available in propertyId 1

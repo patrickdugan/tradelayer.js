@@ -145,6 +145,7 @@ class TradeLayerManager {
         // Constants for the second tranche (Global volume)
         const logScaleMin2 = new BigNumber(10000000);
         const logScaleMax2 = new BigNumber(1000000000000);
+        console.log('inside update vesting '+cumulativeVolumeLTC+' '+currentBlockVolumeLTC+' '+cumulativeVolumeGlobal+' '+currentBlockVolumeGlobal+' '+maxTokens2+' '+maxTokens3)
 
         // Convert inputs to BigNumber
         cumulativeVolumeLTC = new BigNumber(cumulativeVolumeLTC);
@@ -187,7 +188,7 @@ class TradeLayerManager {
 
         // Round vesting amount to 8 decimal places
         vestingAmount2 = vestingAmount2.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
-
+        console.log('ending vest calc '+vestingAmount+' '+vestingAmount2)
         return {two:vestingAmount,three:vestingAmount2};
     }
 

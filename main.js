@@ -275,12 +275,16 @@ class Main {
                 }
                 const cumVolumes = await VolumeIndex.getCumulativeVolumes()
                 const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
-                const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
-                //console.log('update Vesting in block' +blockHeight+ ' '+updateVesting )
-                if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){
+                if(thisBlockVolumes>0){
+                    console.log('this is a block volume! '+thisBlockVolumes)
+                    const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
+                    if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){
+                    console.log('update Vesting in block' +blockHeight+ ' '+JSON.stringify(updateVesting))
                     await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
                     await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
+                    }   
                 }
+                
                 await Channels.processWithdrawals(blockHeight);
                 await Clearing.clearingFunction(blockHeight);
                 maxProcessedHeight = blockHeight;
@@ -479,11 +483,17 @@ class Main {
     async blockHandlerEnd(blockHash, blockHeight) {
 
         const cumVolumes = await VolumeIndex.getCumulativeVolumes()
-        const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
-        const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
-        await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
-        await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
-        //console.log(`Finished processing block ${blockHeight}`);
+                const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
+                if(thisBlockVolumes>0){
+                    console.log('this is a block volume! '+thisBlockVolumes)
+                    const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
+                    if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){
+                    console.log('update Vesting in block' +blockHeight+ ' '+JSON.stringify(updateVesting))
+                    await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
+                    await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
+                    }   
+                }
+                //console.log(`Finished processing block ${blockHeight}`);
         // Additional logic for end of block processing
 
         // Call the method to process confirmed withdrawals

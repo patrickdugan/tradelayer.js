@@ -400,7 +400,13 @@ const Logic = {
             await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
             const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
-            await VolumeIndex.saveVolumeDataById(key,satsReceived,price,block,'UTXO')
+            const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
+            console.log(' price in UTXO '+price)
+            if(isNaN(price)){
+                price = coinAdj.div(tokenAmount).decimalPlaces(8).toNumber()
+                console.log('price 2nd hit '+price+' '+coinAdj+' '+tokenAmount)
+            }
+            await VolumeIndex.saveVolumeDataById(key,coinAdj.toNumber(),price,block,'UTXO')
 
              const trade = {
                     offeredPropertyId: propertyId,

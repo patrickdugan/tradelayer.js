@@ -222,18 +222,18 @@ const Validity = {
                 params.reason += 'Invalid property ID; ';
             }
 
-            if(!params.amount||params.amount==0||isNaN(params.amount)){
-                params.valid = false;
-                params.reason += 'Invalid amount'
-            }
-
-            let has = await TallyMap.hasSufficientReserve(sender, params.propertyId, params.amount);
-
+            let has = await TallyMap.hasSufficientChannel(sender, params.propertyId, params.amount);
+            console.log(JSON.stringify(has))
             if (!has.hasSufficient) {
                 params.valid = true; // Adjust according to logic
                 params.reason += ' Insufficient Tokens ';
                 console.log('reducing tokens to available '+params.amount+' '+has.shortfall)
                 params.amount -= has.shortfall;
+            }
+
+            if(!params.amount||params.amount==0||isNaN(params.amount)){
+                params.valid = false;
+                params.reason += 'Invalid amount'
             }
 
             if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
