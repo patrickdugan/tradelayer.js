@@ -610,7 +610,7 @@ class TallyMap {
 
         try {
             // Query the database for addresses containing the given propertyId
-            const results = await dbInstance.getDatabase('addresses').findAsync({ [`balances.${propertyId}`]: { $exists: true } });
+            const results = await dbInstance.getDatabase('tallyMap').findAsync({ [`balances.${propertyId}`]: { $exists: true } });
             console.log('checking get all address for property '+JSON.stringify(results))
             // Iterate over the results and extract the balances for each address
             for (const result of results) {
