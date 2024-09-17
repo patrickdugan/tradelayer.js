@@ -679,6 +679,7 @@ class TallyMap {
 
     static async applyVesting(propertyId, vestingAmount, block) {
         console.log('insideApply vesting '+vestingAmount)
+        if(vestingAmount<1e-8){return}
         // Get the list of addresses with balances for the given propertyId
         const addressesWithBalances = await this.getAddressesWithBalanceForProperty(propertyId);
         const propertyInfo = await PropertyList.getPropertyData(propertyId)
@@ -686,7 +687,7 @@ class TallyMap {
         const totalTokens = propertyInfo.totalInCirculation;
         vestingAmount = new BigNumber(vestingAmount)
         // Iterate over each address to apply the vesting amount
-    for (const { address, available, reserved, margin, vesting, channelBalance } of addressesWithBalances) {
+        for (const { address, available, reserved, margin, vesting, channelBalance } of addressesWithBalances) {
             console.log(JSON.stringify(addressesWithBalances))
             console.log('inside apply vesting '+address+' '+available+' '+vesting+' '+totalTokens)
             // Calculate the total balance for this address (amount + reserved)
@@ -718,6 +719,7 @@ class TallyMap {
                 );
             }
         }
+        return
     }
 }
 
