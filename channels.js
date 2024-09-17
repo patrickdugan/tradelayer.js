@@ -374,7 +374,7 @@ class Channels {
         if (!channel[channelColumn][propertyId]) {
             channel[channelColumn][propertyId] = 0;
         }
-        channel[channelColumn][propertyId] += tokenAmount;
+        channel[channelColumn][propertyId] += parseInt(tokenAmount);
 
         // Add the commit record to the channel
         const commitRecord = {
