@@ -275,7 +275,7 @@ class Main {
                 }
                 const cumVolumes = await VolumeIndex.getCumulativeVolumes()
                 const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
-                if(thisBlockVolumes>0){
+                if(thisBlockVolumes.global>0){
                     console.log('this is a block volume! '+thisBlockVolumes)
                     const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
                     if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){

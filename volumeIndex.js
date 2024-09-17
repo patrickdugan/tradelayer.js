@@ -226,7 +226,7 @@ class VolumeIndex {
             });
             totalLTCVolume= totalLTCVolume.toNumber()
             totalVolume= totalVolume.toNumber()
-
+            console.log(totalLTCVolume+' '+totalVolume)
             // Return the total volume for the block
             return {ltcPairs:totalLTCVolume,global:totalVolume};
         } catch (error) {
