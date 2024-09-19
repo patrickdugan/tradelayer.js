@@ -65,8 +65,6 @@ class TradeLayerManager {
                 hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, block,null );
 
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
-            const TLVESTLIQId= await propertyManager.createToken('TLVESTLIQ', 0, 'Vesting',0)
-            console.log('verifying that propertyid numbering is consistent '+TLTokenId,TLVESTTokenId, TLVESTLIQId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)
             // Distribute initial amount to insurance fund
             insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)

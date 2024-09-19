@@ -1,2 +1,1 @@
-{"key":"1","value":{"balances":[{"propertyId":2,"amountAvailable":250000,"amountVesting":0},{"propertyId":1,"amountAvailable":0,"amountVesting":250000}],"contractSeriesId":1,"hedgeRatio":0.5,"block":3422187},"_id":"emYhUAe4tjTXnBgS"}
-{"key":"1","value":{"balances":[{"propertyId":2,"amountAvailable":250000,"amountVesting":0},{"propertyId":1,"amountAvailable":0,"amountVesting":250000}],"contractSeriesId":1,"hedgeRatio":0.5,"block":3422187},"_id":"BQrvxwHCfIVobXEe"}
+{"key":"1","value":{"balances":[{"propertyId":1,"amountAvailable":0,"amountVesting":150000}],"contractSeriesId":1,"hedgeRatio":0.5,"block":3422519},"_id":"MF1NlF9bHxC1WiQw"}

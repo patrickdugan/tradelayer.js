@@ -55,7 +55,7 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 
 // Replace with actual values
 const senderAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
-const recipientAddress = "tltc1qjyekaq86kqersjddwyjgydemw23jkg8d52j22m"
+const recipientAddress = "tltc1qn006lvcx89zjnhuzdmj0rjcwnfuqn7eycw40yf"
 //tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2"//tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
 const amountToSend = 0.02; // Amount of LTC to send
 
