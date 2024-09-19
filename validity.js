@@ -1301,7 +1301,7 @@ const Validity = {
                 params.reason += "Vesting tokens cannot be traded"
             }
 
-            if(params.propertyId1==params.propertyId2){
+            if(params.propertyIdOffered==params.propertyIdDesired){
                 params.valid =false
                 params.reason += "Cannot trade token against its own type"
             }
