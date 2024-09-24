@@ -76,7 +76,6 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Invalid ticker; ';
             }
-
             // Add check for existing ticker using the isTickerExist method
 
             const tickerExists = await PropertyList.doesTickerExist(params.ticker);
@@ -1357,63 +1356,53 @@ const Validity = {
         const whitelistsOffered = Array.isArray(propertyDataOffered.whitelistId) ? propertyDataOffered.whitelistId : [propertyDataOffered.whitelistId];
         const whitelistsDesired = Array.isArray(propertyDataDesired.whitelistId) ? propertyDataDesired.whitelistId : [propertyDataDesired.whitelistId];
 
-        var listed1 = false
-        var listed2 = false
-        var listed3 = false
-        var listed4 = false
+        // Skip whitelist checks if both properties have whitelistId of 0
+        if (whitelistsOffered.includes(0) && whitelistsDesired.includes(0)) {
+            console.log('Both properties have whitelistId 0, skipping whitelist checks.');
+        } else {
+            // Check whitelist for commitAddressA and commitAddressB
+            let listed1 = true, listed2 = true, listed3 = true, listed4 = true;
 
-        // Check whitelists for commitAddressA
-        for (const whitelistId of whitelistsOffered) {
-            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressA);
-            if (isWhitelisted) {
-                listed1=true
-                break;
+            // Skip whitelist checks for offered if whitelistId is 0
+            if (!whitelistsOffered.includes(0)) {
+                listed1 = await isListed(whitelistsOffered, commitAddressA);
+                listed3 = await isListed(whitelistsOffered, commitAddressB);
+            }
+
+            // Skip whitelist checks for desired if whitelistId is 0
+            if (!whitelistsDesired.includes(0)) {
+                listed2 = await isListed(whitelistsDesired, commitAddressA);
+                listed4 = await isListed(whitelistsDesired, commitAddressB);
+            }
+
+            // If any of the checks fail, invalidate the params
+            if (!listed1 || !listed2 || !listed3 || !listed4) {
+                params.valid = false;
+                if (!listed1) params.reason += 'Commit address A not whitelisted in clearlist for property offered; ';
+                if (!listed2) params.reason += 'Commit address A not whitelisted in clearlist for property desired; ';
+                if (!listed3) params.reason += 'Commit address B not whitelisted in clearlist for property offered; ';
+                if (!listed4) params.reason += 'Commit address B not whitelisted in clearlist for property desired; ';
             }
         }
-        if(!listed1){
-            params.valid = false;
-            params.reason += `Commit address A not whitelisted in clearlist for property offered; `;
-        }
+        return params;
+    },
 
-        for (const whitelistId of whitelistsDesired) {
-            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressA);
-            if (isWhitelisted) {
-                listed2=true
-            
-                break;
+        // Helper function to check if an address is in the whitelist
+    async isListed(whitelistIds, commitAddress) {
+            for (const whitelistId of whitelistIds) {
+                const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddress);
+                if (isWhitelisted) return true;
             }
-        }
-        if(!listed2){
-            params.valid = false;
-            params.reason += `Commit address A not whitelisted in clearlist for property desired; `;
-        }
+            return false;
+        },
 
-        // Check whitelists for commitAddressB
-        for (const whitelistId of whitelistsOffered) {
-            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressB);
-            if (isWhitelisted) {
-                listed3=true
-                break;
+        // Function to perform whitelist checks
+        async checkWhitelist(whitelists, commitAddress, propertyRole, params) {
+            const listed = await isListed(whitelists, commitAddress);
+            if (!listed) {
+                params.valid = false;
+                params.reason += `Commit address ${propertyRole} not whitelisted in clearlist; `;
             }
-        }
-        if(!listed3){
-            params.valid = false;
-            params.reason += `Commit address B not whitelisted in clearlist for property offered; `;
-        }
-
-        for (const whitelistId of whitelistsDesired) {
-            const isWhitelisted = await ClearList.isAddressInClearlist(whitelistId, commitAddressB);
-            if (isWhitelisted) {
-                listed4 =true
-                break;
-            }
-        }
-        if(!listed4){
-            params.valid = false;
-            params.reason += `Commit address B not whitelisted in clearlist for property desired; `;
-        }
-
-            return params;
         },
 
         // 21: Withdrawal

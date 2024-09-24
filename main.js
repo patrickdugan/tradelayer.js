@@ -415,10 +415,10 @@ class Main {
     /*sub-function of real-time mode, breaks things into 3 steps*/
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
-        await this.blockHandlerBegin(blockData.hash, blockNumber);
+        const tx = await this.blockHandlerBegin(blockData.hash, blockNumber);
 
         // Process each transaction in the block
-        await this.blockHandlerMid(blockData, blockNumber);
+        await this.blockHandlerMid(tx, blockNumber);
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
@@ -450,11 +450,52 @@ class Main {
         return //console.log('no re-org detected ' +blockHeight)
     }
 
-    /*middle part of real-time mode processed new tx */
-    async blockHandlerMid(blockHash, blockHeight) {
+    async blockHandlerBegin(blockHash, blockHeight) {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
-            let txData = await TxIndex.processBlockData(blockData, blockHeight, true);
+            const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
+
+            // Separate out Commit/Transfer transactions from others
+            const fundingTxs = [];
+            const otherTxs = [];
+
+            for (const tx of txDetails) {
+                if (tx.payload.startsWith('4') || tx.payload.startsWith('m')) {
+                    fundingTxs.push(tx);
+                } else {
+                    otherTxs.push(tx);
+                }
+                console.log('funding tx '+JSON.stringify(fundingTxs))
+            }
+
+            // Process Commit/Transfer transactions first
+            if (fundingTxs.length > 0) {
+                await this.processTx(fundingTxs, blockHeight);
+                console.log(`Processed funding txs for block ${blockHeight}`);
+            }
+
+            // Pass other transactions to `blockHandlerMid` for processing later
+            this.otherTxs = otherTxs;  // Store remaining txs for mid-processing
+        } catch (error) {
+            console.error(`Error in blockHandlerBegin at block ${blockHeight}:`, error);
+        }
+
+         // Check for reorganization using ReOrgChecker
+        /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
+        if (reorgDetected) {
+            console.log(`Reorganization detected at block ${blockHeight}`);
+            await this.handleReorg(blockHeight);
+        } else {
+            // Proceed with regular block processing
+            await this.blockchainPersistence.updateLastKnownBlock(blockHash);
+            // Additional block begin logic here
+        }*/
+    }
+
+
+    /*middle part of real-time mode processed new tx */
+    async blockHandlerMid(txData, blockHeight) {
+        try {
             if(txData.length>=1){
                 console.log('tx Data for block '+blockHeight + 'txData'+JSON.stringify(txData))
                  await this.processTx(txData,blockHeight)
