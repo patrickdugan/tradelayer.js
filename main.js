@@ -238,6 +238,7 @@ class Main {
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 const blockData = txByBlockHeight[blockHeight];
+                if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
                     // First process funding transactions
                     await this.processTxSet(blockData.fundingTx, blockHeight);
@@ -432,7 +433,7 @@ class Main {
             console.log('latest block '+chainTip)
 
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
-                const networkIsUp.status = await this.checkNetworkStatus();
+                const networkIsUp = await this.checkNetworkStatus();
                 if (!networkIsUp) {
                     console.log('Network down, entering recovery mode.');
                     blockNumber = await this.enterRecoveryMode(latestProcessedBlock, blockNumber);
@@ -501,7 +502,7 @@ class Main {
             console.log('Entering recovery mode, last processed block:', latestProcessedBlock);
 
             while (true) {
-                const networkIsUp.status = await this.checkNetworkStatus();
+                const networkIsUp = await this.checkNetworkStatus();
                 if (networkIsUp.status) {
                     console.log('Network restored, resuming block processing.');
 
