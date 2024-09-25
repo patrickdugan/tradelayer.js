@@ -310,6 +310,28 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            if(params.ref){
+                const outputs = await TxUtils.getTransactionOutputs(txid)
+
+                let matchingOutput = null;
+                
+                // Loop through the outputs array to find the one with the matching vout
+                for (let i = 0; i < outputs.length; i++) {
+                    if (outputs[i].vout === params.ref) {
+                        matchingOutput = outputs[i];
+                        break; // Exit loop once the matching output is found
+                    }
+                }
+                
+                if (matchingOutput) {
+                    // Access the matching output's address and satoshis
+                    params.channelAddress = matchingOutput.address;
+                }else{
+                    params.valid = false
+                    params.reason += "No channel address detectable in payload or ref: output"
+                }
+            }
+
             let hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
             console.log('inside validate commit '+JSON.stringify(hasSufficientBalance)+params.amount)
             // Check if the sender has sufficient balance
@@ -1486,10 +1508,33 @@ const Validity = {
         },
 
         // 22: Transfer
-        validateTransfer: async (sender, params, block) => {
+        validateTransfer: async (sender, params, block, txid) => {
             params.reason = '';
             params.valid = true;
             params.block=block
+
+
+            if(params.ref){
+                const outputs = await TxUtils.getTransactionOutputs(txid)
+
+                let matchingOutput = null;
+                
+                // Loop through the outputs array to find the one with the matching vout
+                for (let i = 0; i < outputs.length; i++) {
+                    if (outputs[i].vout === params.ref) {
+                        matchingOutput = outputs[i];
+                        break; // Exit loop once the matching output is found
+                    }
+                }
+                
+                if (matchingOutput) {
+                    // Access the matching output's address and satoshis
+                    params.toChannelAddress = matchingOutput.address;
+                }else{
+                    params.valid = false
+                    params.reason += "No channel address detectable in payload or ref: output"
+                }
+            }
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(22);
             if(isAlreadyActivated==false){

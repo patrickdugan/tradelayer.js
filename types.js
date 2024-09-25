@@ -305,7 +305,7 @@ const Types = {
                 params = Decode.decodeTransfer(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTransfer(sender, params, block)
+                params = await Validity.validateTransfer(sender, params, block, txId)
                 break;
             case 23:
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));

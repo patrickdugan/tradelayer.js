@@ -85,11 +85,17 @@ const Decode = {
     // Decode Commit Token Transaction
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
-        return {
-            propertyId: Decode.decodePropertyId(parts[0] || ''),
-            amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            channelAddress: parts[2] || ''
-        };
+          let propertyId = Decode.decodePropertyId(parts[0] || '')
+          let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+          let channelAddress = ''
+          let ref = false
+          if (parts[2].startsWith('ref:')) {
+             const referenceOutput = parts[2].split(':')[1];
+             ref = referenceOutput
+          }else{
+             channelAddress = parts[2] || ''
+          }
+          return {propertyId:propertyId, amount:amount, channelAddress:channelAddress, ref:ref}
     },
 
     // Decode On-chain Token for Token Transaction
@@ -338,12 +344,18 @@ const Decode = {
     // Decode Transfer Transaction
     decodeTransfer: (payload) => {
         const parts = payload.split(',');
-        return {
-            propertyId: Decode.decodePropertyId(parts[0] || ''),
-            amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            isColumnA: parts[2] === '1',
-            toChannelAddress: parts[3] || '',
-        };
+            let propertyId = Decode.decodePropertyId(parts[0] || '')
+            let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+            let isColumnA = parts[2] === '1'
+            let toChannelAddress = ''
+            let ref = false
+          if (parts[2].startsWith('ref:')) {
+             const referenceOutput = parts[3].split(':')[1];
+             ref = referenceOutput
+          }else{
+             toChannelAddress = parts[3] || ''
+          }
+          return {propertyId:propertyId, amount:amount, isColumnA:isColumnA, toChannelAddress:channelAddress, ref:ref}
     },
 
     // Decode Settle Channel PNL Transaction
