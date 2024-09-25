@@ -61,6 +61,7 @@ class Main {
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
+        this.getNetworkInfoAsync = util.promisify(client.getNetworkInfo.bind(client));
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -270,7 +271,7 @@ class Main {
                 maxProcessedHeight = blockHeight;
             }
 
-            await this.saveMaxProcessedHeight(maxProcessedHeight);
+            await this.saveMaxProcessedHeight(maxProcessedHeight,false,null);
             return this.syncIfNecessary();
         }
 
@@ -423,6 +424,7 @@ class Main {
         console.log('entering real-time mode '+latestProcessedBlock)
         let lagObj
         while (true) {
+             
             /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
             }*/
@@ -430,9 +432,19 @@ class Main {
             console.log('latest block '+chainTip)
 
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
+                const networkIsUp.status = await this.checkNetworkStatus();
+                if (!networkIsUp) {
+                    console.log('Network down, entering recovery mode.');
+                    blockNumber = await this.enterRecoveryMode(latestProcessedBlock, blockNumber);
+                }
+
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
-                await this.processBlock(blockData, blockNumber);
-                latestProcessedBlock = blockNumber;
+                let newtxBlock = await this.processBlock(blockData, blockNumber);
+                if(newTxBlock!=null){
+                    latestProcessedBlock = newTxBlock
+                }
+                let trackHeight = blockNumber;
+                await TxIndex.saveMaxHeight(latestProcessedBlock, true, trackHeight)
             }
 
             if(pause==true){
@@ -442,10 +454,70 @@ class Main {
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
-            await TxIndex.saveMaxHeight(latestProcessedBlock)
+            await TxIndex.saveMaxHeight(latestProcessedBlock, true, trackHeight)
         }
         return syncIfNecessary()
     }
+
+        async checkNetworkStatus() {
+            try {
+                // Fetch network info using the promisified getnetworkinfo RPC call
+                const networkInfo = await getNetworkInfoAsync();
+
+                // Check if the network is active
+                const networkActive = networkInfo.networkactive;
+                const connections = networkInfo.connections;
+
+                console.log('Network Status:', networkInfo);
+
+                // Determine if there is a potential network outage or issue
+                if (!networkActive) {
+                    console.error('Network is inactive! The node is not connected to the Bitcoin network.');
+                    return { status: false, reason: 'Network inactive' };
+                }
+
+                if (connections === 0) {
+                    console.warn('Node has 0 connections. It may be isolated from the network.');
+                    return { status: false, reason: 'No connections' };
+                }
+
+                // If everything seems fine
+                console.log('Network is active with', connections, 'connections.');
+                return { status: true, connections: connections };
+
+            } catch (error) {
+                // Handle errors such as ECONNREFUSED (cannot connect to the node)
+                if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+                    console.error(`Network error: ${error.message}. Could not reach the Bitcoin node.`);
+                    return { status: 'down', reason: 'Connection refused or timeout' };
+                } else {
+                    console.error('An unexpected error occurred:', error);
+                    throw error; // Rethrow if it's an unexpected error
+                }
+            }
+        }
+
+        async enterRecoveryMode(latestProcessedBlock, trackHeight) {
+            console.log('Entering recovery mode, last processed block:', latestProcessedBlock);
+
+            while (true) {
+                const networkIsUp.status = await this.checkNetworkStatus();
+                if (networkIsUp.status) {
+                    console.log('Network restored, resuming block processing.');
+
+                    // Reload state from the database to ensure we're starting from the correct point
+                    const savedTrackHeight = await this.loadTrackHeight();
+                    const maxConsensusBlock = await this.loadMaxProcessedHeight();
+
+                    console.log(`Resuming from block: ${latestProcessedBlock}, track height: ${trackHeight}`);
+                    return savedTrackHeight; // Exit recovery mode and resume normal processing
+                }
+
+                // Retry after a short delay before checking the network again
+                await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+        }
+
 
     /*sub-function of real-time mode, breaks things into 3 steps*/
     async processBlock(blockData, blockNumber) {
@@ -517,6 +589,8 @@ class Main {
             if(txData.length>=1){
                 console.log('tx Data for block '+blockHeight + 'txData'+JSON.stringify(txData))
                  await this.processTx(txData,blockHeight)
+                 return blockHeight
+
             }
            //console.log('about to call construct consensus in block '+blockHeight)
            
@@ -532,7 +606,7 @@ class Main {
                 // ...
             }
         }*/
-        return 
+        return null 
         //console.log('processed ' + blockHash)
     }
 
@@ -590,9 +664,16 @@ class Main {
             }else{
                 await db.getDatabase('consensus').updateAsync(
                     { _id: 'MaxProcessedHeight' },
-                    { $set: { value: saveHeight } },
+                    { $set: { value: maxProcessedHeight } },
                     { upsert: true }
                 );
+
+                await db.getDatabase('consensus').updateAsync(
+                    { _id: 'TrackHeight' },
+                    { $set: { value: saveHeight } },
+                    { upsert: true }
+                    )
+
                 //console.log('realtime mode update '+maxProcessedHeight)
             }
         } catch (error) {
@@ -610,6 +691,25 @@ class Main {
                 const maxProcessedHeight = maxProcessedHeightDoc.value;
                 //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
                 return maxProcessedHeight; // Return the retrieved value
+            } else {
+                console.log('MaxProcessedHeight not found in the database.');
+                return null; // Return null or an appropriate default value if not found
+            }
+        } catch (error) {
+            console.error('Error retrieving MaxProcessedHeight:', error);
+            throw error; // Rethrow the error or handle it as needed
+        }
+    }
+
+    async loadTrackHeight() {
+        const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
+
+        try {
+            const track = await consensusDB.findOneAsync({ _id: 'TrackHeight' });
+            if (track) {
+                const track = track.value;
+                //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
+                return track; // Return the retrieved value
             } else {
                 console.log('MaxProcessedHeight not found in the database.');
                 return null; // Return null or an appropriate default value if not found
