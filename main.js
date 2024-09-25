@@ -61,7 +61,7 @@ class Main {
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
-        this.getNetworkInfoAsync = util.promisify(client.getNetworkInfo.bind(client));
+        this.getNetworkInfoAsync = util.promisify(this.client.cmd.bind(this.client, 'getNetworkInfo'));
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -238,7 +238,7 @@ class Main {
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 const blockData = txByBlockHeight[blockHeight];
-                if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
+                //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
                     // First process funding transactions
                     await this.processTxSet(blockData.fundingTx, blockHeight);
