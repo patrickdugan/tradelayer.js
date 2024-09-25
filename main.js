@@ -181,7 +181,7 @@ class Main {
         Real-time==true means we're looping in a delayed timer to check for new blocks and include any new ones in the
         txIndex then apply them to this to update the db and consensus.
     */
-        async constructConsensusFromIndex(startHeight) {
+       async constructConsensusFromIndex(startHeight) {
             let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
             let blockHeight;
             let maxProcessedHeight = startHeight - 1;
@@ -198,9 +198,24 @@ class Main {
             const txByBlockHeight = txDataSet.reduce((acc, txData) => {
                 const txBlockHeight = parseInt(txData._id.split('-')[1]);
                 if (!acc[txBlockHeight]) {
-                    acc[txBlockHeight] = [];
+                    acc[txBlockHeight] = {
+                        fundingTx: [],  // Bucket for funding transactions
+                        tradeTx: []     // Bucket for regular trade transactions
+                    };
                 }
-                acc[txBlockHeight].push(txData);
+
+                // Determine if the transaction is a funding transaction (type starting with 4 or 20)
+                for (const valueData of txData.value) {
+                    const payload = valueData.payload;
+                    const type = parseInt(payload.slice(0, 1).toString(36), 36);
+
+                    // Assuming types 4 and 20 are the funding types
+                    if (type === 4 || type === 20) {
+                        acc[txBlockHeight].fundingTx.push(txData);
+                    } else {
+                        acc[txBlockHeight].tradeTx.push(txData);
+                    }
+                }
                 return acc;
             }, {});
 
@@ -220,80 +235,100 @@ class Main {
             blockHeight = startHeight;
             console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
 
-            let saveHeight; // Define saveHeight here
-
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
-                //await AMM.updateOrdersForAllContractAMMs(blockHeight);
-                if (txByBlockHeight[blockHeight]) {
-                    for (const txData of txByBlockHeight[blockHeight]) {
-                        console.log('tx data '+txData)
-                        const txId = txData.value[0].txId;//._id.split('-')[2];
-                        console.log('checking txId ' + txId);
-                        if (await Consensus.checkIfTxProcessed(txId)) {
-                            //console.log('already logged');
-                            continue;
-                        }
+                const blockData = txByBlockHeight[blockHeight];
+                if (blockData) {
+                    // First process funding transactions
+                    await this.processTxSet(blockData.fundingTx, blockHeight);
 
-                        for (const valueData of txData.value) {
-                            var payload = valueData.payload;
-                            //console.log(valueData);
-                            //console.log(payload);
-                            const marker = valueData.marker;
-                            const type = parseInt(payload.slice(0, 1).toString(36), 36);
-                            payload = payload.slice(1, payload.length).toString(36);
-                            const senderAddress = valueData.sender.senderAddress;
-                            const referenceAddress = valueData.reference.address;
-                            const senderUTXO = valueData.sender.amount;
-                            const referenceUTXO = valueData.reference.amount / COIN;
-                            //console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
-                            const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO, blockHeight);
-                            decodedParams.block = blockHeight;
+                    // Then process trade transactions
+                    await this.processTxSet(blockData.tradeTx, blockHeight);
+                }
 
-                            if (decodedParams.type > 0) {
-                                const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
-                                if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
-                                    decodedParams.valid = false;
-                                    decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
-                                } else if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
-                                    decodedParams.valid = false;
-                                    decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
-                                }
-                            }
-
-                            if (decodedParams.valid === true) {
-                                await Consensus.markTxAsProcessed(txId, decodedParams);
-                                console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
-                                await Logic.typeSwitch(type, decodedParams);
-                                await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                            } else {
-                                await Consensus.markTxAsProcessed(txId, decodedParams);
-                                await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                                console.log('invalid tx ' + decodedParams.reason);
-                            }
-                        }
+                // Handle cumulative volumes and vesting after each block
+                const cumVolumes = await VolumeIndex.getCumulativeVolumes();
+                const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
+                if (thisBlockVolumes.global > 0) {
+                    console.log('This is a block volume! ' + thisBlockVolumes);
+                    const updateVesting = await TradeLayerManager.updateVesting(
+                        cumVolumes.ltcPairTotalVolume,
+                        thisBlockVolumes.ltcPairs,
+                        cumVolumes.globalCumulativeVolume,
+                        thisBlockVolumes.global
+                    );
+                    if (updateVesting != null && updateVesting != undefined && thisBlockVolumes != 0) {
+                        console.log('Update Vesting in block ' + blockHeight + ' ' + JSON.stringify(updateVesting));
+                        await TallyMap.applyVesting(2, updateVesting.two, blockHeight);
+                        await TallyMap.applyVesting(3, updateVesting.three, blockHeight);
                     }
                 }
-                const cumVolumes = await VolumeIndex.getCumulativeVolumes()
-                const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
-                if(thisBlockVolumes.global>0){
-                    console.log('this is a block volume! '+thisBlockVolumes)
-                    const updateVesting = await TradeLayerManager.updateVesting(cumVolumes.ltcPairTotalVolume,thisBlockVolumes.ltcPairs,cumVolumes.globalCumulativeVolume,thisBlockVolumes.global)
-                    if(updateVesting!=null&&updateVesting!=undefined&&thisBlockVolumes!=0){
-                    console.log('update Vesting in block' +blockHeight+ ' '+JSON.stringify(updateVesting))
-                    await TallyMap.applyVesting(2,updateVesting.two,blockHeight)
-                    await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
-                    }   
-                }
-                
+
+                // Additional processing steps like withdrawal and clearing
                 await Channels.processWithdrawals(blockHeight);
                 await Clearing.clearingFunction(blockHeight);
+
                 maxProcessedHeight = blockHeight;
             }
 
             await this.saveMaxProcessedHeight(maxProcessedHeight);
-
             return this.syncIfNecessary();
         }
+
+        // Helper function to process a set of transactions
+        async processTxSet(txSet, blockHeight) {
+            for (const txData of txSet) {
+                const txId = txData.value[0].txId;
+                if (await Consensus.checkIfTxProcessed(txId)) {
+                    continue;
+                }
+
+                for (const valueData of txData.value) {
+                    var payload = valueData.payload;
+                    const marker = valueData.marker;
+                    const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                    payload = payload.slice(1, payload.length).toString(36);
+                    const senderAddress = valueData.sender.senderAddress;
+                    const referenceAddress = valueData.reference.address;
+                    const senderUTXO = valueData.sender.amount;
+                    const referenceUTXO = valueData.reference.amount / COIN;
+
+                    const decodedParams = await Types.decodePayload(
+                        txId,
+                        type,
+                        marker,
+                        payload,
+                        senderAddress,
+                        referenceAddress,
+                        senderUTXO,
+                        referenceUTXO,
+                        blockHeight
+                    );
+                    decodedParams.block = blockHeight;
+
+                    // Check if the transaction is valid
+                    if (decodedParams.type > 0) {
+                        const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
+                        if (blockHeight < activationBlock && decodedParams.valid === true) {
+                            decodedParams.valid = false;
+                            decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
+                        } else if (blockHeight < activationBlock && decodedParams.valid === true) {
+                            decodedParams.valid = false;
+                            decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
+                        }
+                    }
+
+                    if (decodedParams.valid === true) {
+                        await Consensus.markTxAsProcessed(txId, decodedParams);
+                        await Logic.typeSwitch(type, decodedParams);
+                        await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                    } else {
+                        await Consensus.markTxAsProcessed(txId, decodedParams);
+                        await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                    }
+                }
+            }
+        }
+
 
         async processTx(txSet, blockHeight){
             for (const txData of txSet) {
@@ -432,24 +467,6 @@ class Main {
         process.exit(0); // or use another method to exit gracefully
       }
 
-    /*first step of real-time mode is meta-level analysis of consensus and re-orgs, 
-    may revert to last persistence checkpoint if re-org detected*/
-    async blockHandlerBegin(blockHash, blockHeight) {
-        //console.log(`Beginning to process block ${blockHeight}`);
-
-        // Check for reorganization using ReOrgChecker
-        /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
-        if (reorgDetected) {
-            console.log(`Reorganization detected at block ${blockHeight}`);
-            await this.handleReorg(blockHeight);
-        } else {
-            // Proceed with regular block processing
-            await this.blockchainPersistence.updateLastKnownBlock(blockHash);
-            // Additional block begin logic here
-        }*/
-        return //console.log('no re-org detected ' +blockHeight)
-    }
-
     async blockHandlerBegin(blockHash, blockHeight) {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
@@ -475,9 +492,10 @@ class Main {
             }
 
             // Pass other transactions to `blockHandlerMid` for processing later
-            this.otherTxs = otherTxs;  // Store remaining txs for mid-processing
+            return otherTxs;  // Store remaining txs for mid-processing
         } catch (error) {
             console.error(`Error in blockHandlerBegin at block ${blockHeight}:`, error);
+            return []
         }
 
          // Check for reorganization using ReOrgChecker

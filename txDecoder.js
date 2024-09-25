@@ -326,13 +326,13 @@ const Decode = {
 
 
     // Decode Exercise Derivative Transaction
-    decodeExerciseDerivative(payload) {
+  decodeExerciseDerivative(payload) {
       const [derivativeContractId, amount] = payload.split(',');
       return {
         derivativeContractId: parseInt(derivativeContractId, 36),
         amount: parseInt(amount, 36),
       };
-    },
+  },
 
    // Decode Trade Contract On-chain Transaction
   decodeTradeContractOnchain: (payload) => {

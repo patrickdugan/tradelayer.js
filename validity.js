@@ -1311,6 +1311,8 @@ const Validity = {
                 params.reason += "Tx sender is not found to be a channel address"
                 return params
             }
+
+
             const channel = await Channels.getChannel(sender)
             console.log('channel returned ' +JSON.stringify(channel))
             let balanceA
@@ -1322,22 +1324,34 @@ const Validity = {
             if(params.columnAIsOfferer==true){
                 balanceA = channel.A[propertyIdOfferedString]
                 balanceB = channel.B[propertyIdDesiredString]
-                if(balanceA<params.amountOffered){
+                const hasSufficientA = TallyMap.hasSufficientChannel(sender,params.propertyIdOffered,params.amountOffered)
+                const hasSufficientB = TallyMap.hasSufficientChannel(sender,params.propertyIdDesired,params.amountDesired)
+
+                console.log('validating token channel trade columnA is offerer'+balanceA+' '+balanceB+' '+channel.A+' '+channel.B)
+                console.log('sufficient channel? '+JSON.stringify(hasSufficientA)+' '+JSON.stringify(hasSufficientB))
+                if(balanceA<params.amountOffered||!hasSufficientA.hasSufficient){
                     params.valid=false
                     params.reason += "Column A has insufficient balance for amountOffered"
                 }
-                if(balanceB<params.amountDesired){
+                if(balanceB<params.amountDesired||!hasSufficientB.hasSufficient){
                     params.valid=false
                     params.reason += "Column B has insufficient balance for amountDesired"
                 }
             }else if(params.columnAIsOfferer==false){
                 balanceA = channel.A[propertyIdOfferedString]
                 balanceB = channel.B[propertyIdDesiredString]
-                if(balanceA<params.amountDesired){
+
+                const hasSufficientA = TallyMap.hasSufficientChannel(sender,params.propertyIdDesired,params.amountDesired)
+                const hasSufficientB = TallyMap.hasSufficientChannel(sender,params.propertyIdOffered,params.amountOffered)
+
+                console.log('validating token channel trade columnB is offerer'+balanceA+' '+balanceB+' '+channel.A+' '+channel.B)
+                console.log('sufficient channel? '+JSON.stringify(hasSufficientA)+' '+JSON.stringify(hasSufficientB))
+               
+                if(balanceA<params.amountDesired||!hasSufficientA.hasSufficient){
                     params.valid=false
                     params.reason += "Column A has insufficient balance for amountDesired"
                 }
-                if(balanceB<params.amountOffered){
+                if(balanceB<params.amountOffered||!hasSufficientB.hasSufficient){
                     params.valid=false
                     params.reason += "Column B has insufficient balance for amountOffered"
                 }

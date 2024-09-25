@@ -211,46 +211,56 @@ class TxIndex {
         }
     }*/
 
-    static async DecodeRawTransaction(rawTx) {
-        try {
-            const decodedTx = await decoderawtransactionAsync(rawTx);
-            const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
-            if (opReturnOutput) {
-                const opReturnData = opReturnOutput.scriptPubKey.hex;
-                //console.log('OP_RETURN Data:', opReturnData);
-                // Extract and log the "tl" marker
-                let markerHex = opReturnData.substring(4, 8); // '746c' for 'tl'
-                let marker = Buffer.from(markerHex, 'hex').toString();
-                let payloadStart= 8
-        
-                if (marker == ']t') {
-                    console.log('Entering weird OP_Return pacing block');
-                    console.log('Current marker:', marker);
-                    try {
-                        console.log('weird OP_Return pacing', opReturnData.substring(6, 10));
-                        markerHex = opReturnData.substring(6, 10);
-                        marker = Buffer.from(markerHex, 'hex').toString();
-                        payloadStart = 10;
-                        console.log('fixed?', marker);
-                    } catch (error) {
-                        console.error('Error in processing:', error);
+        static async DecodeRawTransaction(rawTx) {
+            try {
+                const decodedTx = await decoderawtransactionAsync(rawTx);
+
+                const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
+                if (opReturnOutput) {
+                    const opReturnData = opReturnOutput.scriptPubKey.hex;
+                    //console.log('OP_RETURN Data:', opReturnData);
+
+                    // Check if the hex contains the marker "746c" (which corresponds to "tl")
+                    const markerHex = "746c"; // Hex for "tl"
+
+                    let markerPosition = opReturnData.indexOf(markerHex); // Check if the marker is anywhere in the string
+                    if (markerPosition === -1) {
+                        //console.error('Marker "tl" not found in OP_RETURN data');
+                        return null;
                     }
+
+                    //console.log(`Marker "tl" found at position: ${markerPosition}`);
+
+                    // Depending on where the marker is found, adjust the payload start accordingly
+                    let payloadStart;
+                    if (markerPosition === 4) {
+                        payloadStart = 8; // Standard position
+                    } else if (markerPosition === 5) {
+                        payloadStart = 9; // One character offset
+                    } else if (markerPosition === 3) {
+                        payloadStart = 7; // One character before
+                    } else {
+                        //console.log('Unexpected marker position, attempting fallback logic');
+                        payloadStart = markerPosition + 4; // Set payload to start right after the marker
+                    }
+
+                    // Extract and log the actual payload after the marker
+                    const payloadHex = opReturnData.substring(payloadStart);
+                    const payload = Buffer.from(payloadHex, 'hex').toString();
+                    //console.log('Decoded Payload:', payload);
+
+                    // Return the marker and payload if they are valid
+                    return { marker: 'tl', payload, decodedTx };
+
+                } else {
+                    //console.log('No OP_RETURN output found.');
+                    return null;
                 }
-                // Extract and log the actual payload
-                const payloadHex = opReturnData.substring(payloadStart);
-                const payload = Buffer.from(payloadHex, 'hex').toString();
-                if(marker=='tl'){console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload+ ' decoding the whole thing '+Buffer.from(opReturnData, 'hex').toString())};
-                return { marker, payload , decodedTx};
-            } else {
-                //console.log('No OP_RETURN output found.');
-                return null;
+            } catch (error) {
+                //console.error('Error decoding raw transaction:', error);
             }
-            // Process decoded transaction logic here...
-            return decodedTx;
-        } catch (error) {
-            //console.error('Error decoding raw transaction:', error);
         }
-    }
+
 
     static async processTransaction(payload, txId, marker) {
         const Types = require('./Types.js'); // Lazy load Types
