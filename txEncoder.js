@@ -73,11 +73,12 @@ const Encode = {
 
     // Encode Commit Token Transaction
     encodeCommit: (params) => {
-        const amount = new BigNumber(params.amount).times(1e8).toNumber();
+        const amount = new BigNumber(params.amount).times(1e8).toString(36);
+        const channelAddress = params.channelAddress.length > 42 ? `ref:${params.ref || 0}` : params.channelAddress; // Handle long multisig addresses
         const payload = [
             params.propertyId.toString(36),
-            params.amount.toString(36),
-            params.channelAddress
+            amount,
+            channelAddress
         ];
         return payload.join(',');
     },
@@ -325,11 +326,12 @@ const Encode = {
     },
 
     // Encode Transfer Transaction
+    
     encodeTransfer: (params) => {
         const propertyId = params.propertyId.toString(36);
-        const amounts = new BigNumber(params.amount).times(1e8).toNumber();
-        const isColumnA = params.isColumnA
-        const destinationAddr = params.destinationAddr
+        const amounts = new BigNumber(params.amount).times(1e8).toString(36);
+        const isColumnA = params.isColumnA ? 1 : 0;
+        const destinationAddr = params.destinationAddr.length > 42 ? `ref:${params.ref || 0}` : params.destinationAddr; // Handle long multisig addresses
         return [propertyId, amounts, isColumnA, destinationAddr].join(',');
     },
 

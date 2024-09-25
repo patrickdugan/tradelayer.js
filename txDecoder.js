@@ -355,7 +355,7 @@ const Decode = {
           }else{
              toChannelAddress = parts[3] || ''
           }
-          return {propertyId:propertyId, amount:amount, isColumnA:isColumnA, toChannelAddress:channelAddress, ref:ref}
+          return {propertyId:propertyId, amount:amount, isColumnA:isColumnA, toChannelAddress:toChannelAddress, ref:ref}
     },
 
     // Decode Settle Channel PNL Transaction

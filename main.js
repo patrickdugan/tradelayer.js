@@ -61,7 +61,7 @@ class Main {
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
-        this.getNetworkInfoAsync = util.promisify(this.client.cmd.bind(this.client, 'getNetworkInfo'));
+        this.getNetworkInfoAsync = util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'));
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -440,12 +440,9 @@ class Main {
                 }
 
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
-                let newtxBlock = await this.processBlock(blockData, blockNumber);
-                if(newTxBlock!=null){
-                    latestProcessedBlock = newTxBlock
-                }
+                await this.processBlock(blockData, blockNumber);
                 let trackHeight = blockNumber;
-                await TxIndex.saveMaxHeight(latestProcessedBlock, true, trackHeight)
+                await this.saveTrackHeight(trackHeight)
             }
 
             if(pause==true){
@@ -463,7 +460,8 @@ class Main {
         async checkNetworkStatus() {
             try {
                 // Fetch network info using the promisified getnetworkinfo RPC call
-                const networkInfo = await getNetworkInfoAsync();
+                console.log('about to ping')
+                const networkInfo = await this.getNetworkInfoAsync();
 
                 // Check if the network is active
                 const networkActive = networkInfo.networkactive;
@@ -526,11 +524,11 @@ class Main {
         const tx = await this.blockHandlerBegin(blockData.hash, blockNumber);
 
         // Process each transaction in the block
-        await this.blockHandlerMid(tx, blockNumber);
+        blockNumber = await this.blockHandlerMid(tx, blockNumber);
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
-        return
+        return blockNumber
     }
 
      async shutdown() {
@@ -590,7 +588,7 @@ class Main {
             if(txData.length>=1){
                 console.log('tx Data for block '+blockHeight + 'txData'+JSON.stringify(txData))
                  await this.processTx(txData,blockHeight)
-                 return blockHeight
+                 this.saveMaxProcessedHeight(blockHeight) 
 
             }
            //console.log('about to call construct consensus in block '+blockHeight)
@@ -653,34 +651,26 @@ class Main {
         // This could involve reverting to a previous state, re-processing blocks, etc.
     }
 
-    async saveMaxProcessedHeight(maxProcessedHeight, realtime, saveHeight){ 
+    async saveMaxProcessedHeight(maxProcessedHeight){ 
          try {
-        if(realtime!=true){console.log('MaxProcessedHeight updated to:', maxProcessedHeight);
-               
              await db.getDatabase('consensus').updateAsync(
                     { _id: 'MaxProcessedHeight' },
                     { $set: { value: maxProcessedHeight } },
                     { upsert: true }
                 );
-            }else{
-                await db.getDatabase('consensus').updateAsync(
-                    { _id: 'MaxProcessedHeight' },
-                    { $set: { value: maxProcessedHeight } },
-                    { upsert: true }
-                );
-
-                await db.getDatabase('consensus').updateAsync(
-                    { _id: 'TrackHeight' },
-                    { $set: { value: saveHeight } },
-                    { upsert: true }
-                    )
-
                 //console.log('realtime mode update '+maxProcessedHeight)
-            }
         } catch (error) {
             console.error('Error updating MaxProcessedHeight:', error);
             throw error; // or handle the error as needed
         }
+    }
+
+    async saveTrackHeight(saveHeight){
+           await db.getDatabase('consensus').updateAsync(
+                    { _id: 'TrackHeight' },
+                    { $set: { value: saveHeight } },
+                    { upsert: true }
+                    )
     }
  
     async loadMaxProcessedHeight() {
