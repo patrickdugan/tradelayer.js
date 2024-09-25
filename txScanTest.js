@@ -28,16 +28,12 @@ async function processBlockData(blockData, blockHeight) {
                 const txData = await DecodeRawTransaction(txHex);
                  if (txData != null && txData!= undefined && txData.marker === 'tl') {
                     const payload = txData.payload;
-                    const thisTx = await processTransaction(payload, txId, txData.marker);
-                    txDetails.push(thisTx)
-                    console.log('payload '+payload+JSON.stringify(txDetails))
+                    //const thisTx = await processTransaction(payload, txId, txData.marker);
+                    //txDetails.push(thisTx)
+                    console.log('payload '+payload)
                 }
-            }
-        
-
-           
+            }       
         }
-         
         return txDetails
     }
 
@@ -87,7 +83,7 @@ async function DecodeRawTransaction(rawTx) {
                 let marker = Buffer.from(markerHex, 'hex').toString();
                 let payloadStart= 8
         
-                if (marker == ']t') {
+                if (marker != 'tl'&&marker.includes('t')) {
                     console.log('Entering weird OP_Return pacing block');
                     console.log('Current marker:', marker);
                     try {
@@ -95,6 +91,14 @@ async function DecodeRawTransaction(rawTx) {
                         markerHex = opReturnData.substring(6, 10);
                         marker = Buffer.from(markerHex, 'hex').toString();
                         payloadStart = 10;
+                        if(marker != 'tl'){
+                            markerHex = opReturnData.substring(5, 9);
+                            marker = Buffer.from(markerHex, 'hex').toString();
+                            if(marker != 'tl'){
+                                return null
+                            }
+                            payloadStart = 9;
+                        }
                         console.log('fixed?', marker);
                     } catch (error) {
                         console.error('Error in processing:', error);

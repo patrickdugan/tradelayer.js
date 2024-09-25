@@ -1598,6 +1598,11 @@ const Validity = {
         params.amount = roundedAmount
         // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
+        if(!contractInfo||contractInfo==null){
+            params.valid=false
+            params.reason += "hedge contract not found"
+            return params
+        }
         const tokenPair = contractInfo.onChainData[0][0]+'-'+contractInfo.onChainData[0][1]
         const collateralPropertyId = contractInfo.collateralPropertyId
         const notionalValue = contractInfo.notionalValue
