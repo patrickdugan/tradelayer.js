@@ -452,7 +452,7 @@ class Main {
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
-            await TxIndex.saveMaxHeight(latestProcessedBlock, true, trackHeight)
+            await this.saveTrackHeight(chainTip)
         }
         return syncIfNecessary()
     }
@@ -460,14 +460,14 @@ class Main {
         async checkNetworkStatus() {
             try {
                 // Fetch network info using the promisified getnetworkinfo RPC call
-                console.log('about to ping')
+                //console.log('about to ping')
                 const networkInfo = await this.getNetworkInfoAsync();
 
                 // Check if the network is active
                 const networkActive = networkInfo.networkactive;
                 const connections = networkInfo.connections;
 
-                console.log('Network Status:', networkInfo);
+                //console.log('Network Status:', networkInfo);
 
                 // Determine if there is a potential network outage or issue
                 if (!networkActive) {
@@ -481,7 +481,7 @@ class Main {
                 }
 
                 // If everything seems fine
-                console.log('Network is active with', connections, 'connections.');
+                //console.log('Network is active with', connections, 'connections.');
                 return { status: true, connections: connections };
 
             } catch (error) {
