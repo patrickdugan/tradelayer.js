@@ -11,103 +11,74 @@ const Decode = {
     decodeTokenIssue: (payload) => {
         const parts = payload.split(',');
         return {
-            initialAmount: parseInt(parts[0], 36),
-            ticker: parts[1],
-            whitelists: parts[2].split(';').map(val => parseInt(val, 36)),
+            initialAmount: parts[0] ? parseInt(parts[0], 36) : 0,
+            ticker: parts[1] || '',
+            whitelists: parts[2] ? parts[2].split(';').map(val => parseInt(val, 36)) : [],
             managed: parts[3] === '1',
-            backupAddress: parts[4],
+            backupAddress: parts[4] || '',
             nft: parts[5] === '1'
         };
     },
 
-    // Decode Send Transaction
+        // Decode Send Transaction
     decodeSend: (payload) => {
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
-        const address = parts[1];
+        const address = parts[1] || '';
 
         if (sendAll) {
             return { sendAll: sendAll, address: address };
         } else if (parts.length === 4) {
-            const propertyId = Decode.decodePropertyId(parts[2]);
-            const amount = parseInt(parts[3], 36);
+            const propertyId = Decode.decodePropertyId(parts[2] || '');
+            const amount = parseInt(parts[3] || '0', 36);
             return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount };
         } else {
-            const propertyIds = parts[2].split(',').map(id => Decode.decodePropertyId(id));
-            const amounts = parts[3].split(',').map(amt => parseInt(amt, 36));
+            const propertyIds = (parts[2] || '').split(',').map(id => Decode.decodePropertyId(id));
+            const amounts = (parts[3] || '').split(',').map(amt => parseInt(amt || '0', 36));
             return { sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
     },
 
-     decodePropertyId(encodedPropertyId) {
+    // Decode Property ID with error handling
+    decodePropertyId(encodedPropertyId) {
         if (encodedPropertyId.startsWith('s')) {
-            // Remove the 's' from the beginning
             const trimmedEncodedPropertyId = encodedPropertyId.substring(1);
-
-            // Handle both formats: s5-4 and s-5-4
             let encodedCollateralId, encodedContractId;
             if (trimmedEncodedPropertyId.includes('-')) {
-                // Format: s-5-4 or s5-4
                 const parts = trimmedEncodedPropertyId.split('-');
-                
-                // Determine the correct format
                 if (parts.length === 2) {
-                    // Format: s5-4
                     [encodedCollateralId, encodedContractId] = parts;
                 } else if (parts.length === 3 && parts[0] === '') {
-                    // Format: s-5-4
                     encodedCollateralId = parts[1];
                     encodedContractId = parts[2];
                 } else {
-                    console.warn('Unexpected encodedPropertyId format:', trimmedEncodedPropertyId);
-                    return `s-NaN-NaN`; // Returning NaN as a fallback
+                    return `s-NaN-NaN`;
                 }
             } else {
-                // Unexpected format
-                console.warn('Unexpected encodedPropertyId format:', trimmedEncodedPropertyId);
-                return `s-NaN-NaN`; // Returning NaN as a fallback
+                return `s-NaN-NaN`;
             }
-
-            console.log('Encoded Collateral ID:', encodedCollateralId); // Debugging log
-            console.log('Encoded Contract ID:', encodedContractId); // Debugging log
-
-            // Decode both parts from base36 to integers
             const collateralId = parseInt(encodedCollateralId, 36);
             const contractId = parseInt(encodedContractId, 36);
-
-            // Handle NaN cases gracefully
             if (isNaN(collateralId) || isNaN(contractId)) {
-                console.warn('Failed to parse encoded parts:', { encodedCollateralId, encodedContractId });
-                return `s-NaN-NaN`; // Returning NaN to indicate parsing failure
+                return `s-NaN-NaN`;
             }
-
-            const decodedPropertyId = `s-${collateralId}-${contractId}`;
-            console.log('Decoded Property ID:', decodedPropertyId);
-
-            return decodedPropertyId;
+            return `s-${collateralId}-${contractId}`;
         } else {
-            // For non-synthetic property IDs
             const result = parseInt(encodedPropertyId, 36);
-            if (isNaN(result)) {
-                console.warn('Failed to parse non-synthetic property ID:', encodedPropertyId);
-                return NaN; // Returning NaN to indicate failure
-            }
-            return result;
+            return isNaN(result) ? NaN : result;
         }
     },
 
     // Decode Trade Token for UTXO Transaction
     decodeTradeTokenForUTXO: (payload) => {
         const parts = payload.split(',');
-        const amount = new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
-        console.log('amount in UTXO trade decode '+amount)
         return {
-            propertyId: Decode.decodePropertyId(parts[0]),
-            amount: amount, // Parse as BigNumber and divide by 100 million
-            columnA: parts[2]==="1",
-            satsExpected: parseInt(parts[3], 36),
-            tokenOutput: parseInt(parts[4]),
-            payToAddress: parseInt(parts[5])
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            columnA: parts[2] === "1",
+            satsExpected: parseInt(parts[3] || '0', 36),
+            tokenOutput: parseInt(parts[4] || '0'),
+            payToAddress: parseInt(parts[5] || '0')
         };
     },
 
@@ -115,9 +86,9 @@ const Decode = {
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: Decode.decodePropertyId(parts[0]),
-            amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            channelAddress: parts[2]
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            channelAddress: parts[2] || ''
         };
     },
 
@@ -125,91 +96,68 @@ const Decode = {
     decodeOnChainTokenForToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyIdOffered: Decode.decodePropertyId(parts[0]),
-            propertyIdDesired: Decode.decodePropertyId(parts[1]),
-            amountOffered: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), // Divide by 100 million
-            amountExpected: new BigNumber(parts[3], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), // Divide by 100 million
+            propertyIdOffered: Decode.decodePropertyId(parts[0] || ''),
+            propertyIdDesired: Decode.decodePropertyId(parts[1] || ''),
+            amountOffered: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            amountExpected: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             stop: parts[4] === "1",
-            post: parts[5] === "1",
+            post: parts[5] === "1"
         };
     },
-
-    decodeCancelOrder:(encodedTx) =>{
+   
+    // Decode Cancel Order Transaction with guards
+    decodeCancelOrder: (encodedTx) => {
         const elements = encodedTx.split(',');
-
-        // Decode the first element
         let isContract = elements[0];
         const cancelParams = {};
-        //console.log('decoding cancel, isContract'+isContract)
-        // Determine if it's a contract cancellation based on the first element
-        let offeredPropertyId
-        let desiredPropertyId
-        let cancelAll
-        if (isContract==1) {
-            isContract=true
-            offeredPropertyId = Decode.decodePropertyId(elements[1]);
-            desiredPropertyId = null;
-            cancelAll = parseInt(elements[2], 36);
+        let offeredPropertyId, desiredPropertyId, cancelAll;
 
-            // Check if elements[3] exists before accessing its length property
+        if (isContract == 1) {
+            isContract = true;
+            offeredPropertyId = Decode.decodePropertyId(elements[1] || '');
+            cancelAll = parseInt(elements[2] || '0', 36);
             if (elements[3] && elements[3].length > 20) {
                 cancelParams.txid = elements[3];
             } else {
-                cancelParams.price = elements[3];
-                cancelParams.side = elements[4];
+                cancelParams.price = elements[3] || '0';
+                cancelParams.side = elements[4] || '0';
             }
         } else {
-            isContract=false
-            offeredPropertyId = Decode.decodePropertyId(elements[1]);
-            desiredPropertyId = isContract ? null : Decode.decodePropertyId(elements[2]);
-            cancelAll = parseInt(elements[3], 36);
-
-            // Check if elements[4] exists before accessing its length property
+            isContract = false;
+            offeredPropertyId = Decode.decodePropertyId(elements[1] || '');
+            desiredPropertyId = Decode.decodePropertyId(elements[2] || '');
+            cancelAll = parseInt(elements[3] || '0', 36);
             if (elements[4] && elements[4].length > 20) {
-                // It's a non-contract cancellation with additional parameters
                 cancelParams.txid = elements[4];
             } else {
-                const priceDecoded = new BigNumber(elements[3]).dividedBy(8).toNumber() // Decode and divide by 8
-                cancelParams.price = priceDecoded;   cancelParams.side = elements[5]
-                if(cancelParams.side==1){
-                  cancelParams.side=true
-                }else{
-                  cancelParams.side=false
-                }
+                const priceDecoded = new BigNumber(elements[3] || '0').dividedBy(8).toNumber();
+                cancelParams.price = priceDecoded;
+                cancelParams.side = elements[5] || '0';
             }
         }
-
-        // Decode the remaining elements
-
-        return {
-            isContract,
-            offeredPropertyId,
-            desiredPropertyId,
-            cancelAll,
-            cancelParams
-        };
+        return { isContract, offeredPropertyId, desiredPropertyId, cancelAll, cancelParams };
     },
 
     // Decode Create Whitelist Transaction
     decodeCreateWhitelist: (payload) => {
         const parts = payload.split(',');
         return {
-            backupAddress: parts[0],
-            name: parts[1],
-            url: parts[2],
-            description: parts[3]
+            backupAddress: parts[0] || '',
+            name: parts[1] || '',
+            url: parts[2] || '',
+            description: parts[3] || ''
         };
     },
 
-    // Decode Update Admin Transaction
+        // Decode Update Admin Transaction
     decodeUpdateAdmin: (payload) => {
         const parts = payload.split(',');
         return {
-            newAddress: parts[0],
+            newAddress: parts[0] || '',
             whitelist: parts[1] === '1',
             oracle: parts[2] === '1',
             token: parts[3] === '1',
-            id: parseInt(parts[4], 36),
+            id: parseInt(parts[4] || '0', 36),
             updateBackup: parts[5] === '1'
         };
     },
@@ -218,23 +166,23 @@ const Decode = {
     decodeIssueOrRevokeAttestation: (payload) => {
         const parts = payload.split(',');
         return {
-            revoke: parts[0]===1,
-            id: parseInt(parts[1],36),
-            targetAddress: parts[3],
-            metaData: parts[4]
+            revoke: parts[0] === '1',
+            id: parseInt(parts[1] || '0', 36),
+            targetAddress: parts[3] || '',
+            metaData: parts[4] || ''
         };
     },
 
-    // Decode Revoke Attestation Transaction
+    // Decode AMM Pool Transaction
     decodeAMMPool: (payload) => {
         const parts = payload.split(',');
         return {
             isRedeem: parts[0] === '1',
             isContract: parts[1] === '1',
-            id: Decode.decodePropertyId(parts[2]),
-            amount: parseInt(parts[3],36),
-            id2: Decode.decodePropertyId(parts[4]),
-            amount2: parseInt(parts[5],36)
+            id: Decode.decodePropertyId(parts[2] || ''),
+            amount: parseInt(parts[3] || '0', 36),
+            id2: Decode.decodePropertyId(parts[4] || ''),
+            amount2: parseInt(parts[5] || '0', 36)
         };
     },
 
@@ -242,18 +190,18 @@ const Decode = {
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
         return {
-            propertyId: Decode.decodePropertyId(parts[0]),
-            amountGranted: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            addressToGrantTo: parts[2]
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            addressToGrantTo: parts[2] || ''
         };
     },
 
     // Decode Redeem Managed Token Transaction
     decodeRedeemManagedToken: (payload) => {
-      const parts = payload.split(',');
+        const parts = payload.split(',');
         return {
-            propertyId: Decode.decodePropertyId(parse[0]),
-            amountDestroyed: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            amountDestroyed: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
         };
     },
 
@@ -261,11 +209,11 @@ const Decode = {
     decodeCreateOracle: (payload) => {
         const parts = payload.split(',');
         return {
-            ticker: parts[0],
-            url: parts[1],
-            backupAddress: parts[2],
-            whitelists: parts[3].split(';').map(val => parseInt(val, 36)),
-            lag: parseInt(parts[4], 36)
+            ticker: parts[0] || '',
+            url: parts[1] || '',
+            backupAddress: parts[2] || '',
+            whitelists: parts[3] ? parts[3].split(';').map(val => parseInt(val, 36)) : [],
+            lag: parseInt(parts[4] || '0', 36)
         };
     },
 
@@ -273,8 +221,8 @@ const Decode = {
     decodePublishOracleData: (payload) => {
         const parts = payload.split(',');
         const data = {
-            oracleId: parseInt(parts[0], 36), // Decode oracleId as the first part
-            price: parseInt(parts[1], 36)     // Adjust indices for other parts
+            oracleId: parseInt(parts[0] || '0', 36), // Decode oracleId as the first part
+            price: parseInt(parts[1] || '0', 36)     // Adjust indices for other parts
         };
         if (parts[2]) {
             data.high = parseInt(parts[2], 36);
@@ -289,10 +237,11 @@ const Decode = {
     },
 
     // Decode Close Oracle Transaction
-    decodeCloseOracle(payload) {
-      return oracleId= parseInt(payload, 36); // No parameters
+    decodeCloseOracle: (payload) => {
+        return parseInt(payload || '0', 36); // No parameters
     },
 
+    // Decode Create Future Contract Series Transaction
     decodeCreateFutureContractSeries: (payload) => {
         const parts = payload.split(',');
 
@@ -303,7 +252,7 @@ const Decode = {
         let onChainDataParts = [];
 
         // Parse onChainData only if the contract is not native
-        if (isNative) {
+        if (!isNative && parts[2]) {
             onChainDataParts = parts[2].split(';').map(pair => 
                 pair.split(':').map(val => val ? parseInt(val, 36) : null)
             );
@@ -311,12 +260,12 @@ const Decode = {
 
         return {
             native: isNative,
-            underlyingOracleId: parseInt(parts[1], 36),
+            underlyingOracleId: parseInt(parts[1] || '0', 36),
             onChainData: onChainDataParts,
-            notionalPropertyId: Decode.decodePropertyId(parts[3]),
-            notionalValue: parseFloat(parts[4]), // Assuming notionalValue should be a float
-            collateralPropertyId: Decode.decodePropertyId(parts[5]),
-            leverage: parseFloat(parts[6]), // Assuming leverage should be a float
+            notionalPropertyId: Decode.decodePropertyId(parts[3] || ''),
+            notionalValue: parseFloat(parts[4] || '0'), // Assuming notionalValue should be a float
+            collateralPropertyId: Decode.decodePropertyId(parts[5] || ''),
+            leverage: parseFloat(parts[6] || '0'), // Assuming leverage should be a float
             expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,
             series: parts[8] ? parseInt(parts[8], 36) : null,
             inverse: parts[9] === '1',
@@ -324,124 +273,124 @@ const Decode = {
         };
     },
 
-
     // Decode Exercise Derivative Transaction
-  decodeExerciseDerivative(payload) {
-      const [derivativeContractId, amount] = payload.split(',');
-      return {
-        derivativeContractId: parseInt(derivativeContractId, 36),
-        amount: parseInt(amount, 36),
-      };
-  },
+    decodeExerciseDerivative: (payload) => {
+        const [derivativeContractId, amount] = payload.split(',');
+        return {
+            derivativeContractId: parseInt(derivativeContractId || '0', 36),
+            amount: parseInt(amount || '0', 36)
+        };
+    },
 
-   // Decode Trade Contract On-chain Transaction
-  decodeTradeContractOnchain: (payload) => {
-    const parts = payload.split(',');
-    return {
-      contractId: parseInt(parts[0], 36),
-      price: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-      sell: parts[3] === '1',
-      insurance: parts[4] === '1',
-      reduce: parts[5]==="1",
-      post: parts[6]==="1",
-      stop: parts[7]==="1"
-    };
-  },
+    // Decode Trade Contract On-chain Transaction
+    decodeTradeContractOnchain: (payload) => {
+        const parts = payload.split(',');
+        return {
+            contractId: parseInt(parts[0] || '0', 36),
+            price: parseInt(parts[1] || '0', 36),
+            amount: parseInt(parts[2] || '0', 36),
+            sell: parts[3] === '1',
+            insurance: parts[4] === '1',
+            reduce: parts[5] === '1',
+            post: parts[6] === '1',
+            stop: parts[7] === '1'
+        };
+    },
 
-  // Decode Trade Contract in Channel Transaction
-  decodeTradeContractChannel: (payload) => {
-    const parts = payload.split(',');
-    return {
-      contractId: parseInt(parts[0], 36),
-      price: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-      columnAIsSeller: parts[3] === '1',
-      expiryBlock: parseInt(parts[4], 36),
-      insurance: parts[5] === '1',
-    };
-  },
+    // Decode Trade Contract in Channel Transaction
+    decodeTradeContractChannel: (payload) => {
+        const parts = payload.split(',');
+        return {
+            contractId: parseInt(parts[0] || '0', 36),
+            price: parseInt(parts[1] || '0', 36),
+            amount: parseInt(parts[2] || '0', 36),
+            columnAIsSeller: parts[3] === '1',
+            expiryBlock: parseInt(parts[4] || '0', 36),
+            insurance: parts[5] === '1',
+        };
+    },
 
-  // Decode Trade Tokens in Channel Transaction
-  decodeTradeTokensChannel: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIdOffered: Decode.decodePropertyId(parts[0]),
-      propertyIdDesired: Decode.decodePropertyId(parts[1]),
-      amountOffered: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-      amountDesired: new BigNumber(parts[3], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-      columnAIsOfferer: parts[4] === '1',
-      expiryBlock: parseInt(parts[5], 36),
-    };
-  },
+    // Decode Trade Tokens in Channel Transaction
+    decodeTradeTokensChannel: (payload) => {
+        const parts = payload.split(',');
+        return {
+            propertyIdOffered: Decode.decodePropertyId(parts[0] || ''),
+            propertyIdDesired: Decode.decodePropertyId(parts[1] || ''),
+            amountOffered: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            amountDesired: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            columnAIsOfferer: parts[4] === '1',
+            expiryBlock: parseInt(parts[5] || '0', 36),
+        };
+    },
 
-  // Decode Withdrawal Transaction
-  decodeWithdrawal: (payload) => {
-    const parts = payload.split(',');
-    return {
-      withdrawAll: parts[0]==="1",
-      propertyId: Decode.decodePropertyId(parts[1]),
-      amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-      column: parts[3]==="1",
-      channelAddress: parts[4],
-    };
-  },
+    // Decode Withdrawal Transaction
+    decodeWithdrawal: (payload) => {
+        const parts = payload.split(',');
+        return {
+            withdrawAll: parts[0] === '1',
+            propertyId: Decode.decodePropertyId(parts[1] || ''),
+            amount: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            column: parts[3] === '1',
+            channelAddress: parts[4] || '',
+        };
+    },
 
-  // Decode Transfer Transaction
-  decodeTransfer: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyId: Decode.decodePropertyId(parts[0]),
-      amount: new BigNumber(parts[1], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-      isColumnA: parts[2]==="1",
-      toChannelAddress: parts[3],
-    };
-  },
+    // Decode Transfer Transaction
+    decodeTransfer: (payload) => {
+        const parts = payload.split(',');
+        return {
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            isColumnA: parts[2] === '1',
+            toChannelAddress: parts[3] || '',
+        };
+    },
 
-  // Decode Settle Channel PNL Transaction
-  decodeSettleChannelPNL: (payload) => {
-    const parts = payload.split(',');
-    return {
-      txidNeutralized: parts[0],
-      contractId: parseInt(parts[1], 36),
-      amountCancelled: parseInt(parts[2], 36),
-      propertyId: Decode.decodePropertyId(parts[3]),
-      amountSettled: new BigNumber(parts[4], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-      close: parts[5] === '1',
-      propertyId2: parts[6] ? Decode.decodePropertyId(parts[6]) : null,
-      amountDelivered: parts[7] ? new BigNumber(parts[7], 36).div(1e8).toNumber() : null,
-    };
-  },
+    // Decode Settle Channel PNL Transaction
+    decodeSettleChannelPNL: (payload) => {
+        const parts = payload.split(',');
+        return {
+            txidNeutralized: parts[0] || '',
+            contractId: parseInt(parts[1] || '0', 36),
+            amountCancelled: parseInt(parts[2] || '0', 36),
+            propertyId: Decode.decodePropertyId(parts[3] || ''),
+            amountSettled: new BigNumber(parts[4] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            close: parts[5] === '1',
+            propertyId2: parts[6] ? Decode.decodePropertyId(parts[6]) : null,
+            amountDelivered: parts[7] ? new BigNumber(parts[7], 36).div(1e8).toNumber() : null,
+        };
+    },
 
-  // Decode Mint Synthetic Transaction
-  decodeMintSynthetic: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyId: Decode.decodePropertyId(parts[0]),
-      contractId: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-    };
-  },
+    // Decode Mint Synthetic Transaction
+    decodeMintSynthetic: (payload) => {
+        const parts = payload.split(',');
+        return {
+            propertyId: Decode.decodePropertyId(parts[0] || ''),
+            contractId: parseInt(parts[1] || '0', 36),
+            amount: parseInt(parts[2] || '0', 36),
+        };
+    },
 
-  // Decode Redeem Synthetic Transaction
-  decodeRedeemSynthetic: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyId: parseInt(parts[0], 36),
-      contractId: parseInt(parts[1], 36),
-      amount: parseInt(parts[2], 36),
-    };
-  },
+    // Decode Redeem Synthetic Transaction
+    decodeRedeemSynthetic: (payload) => {
+        const parts = payload.split(',');
+        return {
+            propertyId: parseInt(parts[0] || '0', 36),
+            contractId: parseInt(parts[1] || '0', 36),
+            amount: parseInt(parts[2] || '0', 36),
+        };
+    },
 
-  // Decode Pay to Tokens Transaction
-  decodePayToTokens: (payload) => {
-    const parts = payload.split(',');
-    return {
-      propertyIdTarget: parseInt(parts[0], 36),
-      propertyIdUsed: parseInt(parts[1], 36),
-      amount: new BigNumber(parts[2], 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-    };
-  },
+    // Decode Pay to Tokens Transaction
+    decodePayToTokens: (payload) => {
+        const parts = payload.split(',');
+        return {
+            propertyIdTarget: parseInt(parts[0] || '0', 36),
+            propertyIdUsed: parseInt(parts[1] || '0', 36),
+            amount: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+        };
+    },
+
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };
