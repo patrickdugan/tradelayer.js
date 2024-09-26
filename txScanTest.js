@@ -22,7 +22,7 @@ async function processBlockData(blockData, blockHeight) {
             let txDetails =[]
         for (const txId of blockData.tx) {
             //console.log('txId '+txId)
-            if(txId=="b35d344d91f7a4dee52431e37f46db84c65e596ac1b8b08fb62302bd14b7c18b"||txId=="9522f815a98299313532a870a82026470c7aaec4ac35a8c5e8e5775e73ab2ac8"){
+            if(txId=="883cf77e4d1f5e32969849ca7db9b626f5363af9edf866972de2076313df7f95"){
                 //console.log('mmmkay')
                 const txHex = await fetchTransactionData(txId);
                 const txData = await DecodeRawTransaction(txHex);
@@ -123,7 +123,7 @@ async function DecodeRawTransaction(rawTx) {
 
 async function doEit(){
 
-const height = 3428587
+const height = 3432676
 let blockData = await fetchBlockData(height);
 
 let txDetails = await processBlockData(blockData, height);

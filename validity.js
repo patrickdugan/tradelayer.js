@@ -309,16 +309,19 @@ const Validity = {
         validateCommit: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
-
+            //console.log('inside validate commit '+JSON.stringify(params))
             if(params.ref){
+                //console.log(params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
 
                 let matchingOutput = null;
-                
+                //console.log(JSON.stringify(outputs)) 
                 // Loop through the outputs array to find the one with the matching vout
                 for (let i = 0; i < outputs.length; i++) {
-                    if (outputs[i].vout === params.ref) {
+                    //console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
+                    if (outputs[i].vout === Number(params.ref)) {
                         matchingOutput = outputs[i];
+                        //console.log('match output '+matchingOutput)
                         break; // Exit loop once the matching output is found
                     }
                 }
@@ -326,14 +329,15 @@ const Validity = {
                 if (matchingOutput) {
                     // Access the matching output's address and satoshis
                     params.channelAddress = matchingOutput.address;
+                    console.log('params.channelAddress '+params.channelAddress)
                 }else{
                     params.valid = false
                     params.reason += "No channel address detectable in payload or ref: output"
                 }
             }
-
+            console.log('about to check tally for commit '+params.senderAddress+' '+params.propertyId+' '+params.amount)
             let hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
-            console.log('inside validate commit '+JSON.stringify(hasSufficientBalance)+params.amount)
+            console.log('checking balance in commit '+JSON.stringify(hasSufficientBalance)+params.amount)
             // Check if the sender has sufficient balance
             if (hasSufficientBalance.hasSufficient==false){
                 params.valid = false

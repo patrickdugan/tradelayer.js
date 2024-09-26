@@ -156,7 +156,6 @@ class Main {
         }
     }
 
-
     async constructOrLoadConsensus() {
         let consensusState;
 
@@ -198,27 +197,35 @@ class Main {
             // Group transactions by block height
             const txByBlockHeight = txDataSet.reduce((acc, txData) => {
                 const txBlockHeight = parseInt(txData._id.split('-')[1]);
-                if (!acc[txBlockHeight]) {
+                if(!acc[txBlockHeight]){
                     acc[txBlockHeight] = {
                         fundingTx: [],  // Bucket for funding transactions
                         tradeTx: []     // Bucket for regular trade transactions
                     };
                 }
-
+                //console.log('troubleshooting 1 '+txData.value)
                 // Determine if the transaction is a funding transaction (type starting with 4 or 20)
-                for (const valueData of txData.value) {
+                let counter1 = 0
+                let counter2 = 0
+                for(const valueData of txData.value){
                     const payload = valueData.payload;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
-
+                    console.log('troubleshooting 2'+type)
                     // Assuming types 4 and 20 are the funding types
                     if (type === 4 || type === 20) {
+                        counter1++
+                        console.log('logging funding '+counter1+' '+JSON.stringify(txData))
                         acc[txBlockHeight].fundingTx.push(txData);
                     } else {
+                        counter2++
+                        console.log('logging other '+counter2+' '+JSON.stringify(txData))
                         acc[txBlockHeight].tradeTx.push(txData);
                     }
                 }
                 return acc;
             }, {});
+
+            //console.log(JSON.stringify(txByBlockHeight))
 
             // Determine the last block height with transactions
             const blockHeights = Object.keys(txByBlockHeight).map(Number);
@@ -238,8 +245,12 @@ class Main {
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 const blockData = txByBlockHeight[blockHeight];
+
                 //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
+                    if(blockHeight==3432676){
+                    console.log('troubleshooting 4'+JSON.stringify(blockData)+' '+'now funding part '+JSON.stringify(blockData.fundingTx)+' '+JSON.stringify(blockData.tradeTx))
+                    }
                     // First process funding transactions
                     await this.processTxSet(blockData.fundingTx, blockHeight);
 
@@ -279,12 +290,22 @@ class Main {
         // Helper function to process a set of transactions
         async processTxSet(txSet, blockHeight) {
             for (const txData of txSet) {
-                const txId = txData.value[0].txId;
-                if (await Consensus.checkIfTxProcessed(txId)) {
-                    continue;
+                let flag = false;
+                if (blockHeight == 3432676) {
+                    console.log('troubleshooting 3 ' + JSON.stringify(txData));
+                    flag = true;
                 }
 
                 for (const valueData of txData.value) {
+                    const txId = valueData.txId;
+                    
+                    if (await Consensus.checkIfTxProcessed(txId)) {
+                        if (flag == true) {
+                            console.log('oddly the missing tx is being included in consensus');
+                        }
+                        continue;
+                    }
+
                     var payload = valueData.payload;
                     const marker = valueData.marker;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
@@ -293,6 +314,18 @@ class Main {
                     const referenceAddress = valueData.reference.address;
                     const senderUTXO = valueData.sender.amount;
                     const referenceUTXO = valueData.reference.amount / COIN;
+
+                    if (flag) {
+                        console.log('missing tx params ' + txId,
+                            type,
+                            marker,
+                            payload,
+                            senderAddress,
+                            referenceAddress,
+                            senderUTXO,
+                            referenceUTXO,
+                            blockHeight);
+                    }
 
                     const decodedParams = await Types.decodePayload(
                         txId,
@@ -305,19 +338,12 @@ class Main {
                         referenceUTXO,
                         blockHeight
                     );
-                    decodedParams.block = blockHeight;
 
-                    // Check if the transaction is valid
-                    if (decodedParams.type > 0) {
-                        const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
-                        if (blockHeight < activationBlock && decodedParams.valid === true) {
-                            decodedParams.valid = false;
-                            decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
-                        } else if (blockHeight < activationBlock && decodedParams.valid === true) {
-                            decodedParams.valid = false;
-                            decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
-                        }
+                    if (flag) {
+                        console.log('missing tx decode ' + decodedParams);
                     }
+
+                    decodedParams.block = blockHeight;
 
                     if (decodedParams.valid === true) {
                         await Consensus.markTxAsProcessed(txId, decodedParams);
@@ -334,7 +360,7 @@ class Main {
 
         async processTx(txSet, blockHeight){
             for (const txData of txSet) {
-                        console.log(JSON.stringify(txData))
+                        console.log('tx data in real-time'+JSON.stringify(txData))
                         let txId= txData.txId
                         if (await Consensus.checkIfTxProcessed(txId)) {
                             return;
@@ -395,7 +421,7 @@ class Main {
                 this.processIncomingBlocks(consensus)
             }
         }else{
-                this.processIncomingBlocks(blockLag.lag, blockLag.maxConsensus, blockLag.chainTip); // Start processing new blocks as they come
+                this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip); // Start processing new blocks as they come
         }
         //}
     }
@@ -412,26 +438,29 @@ class Main {
     //updates max consensus block in real-time mode
     async checkBlockLag() {
         const chaintip = await this.getBlockCountAsync()
-        const maxConsensusBlock = await this.loadMaxProcessedHeight()
+        let track = await this.loadTrackHeight()
+        if(track==null){
+            track = await this.loadMaxProcessedHeight()
+        }
         //console.log(maxConsensusBlock)
-        var lag = chaintip - maxConsensusBlock
-        return {'lag':lag, 'chainTip':chaintip, 'maxConsensus':maxConsensusBlock}
+        var lag = chaintip - track
+        return {'lag':lag, 'chainTip':chaintip, 'maxTrack':track}
     }
 
     /*main function of real-time mode*/
-    async processIncomingBlocks(lag, maxConsensusBlock, chainTip) {
+    async processIncomingBlocks(lag, maxTrack, chainTip) {
         // Continuously loop through incoming blocks and process them
-        let latestProcessedBlock = maxConsensusBlock
+        let latestProcessedBlock = maxTrack
         console.log('entering real-time mode '+latestProcessedBlock)
         let lagObj
         while (true) {
-             
             /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
             }*/
             chainTip = await this.getBlockCountAsync()
-            console.log('latest block '+chainTip)
-
+            console.log('latest block '+chainTip+' max track'+latestProcessedBlock)
+            let checkTrack = await this.loadTrackHeight()
+            if(checkTrack>latestProcessedBlock){latestProcessedBlock=checkTrack}
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 const networkIsUp = await this.checkNetworkStatus();
                 if (!networkIsUp) {
@@ -442,6 +471,7 @@ class Main {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber);
                 let trackHeight = blockNumber;
+                console.log('updating trackHeight'+trackHeight)
                 await this.saveTrackHeight(trackHeight)
             }
 
@@ -521,7 +551,7 @@ class Main {
     /*sub-function of real-time mode, breaks things into 3 steps*/
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
-        const tx = await this.blockHandlerBegin(blockData.hash, blockNumber);
+        const tx= await this.blockHandlerBegin(blockData.hash, blockNumber);
 
         // Process each transaction in the block
         blockNumber = await this.blockHandlerMid(tx, blockNumber);
@@ -542,7 +572,10 @@ class Main {
         try {
             const blockData = await TxIndex.fetchBlockData(blockHeight);
             const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
-
+            
+            if(txDetails.length>=1){
+                console.log('processing new tx '+JSON.stringify(txDetails))   
+            }
             // Separate out Commit/Transfer transactions from others
             const fundingTxs = [];
             const otherTxs = [];
@@ -696,13 +729,13 @@ class Main {
         const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
 
         try {
-            const track = await consensusDB.findOneAsync({ _id: 'TrackHeight' });
+            let track = await consensusDB.findOneAsync({ _id: 'TrackHeight' });
             if (track) {
-                const track = track.value;
+                track = track.value;
                 //console.log('MaxProcessedHeight retrieved:', maxProcessedHeight);
                 return track; // Return the retrieved value
             } else {
-                console.log('MaxProcessedHeight not found in the database.');
+                console.log('MaxTrackHeight not found in the database.');
                 return null; // Return null or an appropriate default value if not found
             }
         } catch (error) {

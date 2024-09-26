@@ -148,7 +148,7 @@ class Channels {
     static async getChannel(channelId) {
         // Ensure the channels registry is loaded
         let channel = this.channelsRegistry.get(channelId)
-        console.log('inside getChannel '+channelId+' '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
+        //console.log('inside getChannel '+channelId+' '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
         console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
         if(!channel||channel==undefined||channel==null){
             await this.loadChannelsRegistry();
