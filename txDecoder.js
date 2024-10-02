@@ -3,8 +3,13 @@ const BigNumber = require('bignumber.js');
 
 const Decode = {
    // Decode Activate TradeLayer Transaction
-    decodeActivateTradeLayer: (payload) => {
-    return { txTypeToActivate: payload };
+    decodeActivateTradeLayer(payload) {
+        const parts = payload.split(',');
+        return {
+            txTypeToActivate: payload.txTypeToActivate,
+            codeHash: payload.codeHash || '',
+            wasmHash: payload.wasmHash || ''
+        };
     },
 
     // Decode Token Issue Transaction

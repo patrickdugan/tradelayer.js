@@ -7,6 +7,7 @@ const Encode = require('./txEncoder.js')
 const COIN = 100000000
 const STANDARD_FEE = 10000; // Standard fee in LTC
 const BigNumber = require('bignumber.js')
+const Consensus = require('./consensus.js')
 const client = new Litecoin.Client({
     host: '127.0.0.1',
     port: 18332,
@@ -795,7 +796,9 @@ const TxUtils = {
             // Step 1: Create the activation payload
             // Assuming activation payload format: 'activation:<txTypeToActivate>'
             var activationPayload = 'tl0'
-            activationPayload += Encode.encodeActivateTradeLayer({'code':txTypeToActivate});
+            var codeHash = await Consensus.hashFiles()
+            activationPayload += Encode.encodeActivateTradeLayer({txTypeToActivate: txTypeToActivate,
+            codeHash: codeHash});
 
             // Step 2: Create a new transaction
             const utxos = await TxUtils.listUnspent(1, 9999999, [adminAddress]);

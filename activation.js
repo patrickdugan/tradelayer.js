@@ -1,6 +1,7 @@
 const db = require('./db')
 //const Logic = require('./logic.js');
 const TradeLayerManager = require('./vesting.js')
+const Consensus = require('./consensus'); // Import consensus.js functions
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
@@ -29,42 +30,6 @@ class Activation {
             Activation.instance = new Activation(adminAddress);
         }
         return Activation.instance;
-    }
-
-
-    static async updateConsensusVector(txType, newState) {
-        this.consensusVector[txType] = newState;
-        await this.saveConsensusVector();
-    }
-
-    async loadConsensusVector() {
-        try {
-            const storedVector = await db.getDatabase('consensus').findAsync({})
-                .then(entries => {
-                    entries.forEach(entry => {
-                        data[entry._id] = entry.value;
-                    });
-                    resolve(data);
-                })
-                .catch(err => {
-                    console.error('Error loading index:', err);
-                    reject(err);
-                });
-            this.consensusVector = JSON.parse(storedVector);
-        } catch (error) {
-            console.error('Error loading consensus vector:', error);
-            this.consensusVector = {};
-        }
-    }
-
-    async saveConsensusVector(vector) {
-        //populate vector with consensus hashes - arguably this and the other one belong to consensus.js and just the save activations belongs here
-        try {
-            await db.getDatabase('consensus').insertAsync({ _id: `consensus-vector`, value: vector});
-            console.log('Consensus vector saved successfully.');
-        } catch (error) {
-            console.error('Error saving consensus vector:', error);
-        }
     }
 
     async saveActivationsList() {
@@ -118,7 +83,6 @@ class Activation {
         }
     }
 
-
     // Example helper functions (implementations depend on your specific logic and data structures)
     async activate(txType, block) {
         txType = parseInt(txType)
@@ -139,7 +103,7 @@ class Activation {
             this.txRegistry[txType].activationBlock = block
             //console.log(JSON.stringify(this.txRegistry))
             await this.saveActivationsList()
-            return this.txRegistry[txType] ; // Save the updated activations list
+            await Consensus.pushLatestActivationToConsensusVector();
         }else{
             // Check if the transaction type exists in the registry
             //console.log('in the general activations block')
@@ -147,7 +111,10 @@ class Activation {
                 this.txRegistry[txType].active = true;
                 this.txRegistry[txType].activationBlock = block
                 //console.log('activating '+txType+ ' '+JSON.stringify(this.txRegistry))
-                return await this.saveActivationsList(); // Save the updated activations list
+                
+                await this.saveActivationsList();
+                await Consensus.pushLatestActivationToConsensusVector(); // Save the updated activations list
+                return this.txRegistry[txType] ; // Save the updated activations list
             } else {
                 console.error(`Transaction type ${txType} not found in registry.`);
             }

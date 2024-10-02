@@ -3,9 +3,14 @@ const BigNumber = require('bignumber.js');
 
 const Encode = {
     // Encode Simple Token Issue Transaction
-     encodeActivateTradeLayer(params) {
-        // Assuming params has a txid
-        return params.code;
+      encodeActivateTradeLayer(params) {
+        // Assuming params has the codeHash and other fields
+        const payload =  {
+            txTypeToActivate: params.txTypeToActivate,
+            codeHash: params.codeHash,
+            wasmHash: params.wasmHash
+        };
+        return payload.join(',')
     },
 
     // Encode Token Issue Transaction
