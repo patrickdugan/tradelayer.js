@@ -1,21 +1,19 @@
-const level = require('level');
-
-// Database setup
-const { db, txIndexDB,propertyListDB,oracleListDB,contractListDB,tallyMapDB,marginMapsDB, whitelistsDB, clearingDB, consensusDB,persistenceDB} = require('./db.js')
+const db = require('./db.js');
+const consensus = require('./consensus.js');  // Import the consensus file for hash and snapshot logic
 
 class BlockchainPersistence {
-    constructor() {
-        this.lastKnownBlockHash = '';
-        this.checkpointInterval = 1000
-    }
+    static lastKnownBlockHash = '';
+    static checkpointInterval = 1000;
 
     /**
      * Updates the last known block hash.
      * @param {String} blockHash - The hash of the latest block
      */
-    async updateLastKnownBlock(blockHash) {
+    static async updateLastKnownBlock(blockHash) {
         try {
-            await db.put('lastKnownBlock', blockHash);
+            const query = { _id: 'lastKnownBlock' };
+            const update = { $set: { value: blockHash } };
+            await db.getDatabase('persistence').updateAsync(query, update, { upsert: true });
             this.lastKnownBlockHash = blockHash;
             console.log('Last known block updated:', blockHash);
         } catch (error) {
@@ -24,119 +22,56 @@ class BlockchainPersistence {
     }
 
     /**
+     * Manage checkpoints based on block intervals.
+     * @param {number} currentBlockNumber - The current block number
+     */
+    static async manageCheckpoints(currentBlockNumber) {
+        if (currentBlockNumber % this.checkpointInterval === 0) {
+            await this.saveState(currentBlockNumber);
+            console.log(`Checkpoint created at block ${currentBlockNumber}`);
+        }
+    }
+
+     /**
      * Detects a blockchain reorganization.
      * @param {String} currentBlockHash - The hash of the current block
      * @returns {Boolean} True if a reorganization is detected, false otherwise
      */
-    async detectReorg(currentBlockHash) {
+    static async detectReorg(currentBlockHash) {
         try {
-            const storedBlockHash = await db.get('lastKnownBlock');
+            const query = { _id: 'lastKnownBlock' };
+            const result = await db.getDatabase('persistence').findOneAsync(query);
+            const storedBlockHash = result ? result.value : null;
             if (storedBlockHash !== currentBlockHash) {
                 console.log('Reorganization detected');
                 return true;
             }
             return false;
         } catch (error) {
-            if (error.type === 'NotFoundError') {
-                console.log('No last known block found');
-                return false;
-            } else {
-                console.error('Error detecting reorganization:', error);
-                return false;
-            }
+            console.error('Error detecting reorganization:', error);
+            return false;
         }
     }
 
     /**
-     * Handles a detected reorganization by reverting to the last checkpoint.
+     * Saves the blockchain state using consensus snapshot logic and includes the hash.
+     * @param {number} blockNumber - The block number to associate with the saved state
      */
-    async handleReorg() {
-        // Load the last saved state from the checkpoint
-        const state = await this.loadState();
-
-        if (state) {
-            // Revert system state to the last saved state
-            console.log('Reverting to last known good state');
-            // Additional logic to revert system state goes here
-
-            // After reverting, resume processing from the last known good block
-            // This might involve re-scanning blocks from the last known good block
-            // to the current block, applying changes to the reverted state
-        } else {
-            console.error('No saved state available to revert to');
-            // Handle the situation when no checkpoint is available
-        }
-    }
-
-    /**
-     * Loads the saved state from a checkpoint.
-     * This is a placeholder and needs implementation based on how state is saved.
-     */
-    async loadState() {
-        // Placeholder implementation
+    static async saveState(blockNumber) {
         try {
-            const state = await db.get('savedState');
-            return state;
-        } catch (error) {
-            console.error('Error loading state:', error);
-            return null;
-        }
-    }
+            const { snapshot, consensusHash } = await consensus.getConsensusSnapshot(true);  // Get both hash and state
 
-    async getActivationsSnapshot() {
-        const snapshot = {};
-        try {
-            // Retrieve all data from the activations sublevel
-            for await (const [key, value] of activationsDB.createReadStream()) {
-                // Process and store each key-value pair in the snapshot
-                // Depending on your data structure, you might need to parse the value or perform other transformations
-                snapshot[key] = value;
-            }
-        } catch (error) {
-            console.error('Error fetching activations snapshot:', error);
-            throw error; // Rethrow the error to handle it in the calling function
-        }
-        return snapshot;
-    }
-
-    async getTallyMapSnapshot() {
-        // Logic to get snapshot of tallyMap
-    }
-
-    async getPropertyListSnapshot() {
-        // Logic to get snapshot of propertyList
-    }
-
-    async getWhitelistsSnapshot() {
-        // Logic to get snapshot of whitelists
-    }
-
-    async getOraclesSnapshot() {
-        // Logic to get snapshot of oracles
-    }
-
-    async getContractListSnapshot() {
-        // Logic to get snapshot of contract list
-    }
-
-    async getMarginMapsSnapshot() {
-        // Logic to get snapshot of marginMaps
-    }
-
-    async saveState() {
-        try {
             const state = {
-                activations: await this.getActivationsSnapshot(),
-                tallyMap: await this.getTallyMapSnapshot(),
-                propertyList: await this.getPropertyListSnapshot(),
-                whitelists: await this.getWhitelistsSnapshot(),
-                oracles: await this.getOraclesSnapshot(),
-                contractList: await this.getContractListSnapshot(),
-                marginMaps: await this.getMarginMapsSnapshot()
+                blockNumber,
+                snapshot,
+                consensusHash
             };
 
-            await persistenceDB.put('savedState', JSON.stringify(state));
-            console.log('State saved successfully');
+            const query = { _id: `state-${blockNumber}` };
+            const update = { $set: { value: JSON.stringify(state) } };
+            await db.getDatabase('persistence').updateAsync(query, update, { upsert: true });
+
+            console.log(`State for block ${blockNumber} saved successfully with hash ${consensusHash}`);
         } catch (error) {
             console.error('Error saving state:', error);
         }
@@ -144,18 +79,83 @@ class BlockchainPersistence {
 
     /**
      * Loads the blockchain state from the most recent checkpoint.
+     * @param {number} blockNumber - The block number of the state to load
+     * @returns {Object|null} The loaded state or null if not found
      */
-    async loadStateFromCheckpoint() {
-        // Load and deserialize the state from the DB
-        // Placeholder implementation
-        // Consider using JSON.parse or a similar method for deserialization
+    static async loadStateFromCheckpoint(blockNumber) {
+        try {
+            const query = { _id: `state-${blockNumber}` };
+            const result = await db.getDatabase('persistence').findOneAsync(query);
+            if (result) {
+                const state = JSON.parse(result.value);
+                console.log(`Loaded state for block ${blockNumber}`);
+                return state;
+            } else {
+                console.error(`State not found for block ${blockNumber}`);
+                return null;
+            }
+        } catch (error) {
+            console.error(`Error loading state from block ${blockNumber}:`, error);
+            return null;
+        }
     }
 
     /**
-     * Manages and maintains checkpoints.
+     * Prunes old snapshots based on block intervals.
+     * @param {number} currentBlockNumber - The current block number
+     * @param {number} retainBlocks - The number of blocks to retain
      */
-    manageCheckpoints() {
-        // Logic to create new checkpoints and prune old ones
+    static async pruneOldSnapshots(currentBlockNumber, retainBlocks = 10000) {
+        try {
+            const lowerBoundBlockNumber = currentBlockNumber - retainBlocks;
+            const stream = await db.getDatabase('persistence').findAsync({});
+            
+            stream.forEach(async (doc) => {
+                const blockNumber = parseInt(doc._id.split('-')[1], 10);
+                if (blockNumber < lowerBoundBlockNumber) {
+                    await db.getDatabase('persistence').removeAsync({ _id: doc._id });
+                    console.log(`Pruned snapshot for block ${blockNumber}`);
+                }
+            });
+        } catch (error) {
+            console.error('Error pruning old snapshots:', error);
+        }
+    }
+
+    /**
+     * Bootstrap function to provide the latest state snapshot and hash to other nodes.
+     * @returns {Object} The latest snapshot and consensus hash
+     */
+    static async bootstrap() {
+        try {
+            const latestBlockNumber = await this.getLatestCheckpointBlockNumber();  // You may need to implement this
+            const state = await this.loadStateFromCheckpoint(latestBlockNumber);
+            if (!state) {
+                throw new Error('No state available to bootstrap.');
+            }
+
+            return {
+                blockNumber: state.blockNumber,
+                snapshot: state.snapshot,
+                consensusHash: state.consensusHash
+            };
+        } catch (error) {
+            console.error('Error during bootstrap:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Utility to get the latest checkpoint block number.
+     * Placeholder function — you'll need to implement this based on your needs.
+     * @returns {number} The latest checkpoint block number
+     */
+    static async getLatestCheckpointBlockNumber() {
+        // Logic to determine the latest checkpoint block number
+        const query = { _id: { $regex: /^state-/ } };
+        const sort = { blockNumber: -1 };
+        const result = await db.getDatabase('persistence').findAsync(query).sort(sort).limit(1);
+        return result.length > 0 ? result[0].blockNumber : null;
     }
 }
 

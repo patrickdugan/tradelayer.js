@@ -15,28 +15,43 @@ class ConsensusDatabase {
         this.loadFlaggedIPsFromDb(); // Load flagged IPs from the database on initialization
     }
 
+    /**
+     * Store the consensus hash for a given block height.
+     * @param {Number} blockHeight - The height of the block.
+     * @param {String} consensusHash - The consensus hash for the block.
+     */
     static async storeConsensusHash(blockHeight, consensusHash) {
-        const doc = { blockHeight, consensusHash };
+        const query = { _id: `block-${blockHeight}` };  // Use _id as a unique identifier
+        const update = { $set: { blockHeight, consensusHash } };  // Update or insert block and consensus hash
+
         try {
-            await db.getDatabase('consensus').insertAsync(doc);
+            await db.getDatabase('consensus').updateAsync(query, update, { upsert: true });  // Upsert to insert if it doesn't exist
             console.log(`Consensus hash for block ${blockHeight} stored.`);
         } catch (err) {
             console.error('Error storing consensus hash:', err);
         }
     }
 
+    /**
+     * Retrieve the consensus hash for a given block height.
+     * @param {Number} blockHeight - The height of the block.
+     * @returns {String|null} - The consensus hash or null if not found.
+     */
     static async getConsensusHash(blockHeight) {
-            try {
-                const docs = await db.getDatabase('consensus').findAsync({ blockHeight });
-                if (docs.length > 0) {
-                    return docs[0].consensusHash;
-                } else {
-                    return null;
-                }
-            } catch (err) {
-                console.error('Error retrieving consensus hash:', err);
+        const query = { _id: `block-${blockHeight}` };  // Use _id to find based on the block number
+
+        try {
+            const result = await db.getDatabase('consensus').findOneAsync(query);  // Find based on the block height (_id)
+            if (result) {
+                return result.consensusHash;  // Return the consensus hash if found
+            } else {
+                console.warn(`No consensus hash found for block ${blockHeight}`);
                 return null;
             }
+        } catch (err) {
+            console.error('Error retrieving consensus hash:', err);
+            return null;
+        }
     }
 
     static async checkIfTxProcessed(txId) {
@@ -138,7 +153,7 @@ class ConsensusDatabase {
 
     // Function to generate stateConsensusHash based on various DBs
     // Function to generate stateConsensusHash based on various DBs
-    static async stateConsensusHash() {
+    static async stateConsensusHash(snapshot) {
         try {
             // Retrieve latest instance from tally.db and activations.db
             const latestTally = await this.getLatestInstance('tallyMap');
@@ -186,7 +201,11 @@ class ConsensusDatabase {
             // Generate and return the SHA-256 hash of the combined state
             const hash = this.generateHash(combinedStateString);
             console.log('stateConsensusHash:', hash);
-            return hash;
+            if(!snapshot){
+            	return hash;
+            }else if(snapshot){
+            	return {hash: hash, state: combinedStateString}
+            }
 
         } catch (err) {
             console.error('Error generating stateConsensus hash:', err);
