@@ -1,5 +1,5 @@
 const assert = require('assert');
-const MainClass = require('../main.js');
+const MainClass = require('./main.js');
 
 describe('Main Blockchain Processing', function() {
     let mainProcessor;
