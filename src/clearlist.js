@@ -25,10 +25,12 @@ class clearlistManager {
 
     static async loadClearlists() {
         try {
-            const clearlists = await this.db.findAsync({});
-            clearlists.forEach(({ _id, data }) => {
+            const clearLists = await this.db.findAsync({});
+            clearLists.forEach(({ _id, data }) => {
                 this.clearlists.set(_id, data);
             });
+
+            return clearLists
         } catch (error) {
             console.error('Error loading clearlists from the database:', error);
         }

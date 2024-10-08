@@ -219,6 +219,30 @@ app.post('/tl_listProperties', async (req, res) => {
     }
 });
 
+app.post('/tl_listClearlists', async (req, res) => {
+    try {
+        console.log('Express calling clearlists');
+        const clearLists = await Clearlist.loadClearlists();
+        res.json(propertiesArray);
+    } catch (error) {
+        console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_showClearlist', async (req, res) => {
+    try {
+        console.log('Express calling clearlist');
+        {id}= req.body
+        const clearLists = await Clearlist.getList(id);
+        res.json(propertiesArray);
+    } catch (error) {
+        console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+
 app.post('/tl_listFeeCache', async(req,res)=>{
     try{
         console.log('Pulling fees for all properties');
