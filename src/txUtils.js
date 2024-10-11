@@ -1,216 +1,114 @@
-// Import the necessary libraries and modules
-const async = require('async');
-const util = require('util');
+
 const litecore = require('bitcore-lib-ltc');
 const Encode = require('./txEncoder.js');
 const BigNumber = require('bignumber.js');
 const Consensus = require('./consensus.js');
-const {createClient, getClient } = require('./client.js');
+const client = require('./client.js');  // Import the ClientWrapper instance
 
 const COIN = 100000000;
 const STANDARD_FEE = 10000; // Standard fee in LTC
-createClient('ltc',true)
-// Use the client from the client wrapper module
-const client = getClient();
-
-// Promisify the necessary client functions
-const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
-const getBlockDataAsync = util.promisify(client.getBlock.bind(client));
-const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
-const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
-const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
-const signrawtransactionwithwalletAsync = util.promisify(client.cmd.bind(client, 'signrawtransactionwithwallet'));
-const dumpprivkeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'))
-const sendrawtransactionAsync = util.promisify(client.cmd.bind(client,'sendrawtransaction'))
-const validateAddress = util.promisify(client.cmd.bind(client,'validateaddress'))
-const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
-const loadWalletAsync = util.promisify(client.cmd.bind(client, 'loadwallet'))
-
-
-const DUST_THRESHOLD= 54600
+const DUST_THRESHOLD = 54600;
 
 const TxUtils = {
     async getRawTransaction(txid) {
-        let transaction;
         try {
-            transaction = await getRawTransactionAsync(txid, true);
-            //console.log(`Transaction:`, transaction);
+            return await client.getRawTransaction(txid, true);
         } catch (error) {
             console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
-        return transaction;
     },
 
-    async validateAddressWrapper(address){
-        return await validateAddress(address)
-    },
-
-    async addOPReturn(txBlob,payload){
-        return new litecore.Transaction(txBlob).addData(payload)
-    },
-
-    async getBlockHeight(blockhash){
-        let block;
+    async validateAddressWrapper(address) {
         try {
-            block = await getBlockDataAsync(blockhash, 1);
-            //console.log(`Block data:`, block);
+            return await client.validateAddress(address);
         } catch (error) {
-            console.error(`Error fetching transaction for txid ${blockhash}:`, error);
+            console.error(`Error validating address ${address}:`, error);
         }
-        return block.height;
     },
 
-    async getBlockCount(){
-        let height;
-        try{
-            height = await getBlockCountAsync()
-        } catch (error) {
-            console.error(`Error fetching transaction for txid ${blockhash}:`, error);
-        }
-        return height;
+    async addOPReturn(txBlob, payload) {
+        return new litecore.Transaction(txBlob).addData(payload);
     },
 
-    async load(){
-        const loadwallet = await loadWalletAsync('wallet.dat')
-        return loadwallet
-    },
-
-    /*async fetchTransactionData(txId) {
-        console.log('fetching tx data '+txId)
-        return new Promise((resolve, reject) => {
-            TxUtils.client.getRawTransaction(txId, true, (error, transaction) => {
-                if (error) {
-                    console.log('blah '+error);
-                    reject(error);
-                } else {
-                    resolve(transaction);
-                }
-            });
-        });
-    },*/
-
-
-    async getSender(txId) {
-        let tx
-        try{
-            tx = await TxUtils.getRawTransaction(txId)
-        }catch(err){
-            console.log('err getting tx for sender'+err)
-        }
-
-        if (!tx || !tx.vin || tx.vin.length === 0) {
-            return new Error(`Invalid transaction data for ${txId}`);
-        }
-
-        const vin = tx.vin[0]; // Assuming we're only interested in the first input
-        if (!vin.txid) {
-            return new Error(`No previous transaction reference in input for ${vin.txid}`);
-        }
-                //console.log('get sender tx id '+vin.txid)
-
-        const parentTx = await TxUtils.getRawTransaction(vin.txid)
-        if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
-            return new Error(`Invalid parent transaction data for ${vin.txid}`);
-        }
-
-        const output = parentTx.vout[vin.vout];
-        if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-            return new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
-        }
-
-        const senderAddress = output.scriptPubKey.addresses[0]; // Assuming single address
-        const amount = output.value; // Amount in LTC
-        //console.log(senderAddress,amount)
-        return { senderAddress, amount };
-    },
-
-    async getReference(txId) {
-        let tx
+    async getBlockHeight(blockhash) {
         try {
-            tx = await getRawTransactionAsync(txId, true);
-            if (!tx || !tx.vout) {
-                return new Error(`Invalid transaction data for ${txId}`);
-            }
-
-            let referenceOutput = null;
-
-            // Iterate over outputs to find the last non-OP_RETURN output
-            for (let i = tx.vout.length - 1; i >= 0; i--) {
-                const output = tx.vout[i];
-                if (output.scriptPubKey.type !== 'nulldata') { // 'nulldata' type is typically used for OP_RETURN
-                    referenceOutput = output;
-                    break;
-                }
-            }
-
-            if (referenceOutput) {
-                const address = referenceOutput.scriptPubKey.addresses[0]; // Assuming single address
-                const satoshis = Math.round(referenceOutput.value * COIN); // Convert LTC to satoshis
-                //console.log(satoshis)
-                return { address, satoshis };
-            } else {
-                return new Error("Reference output not found");
-            }
+            const block = await client.getBlockData(blockhash);
+            return block.height;
         } catch (error) {
-            console.error(`Error in getReference for transaction ${txId}:`, error);
-            return error;
+            console.error(`Error fetching block height for blockhash ${blockhash}:`, error);
         }
     },
 
+    async getBlockCount() {
+        try {
+            return await client.getBlockCount();
+        } catch (error) {
+            console.error(`Error fetching block count:`, error);
+        }
+    },
+
+    async loadWallet() {
+        try {
+            return await client.loadWallet('wallet.dat');
+        } catch (error) {
+            console.error('Error loading wallet:', error);
+        }
+    },
+
+    async listUnspent(minConf, maxConf, addresses) {
+        try {
+            return await client.listUnspent(minConf, maxConf, addresses);
+        } catch (error) {
+            console.error(`Error listing UTXOs for addresses ${addresses}:`, error);
+        }
+    },
+
+    async signRawTransaction(rawTx) {
+        try {
+            return await client.signrawtransactionwithwallet(rawTx);
+        } catch (error) {
+            console.error(`Error signing transaction:`, error);
+        }
+    },
+
+    async sendRawTransaction(serializedTx) {
+        try {
+            return await client.sendrawtransaction(serializedTx);
+        } catch (error) {
+            console.error(`Error sending transaction:`, error);
+        }
+    },
+
+    // Add other functions here, replacing direct calls to client methods with the appropriate wrapped methods
+    // Example:
     async getTransactionOutputs(txId) {
-        let tx;
         try {
-            tx = await getRawTransactionAsync(txId, true);
-            if (!tx || !tx.vout) {
-                return new Error(`Invalid transaction data for ${txId}`);
-            }
-
-            const outputs = [];
-
-            // Iterate over all outputs to gather address and satoshi values
-            for (const output of tx.vout) {
-                if (output.scriptPubKey.type !== 'nulldata') { // Skip 'nulldata' (OP_RETURN) outputs
-                    const address = output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null; // Assuming single address
-                    const satoshis = Math.round(output.value * COIN); // Convert LTC to satoshis
-
-                    outputs.push({ address, satoshis, vout: output.n });
-                }
-            }
-
-            if (outputs.length > 0) {
-                return outputs;
-            } else {
-                return 0
-            }
+            const tx = await this.getRawTransaction(txId);
+            return tx.vout.map(output => ({
+                address: output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null,
+                satoshis: Math.round(output.value * COIN),
+                vout: output.n
+            })).filter(output => output.address);  // Filter out outputs without addresses (OP_RETURN)
         } catch (error) {
-            console.error(`Error in getTransactionOutputs for transaction ${txId}:`, error);
-            return error;
+            console.error(`Error getting outputs for tx ${txId}:`, error);
         }
     },
  
     async getReferenceAddresses(txId) {
-        let tx;
         try {
-            tx = await getRawTransactionAsync(txId, true); // Fetch the raw transaction data
+            const tx = await client.getRawTransaction(txId, true); // Fetch the raw transaction data
             if (!tx || !tx.vout) {
-                return new Error(`Invalid transaction data for ${txId}`);
+                throw new Error(`Invalid transaction data for ${txId}`);
             }
 
             const referenceAddresses = [];
-
-            // Iterate over outputs to find reference outputs
             for (let i = 0; i < tx.vout.length; i++) {
                 const output = tx.vout[i];
 
-                // Check for OP_RETURN
-                if (output.scriptPubKey.type === 'nulldata') {
-                    // If OP_RETURN is found, previous output is a reference (if it exists)
-                    if (i > 0) {
-                        const prevOutput = tx.vout[i - 1];
-                        referenceAddresses.push(prevOutput.scriptPubKey.addresses[0]);
-                    }
-                } else if (output.value < 2 * DUST_THRESHOLD / COIN) {
-                    // If the output amount is less than twice the dust threshold, consider it as a reference
+                if (output.scriptPubKey.type === 'nulldata' && i > 0) {
+                    const prevOutput = tx.vout[i - 1];
+                    referenceAddresses.push(prevOutput.scriptPubKey.addresses[0]);
+                } else if (output.value < (2 * DUST_THRESHOLD) / COIN) {
                     referenceAddresses.push(output.scriptPubKey.addresses[0]);
                 }
             }
@@ -224,8 +122,7 @@ const TxUtils = {
 
     async listUnspent(minconf, maxconf, addresses) {
         try {
-            // Use the promisified version of listUnspent
-            return await listUnspentAsync(minconf, maxconf, addresses);
+            return await client.listUnspent(minconf, maxconf, addresses);
         } catch (error) {
             console.error(`Error listing UTXOs:`, error);
             return error;
@@ -234,9 +131,7 @@ const TxUtils = {
 
     async decoderawtransaction(hexString) {
         try {
-            // Use the promisified version of decoderawtransaction
-            console.log('decoding')
-            return await decoderawtransactionAsync(hexString);
+            return await client.decoderawtransaction(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
             return error;
@@ -245,77 +140,46 @@ const TxUtils = {
 
     async signrawtransactionwithwallet(rawTx) {
         try {
-            // Use the promisified version of signrawtransactionwithwallet
-            return await signrawtransactionwithwalletAsync(rawTx);
+            return await client.signrawtransactionwithwallet(rawTx);
         } catch (error) {
             console.error(`Error signing raw transaction with wallet:`, error);
             return error;
         }
     },
 
-        async getPayload(rawTx) {
-            if (!rawTx || !rawTx.vout) {
-                console.error("Invalid transaction data or missing 'vout' property.");
-                return null; // Return null to indicate no payload was found and maintain consistent return type
+    async getPayload(rawTx) {
+        if (!rawTx || !rawTx.vout) {
+            console.error("Invalid transaction data or missing 'vout' property.");
+            return null;
+        }
+
+        for (const output of rawTx.vout) {
+            if (output.scriptPubKey.type === 'nulldata') {
+                const payloadData = output.scriptPubKey.asm;
+                console.log("Extracted payload: ", payloadData);
+                return payloadData;
             }
+        }
 
-            for (const output of rawTx.vout) {
-                if (output.scriptPubKey.type === 'nulldata') {
-                    const payloadData = output.scriptPubKey.asm;
-
-                    // If payload data needs to be converted from hex to string, add that logic here.
-                    // Example: Convert hex to string if needed
-                    // const payloadString = hexToString(payloadData); 
-
-                    // Logging the payload for debugging - consider the sensitivity of this data
-                    console.log("Extracted payload: ", payloadData);
-
-                    return payloadData; // Return the payload data as is or after conversion
-                }
-            }
-
-            console.log("No payload found in transaction.");
-            return null; // Return null if no payload is found
-        },
-
-        // Example helper function to convert hex to string (if needed)
-        hexToString(hexString) {
-            var str = '';
-            for (var i = 0; i < hexString.length; i += 2) {
-                var v = parseInt(hexString.substr(i, 2), 16);
-                if (v) str += String.fromCharCode(v);
-            }
-            return str;
-        },
-
+        console.log("No payload found in transaction.");
+        return null;
+    },
 
     async getAdditionalInputs(txId) {
         try {
-            const tx = await getRawTransactionAsync(txId, true);
+            const tx = await client.getRawTransaction(txId, true);
             if (!tx || !tx.vin || tx.vin.length <= 1) {
-                return []; // No additional inputs beyond the first
+                return [];
             }
 
             let additionalInputs = [];
-            for (let i = 1; i < tx.vin.length; i++) { // Start from second input
+            for (let i = 1; i < tx.vin.length; i++) {
                 const input = tx.vin[i];
-
-                if (!input.txid) {
-                    return new Error(`No previous transaction reference in input for ${txId}`);
-                }
-
-                const parentTx = await getRawTransactionAsync(input.txid, true);
-                if (!parentTx || !parentTx.vout || parentTx.vout.length <= input.vout) {
-                    return new Error(`Invalid parent transaction data for ${input.txid}`);
-                }
-
+                const parentTx = await client.getRawTransaction(input.txid, true);
                 const output = parentTx.vout[input.vout];
-                if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
-                    return new Error(`No output found for vin ${input.vout} in transaction ${input.txid}`);
-                }
 
-                const address = output.scriptPubKey.addresses[0]; // Assuming single address
-                const amount = output.value; // Amount in LTC
+                const address = output.scriptPubKey.addresses[0];
+                const amount = output.value;
 
                 additionalInputs.push({ address, amount });
             }
@@ -328,357 +192,278 @@ const TxUtils = {
     },
 
     async setSender(address, requiredAmount) {
-        // First, get UTXOs for the specific address
-        let utxos = await listUnspentAsync(0, 9999999, [address]);
+        try {
+            let utxos = await client.listUnspent(0, 9999999, [address]);
+            utxos.sort((a, b) => b.amount - a.amount);
 
-        // Sort UTXOs by amount, descending
-        utxos.sort((a, b) => b.amount - a.amount);
+            let selectedUtxos = [];
+            let totalAmount = 0;
 
-        let selectedUtxos = [];
-        let totalAmount = 0;
-
-        // Try to meet the required amount with UTXOs from the specified address
-        for (let utxo of utxos) {
-            selectedUtxos.push(utxo);
-            totalAmount += utxo.amount;
-            if (totalAmount >= requiredAmount) {
-                return selectedUtxos;
-            }
-        }
-
-        // If not enough, get all UTXOs in the wallet
-        let allUtxos = await client.cmd('listunspent', 0, 9999999);
-        // Exclude UTXOs already selected
-        allUtxos = allUtxos.filter(utxo => !selectedUtxos.includes(utxo));
-
-        // Sort the remaining UTXOs by amount, descending
-        allUtxos.sort((a, b) => b.amount - a.amount);
-
-        // Add additional UTXOs from the wallet
-        for (let utxo of allUtxos) {
-            if (utxo.address !== address) { // Ensure UTXOs from the specified address are first
+            for (let utxo of utxos) {
                 selectedUtxos.push(utxo);
                 totalAmount += utxo.amount;
                 if (totalAmount >= requiredAmount) {
-                    break;
+                    return selectedUtxos;
                 }
             }
-        }
 
-        // Check if the total amount is still insufficient
-        if (totalAmount < requiredAmount) {
-            return new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
-        }
+            let allUtxos = await client.listUnspent(0, 9999999);
+            allUtxos = allUtxos.filter(utxo => !selectedUtxos.includes(utxo)).sort((a, b) => b.amount - a.amount);
 
-        return selectedUtxos;
+            for (let utxo of allUtxos) {
+                if (utxo.address !== address) {
+                    selectedUtxos.push(utxo);
+                    totalAmount += utxo.amount;
+                    if (totalAmount >= requiredAmount) break;
+                }
+            }
+
+            if (totalAmount < requiredAmount) {
+                throw new Error('Insufficient funds: Total UTXOs amount is less than the required amount');
+            }
+
+            return selectedUtxos;
+        } catch (error) {
+            console.error('Error in setSender:', error);
+            return error;
+        }
     },
 
     async createRawTransaction(inputs, outputs, locktime = 0, replaceable = false) {
         const transaction = new litecore.Transaction();
 
         for (const input of inputs) {
-            // Fetch the raw transaction to which this input refers
-            const tx = await getRawTransactionAsync(input.txid, true);
+            const tx = await client.getRawTransaction(input.txid, true);
             const utxo = tx.vout[input.vout];
-            const scriptPubKey = utxo.scriptPubKey.hex;
-            const value = Math.round(utxo.value*COIN)
-            console.log(value)
-            // Add UTXO to the transaction
             transaction.from({
                 txId: input.txid,
                 outputIndex: input.vout,
-                script: scriptPubKey,
-                satoshis: value // Convert LTC to satoshis
+                script: utxo.scriptPubKey.hex,
+                satoshis: Math.round(utxo.value * COIN)
             });
         }
 
-            // Add outputs
-            outputs.forEach(output => {
-                if (output.address) {
-                    transaction.to(output.address, output.amount * COIN); // Convert LTC to satoshis
-                    console.log(output.amount*COIN)
-                }
-                // Handle data (OP_RETURN) outputs
-                else if (output.data) {
-                    const script = litecore.Script.buildDataOut(output.data, 'hex');
-                    transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
-                }
-            });
-
-            // Set locktime if specified
-            if (locktime > 0) {
-                transaction.lockUntilDate(locktime);
+        outputs.forEach(output => {
+            if (output.address) {
+                transaction.to(output.address, output.amount * COIN);
+            } else if (output.data) {
+                const script = litecore.Script.buildDataOut(output.data, 'hex');
+                transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
             }
+        });
 
-            return transaction;
-    },
+        if (locktime > 0) {
+            transaction.lockUntilDate(locktime);
+        }
+
+        return transaction;
+    }
 
     addPayload(payload, rawTx) {
-        const transaction = new litecore.Transaction(rawTx);
-        const script = litecore.Script.buildDataOut('tl' + payload, 'hex');
-        transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
-        return transaction.toString();
-    },
+    const transaction = new litecore.Transaction(rawTx);
+    const script = litecore.Script.buildDataOut('tl' + payload, 'hex');
+    transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
+    return transaction.toString();
+},
 
-    async setChange(senderAddress, amount, rawTx) {
-            const transaction = new litecore.Transaction(rawTx);
+async setChange(senderAddress, amount, rawTx) {
+    const transaction = new litecore.Transaction(rawTx);
+    console.log("Transaction inputs:", transaction.inputs);
+    console.log("Transaction outputs:", transaction.outputs);
 
-            // Log the transaction's inputs and outputs for debugging
-            console.log("Transaction inputs:", transaction.inputs);
-            console.log("Transaction outputs:", transaction.outputs);
+    const inputAmount = transaction.inputs.reduce((sum, input) => {
+        console.log("Current input:", input);
+        return sum + (input.output ? input.output.satoshis : 0);
+    }, 0);
 
-            // Calculate change amount
-            const inputAmount = transaction.inputs.reduce((sum, input) => {
-                console.log("Current input:", input); // Log each input
-                return sum + (input.output ? input.output.satoshis : 0);
-            }, 0);
+    const outputAmount = transaction.outputs.reduce((sum, output) => {
+        console.log("Current output:", output);
+        return sum + output.satoshis;
+    }, 0);
 
-            const outputAmount = transaction.outputs.reduce((sum, output) => {
-                console.log("Current output:", output); // Log each output
-                return sum + output.satoshis;
-            }, 0);
+    const changeAmount = inputAmount - outputAmount - (STANDARD_FEE * 1e8);
+    console.log("Calculated change amount (in satoshis):", changeAmount);
 
-            const changeAmount = inputAmount - outputAmount - (STANDARD_FEE * 1e8); // Convert LTC to satoshis
+    if (changeAmount > DUST_THRESHOLD * 1e8) {
+        transaction.change(senderAddress);
+    }
 
-            // Log the calculated change amount
-            console.log("Calculated change amount (in satoshis):", changeAmount);
+    return transaction.serialize();
+},
 
-            // Add change output if above dust threshold
-            if (changeAmount > DUST_THRESHOLD * 1e8) {
-                transaction.change(senderAddress);
-            }
+signTransaction(rawTx, privateKey) {
+    const transaction = new litecore.Transaction(rawTx);
+    const privateKeyObj = new litecore.PrivateKey(privateKey);
+    transaction.sign(privateKeyObj);
+    return transaction.toString();
+},
 
-            return transaction.serialize();
-    },
+async beginRawTransaction(txid, vout) {
+    try {
+        const inputs = [{ txid: txid, vout: vout }];
+        const outputs = {};
+        const rawTx = await this.createRawTransaction(inputs, [outputs]);
+        return rawTx;
+    } catch (error) {
+        console.error(`Error in createRawTransaction:`, error);
+        return error;
+    }
+},
 
-    signTransaction(rawTx, privateKey) {
-        const transaction = new litecore.Transaction(rawTx);
-        const privateKeyObj = new litecore.PrivateKey(privateKey);
-        transaction.sign(privateKeyObj);
-        return transaction.toString();
-    },
+async addInputs(utxos, rawTx) {
+    try {
+        let decodedTx = await client.decoderawtransaction(rawTx);
+        utxos.forEach(utxo => {
+            decodedTx.vin.push({ txid: utxo.txid, vout: utxo.vout });
+        });
 
-    async beginRawTransaction(txid, vout) {
+        return await client.createRawTransaction(decodedTx.vin, decodedTx.vout);
+    } catch (error) {
+        console.error('Error in addInputs:', error);
+        return error;
+    }
+},
+
+    async constructInitialTradeTokenTx(params, senderChannel) {
         try {
-            // Specify the input using txid and vout
-            const inputs = [{
-                txid: txid,
-                vout: vout
-            }];
+            const utxos = await client.listUnspent(0, 9999999, [senderChannel]);
+            if (utxos.length === 0) throw new Error('No UTXOs found for the sender channel address');
 
-            // Define a minimal set of outputs, can be an empty object for now
-            const outputs = {};
+            const selectedUtxo = utxos[0];
+            params.channelUtxo = { txid: selectedUtxo.txid, vout: selectedUtxo.vout };
 
-            // Create the raw transaction
-            const rawTx = await TxUtils.createRawTransaction(inputs, [outputs]);
-
-            return rawTx;
+            let payload = "tl3" + Encode.encodeTradeTokenForUTXO({ ...params, referenceAddress: senderChannel });
+            let rawTx = await client.createRawTransaction([{ txid: params.channelUtxo.txid, vout: params.channelUtxo.vout }], []);
+            
+            rawTx = this.addPayload(payload, rawTx);
+            rawTx = await this.setChange(params.sellerChangeAddress, params.sellerChangeAmount, rawTx);
+            
+            let signedTx = await client.signrawtransactionwithwallet(rawTx);
+            return signedTx;
         } catch (error) {
-            console.error(`Error in createRawTransaction:`, error);
+            console.error('Error in constructInitialTradeTokenTx:', error);
             return error;
         }
     },
 
+    async tradeUTXO(params, senderChannel, senderLTC) {
+        try {
+            const minConf = 0;
+            const maxConf = 9999999;
 
-    async addInputs(utxos, rawTx) {
-        // Decode the raw transaction to modify it
-        let decodedTx = await decoderawtransactionAsync('decoderawtransaction', rawTx);
+            console.log('Fetching UTXOs for:', senderChannel, senderLTC);
 
-        // Add each UTXO as an input
-        utxos.forEach(utxo => {
-            decodedTx.vin.push({
-                txid: utxo.txid,
-                vout: utxo.vout
+            const utxosSender = await client.listUnspent(minConf, maxConf, [senderChannel]);
+            const utxosBuyer = await client.listUnspent(minConf, maxConf, [senderLTC]);
+
+            if (utxosSender.length === 0 || utxosBuyer.length === 0) {
+                throw new Error('No UTXOs found for one or both addresses');
+            }
+
+            const selectedUtxoSender = utxosSender[0];
+            const selectedUtxoBuyer = utxosBuyer[0];
+
+            console.log('Selected UTXOs:', selectedUtxoSender, selectedUtxoBuyer);
+
+            let payload = "tl3" + Encode.encodeTradeTokenForUTXO({
+                ...params,
+                referenceAddress: senderChannel,
             });
-        });
 
-        // Re-encode the transaction
-        return await client.cmd('createrawtransaction', decodedTx.vin, decodedTx.vout);
+            let transaction = new litecore.Transaction()
+                .from([selectedUtxoSender, selectedUtxoBuyer])
+                .addData(payload)
+                .fee(STANDARD_FEE);
+
+            console.log('Calculating output values...');
+
+            let totalInput = (selectedUtxoSender.amount + selectedUtxoBuyer.amount) * COIN;
+            let requiredOutput = Math.floor(params.satsExpected);
+            let remainingSats = totalInput - STANDARD_FEE - requiredOutput;
+
+            if (remainingSats < 0) {
+                throw new Error('Insufficient funds after subtracting the required output and fee.');
+            }
+
+            transaction.to(senderChannel, requiredOutput);
+
+            let changeSender = Math.floor(selectedUtxoSender.amount * COIN) - (STANDARD_FEE / 2);
+            let changeBuyer = Math.floor(selectedUtxoBuyer.amount * COIN) - (requiredOutput + (STANDARD_FEE / 2));
+
+            transaction.to(senderChannel, changeSender);
+            transaction.to(senderLTC, changeBuyer);
+
+            console.log('Signing the transaction...');
+
+            let privateKey1 = await client.dumpprivkey(senderChannel);
+            let privateKey2 = await client.dumpprivkey(senderLTC);
+
+            transaction.sign(privateKey1);
+            transaction.sign(privateKey2);
+
+            console.log('Serializing the transaction...');
+            
+            const serializedTx = transaction.serialize();
+            const txid = await client.sendrawtransaction(serializedTx);
+            console.log('Trade transaction sent:', txid);
+
+            return txid;
+        } catch (error) {
+            console.error('Error in tradeUTXO:', error);
+            throw error;
+        }
     },
 
-    async constructInitialTradeTokenTx(params, senderChannel) {
-        // Retrieve the UTXO for the senderChannel address
-        const utxos = await listUnspentAsync(0, 9999999, [senderChannel]);
-        if (utxos.length === 0) {
-            return new Error('No UTXOs found for the sender channel address');
+    async finalizeTradeTokenTx(initialRawTx, additionalParams) {
+        try {
+            let rawTx = await this.addInputs(additionalParams.additionalUtxos, initialRawTx);
+            rawTx = await this.setChange(additionalParams.buyerChangeAddress, additionalParams.buyerChangeAmount, rawTx);
+            rawTx = await this.setChange(additionalParams.referenceAddress, additionalParams.referenceAmount, rawTx);
+
+            let signedTx = await client.signrawtransactionwithwallet(rawTx);
+            return signedTx;
+        } catch (error) {
+            console.error('Error in finalizeTradeTokenTx:', error);
+            return error;
         }
-        // Select the appropriate UTXO (e.g., based on criteria like highest amount or specific logic)
-        const selectedUtxo = utxos[0]; // Simple selection logic, adjust as needed
-
-        // Update params with the chosen UTXO details
-        params.channelUtxo = {
-            txid: selectedUtxo.txid,
-            vout: selectedUtxo.vout
-        };
-
-        // Create the OP_RETURN payload
-        let payload = "tl3";
-        payload += Encoding.encodeTradeTokenForUTXO({
-            ...params,
-            // Include the reference address if needed
-            referenceAddress: senderChannel // or another address if required
-        });
-
-        // Create the transaction with the channel address as the first input
-        let rawTx = await client.cmd('createrawtransaction', [[{
-            txid: params.channelUtxo.txid,
-            vout: params.channelUtxo.vout
-        }], []]);
-
-        // Add the OP_RETURN payload
-        rawTx = await addPayload(payload, rawTx);
-
-        // Add a change output for the token seller
-        rawTx = await setChange(params.sellerChangeAddress, params.sellerChangeAmount, rawTx);
-
-        // Sign the transaction
-        let signedTx = await client.cmd('signrawtransactionwithwallet', rawTx);
-
-        // Return the partially constructed and signed raw transaction
-        return signedTx;
     },
-
-   async tradeUTXO(params, senderChannel, senderLTC) {
-    try {
-        const minConf = 0;
-        const maxConf = 9999999;
-
-        console.log('Fetching UTXOs for:', senderChannel, senderLTC);
-
-        const utxosSender = await listUnspentAsync(minConf, maxConf, [senderChannel]);
-        const utxosBuyer = await listUnspentAsync(minConf, maxConf, [senderLTC]);
-
-        if (utxosSender.length === 0 || utxosBuyer.length === 0) {
-            throw new Error('No UTXOs found for one or both addresses');
-        }
-
-        const selectedUtxoSender = utxosSender[0];
-        const selectedUtxoBuyer = utxosBuyer[0];
-
-        console.log('Selected UTXOs:', selectedUtxoSender, selectedUtxoBuyer);
-
-        let payload = "tl3" + Encode.encodeTradeTokenForUTXO({
-            ...params,
-            referenceAddress: senderChannel,
-        });
-
-        let transaction = new litecore.Transaction()
-            .from([selectedUtxoSender, selectedUtxoBuyer])
-            .addData(payload)
-            .fee(STANDARD_FEE);
-
-        console.log('Calculating output values...');
-
-        let totalInput = (selectedUtxoSender.amount + selectedUtxoBuyer.amount) * COIN; // Convert to satoshis
-        let requiredOutput = Math.floor(params.satsExpected); // Expecting in satoshis
-        let remainingSats = totalInput - STANDARD_FEE - requiredOutput;
-
-        if (remainingSats < 0) {
-            throw new Error('Insufficient funds after subtracting the required output and fee.');
-        }
-
-        transaction.to(senderChannel, requiredOutput);
-
-        let changeSender = Math.floor(selectedUtxoSender.amount * COIN) - (STANDARD_FEE / 2); // Half the fee
-        let changeBuyer = Math.floor(selectedUtxoBuyer.amount * COIN) - (requiredOutput + (STANDARD_FEE / 2));
-
-        transaction.to(senderChannel, changeSender);
-        transaction.to(senderLTC, changeBuyer);
-
-        console.log('Signing the transaction...');
-
-        let privateKey1 = await dumpprivkeyAsync(senderChannel);
-        let privateKey2 = await dumpprivkeyAsync(senderLTC);
-
-        transaction.sign(privateKey1);
-        transaction.sign(privateKey2);
-
-        console.log('Serializing the transaction...');
-        
-        const serializedTx = transaction.esrialize();
-        const txid = await sendrawtransactionAsync(serializedTx);
-        console.log('Trade transaction sent:', txid);
-
-        return txid;
-    } catch (error) {
-        console.error('Error in tradeUTXO:', error);
-        throw error;
-    }
-},
-
-   async finalizeTradeTokenTx(initialRawTx, additionalParams) {
-        // additionalParams might include additionalUtxos, buyerChangeAddress, referenceAddress, etc.
-
-        // Add additional UTXO inputs for UTXO consideration
-        let rawTx = await addInputs(additionalParams.additionalUtxos, initialRawTx);
-
-        // Add a change output for the UTXO spender/buyer
-        rawTx = await setChange(additionalParams.buyerChangeAddress, additionalParams.buyerChangeAmount, rawTx);
-
-        // Add the reference output, ensuring it matches the address in the OP_RETURN payload
-        // (Assuming the logic to add a standard output is similar to setChange)
-        rawTx = await setChange(additionalParams.referenceAddress, additionalParams.referenceAmount, rawTx);
-
-        // Re-sign the transaction to include the new inputs and outputs
-        let signedTx = await client.cmd('signrawtransactionwithwallet', rawTx);
-
-        // Return the fully constructed and signed raw transaction
-        return signedTx;
-    },
-
 
     async parseAndCoSignMultisigTransaction(rawTx, expectedUTXOValue, coSignerAddress, coSignerPrivateKey, network) {
-        // Step 1: Decode the raw transaction
-        const decodedTx = await TxUtils.decodeRawTransaction(rawTx, network);
+        try {
+            const decodedTx = await client.decoderawtransaction(rawTx, network);
+            let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
+            
+            if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
+                return new Error('No OP_RETURN output found or no outputs before OP_RETURN');
+            }
 
-        // Step 2: Analyze the transaction outputs to find the reference/payment address and its value
-         // Step 2: Analyze the transaction outputs to find the reference/payment address and its value
-    // The reference output is the last output before the OP_RETURN or null data output
-        let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
-        if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
-            return new Error('No OP_RETURN output found or no outputs before OP_RETURN');
+            let paymentOutput = decodedTx.vout[paymentOutputIndex - 1];
+
+            if (!paymentOutput || paymentOutput.value < expectedUTXOValue) {
+                return new Error('Transaction does not meet the expected UTXO value criteria');
+            }
+
+            const additionalUTXOs = await this.getAdditionalUTXOs(coSignerAddress, expectedUTXOValue - paymentOutput.value, network);
+            rawTx = await this.addInputsToTransaction(rawTx, additionalUTXOs, network);
+
+            const coSignedTx = await this.coSignTransaction(rawTx, coSignerPrivateKey, network);
+            return coSignedTx;
+        } catch (error) {
+            console.error('Error in parseAndCoSignMultisigTransaction:', error);
+            return error;
         }
-        let paymentOutput = decodedTx.vout[paymentOutputIndex - 1]; // Getting the output before OP_RETURN
-
-        if (!paymentOutput || paymentOutput.value < expectedUTXOValue) {
-            return new Error('Transaction does not meet the expected UTXO value criteria');
-        }
-
-        // Step 3: If the transaction is valid, prepare to co-sign it
-        // Fetch additional UTXOs for the coSignerAddress if necessary
-        const additionalUTXOs = await TxUtils.getAdditionalUTXOs(coSignerAddress, expectedUTXOValue - paymentOutput.value, network);
-
-        // Step 4: Add the additional UTXOs to the transaction
-        rawTx = await TxUtils.addInputsToTransaction(rawTx, additionalUTXOs, network);
-
-        // Step 5: Co-sign the transaction
-        const coSignedTx = await TxUtils.coSignTransaction(rawTx, coSignerPrivateKey, network);
-
-        // Step 6: Optionally, you can broadcast the transaction
-        // const txId = await TxUtils.broadcastTransaction(coSignedTx, network);
-
-        return coSignedTx; // Return the co-signed transaction
     },
-
 
     async issuePropertyTransaction(fromAddress, initialAmount, ticker, whitelists, managed, backupAddress, nft) {
         try {
-            // Get private key for the fromAddress
-            const privateKey = await dumpprivkeyAsync(fromAddress);
-
-            // Find a suitable UTXO
+            const privateKey = await client.dumpprivkey(fromAddress);
             const minAmountSatoshis = STANDARD_FEE;
-            const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
-            // Create the transaction
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-
-            // Add change address
             transaction.change(fromAddress);
 
-            // Prepare the payload for property issuance
-            var payload = 'tl1'; // 'tl1' indicates property issuance
-            payload += Encode.encodeTokenIssue({
+            let payload = 'tl1' + Encode.encodeTokenIssue({
                 initialAmount: initialAmount,
                 ticker: ticker,
                 whitelists: whitelists,
@@ -686,100 +471,76 @@ const TxUtils = {
                 backupAddress: backupAddress,
                 nft: nft
             });
+            
             console.log('Preparing payload for property issuance:', payload);
-
-            // Add OP_RETURN data
             transaction.addData(payload);
 
-            // Sign the transaction
             transaction.sign(privateKey);
-
-            // Serialize and send the transaction
             const serializedTx = transaction.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
+            const txid = await client.sendrawtransaction(serializedTx);
             console.log('Property issuance transaction sent:', txid);
             return txid;
         } catch (error) {
             console.error('Error in issuePropertyTransaction:', error);
-            throw error; // Rethrow the error for handling upstream
+            throw error;
         }
     },
-    
+
     async tokenTradeTransaction(fromAddress, propertyIdOffered, propertyIdDesired, amountOffered, amountExpected) {
         try {
-                // Get private key for the fromAddress
-                const privateKey = await dumpprivkeyAsync(fromAddress);
-
-                // Find a suitable UTXO
-                const minAmountSatoshis = STANDARD_FEE;
-                const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
-
-                // Create the transaction
-                let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-
-                // Add change address
-                transaction.change(fromAddress);
-
-                // Prepare the payload for token trade
-                var payload = 'tl5'; // 'tl5' indicates token-to-token trade
-                payload += Encode.encodeOnChainTokenForToken({
-                    propertyIdOffered: propertyIdOffered,
-                    propertyIdDesired: propertyIdDesired,
-                    amountOffered: amountOffered,
-                    amountExpected: amountExpected
-                });
-                console.log('Preparing payload for token trade:', payload);
-
-                // Add OP_RETURN data
-                transaction.addData(payload);
-
-                // Sign the transaction
-                transaction.sign(privateKey);
-
-                // Serialize and send the transaction
-                const serializedTx = transaction.serialize();
-                const txid = await sendrawtransactionAsync(serializedTx);
-                console.log('Token trade transaction sent:', txid);
-                return txid;
-            } catch (error) {
-                console.error('Error in tokenTradeTransaction:', error);
-                throw error; // Rethrow the error for handling upstream
-            }
-        },
-
-// Usage example
-// issuePropertyTransaction('admin-address', 1000000, 'MyToken', [1, 2, 3], true, 'backup-address', false);
-
-   async sendTransaction(fromAddress, toAddress, propertyId, amount, sendAll) {
-        try {
-            // Get private key for the fromAddress
-            const privateKey = await dumpprivkeyAsync(fromAddress);
-            if(sendAll==null){sendAll=0}
-
-            // Find a suitable UTXO
+            const privateKey = await client.dumpprivkey(fromAddress);
             const minAmountSatoshis = STANDARD_FEE;
-            const utxo = await TxUtils.findSuitableUTXO(fromAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
-            // Create the transaction
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-
-            // Add change address
             transaction.change(fromAddress);
 
-            // Add OP_RETURN data if provided
-            var payload ='tl2'
-            payload += Encode.encodeSend({'sendAll':sendAll,'address':toAddress,'propertyId':propertyId,'amount':amount})
-            console.log('preparing paylaod '+payload)
+            let payload = 'tl5' + Encode.encodeOnChainTokenForToken({
+                propertyIdOffered: propertyIdOffered,
+                propertyIdDesired: propertyIdDesired,
+                amountOffered: amountOffered,
+                amountExpected: amountExpected
+            });
+
+            console.log('Preparing payload for token trade:', payload);
             transaction.addData(payload);
-       
 
-            // Sign the transaction
             transaction.sign(privateKey);
-
-            // Serialize and send the transaction
             const serializedTx = transaction.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            console.log(txid)
+            const txid = await client.sendrawtransaction(serializedTx);
+            console.log('Token trade transaction sent:', txid);
+            return txid;
+        } catch (error) {
+            console.error('Error in tokenTradeTransaction:', error);
+            throw error;
+        }
+    },
+
+    async sendTransaction(fromAddress, toAddress, propertyId, amount, sendAll) {
+        try {
+            const privateKey = await client.dumpprivkey(fromAddress);
+            if (sendAll == null) sendAll = 0;
+
+            const minAmountSatoshis = STANDARD_FEE;
+            const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
+
+            let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
+            transaction.change(fromAddress);
+
+            let payload = 'tl2' + Encode.encodeSend({
+                sendAll: sendAll,
+                address: toAddress,
+                propertyId: propertyId,
+                amount: amount
+            });
+
+            console.log('Preparing payload:', payload);
+            transaction.addData(payload);
+
+            transaction.sign(privateKey);
+            const serializedTx = transaction.serialize();
+            const txid = await client.sendrawtransaction(serializedTx);
+            console.log('Send transaction sent:', txid);
 
             return txid;
         } catch (error) {
@@ -790,175 +551,133 @@ const TxUtils = {
 
     async activationTransaction(adminAddress, txTypeToActivate) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var activationPayload = 'tl0'
-            var codeHash = await Consensus.hashFiles()
-            activationPayload += Encode.encodeActivateTradeLayer({txTypeToActivate: txTypeToActivate,
-            codeHash: codeHash});
+            let activationPayload = 'tl0' + Encode.encodeActivateTradeLayer({
+                txTypeToActivate: txTypeToActivate,
+                codeHash: await Consensus.hashFiles()
+            });
 
-            // Step 2: Create a new transaction
-            const utxos = await TxUtils.listUnspent(1, 9999999, [adminAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
-
+            const utxos = await client.listUnspent(1, 9999999, [adminAddress]);
+            console.log(utxos);
+            if (utxos.length === 0) throw new Error('No UTXOs available for the admin address.');
 
             const minAmountSatoshis = STANDARD_FEE;
+            const utxo = await this.findSuitableUTXO(adminAddress, minAmountSatoshis);
 
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(adminAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
+            let transaction = new litecore.Transaction().from(utxo)
                 .addData(activationPayload)
                 .change(adminAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(adminAddress);
-            rawTx.sign(privateKey);
+            const privateKey = await client.dumpprivkey(adminAddress);
+            transaction.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
+            const serializedTx = transaction.serialize();
+            const txid = await client.sendrawtransaction(serializedTx);
+
             console.log(`Activation transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendActivationTransaction:', error);
+            console.error('Error in activationTransaction:', error);
             throw error;
         }
     },
 
 
-    async createContractSeriesTransaction(thisAddress, contractParams) {
+   async createContractSeriesTransaction(thisAddress, contractParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 16
+            var txNumber = 16;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateFutureContractSeries(contractParams);
 
-            // Step 2: Create a new transaction
-            const utxos = await TxUtils.listUnspent(1, 9999999, [thisAddress]);
-            console.log(utxos)
-            if (!utxos || utxos.length === 0) {
-                throw new Error('No UTXOs available for the admin address');
-            }
+            const utxos = await client.listUnspent(1, 9999999, [thisAddress]);
+            console.log(utxos);
+            if (utxos.length === 0) throw new Error('No UTXOs available for the address');
 
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
+            const txid = await client.sendrawtransaction(serializedTx);
+
             console.log(`Create contract transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendActivationTransaction:', error);
+            console.error('Error in createContractSeriesTransaction:', error);
             throw error;
         }
     },
 
     async commitTransaction(fromAddress, toAddress, propertyId, amount, privateKey) {
         try {
-            // Create the transaction
             let transaction = new litecore.Transaction();
 
-            // Add input UTXOs, fees, and change address
-            const utxo = await findSuitableUTXO(fromAddress);
+            const utxo = await this.findSuitableUTXO(fromAddress, STANDARD_FEE);
             transaction.from(utxo).fee(STANDARD_FEE).change(fromAddress);
 
-            // Add the trade commitment as OP_RETURN data
-            const payload = 'tl4' + + Encode.encodeTradeCommitment({ toAddress, propertyId, amount });
+            const payload = 'tl4' + Encode.encodeTradeCommitment({ toAddress, propertyId, amount });
             transaction.addData(payload);
 
-            // Sign the transaction
             transaction.sign(privateKey);
-
-            return transaction; // Return the unsigned transaction
+            return transaction;
         } catch (error) {
             console.error('Error in commitTransaction:', error);
             throw error;
         }
     },
 
-
-    async createGeneralTransaction(thisAddress, contractParams,txNumber) {
+    async createGeneralTransaction(thisAddress, contractParams, txNumber) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateFutureContractSeries(contractParams);
 
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(activationPayload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendActivationTransaction:', error);
-            throw error;
-        }
-    },
-    
-    async createOracleTransaction(thisAddress, contractParams) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 13
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeCreateOracle(contractParams);
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            console.log('chosen utxo '+JSON.stringify(utxo))
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
+            const serializedTx = rawTx.serialize();
+            const txid = await client.sendrawtransaction(serializedTx);
+
+            console.log(`General transaction sent successfully. TXID: ${txid}`);
+            return txid;
+        } catch (error) {
+            console.error('Error in createGeneralTransaction:', error);
+            throw error;
+        }
+    },
+
+    async createOracleTransaction(thisAddress, contractParams) {
+        try {
+            var txNumber = 13;
+            var payload = 'tl' + txNumber.toString(36);
+            payload += Encode.encodeCreateOracle(contractParams);
+
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+            console.log('chosen utxo ' + JSON.stringify(utxo));
+            const rawTx = new litecore.Transaction()
+                .from(utxo)
+                .addData(payload)
+                .change(thisAddress)
+                .fee(STANDARD_FEE);
+
+            const privateKey = await client.dumpprivkey(thisAddress);
+            rawTx.sign(privateKey);
+
             const serializedTx = rawTx.uncheckedSerialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
+            const txid = await client.sendrawtransaction(serializedTx);
+
             console.log(`Create Oracle transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
@@ -967,401 +686,305 @@ const TxUtils = {
         }
     },
 
-
     async publishDataTransaction(thisAddress, contractParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 14
+            var txNumber = 14;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodePublishOracleData(contractParams);
 
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
+            const txid = await client.sendrawtransaction(serializedTx);
+
             console.log(`Oracle publish transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendOracleTransaction:', error);
+            console.error('Error in publishDataTransaction:', error);
             throw error;
         }
     },
 
-
     async createContractOnChainTradeTransaction(thisAddress, contractParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 18
+            var txNumber = 18;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeTradeContractOnchain(contractParams);
 
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            const txid = await client.sendrawtransaction(serializedTx);
+
+            console.log(`Contract on-chain trade transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
+            console.error('Error in createContractOnChainTradeTransaction:', error);
             throw error;
         }
     },
 
     async createCancelTransaction(thisAddress, cancelParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 6
+            var txNumber = 6;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCancelOrder(cancelParams);
 
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            const txid = await client.sendrawtransaction(serializedTx);
+
+            console.log(`Cancel transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
+            console.error('Error in createCancelTransaction:', error);
             throw error;
         }
     },
 
     async createCommitTransaction(thisAddress, commitParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 4
+            var txNumber = 4;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCommit(commitParams);
 
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            const txid = await client.sendrawtransaction(serializedTx);
+
+            console.log(`Commit transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
+            console.error('Error in createCommitTransaction:', error);
             throw error;
         }
     },
 
-     async createWithdrawalTransaction(thisAddress, withdrawalParams) {
+    async createWithdrawalTransaction(thisAddress, withdrawalParams) {
         try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 21
+            var txNumber = 21;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeWithdrawal(withdrawalParams);
 
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
+            const privateKey = await client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
-            // Step 4: Serialize and send the transaction
             const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
+            const txid = await client.sendrawtransaction(serializedTx);
+
+            console.log(`Withdrawal transaction sent successfully. TXID: ${txid}`);
             return txid;
         } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
+            console.error('Error in createWithdrawalTransaction:', error);
             throw error;
         }
     },
+async createChannelContractTradeTransaction(thisAddress, params) {
+    try {
+        var txNumber = 19;
+        var payload = 'tl' + txNumber.toString(36);
+        payload += Encode.encodeTradeContractChannel(params);
 
-    async createChannelContractTradeTransaction(thisAddress, params) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 19
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeTradeContractChannel(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
 
+        const privateKey = await client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
 
+        const serializedTx = rawTx.serialize();
+        const txid = await client.sendrawtransaction(serializedTx);
 
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(payload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
-            throw error;
-        }
-    },
-
-    async createChannelTokenTradeTransaction(thisAddress, params) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 20
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeTradeTokensChannel(params);
-
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(payload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Activation transaction sent successfully. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
-            throw error;
-        }
-    },
-
-    async createTransferTransaction(thisAddress, params) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 22
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeTransfer(params);
-
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(payload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Transfer sent. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
-            throw error;
-        }
-    },
-
-    async createMintTransaction(thisAddress, params) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 24
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeMintSynthetic(params);
-
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(payload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Transfer sent. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
-            throw error;
-        }
-    },
-
-    async createRedeemTransaction(thisAddress, params) {
-        try {
-            // Step 1: Create the activation payload
-            // Assuming activation payload format: 'activation:<txTypeToActivate>'
-            var txNumber = 25
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeRedeemSynthetic(params);
-
-
-
-            const minAmountSatoshis = STANDARD_FEE;
-
-            // Select an UTXO to use
-            const utxo = await TxUtils.findSuitableUTXO(thisAddress, minAmountSatoshis);
-            const rawTx = new litecore.Transaction()
-                .from(utxo)
-                .addData(payload)
-                .change(thisAddress)
-                .fee(STANDARD_FEE);
-
-            // Step 3: Sign the transaction
-            const privateKey = await dumpprivkeyAsync(thisAddress);
-            rawTx.sign(privateKey);
-
-            // Step 4: Serialize and send the transaction
-            const serializedTx = rawTx.serialize();
-            const txid = await sendrawtransactionAsync(serializedTx);
-            
-            console.log(`Transfer sent. TXID: ${txid}`);
-            return txid;
-        } catch (error) {
-            console.error('Error in sendContractTradeTransaction:', error);
-            throw error;
-        }
-    },
-
-    createLitecoinMultisigAddress(pubKey1, pubKey2) {
-        const publicKeys = [
-            new litecore.PublicKey(pubKey1),
-            new litecore.PublicKey(pubKey2)
-        ];
-
-        const multisig = new litecore.Address(publicKeys, 2); // 2-of-2 multisig
-        return multisig.toString();
-    },
-
-    async findSuitableUTXO(address, minAmount) {
-        console.log(address)
-        const utxos = await listUnspentAsync(0, 9999999, [address]);
-        console.log(utxos)
-        const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
-        console.log(suitableUtxo)
-        if (!suitableUtxo) {
-            return new Error('No suitable UTXO found.');
-        }
-
-        return {
-            txId: suitableUtxo.txid,
-            outputIndex: suitableUtxo.vout,
-            address: suitableUtxo.address,
-            script: suitableUtxo.scriptPubKey,
-            satoshis: Math.round(suitableUtxo.amount * 1e8) // Convert LTC to satoshis
-        };
-    },
-
-    decodeTransactionType (encodedPayload){
-        // Implementation to decode the transaction type from the encoded payload
-        // For example, if the transaction type is the first byte of the payload:
-        const txType = parseInt(encodedPayload.substring(0, 2), 16);
-        return txType;
+        console.log(`Channel Contract Trade transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    } catch (error) {
+        console.error('Error in createChannelContractTradeTransaction:', error);
+        throw error;
     }
+},
+
+async createChannelTokenTradeTransaction(thisAddress, params) {
+    try {
+        var txNumber = 20;
+        var payload = 'tl' + txNumber.toString(36);
+        payload += Encode.encodeTradeTokensChannel(params);
+
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await client.sendrawtransaction(serializedTx);
+
+        console.log(`Channel Token Trade transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    } catch (error) {
+        console.error('Error in createChannelTokenTradeTransaction:', error);
+        throw error;
+    }
+},
+
+async createTransferTransaction(thisAddress, params) {
+    try {
+        var txNumber = 22;
+        var payload = 'tl' + txNumber.toString(36);
+        payload += Encode.encodeTransfer(params);
+
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await client.sendrawtransaction(serializedTx);
+
+        console.log(`Transfer transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    } catch (error) {
+        console.error('Error in createTransferTransaction:', error);
+        throw error;
+    }
+},
+
+async createMintTransaction(thisAddress, params) {
+    try {
+        var txNumber = 24;
+        var payload = 'tl' + txNumber.toString(36);
+        payload += Encode.encodeMintSynthetic(params);
+
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await client.sendrawtransaction(serializedTx);
+
+        console.log(`Mint transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    } catch (error) {
+        console.error('Error in createMintTransaction:', error);
+        throw error;
+    }
+},
+
+async createRedeemTransaction(thisAddress, params) {
+    try {
+        var txNumber = 25;
+        var payload = 'tl' + txNumber.toString(36);
+        payload += Encode.encodeRedeemSynthetic(params);
+
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await client.sendrawtransaction(serializedTx);
+
+        console.log(`Redeem transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    } catch (error) {
+        console.error('Error in createRedeemTransaction:', error);
+        throw error;
+    }
+},
+
+createLitecoinMultisigAddress(pubKey1, pubKey2) {
+    const publicKeys = [
+        new litecore.PublicKey(pubKey1),
+        new litecore.PublicKey(pubKey2)
+    ];
+
+    const multisig = new litecore.Address(publicKeys, 2); // 2-of-2 multisig
+    return multisig.toString();
+},
+
+async findSuitableUTXO(address, minAmount) {
+    const utxos = await client.listUnspent(0, 9999999, [address]);
+    const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
+    if (!suitableUtxo) {
+        throw new Error('No suitable UTXO found.');
+    }
+
+    return {
+        txId: suitableUtxo.txid,
+        outputIndex: suitableUtxo.vout,
+        address: suitableUtxo.address,
+        script: suitableUtxo.scriptPubKey,
+        satoshis: Math.round(suitableUtxo.amount * 1e8) // Convert LTC to satoshis
+    };
+},
+
+decodeTransactionType(encodedPayload) {
+    const txType = parseInt(encodedPayload.substring(0, 2), 16);
+    return txType;
+}
 
 };
 
