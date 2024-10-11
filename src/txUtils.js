@@ -1,24 +1,21 @@
-// Import the necessary library for interacting with Litecoin
-const Litecoin = require('litecoin'); // Replace with actual library import
-const async = require('async')
+// Import the necessary libraries and modules
+const async = require('async');
 const util = require('util');
 const litecore = require('bitcore-lib-ltc');
-const Encode = require('./txEncoder.js')
-const COIN = 100000000
+const Encode = require('./txEncoder.js');
+const BigNumber = require('bignumber.js');
+const Consensus = require('./consensus.js');
+const {createClient, getClient } = require('./client.js');
+
+const COIN = 100000000;
 const STANDARD_FEE = 10000; // Standard fee in LTC
-const BigNumber = require('bignumber.js')
-const Consensus = require('./consensus.js')
-const client = new Litecoin.Client({
-    host: '127.0.0.1',
-    port: 18332,
-    user: 'user',
-    pass: 'pass',
-    timeout: 10000
-});
+createClient('ltc',true)
+// Use the client from the client wrapper module
+const client = getClient();
 
 // Promisify the necessary client functions
 const getRawTransactionAsync = util.promisify(client.getRawTransaction.bind(client));
-const getBlockDataAsync = util.promisify(client.getBlock.bind(client))
+const getBlockDataAsync = util.promisify(client.getBlock.bind(client));
 const createRawTransactionAsync = util.promisify(client.createRawTransaction.bind(client));
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));

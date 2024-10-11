@@ -24,7 +24,7 @@ class PropertyManager {
     }
 
     static async load() {
-        console.log('loading property list');
+        //console.log('loading property list');
         try {
             const instance = PropertyManager.getInstance();
             const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
@@ -227,6 +227,9 @@ class PropertyManager {
         // Ensure the property index is loaded before checking
         const index = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
         
+        if(!index){
+            return false
+        }
         // Parse the JSON string to get the actual array
         const parsedIndex = JSON.parse(index.value);
         

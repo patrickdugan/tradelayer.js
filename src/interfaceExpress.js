@@ -2,12 +2,12 @@ const axios = require('axios');
 const serverUrl = 'http://localhost:3000'; // Adjust the server URL as needed
 
 const expressInterface = {
-    async initMain() {
+    async initMain(test) {
         try {
-            const response = await axios.post(`${serverUrl}/initMain`, { test: true });
+            const response = await axios.post(`${serverUrl}/initMain`, { test: test });
             console.log(response.data);
         } catch (error) {
-            console.error('Error:', error.response ? error.response.data : error.message);
+            console.error('Error in init:', error.response ? error.response.data : error.message);
         }
     },
 

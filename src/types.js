@@ -137,9 +137,9 @@ const Types = {
     console.log('checking that type is here '+type)
     switch (type) {
        case 0:
-                //console.log('decoding activate '+params)
+                console.log('decoding activate '+encodedPayload)
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
-                //console.log('validating activate '+JSON.stringify(params))
+                console.log('validating activate '+JSON.stringify(params))
                 params = await Validity.validateActivateTradeLayer(txId,params,sender)     
                 //console.log('back from validity function'+JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;

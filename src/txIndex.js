@@ -1,20 +1,12 @@
-const litecoin = require('litecoin');
+
 const json = require('big-json');
 const util = require('util');
 const TxUtils = require('./txUtils');
 //const Types = require('./types.js');
 const db = require('./db.js');
-
-const clientConfig = /*test ?*/ {
-            host: '127.0.0.1',
-            port: 18332,
-            user: 'user',
-            pass: 'pass',
-            timeout: 10000
-        }
-
-const client = new litecoin.Client(clientConfig);
-
+const { getClient } = require('./client');
+const client = getClient();
+//console.log('client in TxId'+client)
 const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
 const getTransactionAsync = util.promisify(client.cmd.bind(client, 'gettransaction'));
 const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))

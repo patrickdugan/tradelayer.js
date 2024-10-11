@@ -6,9 +6,9 @@ const Decode = {
     decodeActivateTradeLayer(payload) {
         const parts = payload.split(',');
         return {
-            txTypeToActivate: payload.txTypeToActivate,
-            codeHash: payload.codeHash || '',
-            wasmHash: payload.wasmHash || ''
+            txTypeToActivate: parts[0],
+            codeHash: parts[1] || '',
+            wasmHash: parts[2] || ''
         };
     },
 

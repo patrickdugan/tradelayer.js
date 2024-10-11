@@ -4,10 +4,10 @@ async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-const expressInterface = require('./interfaceExpress.js');
+const expressInterface = require('../src/interfaceExpress.js');
 
 async function runTest() {
-    await expressInterface.initMain();
+    await expressInterface.initMain(true);
            await delay(1000)
 
     const address = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk';

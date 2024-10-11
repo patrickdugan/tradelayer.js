@@ -1,9 +1,11 @@
 const Datastore = require('nedb');
 const path = require('path');
 
+const chain = 'ltc'; // Change this to 'btc' or 'doge' as needed
+const baseDir = path.join(__dirname, '..', 'nedb-data', chain);
+
 function clearDatastore(dbPath, dbName) {
     const db = new Datastore({ filename: dbPath, autoload: true });
-
     db.remove({}, { multi: true }, (err, numRemoved) => {
         if (err) {
             console.error(`Error clearing the ${dbName} database:`, err);
@@ -18,52 +20,36 @@ function clearDatastore(dbPath, dbName) {
     });
 }
 
-// Define paths to your NeDB database files
-const txIndexDbPath = path.join(__dirname, 'nedb-data', 'txIndex.db');
-const propertyListDbPath = path.join(__dirname, 'nedb-data', 'propertyList.db');
-const tallyMapDbPath = path.join(__dirname, 'nedb-data', 'tallyMap.db');
-const activationsDbPath = path.join(__dirname, 'nedb-data', 'activations.db');
-const consensusDbPath = path.join(__dirname, 'nedb-data', 'consensus.db');
-const orderBooksDbPath = path.join(__dirname, 'nedb-data', 'orderBooks.db');
-const insuranceDbPath = path.join(__dirname, 'nedb-data', 'insurance.db');
-const oracleListDbPath = path.join(__dirname, 'nedb-data', 'oracleList.db'); // Path to oracleList.db
-const contractListDbPath = path.join(__dirname, 'nedb-data', 'contractList.db')
-const tradeHistoryDbPath = path.join(__dirname, 'nedb-data', 'tradeHistory.db')
-const oracleDataDbPath = path.join(__dirname, 'nedb-data', 'oracleData.db');
-const marginMapDbPath = path.join(__dirname, 'nedb-data', 'marginMaps.db')
-const tallyMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'tallyMapDelta.db')
-const marginMapDeltasDbPath = path.join(__dirname, 'nedb-data', 'marginMapDelta.db')
-const channelsDbPath = path.join(__dirname, 'nedb-data','channels.db')
-const withdrawalQueueDbPath = path.join(__dirname, 'nedb-data','withdrawalQueue.db')
-const liquidationsDbPath = path.join(__dirname, 'Nedb-data','liquidations.db')
-const feeCacheDbPath = path.join(__dirname, 'Nedb-data','feeCache.db')
-const volumeIndexDbPath = path.join(__dirname, 'Nedb-data','volumeIndex.db')
-const clearListDbPath = path.join(__dirname, 'Nedb-data','clearList.db')
-const attestationsDbPath = path.join(__dirname, 'Nedb-data','attestations.db')
-const vaultsDbPath = path.join(__dirname, 'Nedb-data','vaults.db')
-const syntheticTokensDbPath = path.join(__dirname, 'Nedb-data','syntheticTokens.db')
 
-// Clear entries from each database
+const txIndexDbPath = path.join(baseDir, 'txIndex.db');
 clearDatastore(txIndexDbPath, 'txIndex');
-clearDatastore(propertyListDbPath, 'propertyList');
-clearDatastore(tallyMapDbPath, 'tallyMap');
-clearDatastore(activationsDbPath, 'activations');
-clearDatastore(consensusDbPath, 'consensus');
-clearDatastore(orderBooksDbPath, 'orderBooks');
-clearDatastore(insuranceDbPath, 'insurance');
-clearDatastore(oracleListDbPath, 'oracleList'); // Clear the oracleList database
-clearDatastore(contractListDbPath, 'contractList')
-clearDatastore(tradeHistoryDbPath, 'tradeHistory')
-clearDatastore(oracleDataDbPath, 'oracleData')
-clearDatastore(marginMapDbPath, 'marginMaps')
-clearDatastore(tallyMapDeltasDbPath, 'tallyMapDelta')
-clearDatastore(marginMapDeltasDbPath, 'marginMapDelta')
-clearDatastore(channelsDbPath, 'channels')
-clearDatastore(withdrawalQueueDbPath, 'withdrawalQueue')
-clearDatastore(liquidationsDbPath, 'liquidations')
-clearDatastore(feeCacheDbPath, 'feeCache')
-clearDatastore(volumeIndexDbPath, 'volumeIndex')
-clearDatastore(clearListDbPath,'clearList')
-clearDatastore(attestationsDbPath,'attestations')
-clearDatastore(vaultsDbPath,'vaults')
-clearDatastore(syntheticTokensDbPath,'syntheticTokens')
+
+const paths = {
+    propertyListDbPath: 'propertyList.db',
+    tallyMapDbPath: 'tallyMap.db',
+    activationsDbPath: 'activations.db',
+    consensusDbPath: 'consensus.db',
+    orderBooksDbPath: 'orderBooks.db',
+    insuranceDbPath: 'insurance.db',
+    oracleListDbPath: 'oracleList.db',
+    contractListDbPath: 'contractList.db',
+    tradeHistoryDbPath: 'tradeHistory.db',
+    oracleDataDbPath: 'oracleData.db',
+    marginMapDbPath: 'marginMaps.db',
+    tallyMapDeltasDbPath: 'tallyMapDelta.db',
+    marginMapDeltasDbPath: 'marginMapDelta.db',
+    channelsDbPath: 'channels.db',
+    withdrawalQueueDbPath: 'withdrawalQueue.db',
+    liquidationsDbPath: 'liquidations.db',
+    feeCacheDbPath: 'feeCache.db',
+    volumeIndexDbPath: 'volumeIndex.db',
+    clearListDbPath: 'clearLists.db',
+    attestationsDbPath: 'attestations.db',
+    vaultsDbPath: 'vaults.db',
+    syntheticTokensDbPath: 'syntheticTokens.db',
+
+};
+
+for (const [name, relativePath] of Object.entries(paths)) {
+    clearDatastore(path.join(baseDir, relativePath), name);
+}

@@ -1,3 +1,8 @@
+const { createClient } = require('./client');
+const chain = process.argv[2] || process.env.CHAIN || 'LTC';
+const test = process.env.TEST || true
+createClient(chain,test);
+
 const express = require('express');
 const TallyMap = require('./tally.js');
 const TxIndex = require('./txIndex.js');
@@ -12,6 +17,8 @@ var activationsInstance = Activations.getInstance()
 const OracleList = require('./oracle.js')
 const MarginMap = require('./marginMap.js')
 
+
+
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
 const port = 3000; // Choose a port that suits your setup
@@ -23,9 +30,10 @@ app.post('/initMain', async (req, res) => {
         console.log('Initializing');
         const mainProcessor = Main.getInstance(req.body.test); // Use req.body for arguments
         mainProcessor.initialize();
+        console.log('initialized')
         res.status(200).send('Main process initialized successfully');
     } catch (error) {
-        res.status(500).send('Error: ' + error.message);
+        res.status(500).send('Error in listener init: ' + error.message);
     }
 });
 

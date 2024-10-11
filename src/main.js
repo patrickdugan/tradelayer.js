@@ -12,8 +12,7 @@ const util = require('util')
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
-// Additional modules
-const Litecoin = require('litecoin'); // Bitcoin RPC module
+const { createClient, getClient } = require('./client');
 const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity
@@ -45,19 +44,22 @@ class Main {
     static instance;
 
     constructor(test) {
+        console.log('inside main constructor '+test)
         if (Main.instance) {
+            console.log('main already initialized')
             return Main.instance;
         }
 
-        const config = {
-            host: '127.0.0.1',
-            port: test ? 18332 : 8332,
-            user: 'user',
-            pass: 'pass',
-            timeout: 10000
-        };
+        const chain = process.argv[2] || process.env.CHAIN || 'LTC';
 
-        this.client = new Litecoin.Client(config);
+        if (!getClient()) {
+            console.log('creating RPC wrapper on init')
+            createClient(chain, test); // Or set the chain as required
+        }
+
+
+        this.client = getClient();  // Initialize the client with the specified chain
+      
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
@@ -210,15 +212,14 @@ class Main {
                 for(const valueData of txData.value){
                     const payload = valueData.payload;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
-                    console.log('troubleshooting 2'+type)
                     // Assuming types 4 and 20 are the funding types
                     if (type === 4 || type === 20) {
                         counter1++
-                        console.log('logging funding '+counter1+' '+JSON.stringify(txData))
+                        //console.log('logging funding '+counter1+' '+JSON.stringify(txData))
                         acc[txBlockHeight].fundingTx.push(txData);
                     } else {
                         counter2++
-                        console.log('logging other '+counter2+' '+JSON.stringify(txData))
+                        //console.log('logging other '+counter2+' '+JSON.stringify(txData))
                         acc[txBlockHeight].tradeTx.push(txData);
                     }
                 }
@@ -309,6 +310,7 @@ class Main {
                     var payload = valueData.payload;
                     const marker = valueData.marker;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                    console.log('type is '+type)
                     payload = payload.slice(1, payload.length).toString(36);
                     const senderAddress = valueData.sender.senderAddress;
                     const referenceAddress = valueData.reference.address;
@@ -346,10 +348,12 @@ class Main {
                     decodedParams.block = blockHeight;
 
                     if (decodedParams.valid === true) {
+                        console.log('consensus marking valid tx '+decodedParams)
                         await Consensus.markTxAsProcessed(txId, decodedParams);
                         await Logic.typeSwitch(type, decodedParams);
                         await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     } else {
+                        console.log('consensus marking valid tx '+decodedParams)
                         await Consensus.markTxAsProcessed(txId, decodedParams);
                         await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     }
@@ -471,7 +475,7 @@ class Main {
                 const blockData = await TxIndex.fetchBlockData(blockNumber);
                 await this.processBlock(blockData, blockNumber);
                 let trackHeight = blockNumber;
-                console.log('updating trackHeight'+trackHeight)
+                //console.log('updating trackHeight'+trackHeight)
                 await this.saveTrackHeight(trackHeight)
             }
 

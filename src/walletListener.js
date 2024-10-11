@@ -1,3 +1,9 @@
+const { createClient } = require('./client');
+const chain = process.argv[2] || process.env.CHAIN || 'LTC';
+const test = process.env.TEST || true
+createClient(chain,test);
+
+
 const express = require('express');
 const axios = require('axios');
 const TallyMap = require('./tally.js');
@@ -13,6 +19,7 @@ const TxUtils = require('./txUtils.js')
 const Consensus = require('./consensus.js')
 const Channels = require('./channels.js')
 const Types = require('./types.js')
+
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
