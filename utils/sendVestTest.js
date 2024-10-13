@@ -1,10 +1,16 @@
+const {createClient }= require('../src/client.js')
+createClient('LTC',true)
+
+const litecore = require('bitcore-lib-ltc');
+const TxUtils = require('../src/txUtils.js');
+//TxUtils.init('LTC',true)
+
 const PropertyManager = require('../src/property.js');
 const TallyMap = require('../src/tally.js');
 const Logic = require('../src/logic.js');
-const litecore = require('bitcore-lib-ltc');
-const TxUtils = require('../src/txUtils.js');
-const {createClient }= require('../src/client.js')
-createClient('ltc')
+
+
+
 
 function generateNewAddress() {
     const privateKey = new litecore.PrivateKey(); // Generate a new private key

@@ -3,13 +3,21 @@ const litecore = require('bitcore-lib-ltc');
 const Encode = require('./txEncoder.js');
 const BigNumber = require('bignumber.js');
 const Consensus = require('./consensus.js');
-const client = require('./client.js');  // Import the ClientWrapper instance
-
+const {getClient, createClient} = require('./client.js');  // Import the ClientWrapper instance
+const client = getClient()
 const COIN = 100000000;
 const STANDARD_FEE = 10000; // Standard fee in LTC
 const DUST_THRESHOLD = 54600;
 
 const TxUtils = {
+
+
+   async initClient(chain = 'LTC', isTest = false) {
+        if (!getClient()) {
+            createClient(chain, isTest);
+        }
+    },
+
     async getRawTransaction(txid) {
         try {
             return await client.getRawTransaction(txid, true);
@@ -257,14 +265,14 @@ const TxUtils = {
         }
 
         return transaction;
-    }
+    },
 
     addPayload(payload, rawTx) {
-    const transaction = new litecore.Transaction(rawTx);
-    const script = litecore.Script.buildDataOut('tl' + payload, 'hex');
-    transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
-    return transaction.toString();
-},
+        const transaction = new litecore.Transaction(rawTx);
+        const script = litecore.Script.buildDataOut('tl' + payload, 'hex');
+        transaction.addOutput(new litecore.Transaction.Output({ script: script, satoshis: 0 }));
+        return transaction.toString();
+    },
 
 async setChange(senderAddress, amount, rawTx) {
     const transaction = new litecore.Transaction(rawTx);

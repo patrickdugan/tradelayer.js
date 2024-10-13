@@ -7,9 +7,6 @@ const db = require('./db.js');
 const { getClient } = require('./client');
 const client = getClient();
 //console.log('client in TxId'+client)
-const decoderawtransactionAsync = util.promisify(client.cmd.bind(client, 'decoderawtransaction'));
-const getTransactionAsync = util.promisify(client.cmd.bind(client, 'gettransaction'));
-const getBlockCountAsync = util.promisify(client.cmd.bind(client, 'getblockcount'))
 const transparentIndex = [];
 
 class TxIndex {
@@ -174,7 +171,7 @@ class TxIndex {
 
     /*static async DecodeRawTransaction(rawTx) {
         try {
-            const decodedTx = await decoderawtransactionAsync(rawTx);
+            const decodedTx = await client.decoderawtransaction(rawTx);
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
 
             if (opReturnOutput) {
@@ -205,7 +202,7 @@ class TxIndex {
 
     static async DecodeRawTransaction(rawTx) {
         try {
-            const decodedTx = await decoderawtransactionAsync(rawTx);
+            const decodedTx = await client.decoderawtransaction(rawTx);
             //console.log(JSON.stringify(decodedTx))
 
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');

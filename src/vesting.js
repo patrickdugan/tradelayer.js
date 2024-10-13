@@ -4,6 +4,7 @@ const ContractsRegistry = require('./contractRegistry'); // Assuming this is the
 const ClearList = require('./clearlist.js')
 const ContractList = require('./contractRegistry.js')
 const BigNumber = require('bignumber.js')
+const {getChain} = require('./client.js')
 
 class TradeLayerManager {
     static instance = null;
@@ -11,7 +12,37 @@ class TradeLayerManager {
     constructor(adminAddress) {
         if (!TradeLayerManager.instance) {
             this.adminAddress = adminAddress;
+            this.setChainParams();
             TradeLayerManager.instance = this;
+        }
+    }
+
+    setChainParams() {
+        // Access the chain via the client or environment variable
+        this.chain = getChain();
+        
+        // Configure parameters based on the chain
+        if (this.chain === 'BTC') {
+            this.baseVolume = 100;
+            this.minRebate = 0.00000625;
+            this.maxRebate = 0.0001;
+            this.initialTokenAmount = 600000;
+            this.tickerSymbol = 'BTC_TL';
+            this.hedgeLeverage = 5;
+        } else if (this.chain === 'DOGE') {
+            this.baseVolume = 2000000;
+            this.minRebate = 0.00000125;
+            this.maxRebate = 0.0005;
+            this.initialTokenAmount = 200000000;
+            this.tickerSymbol = 'DOGE_TL';
+            this.hedgeLeverage = 10;
+        } else { // Default to Litecoin (LTC)
+            this.baseVolume = 1000;
+            this.minRebate = 0.000003125;
+            this.maxRebate = 0.0001;
+            this.initialTokenAmount = 1500000;
+            this.tickerSymbol = 'LTC_TL';
+            this.hedgeLeverage = 5;
         }
     }
 
@@ -34,17 +65,23 @@ class TradeLayerManager {
          
         if (!alreadyInitialized) {
             var TLTokenId = 1;
-            const TLTotalAmount = 500000;
+            const TLTotalAmount = this.initialTokenAmount;
+            const ticker = this.tickerSymbol;
+            const vestTicker = ticker+"VEST"
+            const incomeTicker = ticker+"I"
+            const incomeVestTicker = incomeTicker + "VEST"
             var TLVESTTokenId = 2;
-            const TLVESTTotalAmount = 250000;
-            var amountToInsuranceFund = 150000;
-            const TLInitialLiquidity = 100000;
+            const TLVESTTotalAmount = new BigNumber(TLTotalAmount).dividedBy(2).toNumber();
+            var amountToInsuranceFund = new BigNumber(TLVESTTotalAmount).times(0.6).toNumber();
+            const TLInitialLiquidity = new BigNumber(TLVESTTotalAmount).times(0.4).toNumber();
             const TLVESTReserve = TLTotalAmount-amountToInsuranceFund-TLInitialLiquidity
+            const TLIVESTinitialLiquidity = TLTotalAmount
+            const TLITotalAmount = TLIVESTinitialLiquidity+1
             const propertyManager = PropertyManager.getInstance()
-            TLTokenId = await propertyManager.createToken('TL', TLTotalAmount, 'Fixed', 0);
-            TLVESTTokenId = await propertyManager.createToken('TLVEST', TLVESTTotalAmount, 'Vesting',0);
-            const TLIVESTToken = await propertyManager.createToken('TLIVEST', 1500000, 'Vesting', 0)
-            const TLI = await propertyManager.createToken('TLI', 1500001, 'Native',0)
+            TLTokenId = await propertyManager.createToken(ticker, TLTotalAmount, 'Fixed', 0);
+            TLVESTTokenId = await propertyManager.createToken(vestTicker, TLVESTTotalAmount, 'Vesting',0);
+            const TLIVESTToken = await propertyManager.createToken(incomeTicker, TLIVESTinitialLiquidity, 'Vesting', 0)
+            const TLI = await propertyManager.createToken(incomeVestTicker, TLITotalAmount, 'Native',0)
 
             const hedgeParams = {
                 native: true,
@@ -190,23 +227,15 @@ class TradeLayerManager {
         return {two:vestingAmount,three:vestingAmount2};
     }
 
-    static calculateTradeRebates(cumulativeVolumeLTC) {
-	    const baseVolume = 1000; // The volume where rebate calculation starts
-	    const minRebate = 0.000003125; // The minimum rebate value
-	    const maxRebate = 0.0001; // The maximum rebate value
-
-	    // Ensure cumulative volume is at least at the base volume
-	    if (cumulativeVolumeLTC < baseVolume) {
-	        return maxRebate; // Return max rebate if below base volume
-	    }
-
-	    // Calculate the rebate using a logarithmic scale
-	    const scale = Math.log(cumulativeVolumeLTC / baseVolume) / Math.log(100000000 / baseVolume);
-	    const rebate = maxRebate - scale * (maxRebate - minRebate);
-
-	    // Ensure the rebate is not less than the minimum
-	    return Math.max(rebate, minRebate);
-	}
+     static calculateTradeRebates(cumulativeVolume) {
+        const { baseVolume, minRebate, maxRebate } = TradeLayerManager.instance;
+        if (cumulativeVolume < baseVolume) {
+            return maxRebate;
+        }
+        const scale = Math.log(cumulativeVolume / baseVolume) / Math.log(100000000 / baseVolume);
+        const rebate = maxRebate - scale * (maxRebate - minRebate);
+        return Math.max(rebate, minRebate);
+    }
 
     static performBuyback(feeCaches) {
         feeCaches.forEach(cache => {

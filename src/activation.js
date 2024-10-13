@@ -2,6 +2,7 @@ const db = require('./db.js')
 //const Logic = require('./logic.js');
 const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus'); // Import consensus.js functions
+const {getChain, getTest} = require('./client.js')
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
@@ -13,7 +14,28 @@ class Activation {
             return Activation.instance;
         }
 
-        this.hardcodedAdminAddress = testAdmin;
+        this.chain = getChain();
+        this.test = getTest()
+        if (this.chain === 'BTC') {
+           if(this.test==true){
+                this.adminAddress = '';
+           }else{
+                this.adminAddress = '';
+           } 
+        } else if (this.chain === 'DOGE') {
+           if(this.test==true){
+                this.adminAddress = '';
+           }else{
+                this.adminAddress = '';
+           } 
+        } else if(this.chain==='LTC'){
+            if(this.test==true){
+                this.adminAddress = testAdmin;
+           }else{
+                this.adminAddress = '';
+           } 
+        }
+
         this.consensusVector = {};
         this.txRegistry = this.initializeTxRegistry()
 
@@ -96,7 +118,7 @@ class Activation {
             //console.log('in the activate 0 block')
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
-            const tradeLayerManager = await TradeLayerManager.getInstance(this.hardcodedAdminAddress);
+            const tradeLayerManager = await TradeLayerManager.getInstance(this.adminAddress);
             const balances = await tradeLayerManager.initializeTokens(block); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             console.log('balances '+ balances + "if undefined this is a repeat that successfully prevented inflation")
             this.txRegistry[txType].active = true;

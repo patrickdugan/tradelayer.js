@@ -12,7 +12,7 @@ const util = require('util')
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
-const { createClient, getClient } = require('./client');
+const {createClient, getClient } = require('./client.js')
 const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity
@@ -58,12 +58,11 @@ class Main {
         }
 
 
-        this.client = getClient();  // Initialize the client with the specified chain
-      
+        this.client = getClient();  // Initialize the client with the specified chain     
         this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
-        this.getBlockCountAsync = util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))
-        this.getNetworkInfoAsync = util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'));
+        this.getBlockCountAsync = () => this.client.getBlockCount();
+        this.getNetworkInfoAsync = () => this.client.getNetworkInfo();
         this.genesisBlock = 3082500;
  //       this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -462,7 +461,7 @@ class Main {
                 break; // Break the loop if shutdown is requested
             }*/
             chainTip = await this.getBlockCountAsync()
-            console.log('latest block '+chainTip+' max track'+latestProcessedBlock)
+            //console.log('latest block '+chainTip+' max track'+latestProcessedBlock)
             let checkTrack = await this.loadTrackHeight()
             if(checkTrack>latestProcessedBlock){latestProcessedBlock=checkTrack}
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
