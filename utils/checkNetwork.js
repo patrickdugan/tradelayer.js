@@ -1,20 +1,26 @@
 // checkChain.js
-const {createClient, getClient} = require('../src/client.js'); // Import your client wrapper
+const client = require('../src/client'); // Import the client wrapper directly
 
-createClient('LTC',true)
-const client = getClient()
 async function checkNetworkInfo() {
+  if (!client) {
+    console.error('Failed to initialize client.');
+    return;
+  }
+
   try {
     const networkInfo = await client.getNetworkInfo();
     console.log('Connected chain info:', networkInfo);
     
-    // You can print specific details like:
-    console.log('Network:', networkInfo.chain);
-    console.log('Blocks:', networkInfo.blocks);
-    console.log('Headers:', networkInfo.headers);
+    // Display specific details if available
+    console.log('Subversion:', networkInfo.subversion);
+    console.log('Connections:', networkInfo.connections);
   } catch (error) {
     console.error('Error fetching network info:', error);
   }
+
+   const blockchainInfo = await client.getBlockchainInfo();
+  const isTestnet = blockchainInfo.chain === 'test';
+  console.log(isTestnet ? 'Running on Testnet' : 'Running on Mainnet');
 }
 
 // Run the check

@@ -133,8 +133,9 @@ class TxIndex {
 
     static async processBlockData(blockData, blockHeight) {
             const txIndexDB = db.getDatabase('txIndex');
+
             let txDetails =[]
-        for (const txId of blockData.tx) {
+        for(const txId of blockData.tx){
             const txHex = await TxIndex.fetchTransactionData(txId);
             const txData = await TxIndex.DecodeRawTransaction(txHex);
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
@@ -156,7 +157,9 @@ class TxIndex {
     }
 
     static async fetchTransactionData(txId) {
-        //console.log('fetching tx data '+txId)
+        const client = getClient()
+        console.log('fetching tx data '+txId+JSON.stringify(client))
+
         return new Promise((resolve, reject) => {
             client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
@@ -201,6 +204,8 @@ class TxIndex {
     }*/
 
     static async DecodeRawTransaction(rawTx) {
+        const client = getClient()
+        console.log('decoding tx '+rawTx+JSON.stringify(client))
         try {
             const decodedTx = await client.decoderawtransaction(rawTx);
             //console.log(JSON.stringify(decodedTx))

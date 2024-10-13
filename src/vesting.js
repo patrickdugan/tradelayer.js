@@ -1,6 +1,5 @@
 const InsuranceFund = require('./insurance.js');
 const PropertyManager = require('./property.js'); // Assuming Property has the createToken method
-const ContractsRegistry = require('./contractRegistry'); // Assuming this is the correct import
 const ClearList = require('./clearlist.js')
 const ContractList = require('./contractRegistry.js')
 const BigNumber = require('bignumber.js')
@@ -29,6 +28,7 @@ class TradeLayerManager {
             this.initialTokenAmount = 600000;
             this.tickerSymbol = 'BTC_TL';
             this.hedgeLeverage = 5;
+            this.expiryInterval = 12960
         } else if (this.chain === 'DOGE') {
             this.baseVolume = 2000000;
             this.minRebate = 0.00000125;
@@ -36,6 +36,7 @@ class TradeLayerManager {
             this.initialTokenAmount = 200000000;
             this.tickerSymbol = 'DOGE_TL';
             this.hedgeLeverage = 10;
+            this.expiryInterval = 129600
         } else { // Default to Litecoin (LTC)
             this.baseVolume = 1000;
             this.minRebate = 0.000003125;
@@ -43,6 +44,7 @@ class TradeLayerManager {
             this.initialTokenAmount = 1500000;
             this.tickerSymbol = 'LTC_TL';
             this.hedgeLeverage = 5;
+            this.expiryInterval= 51840
         }
     }
 
@@ -97,9 +99,7 @@ class TradeLayerManager {
                 fee: false
             }
 
-            const NativeHedgeId = await ContractList.createContractSeries(this.adminAddress, hedgeParams.native, 
-                hedgeParams.underlyingOracleId, hedgeParams.onChainData, hedgeParams.notionalPropertyId, hedgeParams.notionalValue, 
-                hedgeParams.collateralPropertyId, hedgeParams.leverage, hedgeParams.expiryPeriod, hedgeParams.series, hedgeParams.inverse, hedgeParams.fee, block,null );
+            const NativeHedgeId = await TradeLayerManager.initializeContractSeries(block)
 
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)
@@ -122,21 +122,27 @@ class TradeLayerManager {
         }
     }
 
-    static async initializeContractSeries() {
-        const LTC_TL_Future_ContractId = 1;
-        const contractProperties = {
+    static async initializeContractSeries(block) {
+        const params = {
             // Define contract properties such as margin requirements, expiry, etc.
             // Example properties:
             initialMargin: 0.1, // 10%
             maintenanceMargin: 0.05, // 5%
             expiry: 'perp', //need to assure that perp or 0 or null etc. codes to perpetual
-            index: [1, 0], //LTC vs. TL, need to assure that the propertyid for TL init's to 1 and that 0 corresponds to LTC UTXO
-            expiryInterval: 17280,
-            seriesLength: 6
+            onChainData: [[1, 0]], //LTC vs. TL, need to assure that the propertyid for TL init's to 1 and that 0 corresponds to LTC UTXO
+            expiryInterval: this.expiryInterval,
+            leverage: this.hedgeLeverage,
+            seriesLength: 6,
+            native:true,
+            inverse: true,
+            fee: false,
+            notionalPropertyId: 0,
+            notionalValue: 0.0001,
+            collateralPropertyId: 1
         };
 
         // Create the contract series
-        await ContractsRegistry.createContractSeries(LTC_TL_Future_ContractId, 'native', contractProperties);
+        return await ContractList.createContractSeries(this.adminAddress, params, block);
 
 
         // Additional setup if required, such as initializing order books, setting initial market conditions, etc.

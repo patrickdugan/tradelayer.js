@@ -164,7 +164,9 @@ const Types = {
                 try {
                     // This one is a bit different because we're also looking at TxUtil deconstruction of the UTXOs
                     // If we're working in API mode, we may need a flag to check, like if(params.API){outcall}else{TxUtils.decode}
+                    console.log('inside case for type 3 '+encodedPayload)
                     params = Decode.decodeTradeTokenForUTXO(encodedPayload.substr(index));
+                    console.log(JSON.stringify(params))
                     params.senderAddress = sender;
                     params.txid = txId;
 
@@ -174,6 +176,7 @@ const Types = {
                               decode = await TxIndex.DecodeRawTransaction(txHex);
                         //console.log('Decoding UTXO trade: ' + JSON.stringify(decode));
                     } catch (error) {
+                        console.log('error in decoding 3 on tx data '+error)
                         if (error.code === -22) {
                             //console.error('Error decoding raw transaction: ', error);
                             decode = null; // Handle the error gracefully

@@ -12,7 +12,7 @@ const util = require('util')
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const ReOrgChecker = require('./reOrg.js');
 const Oracles = require('./oracle.js')
-const {createClient, getClient } = require('./client.js')
+const clientInstance = require('./client'); // Directly import clientInstance
 const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity
@@ -58,8 +58,8 @@ class Main {
         }
 
 
-        this.client = getClient();  // Initialize the client with the specified chain     
-        this.tradeLayerManager = new TradeLayerManager();
+        this.client = clientInstance;  // Use the already initialized clientInstance  // Initialize the client with the specified chain     
+        //this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = () => this.client.getBlockCount();
         this.getNetworkInfoAsync = () => this.client.getNetworkInfo();

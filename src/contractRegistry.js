@@ -69,7 +69,7 @@ class ContractRegistry {
         return this.instance;
     }
 
-    static async createContractSeries(sender, native, underlyingOracleId, onChainData, notionalPropertyId, notionalValue, collateralPropertyId, leverage, expiryPeriod, series, inverse, fee, block,whitelist) {
+    static async createContractSeries(sender, params, block) {
         // Load the current contract list from the database
         const contractListDB = db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
@@ -85,21 +85,21 @@ class ContractRegistry {
         const contractSeries = {
             id: seriesId,
             issuer: sender,
-            native: native,
-            underlyingOracleId: underlyingOracleId,
-            onChainData: onChainData,
-            notionalPropertyId: notionalPropertyId,
-            notionalValue: notionalValue,
-            collateralPropertyId: collateralPropertyId,
-            leverage: leverage,
-            expiryPeriod: expiryPeriod,
-            series: series,
-            inverse: inverse,
-            fee: fee,
-            whitelist: whitelist,
+            native: params.native,
+            underlyingOracleId: params.underlyingOracleId,
+            onChainData: params.onChainData,
+            notionalPropertyId: params.notionalPropertyId,
+            notionalValue: params.notionalValue,
+            collateralPropertyId: params.collateralPropertyId,
+            leverage: params.leverage,
+            expiryPeriod: params.expiryPeriod,
+            series: params.series,
+            inverse: params.inverse,
+            fee: params.fee,
+            whitelist: params.whitelist,
             contracts: {
                 expired: [],
-                unexpired: await ContractRegistry.generateContracts(expiryPeriod, series, seriesId, block)
+                unexpired: await ContractRegistry.generateContracts(params.expiryPeriod, params.series, seriesId, block)
             },
             ammPool: thisAMM // Add the AMM object to the contract series
         };
