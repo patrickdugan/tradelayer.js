@@ -3,7 +3,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const db = require('./db.js')
 const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
-const oracleDataDB = db.getDatabase('oracleData');
+const oracleDataDB = await db.getDatabase('oracleData');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
@@ -458,7 +458,7 @@ class Clearing {
     }
 
     static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = await dbInstance.getDatabase('clearing');
         const recordKey = `clearing-${contractId}-${blockHeight}`;
 
         const clearingRecord = {
@@ -482,7 +482,7 @@ class Clearing {
     }
 
     static async loadClearingSettlementEvents(contractId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const clearingDB = dbInstance.getDatabase('clearing');
+        const clearingDB = await dbInstance.getDatabase('clearing');
         try {
             const query = {
                 contractId: contractId,

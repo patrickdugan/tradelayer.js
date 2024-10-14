@@ -1,12 +1,22 @@
-// db.js
 const Datastore = require('nedb');
 const path = require('path');
 const util = require('util');
-const { getChain } = require('./client');
+const clientPromise = require('./client').getInstance();
 
 class Database {
     constructor() {
         this.databases = {};
+        this.initialized = false;
+    }
+
+    async init() {
+        // Wait for client to finish setting the chain
+        const client = await clientPromise;
+        const chain = client.chain;
+
+        if (!chain) {
+            throw new Error('Unable to determine blockchain chain.');
+        }
 
         const categories = [
             'txIndex', 'propertyList', 'oracleList', 'oracleData', 'contractList',
@@ -17,7 +27,6 @@ class Database {
             'liquidations'
         ];
 
-        const chain = getChain();
         const dbPath = path.join(__dirname, '..', 'nedb-data', chain.toLowerCase());
 
         categories.forEach(category => {
@@ -35,11 +44,21 @@ class Database {
 
             this.databases[category] = db;
         });
+
+        this.initialized = true;
     }
 
-    getDatabase(category) {
+    async getDatabase(category) {
+        if (!this.initialized) {
+            await this.init();
+        }
         return this.databases[category];
     }
 }
 
-module.exports = new Database();
+const databaseInstance = new Database();
+(async () => {
+    await databaseInstance.init();
+})();
+
+module.exports = databaseInstance;

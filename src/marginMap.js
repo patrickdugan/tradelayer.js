@@ -21,7 +21,7 @@ class MarginMap {
         const key = JSON.stringify({ seriesId });
         //console.log('loading margin map for ' + seriesId);
         // Retrieve the marginMaps database from your Database instance
-        const marginMapsDB = db.getDatabase('marginMaps');
+        const marginMapsDB = await db.getDatabase('marginMaps');
 
         try {
             const doc = await marginMapsDB.findOneAsync({ _id: key });
@@ -143,7 +143,7 @@ class MarginMap {
     async saveMarginMap(isMargin) {
         try {
             const key = JSON.stringify({ seriesId: this.seriesId });
-            const marginMapsDB = db.getDatabase('marginMaps');
+            const marginMapsDB = await db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
             if(isMargin){
                 //console.log('updating marginMap with margin '+JSON.stringify(value))
@@ -679,7 +679,7 @@ class MarginMap {
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode) {
             const newUuid = uuid.v4();
-            const dbInstance = db.getDatabase('marginMapDelta');
+            const dbInstance = await db.getDatabase('marginMapDelta');
             const deltaKey = `${address}-${contractId}-${newUuid}`;
             const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode };
 
@@ -814,7 +814,7 @@ class MarginMap {
     async saveLiquidationOrders(contractId, position, order, blockHeight) {
         try {
             // Access the marginMaps database
-            const liquidationsDB = db.getDatabase('liquidations');
+            const liquidationsDB = await db.getDatabase('liquidations');
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contractId}-${blockHeight}`;
@@ -829,7 +829,7 @@ class MarginMap {
     }
 
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
-        const liquidationsDB = db.getDatabase('liquidations');
+        const liquidationsDB = await db.getDatabase('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
         let liquidations = []
 
@@ -872,7 +872,7 @@ class MarginMap {
         bankruptcyVWAPPreFill = bankruptcyVWAPPreFill.dividedBy(liquidatedContracts);
         avgBankrupcyPrice = avgBankrupcyPrice.dividedBy(liquidationOrders);
 
-        const tradeHistoryDB = db.getDatabase('tradeHistory');
+        const tradeHistoryDB = await db.getDatabase('tradeHistory');
         const tradeKey = `liquidationOrders-${contractId}-${blockHeight}`;
         // Fetch trade history for the given blockHeight and contractId
         const trades = await tradeHistoryDB.findAsync();

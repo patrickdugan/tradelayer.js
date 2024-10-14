@@ -3,26 +3,49 @@ const Litecoin = require('litecoin');
 const Bitcoin = require('bitcoin');
 const Doge = require('dogecoind-rpc');
 
+let clientInstance = null;
+
 class ClientWrapper {
   constructor() {
-
-    getBlockchainInfo() {
-    return util.promisify(this.client.cmd.bind(this.client, 'getblockchaininfo'))();
+    if (clientInstance) {
+      return clientInstance;
     }
 
-    const blockchainInfo = await client.getBlockchainInfo();
+    this.chain = null;
+    this.client = null;
+
+    this.initClient().then(() => {
+      console.log('Client initialized with chain:', this.chain);
+      clientInstance = this;
+    });
+  }
+
+  async initClient() {
+    // Temporary client for initial check
+    this.config = {
+      host: '127.0.0.1',
+      port: 18332, // Temporary port
+      user: 'user',
+      pass: 'pass',
+      timeout: 10000
+    };
+    this.client = new Litecoin.Client(this.config); // Start with Litecoin as a placeholder
+
+    // Check if testnet using getblockchaininfo
+    const blockchainInfo = await this.getBlockchainInfo();
     const isTest = blockchainInfo.chain === 'test';
 
-    this.chain = await verifyClientChain()
-    this.config = {
-        host: '127.0.0.1',
-        port: isTest ? (chain === 'BTC' ? 18332 : chain === 'DOGE' ? 44556 : 18332) : (chain === 'BTC' ? 8332 : chain === 'DOGE' ? 22555 : 9332),
-        user: 'user',
-        pass: 'pass',
-        timeout: 10000,
-      };
+    // Check chain type based on network subversion
+    const networkInfo = await this.getNetworkInfo();
+    this.chain = this.determineChainFromSubversion(networkInfo.subversion);
 
-    switch (chain) {
+    // Configure the port based on chain and network type
+    this.config.port = isTest 
+      ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 18332)
+      : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 9332);
+
+    // Initialize the actual client based on chain
+    switch (this.chain) {
       case 'BTC':
         this.client = new Bitcoin.Client(this.config);
         break;
@@ -32,7 +55,47 @@ class ClientWrapper {
       default:
         this.client = new Litecoin.Client(this.config);
     }
+
+    console.log(`Verified chain: ${this.chain}`);
   }
+
+  static async getInstance(chain) {
+    if (!ClientWrapper.instance) {
+      const instance = new ClientWrapper(chain);
+      await instance.init(); // Await init method
+      ClientWrapper.instance = instance;
+    }
+    return ClientWrapper.instance;
+  }
+
+  determineChainFromSubversion(subversion) {
+    subversion = subversion.toLowerCase();
+    if (subversion.includes('litecoin')) return 'LTC';
+    if (subversion.includes('bitcoin')) return 'BTC';
+    if (subversion.includes('dogecoin')) return 'DOGE';
+    throw new Error(`Unknown chain in subversion: ${subversion}`);
+  }
+
+  getNetworkInfo() {
+    return util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'))();
+  }
+
+  getBlockchainInfo() {
+    return util.promisify(this.client.cmd.bind(this.client, 'getblockchaininfo'))();
+  }
+
+  getRawTransaction(txId) {
+    return util.promisify(this.client.cmd.bind(this.client, 'getrawtransaction'))(txId);
+  }
+
+  getBlockchainInfo() {
+    return util.promisify(this.client.cmd.bind(this.client, 'getblockchaininfo'))();
+  }
+
+  getNetworkInfo(){
+    return util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'))()
+  }
+
 
   getRawTransaction(txId) {
     return util.promisify(this.client.cmd.bind(this.client, 'getrawtransaction'))(txId);
@@ -87,7 +150,6 @@ class ClientWrapper {
     try {
       const networkInfo = await clientInstance.getNetworkInfo();
       const subversion = networkInfo.subversion.toLowerCase();
-      console.log()
       let match;
       if (subversion.includes('litecoin')) {
         match = 'LTC';
@@ -97,24 +159,32 @@ class ClientWrapper {
         match = 'DOGE';
       }
 
-      if (match && match !== selectedChain) {
-        console.warn(`Mismatch: Configured chain is ${selectedChain}, but detected ${match}.`);
-        selectedChain = match;
+      if (match && match !== this.chain) {
+        console.warn(`Mismatch: Configured chain is ${this.chain}, but detected ${match}.`);
+        this.chain = match;
       } else {
-        console.log(`Verified chain: ${selectedChain}`);
+        console.log(`Verified chain: ${this.chain}`);
       }
     } catch (error) {
       console.error('Error verifying chain:', error);
     }
   }
 
-  getChain() {
-    verifyClientChain(); // Double-check chain type
-    return selectedChain;
+  async getChain() {
+    const bleh = await this.getNetworkInfo(); // Double-check chain type  
+    return determineChainFromSubversion(bleh);
   }
 
+  async getTests(){
+    const blockchainInfo = await this.getBlockchainInfo();
+    return blockchainInfo.chain === 'test';
+  }
+
+  clientInstance = this;
+
+
+  // Additional RPC methods as needed...
 }
 
-// Export as a singleton
-const clientInstance = new ClientWrapper();
-module.exports = clientInstance;
+// Export singleton instance
+module.exports = ClientWrapper;

@@ -56,7 +56,7 @@ class Activation {
 
     async saveActivationsList() {
     try {
-        const activationsDB = db.getDatabase('activations');
+        const activationsDB = await db.getDatabase('activations');
         const query = { _id: 'activationsList' };
         const update = { $set: { value: JSON.stringify(this.txRegistry) } };
         const options = { upsert: true }; // This option will insert if not found
@@ -73,7 +73,7 @@ class Activation {
    // New Method to load activations list
     async loadActivationsList() {
         try {
-            const activationsDB = db.getDatabase('activations');
+            const activationsDB = await db.getDatabase('activations');
             const entries = await activationsDB.findAsync({});
             //console.log('loaded activations '+JSON.stringify(entries))
             if (entries.length === 0) {

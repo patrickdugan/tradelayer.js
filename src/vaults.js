@@ -94,7 +94,7 @@ class SynthRegistry {
     // Persist vault data to the database
     static async saveVault(vaultId, vault) {
                 await this.initializeIfNeeded();
-        const vaultDB = db.getDatabase('vaults');
+        const vaultDB = await db.getDatabase('vaults');
         await vaultDB.updateAsync(
             { _id: vaultId },
             { _id: vaultId, value: JSON.stringify(vault) },
@@ -105,7 +105,7 @@ class SynthRegistry {
     // Persist synthetic token data to the database
     static async saveSyntheticToken(syntheticTokenId) {
                 await this.initializeIfNeeded();
-        const synthDB = db.getDatabase('syntheticTokens');
+        const synthDB = await db.getDatabase('syntheticTokens');
         await synthDB.updateAsync(
             { _id: `${syntheticTokenId}` },
             { _id: `${syntheticTokenId}`, value: JSON.stringify(this.syntheticTokens.get(syntheticTokenId)) },

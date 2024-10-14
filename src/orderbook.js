@@ -23,7 +23,7 @@ class Orderbook {
 
          async loadOrderBook(key,contract) {
                 const stringKey = typeof key === 'string' ? key : String(key);
-                const orderBooksDB = dbInstance.getDatabase('orderBooks');
+                const orderBooksDB = await dbInstance.getDatabase('orderBooks');
 
                 try {
                     const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
@@ -50,7 +50,7 @@ class Orderbook {
             if(key==undefined){
                 return console.log('orderbook save failed with undefined key')
             }
-            const orderBooksDB = dbInstance.getDatabase('orderBooks');
+            const orderBooksDB = await dbInstance.getDatabase('orderBooks');
             await orderBooksDB.updateAsync(
                 { _id: key },
                 { _id: key, value: JSON.stringify(orderbookData) },
@@ -86,7 +86,7 @@ class Orderbook {
         }
 
         async saveTrade(tradeRecord) {
-            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeDB =await dbInstance.getDatabase('tradeHistory');
 
             const uuid = uuidv4();
 
@@ -115,7 +115,7 @@ class Orderbook {
 
         // Retrieve token trading history by propertyId pair
         static async getTokenTradeHistoryByPropertyIdPair(propertyId1, propertyId2) {
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
+                const tradeDB = await dbInstance.getDatabase('tradeHistory');
                 const tradeRecordKey = `token-${propertyId1}-${propertyId2}`;
                 const trades = await tradeDB.findAsync({ key: tradeRecordKey });
                 return trades.map(doc => doc.trade);
@@ -124,7 +124,7 @@ class Orderbook {
         // Retrieve contract trading history by contractId
         static async getContractTradeHistoryByContractId(contractId) {
                 //console.log('loading trade history for '+contractId)
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
+                const tradeDB = await dbInstance.getDatabase('tradeHistory');
                 const tradeRecordKey = `contract-${contractId}`;
                 const trades = await tradeDB.findAsync({ key: tradeRecordKey });
                 return trades.map(doc => doc.trade);
@@ -132,7 +132,7 @@ class Orderbook {
 
         // Retrieve trade history by address for both token and contract trades
         static async getTradeHistoryByAddress(address) {
-                const tradeDB = dbInstance.getDatabase('tradeHistory');
+                const tradeDB = await dbInstance.getDatabase('tradeHistory');
                 const trades = await tradeDB.findAsync({ 
                     $or: [{ 'trade.sender': address }, { 'trade.receiverAddress': address }]
                 });

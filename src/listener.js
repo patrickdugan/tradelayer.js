@@ -1,8 +1,4 @@
-const { createClient } = require('./client');
-const chain = process.argv[2] || process.env.CHAIN || 'LTC';
-const test = process.env.TEST || true
-createClient(chain,test);
-
+const ClientWrapper = require('./client.js');
 const express = require('express');
 const TallyMap = require('./tally.js');
 const TxIndex = require('./txIndex.js');
@@ -16,7 +12,6 @@ const ContractRegistry = require('./contractRegistry.js')
 var activationsInstance = Activations.getInstance()
 const OracleList = require('./oracle.js')
 const MarginMap = require('./marginMap.js')
-
 
 
 let isInitialized = false; // A flag to track the initialization status

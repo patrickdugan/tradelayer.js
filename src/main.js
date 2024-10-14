@@ -187,7 +187,7 @@ class Main {
             let blockHeight;
             let maxProcessedHeight = startHeight - 1;
 
-            const txIndexDB = db.getDatabase('txIndex');
+            const txIndexDB = await db.getDatabase('txIndex');
             const tallyMapInstance = TallyMap.getInstance();
             const lastConsensusHeight = await this.loadMaxProcessedHeight();
 
@@ -710,7 +710,7 @@ class Main {
     }
  
     async loadMaxProcessedHeight() {
-        const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
+        const consensusDB = await db.getDatabase('consensus'); // Access the consensus sub-database
 
         try {
             const maxProcessedHeightDoc = await consensusDB.findOneAsync({ _id: 'MaxProcessedHeight' });
@@ -729,7 +729,7 @@ class Main {
     }
 
     async loadTrackHeight() {
-        const consensusDB = db.getDatabase('consensus'); // Access the consensus sub-database
+        const consensusDB = await db.getDatabase('consensus'); // Access the consensus sub-database
 
         try {
             let track = await consensusDB.findOneAsync({ _id: 'TrackHeight' });

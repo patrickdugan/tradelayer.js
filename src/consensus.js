@@ -91,7 +91,7 @@ class ConsensusDatabase {
     }
 
     static async getHighestBlockHeight(callback) {
-        db.getDatabase('consensus').aggregate([
+        await db.getDatabase('consensus').aggregate([
             { $group: { _id: null, maxBlockHeight: { $max: "$value.params.blockHeight" } } }
         ], (err, result) => {
             if (err) {

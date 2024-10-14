@@ -28,7 +28,7 @@ class OracleList {
             this.oracles.set(oracleId, oracleData);
 
             // Add to NeDB database (if applicable)
-            const oracleDB = db.getDatabase('oracleList');
+            const oracleDB = await db.getDatabase('oracleList');
             await oracleDB.insertAsync({ _id: oracleId, ...oracleData });
 
             console.log(`Oracle added: ID ${oracleId}`);
@@ -57,7 +57,7 @@ class OracleList {
         }
 
         // If not found in-memory, optionally check the database
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = await db.getDatabase('oracleList');
         console.log('oracle key '+oracleKey)
         const dbOracle = await oracleDB.findOneAsync({ _id: oracleKey });
         console.log('db oracle '+ JSON.stringify(dbOracle))
@@ -71,7 +71,7 @@ class OracleList {
     
     static async getOraclePrice(oracleId) {
         // Prepare the query to find all entries with the specified oracleId
-        const oracleDB = db.getDatabase('oracleData');
+        const oracleDB = await db.getDatabase('oracleData');
         const oracleData = await oracleDB.findAsync({ oracleId: oracleId });
         
         // Check if any data was returned
@@ -120,7 +120,7 @@ class OracleList {
 
     static async load() {
         try {
-            const oracleDB = db.getDatabase('oracleList');
+            const oracleDB = await db.getDatabase('oracleList');
             const oracles = await oracleDB.findAsync({});
 
             const instance = OracleList.getInstance();
@@ -138,7 +138,7 @@ class OracleList {
         try {
             const oracleKey = `oracle-${oracleId}`;
             console.log('checking admin for oracle key '+oracleKey)
-            const oracleDB = db.getDatabase('oracleList');
+            const oracleDB = await db.getDatabase('oracleList');
             const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
 
             if (oracleData && oracleData.name.adminAddress === senderAddress) {
@@ -161,7 +161,7 @@ class OracleList {
 
         // If not found in-memory, check the database
         if (!oracle) {
-            const oracleDB = db.getDatabase('oracleList');
+            const oracleDB = await db.getDatabase('oracleList');
             oracle = await oracleDB.findOneAsync({ _id: oracleKey });
         }
 
@@ -175,7 +175,7 @@ class OracleList {
         const instance = OracleList.getInstance();
             
         // Get the NeDB datastore for oracles
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = await db.getDatabase('oracleList');
 
         // Fetch the current oracle data
         const oracle = await oracleDB.findOneAsync({ _id: oracleKey });
@@ -214,7 +214,7 @@ class OracleList {
         };
 
         // Get the NeDB datastore for oracles
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = await db.getDatabase('oracleList');
 
         try {
             // Save the new oracle to the database
@@ -244,7 +244,7 @@ class OracleList {
     }
 
     async saveOracleData(oracleId, data, blockHeight) {
-        const oracleDataDB = db.getDatabase('oracleData');
+        const oracleDataDB = await db.getDatabase('oracleData');
         const recordKey = `oracle-${oracleId}-${blockHeight}`;
         console.log('saving published oracle data to key '+recordKey)
         const oracleDataRecord = {
@@ -268,7 +268,7 @@ class OracleList {
     }
 
     async loadOracleData(oracleId, startBlockHeight = 0, endBlockHeight = Number.MAX_SAFE_INTEGER) {
-        const oracleDataDB = db.getDatabase('oracleData');
+        const oracleDataDB = await db.getDatabase('oracleData');
         try {
             const query = {
                 oracleId: oracleId,
@@ -288,7 +288,7 @@ class OracleList {
     static async closeOracle(oracleId) {
         const instance = OracleList.getInstance();
         const oracleKey = `oracle-${oracleId}`;
-        const oracleDB = db.getDatabase('oracleList');
+        const oracleDB = await db.getDatabase('oracleList');
 
         try {
             // Fetch the current oracle data

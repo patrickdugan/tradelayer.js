@@ -30,7 +30,7 @@ class Channels {
 
     static async saveChannelsRegistry() {
         // Persist the channels registry to NeDB
-        const channelsDB = dbInstance.getDatabase('channels');
+        const channelsDB = await dbInstance.getDatabase('channels');
         const entries = [...this.channelsRegistry.entries()].map(([channelId, channelData]) => {
             return {
                 _id: `${channelId}`, // Unique identifier for each channel
@@ -49,7 +49,7 @@ class Channels {
 
     static async loadChannelsRegistry() {
         // Load the channels registry from NeDB
-        const channelsDB = dbInstance.getDatabase('channels');
+        const channelsDB = await dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
             //console.log('loading channel DB '+JSON.stringify(entries))
@@ -69,7 +69,7 @@ class Channels {
      // Function to save pending withdrawal object to the database
     static async savePendingWithdrawalToDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        const withdrawalDB = await dbInstance.getDatabase('withdrawQueue');
         await withdrawalDB.updateAsync(
             { _id: withdrawalKey },
             { $set: { data: withdrawalObj } },
@@ -79,14 +79,14 @@ class Channels {
 
     // Function to load pending withdrawals from the database
     static async loadPendingWithdrawalsFromDB() {
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        const withdrawalDB = await dbInstance.getDatabase('withdrawQueue');
         const entries = await withdrawalDB.findAsync({ _id: { $regex: /^withdrawal-/ } });
         return entries.map(entry => entry.data);
     }
 
     static async removePendingWithdrawalFromDB(withdrawalObj) {
         const withdrawalKey = `withdrawal-${withdrawalObj.blockHeight}-${withdrawalObj.senderAddress}`;
-        const withdrawalDB = dbInstance.getDatabase('withdrawQueue');
+        const withdrawalDB = await dbInstance.getDatabase('withdrawQueue');
         
         // Remove the withdrawal from the database
         await withdrawalDB.removeAsync({ _id: withdrawalKey });
@@ -119,7 +119,7 @@ class Channels {
     }
 
     static async saveTrade(tradeRecord) {
-        const tradeDB = dbInstance.getDatabase('tradeHistory');
+        const tradeDB = await dbInstance.getDatabase('tradeHistory');
 
         // Use the key provided in the trade record for storage
         const tradeId = `${tradeRecord.key}-${tradeRecord.txid}-${tradeRecord.blockHeight}`;
@@ -542,7 +542,7 @@ class Channels {
     }
 
     static async removeChannelFromDB(channelAddress) {
-      const channelsDB = dbInstance.getDatabase('channels');
+      const channelsDB = await dbInstance.getDatabase('channels');
       const withdrawalKey = `${channelAddress}`;
       
       // Remove the channel entry from the database

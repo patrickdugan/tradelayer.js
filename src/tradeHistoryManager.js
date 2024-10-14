@@ -3,7 +3,7 @@ const BigNumber = require('bignumber.js');
 
 class TradeHistory {
   constructor() {
-    this.tradeHistoryDb = database.getDatabase('tradeHistory');
+    this.tradeHistoryDb = await database.getDatabase('tradeHistory');
   }
 
   async loadTradeHistory(contractId) {
@@ -357,7 +357,7 @@ async calculateLIFOEntry(address, amount, contractId) {
        */
       async save(key, data) {
         try {
-          const db = database.getDatabase('tradeHistory');
+          const db = await database.getDatabase('tradeHistory');
           const value = JSON.stringify(data);
 
           console.log(`updating tradeHistoryDB with ${value}`);
@@ -379,7 +379,7 @@ async calculateLIFOEntry(address, amount, contractId) {
     }
 
     async saveTrade(tradeRecord) {
-            const tradeDB = dbInstance.getDatabase('tradeHistory');
+            const tradeDB = await dbInstance.getDatabase('tradeHistory');
 
             const uuid = uuidv4();
 

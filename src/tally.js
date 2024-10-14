@@ -213,7 +213,7 @@ class TallyMap {
 
 
         static async setInitializationFlag() {
-            const db = dbInstance.getDatabase('tallyMap');
+            const db = await dbInstance.getDatabase('tallyMap');
             await db.updateAsync(
                 { _id: '$TLinit' },
                 { _id: '$TLinit', initialized: true },
@@ -222,7 +222,7 @@ class TallyMap {
         }
 
     static async checkInitializationFlag() {
-            const db = dbInstance.getDatabase('tallyMap');
+            const db = await dbInstance.getDatabase('tallyMap');
             const result = await db.findOneAsync({ _id: '$TLinit' });
             if(result==undefined){return false}
             return result ? result.initialized : false;
@@ -356,7 +356,7 @@ class TallyMap {
 
     async saveToDB() {
         try {
-            const db = dbInstance.getDatabase('tallyMap');
+            const db = await dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
             console.log('saving tallymap')
             // Use upsert option
@@ -395,7 +395,7 @@ class TallyMap {
 
         console.log('Inside save fee cache ' + propertyId + ' ' + feeAmount);
 
-        const db = dbInstance.getDatabase('feeCache');
+        const db = await dbInstance.getDatabase('feeCache');
         try {
             const serializedFeeAmount = JSON.stringify(feeAmount);
             
@@ -417,7 +417,7 @@ class TallyMap {
     static async loadFeeCacheFromDB() {
         let propertyIndex = await PropertyList.getPropertyIndex();    
         try {
-            const db = dbInstance.getDatabase('feeCache');
+            const db = await dbInstance.getDatabase('feeCache');
             this.feeCache = new Map();
 
             // Assuming you have a list of property IDs, iterate through them
@@ -439,7 +439,7 @@ class TallyMap {
 
     static async loadFeeCacheForProperty(id) {    
         try {
-            const db = dbInstance.getDatabase('feeCache');
+            const db = await dbInstance.getDatabase('feeCache');
 
             const result = await db.findAsync({});
             console.log('Database contents:', JSON.stringify(result, null, 2));
@@ -530,7 +530,7 @@ class TallyMap {
     // Function to record a delta
     static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, type){
         const newUuid = uuid.v4();
-        const db = dbInstance.getDatabase('tallyMapDelta');
+        const db = await dbInstance.getDatabase('tallyMapDelta');
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type };
@@ -573,7 +573,7 @@ class TallyMap {
     // Function to save the aggregated block delta
     saveBlockDelta(blockHeight, blockDelta) {
         const deltaKey = `blockDelta-${blockHeight}`;
-        dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(blockDelta));
+        await dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(blockDelta));
     }
 
     // Function to load all deltas for a block

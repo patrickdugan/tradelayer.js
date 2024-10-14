@@ -1,8 +1,8 @@
 const dbInstance = require('./db.js');
 
 class clearlistManager {
-    static db = dbInstance.getDatabase('clearlists');
-    static attestationsDb = dbInstance.getDatabase('attestations');
+    static db = await dbInstance.getDatabase('clearlists');
+    static attestationsDb = await dbInstance.getDatabase('attestations');
     static clearlists = new Map();
 
     static async createClearlist(adminAddress, name, url, description, backupAddress) {

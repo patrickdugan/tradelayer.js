@@ -1,9 +1,4 @@
-const { createClient } = require('./client');
-const chain = process.argv[2] || process.env.CHAIN || 'LTC';
-const test = process.env.TEST || true
-createClient(chain,test);
-
-
+const ClientWrapper = require('./client.js');
 const express = require('express');
 const axios = require('axios');
 const TallyMap = require('./tally.js');

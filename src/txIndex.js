@@ -4,28 +4,23 @@ const util = require('util');
 const TxUtils = require('./txUtils');
 //const Types = require('./types.js');
 const db = require('./db.js');
-const { getClient } = require('./client');
-const client = getClient();
-//console.log('client in TxId'+client)
+const clientPromise = require('./client.js').getInstance(); // Wait for client to initialize//console.log('this.client in TxId'+this.client)
 const transparentIndex = [];
 
 class TxIndex {
-    static instance;
+     static instance;
 
-    constructor(test) {
+    constructor() {
         if (TxIndex.instance) {
             return TxIndex.instance;
         }
-
-         /*: {
-            host: '127.0.0.1',
-            port: 8332,
-            user: 'user',
-            pass: 'pass',
-            timeout: 10000
-        };*/
-
+        this.init();
         TxIndex.instance = this;
+    }
+
+    async init() {
+        this.client = await this.clientPromise;
+        // Use this.this.client for this.client-related actions within TxIndex methods
     }
 
     static getInstance(test) {
@@ -103,7 +98,7 @@ class TxIndex {
 
     static async fetchChainTip() {
         return new Promise((resolve, reject) => {
-            client.getBlockCount((error, chainTip) => {
+            this.client.getBlockCount((error, chainTip) => {
                 if (error) {
                     reject(error);
                 } else {
@@ -115,11 +110,11 @@ class TxIndex {
 
     static async fetchBlockData(height) {
         return new Promise((resolve, reject) => {
-            client.getBlockHash(height, (error, blockHash) => {
+            this.client.getBlockHash(height, (error, blockHash) => {
                 if (error) {
                     reject(error);
                 } else {
-                    client.getBlock(blockHash, (error, block) => {
+                    this.client.getBlock(blockHash, (error, block) => {
                         if (error) {
                             reject(error);
                         } else {
@@ -132,7 +127,7 @@ class TxIndex {
     }
 
     static async processBlockData(blockData, blockHeight) {
-            const txIndexDB = db.getDatabase('txIndex');
+            const txIndexDB = await db.getDatabase('txIndex');
 
             let txDetails =[]
         for(const txId of blockData.tx){
@@ -157,11 +152,8 @@ class TxIndex {
     }
 
     static async fetchTransactionData(txId) {
-        const client = getClient()
-        console.log('fetching tx data '+txId+JSON.stringify(client))
-
         return new Promise((resolve, reject) => {
-            client.getRawTransaction(txId, true, (error, transaction) => {
+            this.client.getRawTransaction(txId, true, (error, transaction) => {
                 if (error) {
                     console.log('blah '+error);
                     reject(error);
@@ -174,7 +166,7 @@ class TxIndex {
 
     /*static async DecodeRawTransaction(rawTx) {
         try {
-            const decodedTx = await client.decoderawtransaction(rawTx);
+            const decodedTx = await this.client.decoderawtransaction(rawTx);
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
 
             if (opReturnOutput) {
@@ -204,10 +196,8 @@ class TxIndex {
     }*/
 
     static async DecodeRawTransaction(rawTx) {
-        const client = getClient()
-        console.log('decoding tx '+rawTx+JSON.stringify(client))
         try {
-            const decodedTx = await client.decoderawtransaction(rawTx);
+            const decodedTx = await this.client.decoderawtransaction(rawTx);
             //console.log(JSON.stringify(decodedTx))
 
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
@@ -309,10 +299,9 @@ class TxIndex {
     }
 
     static async upsertTxValidityAndReason(txId, type, isValid, reason) {
-         const txIndexDB = db.getDatabase('txIndex');
             
             // Fetch all entries with _id starting with "tx"
-            const allTxData = await txIndexDB.findAsync({ _id: { $regex: /^tx/ } });
+            const allTxData = await db.getDatabase('txIndex').findAsync({ _id: { $regex: /^tx/ } });
             
             // Filter for the entry ending with the specified txId
             const txData = allTxData.find(txData => txData._id.endsWith(`-${txId}`));
@@ -353,10 +342,10 @@ class TxIndex {
         return new Promise(async (resolve, reject) => {
             try {
                 // Access the txIndex database using dbInstance
-                const txIndexDB = db.getDatabase('txIndex');
+                const txIndexDB = await db.getDatabase('txIndex');
 
                 // Attempt to find the 'genesisBlock' key
-                txIndexDB.findOneAsync({ _id: 'genesisBlock' })
+                await getDatabase('txIndex').findOneAsync({ _id: 'genesisBlock' })
                     .then(doc => {
                         if (!doc) {
                             // If 'genesisBlock' key does not exist, initialize it
@@ -390,8 +379,7 @@ class TxIndex {
 
     static async findMaxIndexedBlock() {
         try {
-            const txIndexDB = db.getDatabase('txIndex');
-            const maxHeightDoc = await txIndexDB.findOneAsync({ _id: 'MaxHeight' });
+            const maxHeightDoc = await db.getDatabase('txIndex').findOneAsync({ _id: 'MaxHeight' });
 
             if (maxHeightDoc) {
                 return maxHeightDoc.value;
@@ -413,9 +401,8 @@ class TxIndex {
      */
     static async getTransactionData(txId) {
         try {
-            const txIndexDB = db.getDatabase('txIndex');
-            const blockHeight = TxIndex.fetchChainTip()
-            const txData = await txIndexDB.findOneAsync({ _id: indexKey });
+            const blockHeight = await TxIndex.fetchChainTip()
+            const txData = await db.getDatabase('txIndex').findOneAsync({ _id: indexKey });
 
             if (txData) {
                 console.log(`Transaction data found for ${txId}:`, txData);

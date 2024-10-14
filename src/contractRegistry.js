@@ -71,7 +71,7 @@ class ContractRegistry {
 
     static async createContractSeries(sender, params, block) {
         // Load the current contract list from the database
-        const contractListDB = db.getDatabase('contractList');
+        const contractListDB = await db.getDatabase('contractList');
         const currentContractList = await contractListDB.findAsync({ type: 'contractSeries' });
         const contractList = new Map(currentContractList.map(doc => [doc.id, doc.data]));
 
@@ -178,7 +178,7 @@ class ContractRegistry {
     }
 
     static loadContractsFromDB() {
-        return db.getDatabase('contractList').findAsync()
+        return await db.getDatabase('contractList').findAsync()
             .then(docs => {
                 docs.forEach(doc => {
                     const { type, seriesId } = doc;
@@ -240,7 +240,7 @@ class ContractRegistry {
     }
 
     static async getContractSeries(seriesId) {
-        const contractListDB = db.getDatabase('contractList');
+        const contractListDB = await db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: seriesId, type: 'contractSeries' });
         return doc ? doc.data : null;
     }
@@ -249,14 +249,14 @@ class ContractRegistry {
 
     // Function to generate unique series ID
     static async getNextId() {
-        const contractListDB = db.getDatabase('contractList');
+        const contractListDB = await db.getDatabase('contractList');
         const docs = await contractListDB.findAsync({ type: 'contractSeries' });
         let maxId = docs.reduce((max, doc) => Math.max(max, parseInt(doc.id)), 0);
         return maxId + 1;
     }
 
     static async getAllContracts() {
-        const contractListDB = db.getDatabase('contractList');
+        const contractListDB = await db.getDatabase('contractList');
         const docs = await contractListDB.findAsync({ type: 'contractSeries' });
         return docs.map(doc => doc.data);
     }
@@ -296,7 +296,7 @@ class ContractRegistry {
 
     static async getContractInfo(contractId) {
         //console.log('retrieving db info for contract '+contractId)
-        const contractListDB = db.getDatabase('contractList');
+        const contractListDB = await db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
             //console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
@@ -532,7 +532,7 @@ class ContractRegistry {
         let propertyId1 = null;
         let propertyId2 = null;
         let latestData;
-        let oracleDataDB = db.getDatabase('contractList')
+        let oracleDataDB = await db.getDatabase('contractList')
         if (isOracleContract) {
             oracleId = await ContractRegistry.getOracleId(contractId);
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
@@ -595,7 +595,7 @@ class ContractRegistry {
 
     static async getLatestOracleData(oracleId){
          // Access the database where oracle data is stored
-            const oracleDataDB = db.getDatabase('oracleData');
+            const oracleDataDB = await db.getDatabase('oracleData');
             // Query the database for the latest oracle data for the given contract
                        
             const latestData = await oracleDataDB.findOneAsync({ oracleId: oracleId });

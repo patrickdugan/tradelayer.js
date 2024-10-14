@@ -7,7 +7,7 @@ async function delay(ms) {
 const expressInterface = require('../src/interfaceExpress.js');
 
 async function runTest() {
-    await expressInterface.initMain(true);
+    await expressInterface.initMain();
            await delay(1000)
 
     const address = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk';
