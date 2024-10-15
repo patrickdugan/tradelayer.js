@@ -1,10 +1,7 @@
 const ClientWrapper = require('./client.js');
 const express = require('express');
 const TallyMap = require('./tally.js');
-const TxIndex = require('./txIndex.js');
 const PropertyManager = require('./property.js');
-const Interface = require('./interface.js');
-const interfaceInstance = new Interface();
 const Main = require('./main.js');
 const Activations = require('./activation.js')
 const Orderbook = require('./orderbook.js')
@@ -23,7 +20,7 @@ app.use(express.json()); // Middleware to parse JSON bodies
 app.post('/initMain', async (req, res) => {
     try {
         console.log('Initializing');
-        const mainProcessor = Main.getInstance(req.body.test); // Use req.body for arguments
+        const mainProcessor = await Main.getInstance(req.body.test); // Use req.body for arguments
         mainProcessor.initialize();
         console.log('initialized')
         res.status(200).send('Main process initialized successfully');

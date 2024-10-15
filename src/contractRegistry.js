@@ -2,7 +2,6 @@ const db = require('./db')
 const path = require('path');
 const util = require('util');
 //const TxUtils = require('./txUtils.js')
-const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 const AMMPool = require('./AMM.js')
 const VolumeIndex = require('./volumeIndex.js')
@@ -22,7 +21,8 @@ class ContractRegistry {
         const instance = ContractRegistry.getInstance(); // Access singleton instance
         //console.log('loading contract list for this instance '+JSON.stringify(instance))
         try {
-            const docs = await db.getDatabase('contractList').findAsync({ type: 'contractSeries' });
+            const base = await db.getDatabase('contractList')
+            const docs = await base.findAsync({ type: 'contractSeries' });
             return instance.contractSeries = new Map(docs.map(doc => [doc.id, doc.data]));
         } catch (error) {
             console.error('Error loading contract series data:', error);
@@ -178,7 +178,7 @@ class ContractRegistry {
     }
 
     static loadContractsFromDB() {
-        return await db.getDatabase('contractList').findAsync()
+        db.getDatabase('contractList').findAsync()
             .then(docs => {
                 docs.forEach(doc => {
                     const { type, seriesId } = doc;
@@ -188,6 +188,7 @@ class ContractRegistry {
                         this.nativeList.set(seriesId, doc.data);
                     }
                 });
+                return
             })
             .catch(error => {
                 console.error('Error loading contracts from DB:', error);

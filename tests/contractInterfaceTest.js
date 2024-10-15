@@ -10,7 +10,7 @@ async function runTest() {
     await expressInterface.initMain();
            await delay(1000)
 
-    const address = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk';
+    /*const address = 'tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk';
     const contractId = 1; // example contract ID
 
     const balance2 = await expressInterface.getAllBalancesForAddress('tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk');
@@ -40,7 +40,7 @@ async function runTest() {
 
     const trades = await expressInterface.getContractTradeHistory(1)
     console.log('trade history '+trades)
-
+    */
 
 
 }

@@ -1,11 +1,10 @@
 const dbInstance = require('./db.js');
 
 class clearlistManager {
-    static db = await dbInstance.getDatabase('clearlists');
-    static attestationsDb = await dbInstance.getDatabase('attestations');
     static clearlists = new Map();
 
     static async createClearlist(adminAddress, name, url, description, backupAddress) {
+
         const clearlistId = await this.getNextId();
         const clearlistData = {
             adminAddress,
@@ -14,7 +13,7 @@ class clearlistManager {
             backupAddress
         };
 
-        await this.db.updateAsync(
+        await dbInstance.getDatabase('clearlists').updateAsync(
             { _id: clearlistId },
             { $set: { data: clearlistData } },
             { upsert: true }
@@ -25,7 +24,7 @@ class clearlistManager {
 
     static async loadClearlists() {
         try {
-            const clearLists = await this.db.findAsync({});
+            const clearLists = await dbInstance.getDatabase('attestations').findAsync({});
             clearLists.forEach(({ _id, data }) => {
                 this.clearlists.set(_id, data);
             });
@@ -38,7 +37,7 @@ class clearlistManager {
 
     static async getList(id) {
         try {
-            const clearlist = await this.db.findOneAsync({ _id: id });
+            const clearlist = await dbInstance.getDatabase('attestations').findOneAsync({ _id: id });
             if (clearlist) {
                 return clearlist.data;
             } else {

@@ -27,7 +27,8 @@ class PropertyManager {
         //console.log('loading property list');
         try {
             const instance = PropertyManager.getInstance();
-            const propertyIndexEntry = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+            const base = await db.getDatabase('propertyList')
+            const propertyIndexEntry = await base.findOneAsync({ _id: 'propertyIndex' });
             if (propertyIndexEntry && propertyIndexEntry.value) {
                 // Check if the value is a string and parse it as JSON
                 const data = typeof propertyIndexEntry.value === 'string' ? JSON.parse(propertyIndexEntry.value) : propertyIndexEntry.value;
@@ -44,7 +45,7 @@ class PropertyManager {
             }
         } catch (error) {
             console.error('Error loading data from NeDB:', error);
-            instance.propertyIndex = new Map(); // Use an empty Map in case of an error
+            //instance.propertyIndex = new Map(); // Use an empty Map in case of an error
         }
     }
 
@@ -172,7 +173,8 @@ class PropertyManager {
         propertyData.totalInCirculation = BigNumber(propertyData.totalInCirculation).plus(amountChange).toNumber();
 
         // Update the property data in the database
-        const propertyIndex = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+        const base= await db.getDatabase('propertyList')
+        const propertyIndex = await base.findOneAsync({ _id: 'propertyIndex' });
         const parsedData = JSON.parse(propertyIndex.value);
 
         const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
@@ -225,7 +227,8 @@ class PropertyManager {
      */
     static async doesTickerExist(ticker) {
         // Ensure the property index is loaded before checking
-        const index = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+        const base = await db.getDatabase('propertyList')
+        const index = await base.findOneAsync({ _id: 'propertyIndex' });
         
         if(!index){
             return false
@@ -297,7 +300,8 @@ class PropertyManager {
 
    static async getPropertyData(propertyId) {
         try {
-            const propertyData = await db.getDatabase('propertyList').findOneAsync({ _id: 'propertyIndex' });
+            const base = await db.getDatabase('propertyList')
+            const propertyData = base.findOneAsync({ _id: 'propertyIndex' });
 
             if (propertyData && propertyData.value) {
                 const parsedData = JSON.parse(propertyData.value);

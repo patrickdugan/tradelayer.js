@@ -2,14 +2,11 @@ const database = require('./db.js')
 const BigNumber = require('bignumber.js');
 
 class TradeHistory {
-  constructor() {
-    this.tradeHistoryDb = await database.getDatabase('tradeHistory');
-  }
 
   async loadTradeHistory(contractId) {
     let key = { "key": "contract-" + contractId }
     console.log('key to load trades ' +JSON.stringify(key))
-    return this.tradeHistoryDb.findAsync(key);
+    return await database.getDatabase('tradeHistory')
   }
 
   async getTradeHistoryForAddress(address,contractId) {

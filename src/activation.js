@@ -2,54 +2,50 @@ const db = require('./db.js')
 //const Logic = require('./logic.js');
 const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus'); // Import consensus.js functions
-const {getChain, getTest} = require('./client.js')
+const ClientWrapper = require('./client.js')
 
 const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 
 class Activation {
     static instance = null;  // Static instance holder
 
-    constructor(adminAddress) {
+    constructor() {
         if (Activation.instance) {
             return Activation.instance;
         }
-
-        this.chain = getChain();
-        this.test = getTest()
-        if (this.chain === 'BTC') {
-           if(this.test==true){
-                this.adminAddress = '';
-           }else{
-                this.adminAddress = '';
-           } 
-        } else if (this.chain === 'DOGE') {
-           if(this.test==true){
-                this.adminAddress = '';
-           }else{
-                this.adminAddress = '';
-           } 
-        } else if(this.chain==='LTC'){
-            if(this.test==true){
-                this.adminAddress = testAdmin;
-           }else{
-                this.adminAddress = '';
-           } 
-        }
-
+       
         this.consensusVector = {};
         this.txRegistry = this.initializeTxRegistry()
 
         Activation.instance = this; // Set the instance
     }
 
+     async init() {
+                const client = await ClientWrapper.getInstance()
+                this.chain = await client.getChain();
+                this.test = await client.getTest();
+                this.updateAdminAddress()
+            }
+
+    updateAdminAddress() {
+        if (this.chain === 'BTC') {
+            this.adminAddress = this.test ? '' : '';
+        } else if (this.chain === 'DOGE') {
+            this.adminAddress = this.test ? '' : '';
+        } else if (this.chain === 'LTC') {
+            this.adminAddress = this.test ? testAdmin : '';
+        }
+    }
+
+
     async delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     // Static method to get the singleton instance
-    static getInstance(adminAddress) {
+    static getInstance() {
         if (!Activation.instance) {
-            Activation.instance = new Activation(adminAddress);
+            Activation.instance = new Activation();
         }
         return Activation.instance;
     }
@@ -118,7 +114,7 @@ class Activation {
             //console.log('in the activate 0 block')
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
-            const tradeLayerManager = await TradeLayerManager.getInstance(this.adminAddress);
+            const tradeLayerManager = await TradeLayerManager.getInstance(this.adminAddress, this.chain);
             const balances = await tradeLayerManager.initializeTokens(block); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             console.log('balances '+ balances + "if undefined this is a repeat that successfully prevented inflation")
             this.txRegistry[txType].active = true;
@@ -181,7 +177,7 @@ class Activation {
             32: { name: "Publish New Tx", active: false },
             33: { name: "Colored Coin", active: false },
             34: { name: "Cross Layer Bridge", active: false },
-            35: { name: "OP_CTV Covenant", active: false },
+            35: { name: "Smart Contract Bind", active: false },
         }
 
     }

@@ -11,8 +11,28 @@ const util = require('util')
 //const Orderbook = require('./orderbook.js'); // Manages the order book
 //const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
 //const ReOrgChecker = require('./reOrg.js');
-const Oracles = require('./oracle.js')
-const clientInstance = require('./client'); // Directly import clientInstance
+// main.js
+const initialize = require('./init');
+let client 
+let db
+(async () => {
+    try {
+        const { Client, Db } = await initialize();
+        client = Client
+        db = Db
+        console.log('Client and Database initialized successfully.');
+
+        // Now proceed with the rest of your app setup
+        /*const Main = require('./main-logic'); // Adjust based on your main logic setup
+        const app = new Main(client, db);      // Pass the initialized instances if needed
+        app.start(); // Start your app logic*/
+
+    } catch (error) {
+        console.error('Failed to initialize client or database.', error);
+        process.exit(1);
+    }
+})();
+
 const fs = require('fs'); // File system module
 
 const Validity = require('./validity.js'); // Module for checking transaction validity
@@ -28,14 +48,25 @@ const ContractsRegistry = require('./contractRegistry.js'); // Registry for cont
 const VolumeIndex = require('./volumeIndex.js')
 const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus.js'); // Functions for handling consensus
+const Oracles = require('./oracle.js')
+
 const Activation = require('./activation.js')
-const activationInstance = Activation.getInstance()
+let activation
+
+(async () => {
+    activation = Activation.getInstance()
+    await activation.init();
+    console.log(`App initialized with Chain: ${activation.chain}, Testnet: ${activation.test}, Admin Address: ${activation.adminAddress}`);
+    
+    // Continue with the rest of your application setup
+    // Initialize other components or start the server, etc.
+})();
+
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
 const AMM = require('./AMM.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
-const db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
 const COIN = 100000000
 const pause = false
@@ -44,34 +75,30 @@ class Main {
     static instance;
 
     constructor(test) {
-        console.log('inside main constructor '+test)
+        console.log('inside main constructor '+Boolean(Main.instance))
         if (Main.instance) {
             console.log('main already initialized')
             return Main.instance;
         }
 
-        const chain = process.argv[2] || process.env.CHAIN || 'LTC';
-
-        if (!getClient()) {
-            console.log('creating RPC wrapper on init')
-            createClient(chain, test); // Or set the chain as required
-        }
-
-
-        this.client = clientInstance;  // Use the already initialized clientInstance  // Initialize the client with the specified chain     
+        this.client=client// Use the already initialized clientInstance  // Initialize the client with the specified chain     
+        console.log('client in main ' +this.client)
         //this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = () => this.client.getBlockCount();
         this.getNetworkInfoAsync = () => this.client.getNetworkInfo();
         this.genesisBlock = 3082500;
- //       this.blockchainPersistence = new Persistence();
+        console.log(this.genesisBlock)
+        //this.blockchainPersistence = new Persistence();
         Main.instance = this;
     }
 
-    static getInstance(test) {
+    static async getInstance(test) {
         if (!Main.instance) {
+            console.log('getting main')
             Main.instance = new Main(test);
         }
+        //this.client =client
         return Main.instance;
     }
 

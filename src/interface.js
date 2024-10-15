@@ -27,7 +27,7 @@ const Clearing = require('./clearing.js');
 class Interface {
     constructor() {
         // Singleton instances or references to the modules can be set up here if necessary
-        this.tallyMap = TallyMap.getInstance();
+        //this.tallyMap = TallyMap.getInstance();
     }
 
     async JSONAuditTallyMap() {

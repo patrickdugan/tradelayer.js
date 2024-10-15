@@ -3,7 +3,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const db = require('./db.js')
 const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
-const oracleDataDB = await db.getDatabase('oracleData');
+
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
@@ -180,7 +180,7 @@ class Clearing {
             let oracleId = await ContractRegistry.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
             //console.log('oracle id '+oracleId)         
-            const latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            const latestData = await db.getDatabase('oracleData').findAsync({ oracleId: oracleId });
             //console.log('is price updated ' +JSON.stringify(latestData))
             if (latestData.length>0) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
@@ -221,6 +221,8 @@ class Clearing {
     static async makeSettlement(blockHeight) {
             const ContractRegistry = require('./contractRegistry.js');
             const contracts = await ContractRegistry.loadContractSeries();
+            //console.log(contracts)
+            if(!contracts){return}
         for (const contract of contracts) {
             let id = contract[1].id
             // Check if there is updated price information for the contract
@@ -325,7 +327,7 @@ class Clearing {
         let latestData
         if(isOracleContract){
             oracleId = await ContractRegistry.getOracleId(contractId)
-            latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
+            latestData = await db.getDatabase('oracleData').findAsync({ oracleId: oracleId });
             //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
             console.log('inside get price change in clearing')

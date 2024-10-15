@@ -17,6 +17,16 @@ const SyntheticRegistry = require('./vaults.js')
 
 const Validity = {
 
+        isActivated: async (txId,txType) => {
+            let is = false
+            const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate) 
+            const tx = await TxUtils.getTransaction(txId)
+            if(tx.blockheight>activationBlock&&activationBlock!=null){
+                is = true
+            }
+            return is
+        }
+
         // 0: Activate TradeLayer
         validateActivateTradeLayer: async (txId, params, sender) => {
             params.valid = true;
@@ -36,19 +46,12 @@ const Validity = {
 
             // Check if the txTypeToActivate is already activated
              
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(params.txTypeToActivate);
-            //console.log('isAlreadyActivated '+isAlreadyActivated, params.txTypeToActivate)
-            const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate)
-
-            const rawTxData = await TxUtils.getRawTransaction(txId)
-            const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
-            //console.log('comparing heights' +activationBlock + ' ' + confirmedBlock) 
-            if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) {
+            const is = await this.isActivated(txId,0)
+            console.log(is)
+            if (!is) {
                 params.valid = false;
-                params.reason = 'Transaction type already activated';
+                params.reason = 'Transaction type not already activated';
             }
-
-
 
             if(params.txTypeToActivate>35){
                 params.valid = false;
@@ -100,6 +103,13 @@ const Validity = {
                 params.reason += 'Invalid property ID for vesting type; ';
             }
 
+            const is = await this.isActivated(txId,1)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             return params
         },
 
@@ -116,15 +126,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const activationBlock = await activationInstance.checkActivationBlock(2)
-
-            const rawTxData = await TxUtils.getRawTransaction(txId)
-            const confirmedBlock = await TxUtils.getBlockHeight(rawTxData.blockhash)
-            console.log('send comparing heights' +activationBlock + ' ' + confirmedBlock)
-            if (isAlreadyActivated&&confirmedBlock>activationBlock&&activationBlock!=null) { //come back and tighten this up when checkAct block returns null
+            const is = await this.isActivated(txId,2)
+            console.log(is)
+            if (!is) {
                 params.valid = false;
-                params.reason = 'Transaction type activated in the future';
+                params.reason = 'Transaction type activated after tx';
             }
+
 
             const propertyData = await PropertyList.getPropertyData(params.propertyIds)
             if(propertyData==null||propertyData==undefined){
@@ -140,9 +148,9 @@ const Validity = {
                 var balances = await TallyMap.getAddressBalances(sender)
                 if(balances ==[]){
                     TallyMap.diagonistic(sender, params.propertyIds)
-                }
-                
+                } 
             }
+
             console.log('checking we have enough tokens '+senderTally.available+ ' '+ params.amounts)
             if(senderTally.available<params.amounts||senderTally.available==undefined){
                 params.valid=false
@@ -213,6 +221,14 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Tx type not yet activated ';
             }
+
+            const is = await this.isActivated(txId,3)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
 
             const property = PropertyList.getPropertyData(params.propertyId)
 
@@ -350,6 +366,14 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,4)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
+
             if(params.propertyId==2||params.propertyId==3){
                 params.valid=false
                 params.reason="Cannot trade vesting tokens"
@@ -417,6 +441,13 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,5)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
             const isVEST= (parseInt(params.propertyIdDesired)==2||parseInt(params.propertyIdOffered)==2||parseInt(params.propertyIdDesired)==3||parseInt(params.propertyIdOffered)==3)
@@ -492,6 +523,13 @@ const Validity = {
             if (!isAlreadyActivated) {
                 params.valid = false;
                 params.reason += 'Tx type not yet activated ';
+            }
+
+            const is = await this.isActivated(txId,6)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
             if (!(typeof sender === 'string')) {
@@ -598,6 +636,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,7)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             if (!(params.backupAddress && typeof params.backupAddress === 'string')) {
                 params.valid = false;
                 params.reason += 'Invalid backup address; ';
@@ -618,6 +663,13 @@ const Validity = {
                 if (!isAlreadyActivated) {
                     params.valid = false;
                     params.reason += 'Tx type not yet activated; ';
+                }
+
+                const is = await this.isActivated(txId,8)
+                console.log(is)
+                if (!is) {
+                    params.valid = false;
+                    params.reason = 'Transaction type activated after tx';
                 }
 
                 if (!(typeof params.newAddress === 'string')) {
@@ -669,6 +721,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated; ';
             }
 
+            const is = await this.isActivated(txId,9)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             if (typeof params.targetAddress !== 'string') {
                 params.valid = false;
                 params.reason += 'Invalid target address; ';
@@ -716,6 +775,13 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,10)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
             if (!(typeof params.targetAddress === 'string')) {
@@ -774,6 +840,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,11)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
@@ -804,6 +877,13 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,12)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
             const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
@@ -838,6 +918,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,13)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             return params;
         },
 
@@ -854,6 +941,13 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,14)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
                 // Retrieve the oracle instance using its ID
                 const oracle = await OracleList.getOracleInfo(params.oracleId);
@@ -878,6 +972,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,14)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             return params;
         },
 
@@ -893,6 +994,19 @@ const Validity = {
                     params.valid = false;
                     params.reason += "Invalid or missing underlying oracle ID. ";
                 }
+            }
+
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(16);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,16)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
              // Check if collateralPropertyId is a valid existing propertyId
@@ -1006,6 +1120,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,17)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             const isValidDerivative = derivativeRegistry.isValidDerivative(params.contractId);
             if (!isValidDerivative) {
                 params.valid = false;
@@ -1031,6 +1152,14 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+
+            const is = await this.isActivated(txId,18)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             console.log('calling get contract Info in validate trade'+block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             console.log('checking contract details validity ' + JSON.stringify(contractDetails))
@@ -1130,6 +1259,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,19)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             if(params.expiryBlock<block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
@@ -1210,7 +1346,6 @@ const Validity = {
                     params.reason += "Insufficient balance for initial margin on buySide";
                 }
             }
-
 
              let isBuyerFlippingPosition              
              let isSellerFlippingPosition 
@@ -1311,6 +1446,13 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
                 return params
+            }
+
+            const is = await this.isActivated(txId,20)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
             }
 
             console.log(params.expiryBlock,block)
@@ -1456,6 +1598,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,21)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             if(params.withdrawAll!=true&&(params.propertyId==null||params.amount==null)){
                 params.valid=false
                 params.reason += 'propertyId or amount not specified while withdrawAll is false'
@@ -1546,6 +1695,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,22)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             const isValidSourceChannel = Channels.isValidChannel(sender);
             if (!isValidSourceChannel) {
                 params.valid = false;
@@ -1608,6 +1764,13 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            const is = await this.isActivated(txId,23)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
             const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
             if (!isValidChannel) {
                 params.valid = false;
@@ -1637,6 +1800,19 @@ const Validity = {
         console.log(JSON.stringify(params))
 
          const roundedAmount = Math.floor(params.amount);
+
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(24);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,24)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
 
     // Check if the rounded amount is still >= 1
         if (roundedAmount < 1) {
@@ -1719,6 +1895,20 @@ const Validity = {
          const roundedAmount = Math.floor(params.amount);
          params.propertyId='s-'+params.propertyId+'-'+params.contractId
         // Check if the rounded amount is still >= 1
+
+         const isAlreadyActivated = await activationInstance.isTxTypeActive(25);
+            if(isAlreadyActivated==false){
+                params.valid=false
+                params.reason += 'Tx type not yet activated '
+            }
+
+            const is = await this.isActivated(txId,25)
+            console.log(is)
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+            }
+
         if (roundedAmount < 1) {
             params.valid=false
             params.reason += 'Amount less than one'

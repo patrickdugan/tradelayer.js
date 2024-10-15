@@ -25,7 +25,8 @@ class ConsensusDatabase {
         const update = { $set: { blockHeight, consensusHash } };  // Update or insert block and consensus hash
 
         try {
-            await db.getDatabase('consensus').updateAsync(query, update, { upsert: true });  // Upsert to insert if it doesn't exist
+            const base = await db.getDatabase('consensus')
+            await base.updateAsync(query, update, { upsert: true });  // Upsert to insert if it doesn't exist
             console.log(`Consensus hash for block ${blockHeight} stored.`);
         } catch (err) {
             console.error('Error storing consensus hash:', err);
@@ -41,7 +42,8 @@ class ConsensusDatabase {
         const query = { _id: `block-${blockHeight}` };  // Use _id to find based on the block number
 
         try {
-            const result = await db.getDatabase('consensus').findOneAsync(query);  // Find based on the block height (_id)
+            const base = await db.getDatabase('consensus')
+            const result = await base.findOneAsync(query);  // Find based on the block height (_id)
             if (result) {
                 return result.consensusHash;  // Return the consensus hash if found
             } else {
@@ -56,19 +58,22 @@ class ConsensusDatabase {
 
     static async checkIfTxProcessed(txId) {
         //console.log('inside checkIfTxProcessed ' + txId);
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        const base = await db.getDatabase('consensus')
+        const result = await base.findOneAsync({ _id: txId });
         //console.log(result);
         return result && result.processed === true;
     }
 
     static async getTxParams(txId) {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: txId });
+        const base = await db.getDatabase('consensus')
+        const result = await base.findOneAsync({ _id: txId });
         return result.value.processed === true ? result.value.params : null;
     }
 
     static async markTxAsProcessed(txId, params) {
         let value = { processed: true, params };
-        await db.getDatabase('consensus').updateAsync(
+        const base = await db.getDatabase('consensus')
+        await base.updateAsync(
             { _id: txId },
             { $set: value },
             { upsert: true }
@@ -76,22 +81,26 @@ class ConsensusDatabase {
     }
 
     static async getTxParamsForAddress(address) {
-        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.address": address });
+        const base = await db.getDatabase('consensus')
+        const results = await base.findAsync({ "value.processed": true, "value.params.address": address });
         return results.map(result => result.value.params);
     }
 
     static async getTxParamsForBlock(blockHeight) {
-        const results = await db.getDatabase('consensus').findAsync({ "value.processed": true, "value.params.block": blockHeight });
+        const base = await db.getDatabase('consensus')
+        const results = await base.findAsync({ "value.processed": true, "value.params.block": blockHeight });
         return results.map(result => result.value.params);
     }
 
     static async getMaxProcessedBlock() {
-        const result = await db.getDatabase('consensus').findOneAsync({ _id: 'MaxProcessedHeight' });
+        const base = await db.getDatabase('consensus')
+        const result = await base.findOneAsync({ _id: 'MaxProcessedHeight' });
         return result ? result.value : null;
     }
 
     static async getHighestBlockHeight(callback) {
-        await db.getDatabase('consensus').aggregate([
+            const base = await db.getDatabase('consensus')
+            const result = await base.aggregate([
             { $group: { _id: null, maxBlockHeight: { $max: "$value.params.blockHeight" } } }
         ], (err, result) => {
             if (err) {
@@ -128,7 +137,8 @@ class ConsensusDatabase {
     // 1. txIndexHash: Hash the filtered txIndex
     static async txIndexHash() {
         try {
-            const txIndex = await db.getDatabase('txIndex').findAsync({});
+            const base = await db.getDatabase('txIndex')
+            const txIndex = await base.findAsync({});
             const filteredTxIndex = txIndex.filter(tx => tx._id.startsWith('tx'));
             const filteredTxIndexString = JSON.stringify(filteredTxIndex);
             const hash = this.generateHash(filteredTxIndexString);
@@ -141,13 +151,15 @@ class ConsensusDatabase {
 
 	// Function to get the latest instance of a DB
     static async getLatestInstance(dbName) {
-        const data = await db.getDatabase(dbName).findAsync({});
+        const base = await db.getDatabase(dbName)
+        const data = await base.findAsync({});
         return data.length > 0 ? data[data.length - 1] : null; // Get the latest entry
     }
 
     // Function to get all instances from a DB
     static async getAllInstances(dbName) {
-        const data = await db.getDatabase(dbName).findAsync({});
+        const base = await db.getDatabase(dbName)
+        const data = await base.findAsync({});
         return data; // Return all entries
     }
 
@@ -254,7 +266,7 @@ class ConsensusDatabase {
 		static async pushLatestActivationToConsensusVector() {
 		    try {
 		        // Fetch the latest activation from the activations database
-		        const activationsDb = db.getDatabase('activations');
+		        const activationsDb = await db.getDatabase('activations');
 		        const activations = await activationsDb.findAsync({}).sort({ blockNumber: -1 }).limit(1);
 
 		        if (activations.length === 0) {
@@ -302,7 +314,7 @@ class ConsensusDatabase {
 	// Function to save the consensus vector to the consensus.db file
 	static async saveConsensusVector() {
 	    try {
-	        const consensusDb = db.getDatabase('consensus');
+	        const consensusDb = await db.getDatabase('consensus');
 
 	        // Check if a document with _id "consensusVector" exists
 	        const existingConsensusVector = await consensusDb.findOneAsync({ _id: 'consensusVector' });
@@ -330,7 +342,7 @@ class ConsensusDatabase {
 
 	static async loadConsensusVector() {
 	    try {
-	        const consensusDb = db.getDatabase('consensus');
+	        const consensusDb = await db.getDatabase('consensus');
 
 	        // Check if a document with _id "consensusVector" exists
 	        const existingConsensusVector = await consensusDb.findOneAsync({ _id: 'consensusVector' });
@@ -442,7 +454,7 @@ class ConsensusDatabase {
     // Load the flagged IPs list from the database
     static async loadFlaggedIPsFromDb() {
         try {
-            const flaggedIPsDb = db.getDatabase('flaggedIPs');
+            const flaggedIPsDb = await db.getDatabase('flaggedIPs');
             const entry = await flaggedIPsDb.findOneAsync({ _id: 'flaggedIPsList' });
 
             if (entry && entry.value) {

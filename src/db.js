@@ -1,7 +1,7 @@
 const Datastore = require('nedb');
 const path = require('path');
 const util = require('util');
-const clientPromise = require('./client').getInstance();
+const ClientWrapper = require('./client')
 
 class Database {
     constructor() {
@@ -9,13 +9,14 @@ class Database {
         this.initialized = false;
     }
 
-    async init() {
+    async init(chain) {
+
+        //await new Promise(resolve => setTimeout(resolve, 300)); // Wait 0.3 seconds
         // Wait for client to finish setting the chain
-        const client = await clientPromise;
-        const chain = client.chain;
 
         if (!chain) {
-            throw new Error('Unable to determine blockchain chain.');
+            const instance = await ClientWrapper.getInstance()
+            chain = instance.chain //throw new Error('Unable to determine blockchain chain.');
         }
 
         const categories = [
@@ -27,6 +28,10 @@ class Database {
             'liquidations'
         ];
 
+        if(!chain){
+            console.log('wait for chain')
+            await new Promise(resolve => setTimeout(resolve, 300)); // Wait 0.3 seconds
+        }
         const dbPath = path.join(__dirname, '..', 'nedb-data', chain.toLowerCase());
 
         categories.forEach(category => {

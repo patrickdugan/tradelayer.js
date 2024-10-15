@@ -3,22 +3,22 @@ const PropertyManager = require('./property.js'); // Assuming Property has the c
 const ClearList = require('./clearlist.js')
 const ContractList = require('./contractRegistry.js')
 const BigNumber = require('bignumber.js')
-const {getChain} = require('./client.js')
+const ClientWrapper = require('./client.js')
 
 class TradeLayerManager {
     static instance = null;
 
-    constructor(adminAddress) {
+    constructor(adminAddress,chain) {
         if (!TradeLayerManager.instance) {
             this.adminAddress = adminAddress;
-            this.setChainParams();
+            this.setChainParams(chain);
             TradeLayerManager.instance = this;
         }
     }
 
-    setChainParams() {
+    setChainParams(chain) {
         // Access the chain via the client or environment variable
-        this.chain = getChain();
+       
         
         // Configure parameters based on the chain
         if (this.chain === 'BTC') {
@@ -48,9 +48,9 @@ class TradeLayerManager {
         }
     }
 
-    static async getInstance(adminAddress){
+    static async getInstance(adminAddress, chain){
         if (!TradeLayerManager.instance) {
-            TradeLayerManager.instance = new TradeLayerManager(adminAddress);
+            TradeLayerManager.instance = new TradeLayerManager(adminAddress.chain);
             console.log('generating new TL manager')
         }
         console.log('returning TL Manager')

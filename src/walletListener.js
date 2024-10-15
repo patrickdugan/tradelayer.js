@@ -26,7 +26,7 @@ app.use(express.json()); // Middleware to parse JSON bodies
 app.post('/tl_initmain', async (req, res) => {
     try {
         console.log('Initializing');
-        const mainProcessor = Main.getInstance(req.body.test);
+        const mainProcessor = await Main.getInstance(req.body.test);
         mainProcessor.initialize();
         res.status(200).send('Main process initialized successfully');
     } catch (error) {

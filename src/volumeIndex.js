@@ -20,8 +20,8 @@ class VolumeIndex {
 
     static async saveVolumeDataById(id, volume,price,blockHeight, type) {
         console.log('saving volume index data '+id, typeof id, volume, price, blockHeight, type)
-
-        await db.getDatabase('volumeIndex').updateAsync(
+        const base = await db.getDatabase('volumeIndex')
+        await base.updateAsync(
             { _id: id },
             { _id: id, value: { blockHeight:blockHeight, volume: volume, price:price, type } },
             { upsert: true }
@@ -47,7 +47,8 @@ class VolumeIndex {
             }
             this.contractCumulativeVolumes += volumeInLTC;
             this.globalCumulativeVolume += volume;
-            await db.getDatabase('volumeIndex').updateAsync(
+            const base = await db.getDatabase('volumeIndex')
+            await base.updateAsync(
                 { _id: 'contractCumulativeVolume' },
                 { _id: 'contractCumulativeVolume', value: this.contractCumulativeVolume },
                 { upsert: true }
@@ -84,7 +85,8 @@ class VolumeIndex {
 
             // Assuming volume is in LTC
         console.log('saving cum-LTC volume '+this.ltcPairTotalVolume)
-            await db.getDatabase('volumeIndex').updateAsync(
+            const base = await db.getDatabase('volumeIndex')
+            await base.updateAsync(
                 { _id: 'ltcPairCumulativeVolume' },
                 { value: this.ltcPairTotalVolume },
                 { upsert: true }
@@ -94,7 +96,8 @@ class VolumeIndex {
 
 
         console.log('saving global cum. volume '+this.globalCumulativeVolume)
-        await db.getDatabase('volumeIndex').updateAsync(
+        const base = await db.getDatabase('volumeIndex')
+        await base.updateAsync(
             {   _id: 'globalCumulativeVolume'},
             { _id: 'globalCumulativeVolume', value: this.globalCumulativeVolume },
             { upsert: true }
@@ -104,7 +107,8 @@ class VolumeIndex {
 
     static async getTokenPriceInLTC(tokenId) {
         // Attempt to fetch the VWAP price from the database
-        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `0-${tokenId}` });
+        const base = await db.getDatabase('volumeIndex')
+        const vwapData = await base.findOneAsync({ _id: `0-${tokenId}` });
         
         if (vwapData && vwapData.value && vwapData.value.price) {
             return vwapData.value.price;
@@ -129,7 +133,8 @@ class VolumeIndex {
             };
 
             console.log('inside get last price ' +blockHeight)
-            const tokenData = await db.getDatabase('volumeIndex').findOneAsync(query);
+            const base = await db.getDatabase('volumeIndex')
+            const tokenData = await base.findOneAsync(query);
 
             if (!tokenData || !tokenData.value) {
                 console.error(`No data found for token pair: ${tokenPair} at or below block height ${blockHeight}`);
@@ -148,7 +153,8 @@ class VolumeIndex {
         if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {
             // Fetch globalCumulativeVolume from the database
             try {
-                const globalCumulativeVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'globalCumulativeVolume' });
+                const base = await db.getDatabase('volumeIndex')
+                const globalCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'globalCumulativeVolume' });
                 if (globalCumulativeVolumeFromDB) {
                     this.globalCumulativeVolume = globalCumulativeVolumeFromDB.value;
                 }else{
@@ -163,7 +169,8 @@ class VolumeIndex {
         if (!this.contractCumulativeVolume || this.contractCumulativeVolume === 0) {
             // Fetch globalCumulativeVolume from the database
             try {
-                const contractCumulativeVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'contractCumulativeVolume' });
+                const base = await db.getDatabase('volumeIndex')
+                const contractCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'contractCumulativeVolume' });
                 if (contractCumulativeVolumeFromDB) {
                     this.contractCumulativeVolume = contractCumulativeVolumeFromDB.value;
                 }else{
@@ -178,7 +185,8 @@ class VolumeIndex {
         if (!this.ltcPairTotalVolume || this.ltcPairTotalVolume === 0) {
             // Fetch ltcPairTotalVolume from the database
             try {
-                const ltcPairTotalVolumeFromDB = await db.getDatabase('volumeIndex').findOneAsync({ _id: 'ltcPairCumulativeVolume' });
+                const base = await db.getDatabase('volumeIndex')
+                const ltcPairTotalVolumeFromDB = await base.findOneAsync({ _id: 'ltcPairCumulativeVolume' });
                 if (ltcPairTotalVolumeFromDB) {
                     this.ltcPairTotalVolume = ltcPairTotalVolumeFromDB.value;
                 }else{
@@ -202,7 +210,8 @@ class VolumeIndex {
     static async getBlockVolumes(blockHeight) {
         try {
             // Query the VolumeIndex.db for trades with the given blockHeight
-            const trades = await db.getDatabase('volumeIndex').findAsync({ 
+            const base = await db.getDatabase('volumeIndex')
+            const trades = await base.findAsync({ 
                 "value.blockHeight": blockHeight
             });
             // If no trades are found, return 0
@@ -230,8 +239,8 @@ class VolumeIndex {
             // Return the total volume for the block
             return {ltcPairs:totalLTCVolume,global:totalVolume};
         } catch (error) {
-            console.error(`Error fetching block volumes for block ${blockHeight}:`, error);
-            throw new Error(`Failed to fetch block volumes for block ${blockHeight}`);
+            return console.error(`Error fetching block volumes for block ${blockHeight}:`, error);
+            //throw new Error(`Failed to fetch block volumes for block ${blockHeight}`);
         }
     }
 
@@ -363,7 +372,8 @@ class VolumeIndex {
 
     static async saveVWAP(id, blockHeight, vwap) {
         console.log('saving VWAP'+ id, blockHeight, vwap)
-        await db.getDatabase('volumeIndex').updateAsync(
+        const base = await db.getDatabase('volumeIndex')
+        await base.updateAsync(
             { _id: 'vwap-'+id },
             { value: { blockHeight:blockHeight, volume: volume, price:price } },
             { upsert: true }
@@ -429,7 +439,8 @@ class VolumeIndex {
 
     static async getTLPriceInLTC() {
         // Attempt to fetch the VWAP price from the database
-        const vwapData = await db.getDatabase('volumeIndex').findOneAsync({ _id: `vwap-1` });
+        const base = await db.getDatabase('volumeIndex')
+        const vwapData = await base.findOneAsync({ _id: `vwap-1` });
         
         if (vwapData && vwapData.value && vwapData.value.price) {
             return vwapData.value.price;

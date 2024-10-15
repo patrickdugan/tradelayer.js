@@ -13,23 +13,41 @@ const TxUtils = {
         this.client = await clientPromise;
     },
 
-   async initClient(chain = 'LTC', isTest = false) {
-        if (!getClient()) {
-            createClient(chain, isTest);
+    async getRawTransaction(txid) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+        try {
+            const doc = await this.client.getRawTransaction(txid, true);
+            //console.log(doc)
+            return doc
+        } catch (error) {
+            console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
     },
 
-    async getRawTransaction(txid) {
+    async getTransaction(txid) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
         try {
-            return await client.getRawTransaction(txid, true);
+            const doc = await this.client.getTransaction(txid);
+            //console.log(doc)
+            return doc
         } catch (error) {
             console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
     },
 
     async validateAddressWrapper(address) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
         try {
-            return await client.validateAddress(address);
+            return await this.client.validateAddress(address);
         } catch (error) {
             console.error(`Error validating address ${address}:`, error);
         }
@@ -40,8 +58,13 @@ const TxUtils = {
     },
 
     async getBlockHeight(blockhash) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            const block = await client.getBlockData(blockhash);
+            const block = await this.client.getBlockData(blockhash);
             return block.height;
         } catch (error) {
             console.error(`Error fetching block height for blockhash ${blockhash}:`, error);
@@ -49,40 +72,65 @@ const TxUtils = {
     },
 
     async getBlockCount() {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.getBlockCount();
+            return await this.client.getBlockCount();
         } catch (error) {
             console.error(`Error fetching block count:`, error);
         }
     },
 
     async loadWallet() {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.loadWallet('wallet.dat');
+            return await this.client.loadWallet('wallet.dat');
         } catch (error) {
             console.error('Error loading wallet:', error);
         }
     },
 
     async listUnspent(minConf, maxConf, addresses) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.listUnspent(minConf, maxConf, addresses);
+            return await this.client.listUnspent(minConf, maxConf, addresses);
         } catch (error) {
             console.error(`Error listing UTXOs for addresses ${addresses}:`, error);
         }
     },
 
     async signRawTransaction(rawTx) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.signrawtransactionwithwallet(rawTx);
+            return await this.client.signrawtransactionwithwallet(rawTx);
         } catch (error) {
             console.error(`Error signing transaction:`, error);
         }
     },
 
     async sendRawTransaction(serializedTx) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.sendrawtransaction(serializedTx);
+            return await this.client.sendrawtransaction(serializedTx);
         } catch (error) {
             console.error(`Error sending transaction:`, error);
         }
@@ -91,8 +139,13 @@ const TxUtils = {
     // Add other functions here, replacing direct calls to client methods with the appropriate wrapped methods
     // Example:
     async getTransactionOutputs(txId) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            const tx = await this.getRawTransaction(txId);
+            const tx = await this.client.getRawTransaction(txId);
             return tx.vout.map(output => ({
                 address: output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null,
                 satoshis: Math.round(output.value * COIN),
@@ -104,8 +157,13 @@ const TxUtils = {
     },
  
     async getReferenceAddresses(txId) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            const tx = await client.getRawTransaction(txId, true); // Fetch the raw transaction data
+            const tx = await this.client.getRawTransaction(txId, true); // Fetch the raw transaction data
             if (!tx || !tx.vout) {
                 throw new Error(`Invalid transaction data for ${txId}`);
             }
@@ -130,8 +188,13 @@ const TxUtils = {
     },
 
     async listUnspent(minconf, maxconf, addresses) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.listUnspent(minconf, maxconf, addresses);
+            return await this.client.listUnspent(minconf, maxconf, addresses);
         } catch (error) {
             console.error(`Error listing UTXOs:`, error);
             return error;
@@ -139,8 +202,13 @@ const TxUtils = {
     },
 
     async decoderawtransaction(hexString) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.decoderawtransaction(hexString);
+            return await this.client.decoderawtransaction(hexString);
         } catch (error) {
             console.error(`Error decoding raw transaction:`, error);
             return error;
@@ -148,8 +216,13 @@ const TxUtils = {
     },
 
     async signrawtransactionwithwallet(rawTx) {
+        if(!this.client){
+            console.log('awaiting client in get raw tx')
+            await init()
+        }
+
         try {
-            return await client.signrawtransactionwithwallet(rawTx);
+            return await this.client.signrawtransactionwithwallet(rawTx);
         } catch (error) {
             console.error(`Error signing raw transaction with wallet:`, error);
             return error;
@@ -175,8 +248,12 @@ const TxUtils = {
     },
 
     async getAdditionalInputs(txId) {
+        if(!this.client){
+            console.log('awaitingthis.clientin get raw tx')
+            await init()
+        }
         try {
-            const tx = await client.getRawTransaction(txId, true);
+            const tx = await this.client.getRawTransaction(txId, true);
             if (!tx || !tx.vin || tx.vin.length <= 1) {
                 return [];
             }
@@ -202,7 +279,11 @@ const TxUtils = {
 
     async setSender(address, requiredAmount) {
         try {
-            let utxos = await client.listUnspent(0, 9999999, [address]);
+            if(!this.client){
+                console.log('awaitingthis.clientin get raw tx')
+                await init()
+            }
+            let utxos = await this.client.listUnspent(0, 9999999, [address]);
             utxos.sort((a, b) => b.amount - a.amount);
 
             let selectedUtxos = [];
@@ -321,12 +402,12 @@ async beginRawTransaction(txid, vout) {
 
 async addInputs(utxos, rawTx) {
     try {
-        let decodedTx = await client.decoderawtransaction(rawTx);
+        let decodedTx = await this.client.decoderawtransaction(rawTx);
         utxos.forEach(utxo => {
             decodedTx.vin.push({ txid: utxo.txid, vout: utxo.vout });
         });
 
-        return await client.createRawTransaction(decodedTx.vin, decodedTx.vout);
+        return await this.client.createRawTransaction(decodedTx.vin, decodedTx.vout);
     } catch (error) {
         console.error('Error in addInputs:', error);
         return error;
@@ -335,19 +416,19 @@ async addInputs(utxos, rawTx) {
 
     async constructInitialTradeTokenTx(params, senderChannel) {
         try {
-            const utxos = await client.listUnspent(0, 9999999, [senderChannel]);
+            const utxos = await this.client.listUnspent(0, 9999999, [senderChannel]);
             if (utxos.length === 0) throw new Error('No UTXOs found for the sender channel address');
 
             const selectedUtxo = utxos[0];
             params.channelUtxo = { txid: selectedUtxo.txid, vout: selectedUtxo.vout };
 
             let payload = "tl3" + Encode.encodeTradeTokenForUTXO({ ...params, referenceAddress: senderChannel });
-            let rawTx = await client.createRawTransaction([{ txid: params.channelUtxo.txid, vout: params.channelUtxo.vout }], []);
+            let rawTx = await this.client.createRawTransaction([{ txid: params.channelUtxo.txid, vout: params.channelUtxo.vout }], []);
             
             rawTx = this.addPayload(payload, rawTx);
             rawTx = await this.setChange(params.sellerChangeAddress, params.sellerChangeAmount, rawTx);
             
-            let signedTx = await client.signrawtransactionwithwallet(rawTx);
+            let signedTx = await this.client.signrawtransactionwithwallet(rawTx);
             return signedTx;
         } catch (error) {
             console.error('Error in constructInitialTradeTokenTx:', error);
@@ -362,8 +443,8 @@ async addInputs(utxos, rawTx) {
 
             console.log('Fetching UTXOs for:', senderChannel, senderLTC);
 
-            const utxosSender = await client.listUnspent(minConf, maxConf, [senderChannel]);
-            const utxosBuyer = await client.listUnspent(minConf, maxConf, [senderLTC]);
+            const utxosSender = await this.client.listUnspent(minConf, maxConf, [senderChannel]);
+            const utxosBuyer = await this.client.listUnspent(minConf, maxConf, [senderLTC]);
 
             if (utxosSender.length === 0 || utxosBuyer.length === 0) {
                 throw new Error('No UTXOs found for one or both addresses');
@@ -429,7 +510,7 @@ async addInputs(utxos, rawTx) {
             rawTx = await this.setChange(additionalParams.buyerChangeAddress, additionalParams.buyerChangeAmount, rawTx);
             rawTx = await this.setChange(additionalParams.referenceAddress, additionalParams.referenceAmount, rawTx);
 
-            let signedTx = await client.signrawtransactionwithwallet(rawTx);
+            let signedTx = await this.client.signrawtransactionwithwallet(rawTx);
             return signedTx;
         } catch (error) {
             console.error('Error in finalizeTradeTokenTx:', error);
@@ -439,7 +520,7 @@ async addInputs(utxos, rawTx) {
 
     async parseAndCoSignMultisigTransaction(rawTx, expectedUTXOValue, coSignerAddress, coSignerPrivateKey, network) {
         try {
-            const decodedTx = await client.decoderawtransaction(rawTx, network);
+            const decodedTx = await this.client.decoderawtransaction(rawTx, network);
             let paymentOutputIndex = decodedTx.vout.findIndex(output => output.scriptPubKey.type === 'nulldata');
             
             if (paymentOutputIndex === -1 || paymentOutputIndex === 0) {
@@ -465,7 +546,7 @@ async addInputs(utxos, rawTx) {
 
     async issuePropertyTransaction(fromAddress, initialAmount, ticker, whitelists, managed, backupAddress, nft) {
         try {
-            const privateKey = await client.dumpprivkey(fromAddress);
+            const privateKey = await this.client.dumpprivkey(fromAddress);
             const minAmountSatoshis = STANDARD_FEE;
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
@@ -486,7 +567,7 @@ async addInputs(utxos, rawTx) {
 
             transaction.sign(privateKey);
             const serializedTx = transaction.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
             console.log('Property issuance transaction sent:', txid);
             return txid;
         } catch (error) {
@@ -497,7 +578,7 @@ async addInputs(utxos, rawTx) {
 
     async tokenTradeTransaction(fromAddress, propertyIdOffered, propertyIdDesired, amountOffered, amountExpected) {
         try {
-            const privateKey = await client.dumpprivkey(fromAddress);
+            const privateKey = await this.client.dumpprivkey(fromAddress);
             const minAmountSatoshis = STANDARD_FEE;
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
@@ -516,7 +597,7 @@ async addInputs(utxos, rawTx) {
 
             transaction.sign(privateKey);
             const serializedTx = transaction.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
             console.log('Token trade transaction sent:', txid);
             return txid;
         } catch (error) {
@@ -527,7 +608,7 @@ async addInputs(utxos, rawTx) {
 
     async sendTransaction(fromAddress, toAddress, propertyId, amount, sendAll) {
         try {
-            const privateKey = await client.dumpprivkey(fromAddress);
+            const privateKey = await this.client.dumpprivkey(fromAddress);
             if (sendAll == null) sendAll = 0;
 
             const minAmountSatoshis = STANDARD_FEE;
@@ -548,7 +629,7 @@ async addInputs(utxos, rawTx) {
 
             transaction.sign(privateKey);
             const serializedTx = transaction.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
             console.log('Send transaction sent:', txid);
 
             return txid;
@@ -565,7 +646,7 @@ async addInputs(utxos, rawTx) {
                 codeHash: await Consensus.hashFiles()
             });
 
-            const utxos = await client.listUnspent(1, 9999999, [adminAddress]);
+            const utxos = await this.client.listUnspent(1, 9999999, [adminAddress]);
             console.log(utxos);
             if (utxos.length === 0) throw new Error('No UTXOs available for the admin address.');
 
@@ -577,11 +658,11 @@ async addInputs(utxos, rawTx) {
                 .change(adminAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(adminAddress);
+            const privateKey = await this.client.dumpprivkey(adminAddress);
             transaction.sign(privateKey);
 
             const serializedTx = transaction.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Activation transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -598,7 +679,7 @@ async addInputs(utxos, rawTx) {
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateFutureContractSeries(contractParams);
 
-            const utxos = await client.listUnspent(1, 9999999, [thisAddress]);
+            const utxos = await this.client.listUnspent(1, 9999999, [thisAddress]);
             console.log(utxos);
             if (utxos.length === 0) throw new Error('No UTXOs available for the address');
 
@@ -609,11 +690,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Create contract transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -653,11 +734,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`General transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -681,11 +762,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.uncheckedSerialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Create Oracle transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -708,11 +789,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Oracle publish transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -735,11 +816,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Contract on-chain trade transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -762,11 +843,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Cancel transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -789,11 +870,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Commit transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -816,11 +897,11 @@ async addInputs(utxos, rawTx) {
                 .change(thisAddress)
                 .fee(STANDARD_FEE);
 
-            const privateKey = await client.dumpprivkey(thisAddress);
+            const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
 
             const serializedTx = rawTx.serialize();
-            const txid = await client.sendrawtransaction(serializedTx);
+            const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Withdrawal transaction sent successfully. TXID: ${txid}`);
             return txid;
@@ -842,11 +923,11 @@ async createChannelContractTradeTransaction(thisAddress, params) {
             .change(thisAddress)
             .fee(STANDARD_FEE);
 
-        const privateKey = await client.dumpprivkey(thisAddress);
+        const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
         const serializedTx = rawTx.serialize();
-        const txid = await client.sendrawtransaction(serializedTx);
+        const txid = await this.client.sendrawtransaction(serializedTx);
 
         console.log(`Channel Contract Trade transaction sent successfully. TXID: ${txid}`);
         return txid;
@@ -869,11 +950,11 @@ async createChannelTokenTradeTransaction(thisAddress, params) {
             .change(thisAddress)
             .fee(STANDARD_FEE);
 
-        const privateKey = await client.dumpprivkey(thisAddress);
+        const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
         const serializedTx = rawTx.serialize();
-        const txid = await client.sendrawtransaction(serializedTx);
+        const txid = await this.client.sendrawtransaction(serializedTx);
 
         console.log(`Channel Token Trade transaction sent successfully. TXID: ${txid}`);
         return txid;
@@ -896,11 +977,11 @@ async createTransferTransaction(thisAddress, params) {
             .change(thisAddress)
             .fee(STANDARD_FEE);
 
-        const privateKey = await client.dumpprivkey(thisAddress);
+        const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
         const serializedTx = rawTx.serialize();
-        const txid = await client.sendrawtransaction(serializedTx);
+        const txid = await this.client.sendrawtransaction(serializedTx);
 
         console.log(`Transfer transaction sent successfully. TXID: ${txid}`);
         return txid;
@@ -923,7 +1004,7 @@ async createMintTransaction(thisAddress, params) {
             .change(thisAddress)
             .fee(STANDARD_FEE);
 
-        const privateKey = await client.dumpprivkey(thisAddress);
+        const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
         const serializedTx = rawTx.serialize();
@@ -950,7 +1031,7 @@ async createRedeemTransaction(thisAddress, params) {
             .change(thisAddress)
             .fee(STANDARD_FEE);
 
-        const privateKey = await client.dumpprivkey(thisAddress);
+        const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
         const serializedTx = rawTx.serialize();

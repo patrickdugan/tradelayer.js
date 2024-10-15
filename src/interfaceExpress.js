@@ -4,6 +4,7 @@ const serverUrl = 'http://localhost:3000'; // Adjust the server URL as needed
 const expressInterface = {
     async initMain(test) {
         try {
+            console.log('about to init')
             const response = await axios.post(`${serverUrl}/initMain`, { test: test });
             console.log(response.data);
         } catch (error) {

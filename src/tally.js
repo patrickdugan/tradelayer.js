@@ -1,5 +1,4 @@
 var dbInstance = require('./db.js')
-var TxIndex = require('./txIndex.js')
 var TxUtils = require('./txUtils.js')
 var PropertyList = require('./property.js')
 const uuid = require('uuid');
@@ -370,7 +369,8 @@ class TallyMap {
     async loadFromDB() {
         try {
             const query = { _id: 'tallyMap' };
-            const result = await dbInstance.getDatabase('tallyMap').findOneAsync(query);
+            const db = await dbInstance.getDatabase('tallyMap')
+            const result = await db.findOneAsync(query);
 
             if (result && result.data) {
                 // Deserialize the data from a JSON string to an array
@@ -571,7 +571,7 @@ class TallyMap {
     }
 
     // Function to save the aggregated block delta
-    saveBlockDelta(blockHeight, blockDelta) {
+    async saveBlockDelta(blockHeight, blockDelta) {
         const deltaKey = `blockDelta-${blockHeight}`;
         await dbInstance.getDatabase('tallyMap').insert(deltaKey, JSON.stringify(blockDelta));
     }
