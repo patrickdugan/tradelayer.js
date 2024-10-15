@@ -17,18 +17,20 @@ const SyntheticRegistry = require('./vaults.js')
 
 const Validity = {
 
-        isActivated: async (txId,txType) => {
+        isActivated: async (txid,txType) => {
             let is = false
-            const activationBlock = await activationInstance.checkActivationBlock(params.txTypeToActivate) 
-            const tx = await TxUtils.getTransaction(txId)
+            const activationBlock = await activationInstance.checkActivationBlock(txType) 
+            const tx = await TxUtils.getRawTransaction(txid,true)
+            console.log('inside isActivated '+txid + ' '+ activationBlock+ ' '+txType)
+            if(!tx){return true}
             if(tx.blockheight>activationBlock&&activationBlock!=null){
                 is = true
             }
             return is
-        }
+        },
 
         // 0: Activate TradeLayer
-        validateActivateTradeLayer: async (txId, params, sender) => {
+        validateActivateTradeLayer: async (sender, params,txid) => {
             params.valid = true;
             console.log('inside validating activation '+JSON.stringify(params))
 
@@ -45,13 +47,6 @@ const Validity = {
             }
 
             // Check if the txTypeToActivate is already activated
-             
-            const is = await this.isActivated(txId,0)
-            console.log(is)
-            if (!is) {
-                params.valid = false;
-                params.reason = 'Transaction type not already activated';
-            }
 
             if(params.txTypeToActivate>35){
                 params.valid = false;
@@ -62,7 +57,7 @@ const Validity = {
         },
   
          // 1: Token Issue
-        validateTokenIssue: async (params) => {
+        validateTokenIssue: async (sender, params,txid) => {
             params.valid=true
             console.log('inside issuance validation '+JSON.stringify(params))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(1);
@@ -103,7 +98,7 @@ const Validity = {
                 params.reason += 'Invalid property ID for vesting type; ';
             }
 
-            const is = await this.isActivated(txId,1)
+            const is = await Validity.isActivated(txid,1)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -114,7 +109,7 @@ const Validity = {
         },
 
         // 2: Send
-        validateSend: async (sender, params, txId) => {
+        validateSend: async (sender, params, txid) => {
             params.reason = '';
             params.valid= true
 
@@ -126,7 +121,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,2)
+            const is = await Validity.isActivated(txid,2)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -222,7 +217,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated ';
             }
 
-            const is = await this.isActivated(txId,3)
+            const is = await Validity.isActivated(txid,3)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -366,7 +361,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,4)
+            const is = await Validity.isActivated(txid,4)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -428,7 +423,7 @@ const Validity = {
         },
 
         // 5: On-chain Token for Token
-        validateOnChainTokenForToken: async (sender, params, txId) => {
+        validateOnChainTokenForToken: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -443,7 +438,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,5)
+            const is = await Validity.isActivated(txid,5)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -525,7 +520,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated ';
             }
 
-            const is = await this.isActivated(txId,6)
+            const is = await Validity.isActivated(txid,6)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -636,7 +631,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,7)
+            const is = await Validity.isActivated(txid,7)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -665,7 +660,7 @@ const Validity = {
                     params.reason += 'Tx type not yet activated; ';
                 }
 
-                const is = await this.isActivated(txId,8)
+                const is = await Validity.isActivated(txid,8)
                 console.log(is)
                 if (!is) {
                     params.valid = false;
@@ -721,7 +716,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated; ';
             }
 
-            const is = await this.isActivated(txId,9)
+            const is = await Validity.isActivated(txid,9)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -777,7 +772,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,10)
+            const is = await Validity.isActivated(txid,10)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -840,7 +835,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,11)
+            const is = await Validity.isActivated(txid,11)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -879,7 +874,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,12)
+            const is = await Validity.isActivated(txid,12)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -918,7 +913,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,13)
+            const is = await Validity.isActivated(txid,13)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -943,7 +938,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,14)
+            const is = await Validity.isActivated(txid,14)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -972,7 +967,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,14)
+            const is = await Validity.isActivated(txid,14)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1002,7 +997,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,16)
+            const is = await Validity.isActivated(txid,16)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1094,13 +1089,6 @@ const Validity = {
                 params.reason += "Fee must be a boolean. ";
             }
 
-            // Check if the transaction type is activated
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(16);
-            if (!isAlreadyActivated) {
-                params.valid = false;
-                params.reason += 'Tx type not yet activated. ';
-            }
-
             if (!params.valid) {
                 console.log(`Contract series validation failed: ${params.reason}`);
             }
@@ -1110,7 +1098,7 @@ const Validity = {
 
 
         // 17: Exercise Derivative
-        validateExerciseDerivative: async (params, derivativeRegistry, marginMap) => {
+        validateExerciseDerivative: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -1120,7 +1108,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,17)
+            const is = await Validity.isActivated(txid,17)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1143,7 +1131,7 @@ const Validity = {
         },
 
         // 18: Trade Contract On-chain
-        validateTradeContractOnchain: async (sender,params, block) => {
+        validateTradeContractOnchain: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
             console.log('validating contract trade '+JSON.stringify(params))
@@ -1153,14 +1141,14 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,18)
+            const is = await Validity.isActivated(txid,18)
             console.log(is)
             if (!is) {
                 params.valid = false;
                 params.reason = 'Transaction type activated after tx';
             }
 
-            console.log('calling get contract Info in validate trade'+block)
+            console.log('calling get contract Info in validate trade'+params.contractId)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             console.log('checking contract details validity ' + JSON.stringify(contractDetails))
             if(contractDetails==null||contractDetails=={}){
@@ -1244,12 +1232,12 @@ const Validity = {
                     params.reason += `Sender address not in clearlist; `;
                 }
             }
-         
+            console.log('finished contract trade params '+params.valid+' '+params.reason)
             return params;
         },
 
         // 19: Trade Contract Channel
-        validateTradeContractChannel: async (sender, params,block) => {
+        validateTradeContractChannel: async (sender, params,txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -1259,14 +1247,14 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,19)
+            const is = await Validity.isActivated(txid,19)
             console.log(is)
             if (!is) {
                 params.valid = false;
                 params.reason = 'Transaction type activated after tx';
             }
 
-            if(params.expiryBlock<block||params.expiryBlock==undefined){
+            if(params.expiryBlock<params.block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
                 return params
@@ -1281,7 +1269,7 @@ const Validity = {
                 return params
             }
             
-            console.log('calling get contract Info in validate channel trade'+block)
+            console.log('calling get contract Info in validate channel trade'+params.block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             if(contractDetails==null){
                 params.valid=false
@@ -1437,7 +1425,7 @@ const Validity = {
         },
 
         // 20: Trade Tokens Channel
-        validateTradeTokensChannel: async (sender, params, block) => {
+        validateTradeTokensChannel: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
             console.log('inside validateTradeTokensChannel '+JSON.stringify(params))
@@ -1448,15 +1436,15 @@ const Validity = {
                 return params
             }
 
-            const is = await this.isActivated(txId,20)
+            const is = await Validity.isActivated(txid,20)
             console.log(is)
             if (!is) {
                 params.valid = false;
                 params.reason = 'Transaction type activated after tx';
             }
 
-            console.log(params.expiryBlock,block)
-            if(params.expiryBlock<block||params.expiryBlock==undefined){
+            console.log(params.expiryBlock,params.block)
+            if(params.expiryBlock<params.block||params.expiryBlock==undefined){
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
                 return params
@@ -1588,7 +1576,7 @@ const Validity = {
         },
 
         // 21: Withdrawal
-        validateWithdrawal: async (sender, params, block) => {
+        validateWithdrawal: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -1598,7 +1586,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,21)
+            const is = await Validity.isActivated(txid,21)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1661,10 +1649,9 @@ const Validity = {
         },
 
         // 22: Transfer
-        validateTransfer: async (sender, params, block, txid) => {
+        validateTransfer: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
-            params.block=block
 
 
             if(params.ref){
@@ -1695,7 +1682,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,22)
+            const is = await Validity.isActivated(txid,22)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1754,7 +1741,7 @@ const Validity = {
         },
 
         // 23: Settle Channel PNL
-        validateSettleChannelPNL: async (sender, params, block) => {
+        validateSettleChannelPNL: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
 
@@ -1764,7 +1751,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,23)
+            const is = await Validity.isActivated(txid,23)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1794,7 +1781,7 @@ const Validity = {
 
 
     // 24: Mint Synthetic
-    validateMintSynthetic: async (sender, params, block) => {
+    validateMintSynthetic: async (sender, params, txid) => {
         params.reason = '';
         params.valid = true;
         console.log(JSON.stringify(params))
@@ -1807,7 +1794,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,24)
+            const is = await Validity.isActivated(txid,24)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1858,7 +1845,7 @@ const Validity = {
                 }        
         }
         // Ensure the sender has sufficient balance of the underlying property
-        const markPrice = await VolumeIndex.getLastPrice(tokenPair, block)
+        const markPrice = await VolumeIndex.getLastPrice(tokenPair, params.block)
         const initMargin = await ContractRegistry.getInitialMargin(params.contractId, markPrice)
         let totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
         let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).abs().toNumber()
@@ -1888,7 +1875,7 @@ const Validity = {
     },
 
     // 25: Redeem Synthetic
-    validateRedeemSynthetic: async (sender, params,block) => {
+    validateRedeemSynthetic: async (sender, params,txid) => {
         params.reason = '';
         params.valid = true;
         console.log('validating redeem '+JSON.stringify(params))
@@ -1902,7 +1889,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await this.isActivated(txId,25)
+            const is = await Validity.isActivated(txid,25)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1965,7 +1952,7 @@ const Validity = {
     validateTradeBaiUrbun: (params, channelRegistry, baiUrbunRegistry) => {
         // Verify that the trade channel exists and is valid
         const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-        // Check if Bai Urbun contract terms are valid (price, amount, expiryBlock, etc.)
+        // Check if Bai Urbun contract terms are valid (price, amount, expiry block, etc.)
         const isValidContractTerms = baiUrbunRegistry.isValidBaiUrbunTerms(params.propertyIdDownPayment, params.propertyIdToBeSold, params.price, params.amount, params.expiryBlock);
 
         return isValidChannel && isValidContractTerms;
@@ -1975,7 +1962,7 @@ const Validity = {
     validateTradeMurabaha: (params, channelRegistry, murabahaRegistry) => {
         // Verify that the trade channel exists and is valid
         const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-        // Check if Murabaha contract terms are valid (down payment, price, amount, expiryBlock, etc.)
+        // Check if Murabaha contract terms are valid (down payment, price, amount, expiryparams.block, etc.)
         const isValidContractTerms = murabahaRegistry.isValidMurabahaTerms(params.propertyIdDownPayment, params.downPaymentPercent, params.propertyIdToBeSold, params.price, params.amount, params.expiryBlock, params.installmentInterval);
 
         return isValidChannel && isValidContractTerms;

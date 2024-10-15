@@ -84,6 +84,76 @@ const TxUtils = {
         }
     },
 
+
+    async getSender(txId) {
+        let tx
+        try{
+            tx = await this.client.getRawTransaction(txId)
+        }catch(err){
+            console.log('err getting tx for sender'+err)
+        }
+
+        if (!tx || !tx.vin || tx.vin.length === 0) {
+            return new Error(`Invalid transaction data for ${txId}`);
+        }
+
+        const vin = tx.vin[0]; // Assuming we're only interested in the first input
+        if (!vin.txid) {
+            return new Error(`No previous transaction reference in input for ${vin.txid}`);
+        }
+                //console.log('get sender tx id '+vin.txid)
+
+        const parentTx = await this.client.getRawTransaction(vin.txid)
+        if (!parentTx || !parentTx.vout || parentTx.vout.length <= vin.vout) {
+            return new Error(`Invalid parent transaction data for ${vin.txid}`);
+        }
+
+        const output = parentTx.vout[vin.vout];
+        if (!output || !output.scriptPubKey || !output.scriptPubKey.addresses) {
+            return new Error(`No output found for vin ${vin.vout} in transaction ${vin.txid}`);
+        }
+
+        const senderAddress = output.scriptPubKey.addresses[0]; // Assuming single address
+        const amount = output.value; // Amount in LTC
+        //console.log(senderAddress,amount)
+        return { senderAddress, amount };
+    },
+
+
+    async getReference(txId) {
+        let tx
+        try {
+            tx = await this.client.getRawTransaction(txId, true);
+            if (!tx || !tx.vout) {
+                return new Error(`Invalid transaction data for ${txId}`);
+            }
+
+            let referenceOutput = null;
+
+            // Iterate over outputs to find the last non-OP_RETURN output
+            for (let i = tx.vout.length - 1; i >= 0; i--) {
+                const output = tx.vout[i];
+                if (output.scriptPubKey.type !== 'nulldata') { // 'nulldata' type is typically used for OP_RETURN
+                    referenceOutput = output;
+                    break;
+                }
+            }
+
+            if (referenceOutput) {
+                const address = referenceOutput.scriptPubKey.addresses[0]; // Assuming single address
+                const satoshis = Math.round(referenceOutput.value * COIN); // Convert LTC to satoshis
+                //console.log(satoshis)
+                return { address, satoshis };
+            } else {
+                return new Error("Reference output not found");
+            }
+        } catch (error) {
+            console.error(`Error in getReference for transaction ${txId}:`, error);
+            return error;
+        }
+   },
+ 
+
     async loadWallet() {
         if(!this.client){
             console.log('awaiting client in get raw tx')

@@ -180,24 +180,25 @@ class PropertyManager {
         const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
         if (propertyEntry) {
             propertyEntry[1] = propertyData;
-            await db.getDatabase('propertyList').updateAsync({ _id: 'propertyIndex' }, { $set: { value: JSON.stringify(parsedData) } });
+            const base = db.getDatabase('propertyList')
+            await base.updateAsync({ _id: 'propertyIndex' }, { $set: { value: JSON.stringify(parsedData) } });
         } else {
             throw new Error('Failed to update totalInCirculation, property not found in index');
         }
     }
 
 
-    async save() {
-
+   async save() {
         const propertyIndexJSON = JSON.stringify([...this.propertyIndex.entries()]);
         const propertyIndexData = { _id: 'propertyIndex', value: propertyIndexJSON };
 
-        await new Promise((resolve, reject) => {
-            db.getDatabase('propertyList').update({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true }, (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+        try {
+            const propertyListDB = await db.getDatabase('propertyList');
+            await propertyListDB.updateAsync({ _id: 'propertyIndex' }, propertyIndexData, { upsert: true });
+        } catch (err) {
+            console.error('Error saving property index:', err);
+            throw err;
+        }
     }
 
      

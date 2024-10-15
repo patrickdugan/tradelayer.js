@@ -141,7 +141,7 @@ const Types = {
                 params = Decode.decodeActivateTradeLayer(encodedPayload.substr(index));
                 console.log('validating activate '+JSON.stringify(params))
                 params.block=block
-                params = await Validity.validateActivateTradeLayer(txId,params,sender)     
+                params = await Validity.validateActivateTradeLayer(sender, params,txId)     
                 //console.log('back from validity function'+JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 1:
@@ -150,7 +150,7 @@ const Types = {
                 params.senderAddress = sender
                 //console.log('validating issuance '+JSON.stringify(params))
                 params.block=block
-                params = await Validity.validateTokenIssue(params)               
+                params = await Validity.validateTokenIssue(sender, params,txId)               
                 //console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 2:
@@ -307,91 +307,91 @@ const Types = {
                 console.log('initially decoded contract trade params '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeContractOnchain(sender,params, block)
+                params = await Validity.validateTradeContractOnchain(sender,params, txId)
                 break;
             case 19:
                 params.block=block
                 params = Decode.decodeTradeContractChannel(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeContractChannel(sender, params, block)
+                params = await Validity.validateTradeContractChannel(sender, params, txId)
                 break;
             case 20:
                 params.block=block
                 params = Decode.decodeTradeTokensChannel(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeTokensChannel(sender, params, block)
+                params = await Validity.validateTradeTokensChannel(sender, params,txId)
                 break;
             case 21:
                 params.block=block
                 params = Decode.decodeWithdrawal(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateWithdrawal(sender, params, block)
+                params = await Validity.validateWithdrawal(sender, params, txId)
                 break;
             case 22:
                 params.block=block
                 params = Decode.decodeTransfer(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTransfer(sender, params, block, txId)
+                params = await Validity.validateTransfer(sender, params, txId)
                 break;
             case 23:
                 params.block=block
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateSettleChannelPNL(sender, params, block)
+                params = await Validity.validateSettleChannelPNL(sender, params, txId)
                 break;
             case 24:
                 params.block=block
                 params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateMintSynthetic(sender, params, block)
+                params = await Validity.validateMintSynthetic(sender, params, txId)
                 break;
             case 25:
                 params.block=block
                 params = Decode.decodeRedeemSynthetic(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateRedeemSynthetic(sender, params, block)
+                params = await Validity.validateRedeemSynthetic(sender, params, txId)
                 break;
             case 26:
                 params.block=block
                 params = Decode.decodePayToTokens(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validatePayToTokens(sender, params, block)
+                params = await Validity.validatePayToTokens(sender, params, txId)
                 break;
             case 27:
                 params.block=block
                 params = Decode.decodeCreateOptionChain(encodedPayload.substr(index));
                  params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateCreateOptionChain(sender, params, block)
+                params = await Validity.validateCreateOptionChain(sender, params, txId)
                 break;
             case 28:
                 params.block=block
                 params = Decode.decodeTradeBaiUrbun(encodedPayload.substr(index));
                  params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeBaiUrbun(sender, params, block)
+                params = await Validity.validateTradeBaiUrbun(sender, params, txId)
                 break;
             case 29:
                 params.block=block
                 params = Decode.decodeTradeMurabaha(encodedPayload.substr(index));
                  params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateTradeMurabaha(sender, params, block)
+                params = await Validity.validateTradeMurabaha(sender, params, txId)
                 break;
             case 30:
                 params.block=block
                 params = Decode.decodeIssueInvoice(encodedPayload.substr(index));
                  params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateIssueInvoice(sender, params, block)
+                params = await Validity.validateIssueInvoice(sender, params, txId)
                 break;    
             case 31:
                 params.block=block

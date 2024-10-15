@@ -14,19 +14,19 @@ class TxIndex {
         if (TxIndex.instance) {
             return TxIndex.instance;
         }
-        this.init();
         TxIndex.instance = this;
     }
 
-    async init() {
+    static async init() {
         this.client = await ClientWrapper.getInstance();
         // Use this.this.client for this.client-related actions within TxIndex methods
     }
 
-    static getInstance(test) {
+    static async getInstance(test) {
         if (!TxIndex.instance) {
             TxIndex.instance = new TxIndex(test);
         }
+        await this.init()
         return TxIndex.instance;
     }
 
@@ -100,42 +100,39 @@ class TxIndex {
     }
 
     static async fetchChainTip() {
-        return new Promise((resolve, reject) => {
-            this.client.getBlockCount((error, chainTip) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve(chainTip);
-                }
-            });
-        });
+        try {
+            const chainTip = await this.client.getBlockCount();
+            return chainTip;
+        } catch (error) {
+            throw new Error(`Error fetching chain tip: ${error}`);
+        }
     }
 
+
     static async fetchBlockData(height) {
-        return new Promise((resolve, reject) => {
-            this.client.getBlockHash(height, (error, blockHash) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    this.client.getBlock(blockHash, (error, block) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve(block);
-                        }
-                    });
-                }
-            });
-        });
+        try {
+            // Fetch the block hash for the given height
+            const blockHash = await this.client.getBlockHash(height);
+            // Fetch the block data using the retrieved block hash
+            const block = await this.client.getBlock(blockHash);
+            return block;
+        } catch (error) {
+            console.error(`Error fetching block data for height ${height}:`, error);
+            throw error;
+        }
     }
+
 
     static async processBlockData(blockData, blockHeight) {
             const txIndexDB = await db.getDatabase('txIndex');
-
+            //console.log(blockData)
             let txDetails =[]
         for(const txId of blockData.tx){
-            const txHex = await TxIndex.fetchTransactionData(txId);
+            //console.log(txId)
+            const txHex = await TxIndex.fetchTransactionData(txId, false, blockData.hash);
+            //console.log(txHex)
             const txData = await TxIndex.DecodeRawTransaction(txHex);
+            //console.log('tx data' +txData)
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const thisTx = await TxIndex.processTransaction(payload, txId, txData.marker);
@@ -153,19 +150,17 @@ class TxIndex {
          
         return txDetails
     }
-
-    static async fetchTransactionData(txId) {
-        return new Promise((resolve, reject) => {
-            this.client.getRawTransaction(txId, true, (error, transaction) => {
-                if (error) {
-                    console.log('blah '+error);
-                    reject(error);
-                } else {
-                    resolve(transaction.hex);
-                }
-            });
-        });
+    
+    static async fetchTransactionData(txId, verbose, blockHash) {
+        try {
+            const transaction = await this.client.getRawTransaction(txId,verbose,blockHash);
+            return transaction;
+        } catch (error) {
+            console.error('Error fetching transaction:', error);
+            throw error;
+        }
     }
+
 
     /*static async DecodeRawTransaction(rawTx) {
         try {
@@ -201,10 +196,12 @@ class TxIndex {
     static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await this.client.decoderawtransaction(rawTx);
-            //console.log(JSON.stringify(decodedTx))
+            
 
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
+
             if (opReturnOutput) {
+                //console.log(opReturnOutput)
                 const opReturnData = opReturnOutput.scriptPubKey.hex;
                 //console.log('OP_RETURN Data:', opReturnData);
                 // Extract and log the "tl" marker
@@ -224,11 +221,10 @@ class TxIndex {
                     payloadStart=10
                 }; // '746c' for 'tl'
                 let marker = Buffer.from(markerHex, 'hex').toString();
-                
                 // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(payloadStart);
                 const payload = Buffer.from(payloadHex, 'hex').toString();
-                console.log(markerHex+' '+marker+' '+payload)
+                console.log('market data ' +markerHex+' '+marker+' '+payload)
                 if(marker=='tl'){console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload+ ' decoding the whole thing '+Buffer.from(opReturnData, 'hex').toString())};
                 return { marker, payload , decodedTx};
             } else {
@@ -312,7 +308,7 @@ class TxIndex {
             
             // If the entry is found, update it; otherwise, create a new one
             if (txData) {
-                await txIndexDB.updateAsync(
+                await base.updateAsync(
                     { _id: txData._id },
                     { $set: { type: type, valid: isValid, reason: reason } },
                     { upsert: true }

@@ -107,7 +107,7 @@ class Main {
     }
 
     async initialize() {
-        const txIndex = TxIndex.getInstance();
+        const txIndex = await TxIndex.getInstance();
         try {
             await txIndex.initializeOrLoadDB(this.genesisBlock);
             // Proceed with further operations after successful initialization
@@ -716,7 +716,8 @@ class Main {
 
     async saveMaxProcessedHeight(maxProcessedHeight){ 
          try {
-             await db.getDatabase('consensus').updateAsync(
+            const base = await db.getDatabase('consensus')
+             await base.updateAsync(
                     { _id: 'MaxProcessedHeight' },
                     { $set: { value: maxProcessedHeight } },
                     { upsert: true }
@@ -729,7 +730,8 @@ class Main {
     }
 
     async saveTrackHeight(saveHeight){
-           await db.getDatabase('consensus').updateAsync(
+            const base = await db.getDatabase('consensus')
+           await base.updateAsync(
                     { _id: 'TrackHeight' },
                     { $set: { value: saveHeight } },
                     { upsert: true }

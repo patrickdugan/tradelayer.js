@@ -67,7 +67,7 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'getblockchaininfo'))();
   }
 
-  getRawTransaction(txId, verbose = true) {
+  getRawTransaction(txId, verbose = true, blockHash) {
     return util.promisify(this.client.cmd.bind(this.client, 'getrawtransaction'))(txId, verbose);
   }
 
@@ -80,8 +80,12 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'gettransaction'))(txId);
   }
 
-  getBlockData(blockHash) {
+  getBlock(blockHash) {
     return util.promisify(this.client.cmd.bind(this.client, 'getblock'))(blockHash);
+  }
+
+  getBlockHash(height) {
+    return util.promisify(this.client.cmd.bind(this.client, 'getblockhash'))(height);
   }
 
   createRawTransaction(...params) {
@@ -113,7 +117,7 @@ class ClientWrapper {
   }
 
   getBlockCount() {
-    return util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))();
+      return util.promisify(this.client.cmd.bind(this.client, 'getblockcount'))();
   }
 
   loadWallet(...params) {
