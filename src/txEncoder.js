@@ -265,11 +265,17 @@ const Encode = {
 
      // Encode Create Future Contract Series Transaction
     encodeCreateFutureContractSeries: (params) => {
+    
+        const onChainData = params.onChainData && params.onChainData.length > 0 ? 
+            params.onChainData.map(data => `${data[0][0].toString(36)}:${data[0][1].toString(36)}`).join(';')
+            : ''
+
+        console.log('params.notionalValue '+params.notionalValue)
         const payload = [
             params.native ? '1' : '0',
             params.underlyingOracleId.toString(36),
-            params.onChainData.map(data => `${data[0].toString(36)}:${data[1].toString(36)}`).join(';'),
-            params.notionalPropertyId.toString(36),
+            onChainData, // Use '' if empty or falsy; adjust as needed
+            params.notionalPropertyId.toString(36), 
             params.notionalValue.toString(36),
             params.collateralPropertyId.toString(36),
             params.leverage,

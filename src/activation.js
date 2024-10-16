@@ -213,9 +213,8 @@ class Activation {
         await this.loadActivationsList()
         //console.log('checking for activation block ' +this.txRegistry[txTypeNumber])
         const txType = this.txRegistry[txTypeNumber];
-        //console.log('checking ' + JSON.stringify(txType)+' registry '+JSON.stringify(this.txRegistry))
-        if(txType==undefined){return null}
-        if(txType.blockHeight==undefined){return null}else{return txType.blockHeight};
+        //console.log('checking type activation' + JSON.stringify(txType))
+        if(txType.activationBlock==undefined){return null}else{return txType.activationBlock};
     }
 
     async isSenderGenesisAdmin(address) {

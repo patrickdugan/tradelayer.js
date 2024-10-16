@@ -124,6 +124,10 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'loadwallet'))(...params);
   }
 
+  listUnspent(...params) {
+    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))(...params);
+  }
+
   // Add this method to the ClientWrapper class
   async verifyClientChain() {
     try {

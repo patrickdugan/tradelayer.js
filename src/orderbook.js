@@ -1702,9 +1702,7 @@ class Orderbook {
 
             try {
                 // Load or create order book data
-                await this.loadOrderBook(orderbookId);
-
-                const orderbookData = this.orderBooks[orderbookId];
+                const orderbookData = await this.loadOrderBook(orderbookId);
                 const { buy, sell } = orderbookData;
 
                 if (!buy || !sell) {

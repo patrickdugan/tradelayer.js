@@ -271,6 +271,7 @@ class Main {
             console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
+                if(blockHeight%10000==1){console.log('parsing towards real-time mode '+blockHeight)}
                 const blockData = txByBlockHeight[blockHeight];
 
                 //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
@@ -327,14 +328,14 @@ class Main {
                     const txId = valueData.txId;
                     
                     if (await Consensus.checkIfTxProcessed(txId)) {
-                        console.log('scanning blockHeight '+blockHeight+' '+tx)
+                        //console.log('scanning blockHeight '+blockHeight+' '+txId)
                         continue;
                     }
 
                     var payload = valueData.payload;
                     const marker = valueData.marker;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
-                    console.log('type is '+type)
+                    console.log('type is '+type + ' height is '+blockHeight)
                     payload = payload.slice(1, payload.length).toString(36);
                     const senderAddress = valueData.sender.senderAddress;
                     const referenceAddress = valueData.reference.address;
@@ -368,8 +369,8 @@ class Main {
                     if (flag) {
                         console.log('missing tx decode ' + decodedParams);
                     }
-
-                    decodedParams.block = blockHeight;
+                    //console.log('decoded params ' +JSON.stringify(decodedParams))
+                    //decodedParams.block = blockHeight;
 
                     if (decodedParams.valid === true) {
                         console.log('consensus marking valid tx '+decodedParams)

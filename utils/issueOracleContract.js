@@ -1,5 +1,6 @@
 const crypto = require('crypto');
-const TxUtils = require('./txUtils.js'); // Assuming TxUtils contains the necessary transaction utility functions
+const TxUtils = require('../src/txUtils.js'); // Assuming TxUtils contains the necessary transaction utility functions
+const client = require('../src/client.js')
 
 // Function to create a random ticker
 function createRandomTicker(length = 5) {
@@ -18,6 +19,11 @@ function randomNumber(min, max) {
 
 // Function to create an oracle and then issue a contract
 async function createOracleAndIssueContract() {
+
+    const instance = new client()
+    instance.init()
+    await new Promise(resolve => setTimeout(resolve, 700));
+
     const adminAddress = 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'; // Replace with the actual admin address
     const backupAddress = 'LNmiS6p8z3KuHHx3q6Jf6x6TfcyptE68oP'; // Replace with an actual backup address
 
@@ -52,6 +58,9 @@ async function createOracleAndIssueContract() {
         // This is just a placeholder, you should implement a proper wait/check mechanism
         console.log('Waiting for oracle confirmation...');
         await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds delay
+    }catch(err){
+        console.log('err '+err)
+    }
 }
 
 // Call the function to create an oracle and issue a contract

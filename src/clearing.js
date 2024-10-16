@@ -135,7 +135,8 @@ class Clearing {
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
         try {
-            const liquidationData = await db.getDatabase('clearing').findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` });
+            const base = await db.getDatabase('clearing')
+            const liquidationData = await base.findOneAsync({ _id: `liquidation-${contractId}-${blockHeight}` });
             return liquidationData ? liquidationData.volume : null; // Assuming 'volume' is the field you're interested in
         } catch (error) {
             if (error.name === 'NotFoundError') {
@@ -157,7 +158,8 @@ class Clearing {
             const query = { blockHeight: blockHeight }; // Query to match the block height
 
             // Fetch the deltas from the database
-            const results = await db.getDatabase('clearing').findAsync(query);
+            const base = await db.getDatabase('clearing')
+            const results = await base.findAsync(query);
             results.forEach(doc => {
                 clearingDeltas.push(doc.value); // Assuming each document has a 'value' field with the delta data
             });
@@ -179,8 +181,9 @@ class Clearing {
         if (isOracle) {
             let oracleId = await ContractRegistry.getOracleId(contractId)
             // Query the database for the latest oracle data for the given contract
-            //console.log('oracle id '+oracleId)         
-            const latestData = await db.getDatabase('oracleData').findAsync({ oracleId: oracleId });
+            //console.log('oracle id '+oracleId)
+            const base = await db.getDatabase('oracleData')         
+            const latestData = base.findAsync({ oracleId: oracleId });
             //console.log('is price updated ' +JSON.stringify(latestData))
             if (latestData.length>0) {
                 const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
@@ -327,7 +330,8 @@ class Clearing {
         let latestData
         if(isOracleContract){
             oracleId = await ContractRegistry.getOracleId(contractId)
-            latestData = await db.getDatabase('oracleData').findAsync({ oracleId: oracleId });
+            const base = await db.getDatabase('oracleData')
+            latestData = await base.findAsync({ oracleId: oracleId });
             //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
         }else{
             console.log('inside get price change in clearing')

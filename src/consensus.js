@@ -3,8 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const util = require('util');
+const fsPromises = fs.promises;
 
 class ConsensusDatabase {
+        static consensusVector = [];
     constructor() {
         if (ConsensusDatabase.instance) {
             return ConsensusDatabase.instance;
@@ -240,7 +242,7 @@ class ConsensusDatabase {
 	            const filePath = path.join(basePath, `${file}.js`);
 
 	            if (fs.existsSync(filePath)) {
-	                const fileContent = await fs.readFile(filePath, 'utf8');
+                    const fileContent = await fsPromises.readFile(filePath, 'utf8');
 	                combinedContent += fileContent; // Append file content
 	            } else {
 	                console.warn(`File not found: ${filePath}`); // Warn if the file is missing
@@ -291,9 +293,9 @@ class ConsensusDatabase {
                 }
 
                 const projectPath = path.resolve(__dirname);
-                const codeHash = await hashCodeFiles(projectPath) || '';
+                const codeHash = await ConsensusDatabase.hashFiles(projectPath) || '';
                 const wasmCodeHash = '';
-                const consensusHash = await generateConsensusHash();
+                const consensusHash = await ConsensusDatabase.stateConsensusHash();
 
                 const newConsensusEntry = {
                     activation: latestActivation,
@@ -303,7 +305,7 @@ class ConsensusDatabase {
                     blockNumber: maxBlock,
                 };
 
-                consensusVector.push(newConsensusEntry);
+                this.consensusVector.push(newConsensusEntry);
                 console.log('Latest activation pushed to consensus vector:', newConsensusEntry);
                 return newConsensusEntry;
 
@@ -361,10 +363,10 @@ class ConsensusDatabase {
 	}
 
 	static async generateHashes() {
-        // These are placeholder functions that should retrieve or generate the respective hashes
-        this.txIndexHash = await this.getTxIndexHash();
-        this.consensusStateHash = await this.getConsensusStateHash();
-        this.codeHash = await this.getCodeHash();
+        // These are updated to match the actual method names
+        this.txIndexHash = await this.txIndexHash(); // For transaction index hash
+        this.consensusStateHash = await this.stateConsensusHash(); // For consensus state hash
+        this.codeHash = await this.hashFiles(path.resolve(__dirname)); // For code hash
     }
 
 	  // Consensus handshake function: compares local and incoming hashes

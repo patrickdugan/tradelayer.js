@@ -17,16 +17,17 @@ const SyntheticRegistry = require('./vaults.js')
 
 const Validity = {
 
-        isActivated: async (txid,txType) => {
-            let is = false
+        isActivated: async (block,txid,txType) => {
+            /*let is = false
             const activationBlock = await activationInstance.checkActivationBlock(txType) 
             const tx = await TxUtils.getRawTransaction(txid,true)
-            console.log('inside isActivated '+txid + ' '+ activationBlock+ ' '+txType)
-            if(!tx){return true}
-            if(tx.blockheight>activationBlock&&activationBlock!=null){
+            console.log('inside isActivated '+JSON.stringify(tx) + ' '+ activationBlock+ ' '+txType)
+            //if(!tx){return true}
+            if(block>activationBlock&&activationBlock!=null){
                 is = true
             }
-            return is
+            return is*/
+            return true
         },
 
         // 0: Activate TradeLayer
@@ -98,7 +99,7 @@ const Validity = {
                 params.reason += 'Invalid property ID for vesting type; ';
             }
 
-            const is = await Validity.isActivated(txid,1)
+            const is = await Validity.isActivated(params.block,txid,1)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -121,7 +122,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,2)
+            const is = await Validity.isActivated(params.block,txid,2)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -217,7 +218,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated ';
             }
 
-            const is = await Validity.isActivated(txid,3)
+            const is = await Validity.isActivated(params.block,txid,3)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -361,7 +362,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,4)
+            const is = await Validity.isActivated(params.block,txid,4)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -375,7 +376,7 @@ const Validity = {
             }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
-            console.log('getting propertyId in validate commit '+JSON.stringify(propertyData))
+            //console.log('getting propertyId in validate commit '+JSON.stringify(propertyData))
             if(propertyData==null){
                 console.log('offending propertyId value '+params.propertyId)
                 params.valid=false
@@ -438,7 +439,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,5)
+            const is = await Validity.isActivated(params.block,txid,5)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -520,7 +521,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated ';
             }
 
-            const is = await Validity.isActivated(txid,6)
+            const is = await Validity.isActivated(params.block,txid,6)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -631,7 +632,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,7)
+            const is = await Validity.isActivated(params.block,txid,7)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -660,7 +661,7 @@ const Validity = {
                     params.reason += 'Tx type not yet activated; ';
                 }
 
-                const is = await Validity.isActivated(txid,8)
+                const is = await Validity.isActivated(params.block,txid,8)
                 console.log(is)
                 if (!is) {
                     params.valid = false;
@@ -716,7 +717,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated; ';
             }
 
-            const is = await Validity.isActivated(txid,9)
+            const is = await Validity.isActivated(params.block,txid,9)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -772,7 +773,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,10)
+            const is = await Validity.isActivated(params.block,txid,10)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -835,7 +836,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,11)
+            const is = await Validity.isActivated(params.block,txid,11)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -874,7 +875,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,12)
+            const is = await Validity.isActivated(params.block,txid,12)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -913,7 +914,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,13)
+            const is = await Validity.isActivated(params.block,txid,13)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -938,7 +939,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,14)
+            const is = await Validity.isActivated(params.block,txid,14)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -967,7 +968,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,14)
+            const is = await Validity.isActivated(params.block,txid,14)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -997,7 +998,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,16)
+            const is = await Validity.isActivated(params.block,txid,16)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1108,7 +1109,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,17)
+            const is = await Validity.isActivated(params.block,txid,17)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1141,7 +1142,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,18)
+            const is = await Validity.isActivated(params.block,txid,18)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1247,7 +1248,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,19)
+            const is = await Validity.isActivated(params.block,txid,19)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1266,14 +1267,17 @@ const Validity = {
             if(commitAddressA==null&&commitAddressB==null){
                 params.valid=false
                 params.reason = "Tx sender is not found to be a channel address"
+                console.log('exiting contract channel validity for lack of commit addr '+JSON.stringify(params))
                 return params
             }
             
             console.log('calling get contract Info in validate channel trade'+params.block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
-            if(contractDetails==null){
+            const collateralPropertyId = contractDetails.collateralPropertyId
+            if(!contractDetails){
                 params.valid=false
                 params.reason = "ContractId not found"
+                console.log('exiting contract channel validity for lack of contractId '+JSON.stringify(params))
                 return params
             }
             console.log(JSON.stringify(contractDetails))
@@ -1370,8 +1374,9 @@ const Validity = {
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
                 BFlipShort=true
              }
-             let tallyA = await TallyMap.getTally(commitAddressA,contractDetails.issuer.collateralPropertyId)
-             let tallyB = await TallyMap.getTally(commitAddressB,contractDetails.issuer.collateralPropertyId)
+
+             let tallyA = await TallyMap.getTally(commitAddressA,collateralPropertyId)
+             let tallyB = await TallyMap.getTally(commitAddressB,collateralPropertyId)
 
              if((balanceA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
                 ||(balanceA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
@@ -1420,6 +1425,7 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Commit address B not whitelisted; ';
             }*/
+            console.log('finishing validated channel contract '+JSON.stringify(params))
 
             return params;
         },
@@ -1436,7 +1442,7 @@ const Validity = {
                 return params
             }
 
-            const is = await Validity.isActivated(txid,20)
+            const is = await Validity.isActivated(params.block,txid,20)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1586,7 +1592,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,21)
+            const is = await Validity.isActivated(params.block,txid,21)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1682,7 +1688,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,22)
+            const is = await Validity.isActivated(params.block,txid,22)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1751,7 +1757,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,23)
+            const is = await Validity.isActivated(params.block,txid,23)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1794,7 +1800,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,24)
+            const is = await Validity.isActivated(params.block,txid,24)
             console.log(is)
             if (!is) {
                 params.valid = false;
@@ -1889,7 +1895,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const is = await Validity.isActivated(txid,25)
+            const is = await Validity.isActivated(params.block,txid,25)
             console.log(is)
             if (!is) {
                 params.valid = false;

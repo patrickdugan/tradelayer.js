@@ -303,7 +303,7 @@ class PropertyManager {
         try {
             const base = await db.getDatabase('propertyList')
             const propertyData = await base.findOneAsync({ _id: 'propertyIndex' });
-            console.log('property list ' +JSON.stringify(propertyData))
+            //console.log('property list ' +JSON.stringify(propertyData))
             if (propertyData && propertyData.value) {
                 const parsedData = JSON.parse(propertyData.value);
                 console.log(propertyId)
@@ -324,7 +324,7 @@ class PropertyManager {
                 // Check for integer-based property ID
                 //console.log('propertyId:', propertyId, 'type:', typeof propertyId);
                 const propertyEntry = parsedData.find(entry => Number(entry[0]) === Number(propertyId));
-                console.log('retrieving property data '+JSON.stringify(propertyEntry)+' '+JSON.stringify(parsedData))
+                //console.log('retrieving property data '+JSON.stringify(propertyEntry)+' '+JSON.stringify(parsedData))
                 if (propertyEntry) {
                     return propertyEntry[1];
                 } else {

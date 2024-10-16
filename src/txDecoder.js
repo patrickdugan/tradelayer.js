@@ -290,12 +290,14 @@ const Decode = {
             );
         }
 
+        console.log('decoding create contract notionalValue '+parts[4])
+
         return {
             native: isNative,
             underlyingOracleId: parseInt(parts[1] || '0', 36),
             onChainData: onChainDataParts,
             notionalPropertyId: Decode.decodePropertyId(parts[3] || ''),
-            notionalValue: parseFloat(parts[4] || '0'), // Assuming notionalValue should be a float
+            notionalValue: parseInt(parts[4] || '0',36), // Assuming notionalValue should be a float
             collateralPropertyId: Decode.decodePropertyId(parts[5] || ''),
             leverage: parseFloat(parts[6] || '0'), // Assuming leverage should be a float
             expiryPeriod: parts[7] ? parseInt(parts[7], 36) : null,

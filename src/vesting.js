@@ -26,7 +26,7 @@ class TradeLayerManager {
             this.minRebate = 0.00000625;
             this.maxRebate = 0.0001;
             this.initialTokenAmount = 600000;
-            this.tickerSymbol = 'BTC_TL';
+            this.tickerSymbol = 'TB';
             this.hedgeLeverage = 5;
             this.expiryInterval = 12960
         } else if (this.chain === 'DOGE') {
@@ -34,7 +34,7 @@ class TradeLayerManager {
             this.minRebate = 0.00000125;
             this.maxRebate = 0.0005;
             this.initialTokenAmount = 200000000;
-            this.tickerSymbol = 'DOGE_TL';
+            this.tickerSymbol = 'TD';
             this.hedgeLeverage = 10;
             this.expiryInterval = 129600
         } else { // Default to Litecoin (LTC)
@@ -42,7 +42,7 @@ class TradeLayerManager {
             this.minRebate = 0.000003125;
             this.maxRebate = 0.0001;
             this.initialTokenAmount = 1500000;
-            this.tickerSymbol = 'LTC_TL';
+            this.tickerSymbol = 'TL';
             this.hedgeLeverage = 5;
             this.expiryInterval= 51840
         }
@@ -104,7 +104,7 @@ class TradeLayerManager {
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)
             // Distribute initial amount to insurance fund
-            insuranceFund.deposit(TLTokenId,amountToInsuranceFund,true)
+            insuranceFund.deposit(TLTokenId,amountToInsuranceFund,false)
             
             await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, 0);
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount, 0, 0, TLVESTTotalAmount);
@@ -131,7 +131,7 @@ class TradeLayerManager {
             expiry: 'perp', //need to assure that perp or 0 or null etc. codes to perpetual
             onChainData: [[1, 0]], //LTC vs. TL, need to assure that the propertyid for TL init's to 1 and that 0 corresponds to LTC UTXO
             expiryInterval: this.expiryInterval,
-            leverage: this.hedgeLeverage,
+            leverage: this.hedgeLeverage||5,
             seriesLength: 6,
             native:true,
             inverse: true,

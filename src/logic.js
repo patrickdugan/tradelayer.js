@@ -473,6 +473,7 @@ const Logic = {
         //console.log('load orderbook for pair key '+JSON.stringify(orderbook))
 
         const txInfo = await TxUtils.getRawTransaction(txid)
+       
         const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
 
         if(stop==true&&post==true){
@@ -717,7 +718,7 @@ const Logic = {
             onChainData: onChainData,
             notionalPropertyId: notionalPropertyId,
             notionalValue: notionalValue,
-            collateralProperty: collateralProperty,
+            collateralProperty: collateralPropertyId,
             leverage:leverage, 
             expiryPeriod: expiryPeriod, 
             series:series, 

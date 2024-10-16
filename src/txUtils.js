@@ -64,7 +64,7 @@ const TxUtils = {
         }
 
         try {
-            const block = await this.client.getBlockData(blockhash);
+            const block = await this.client.getBlock(blockhash);
             return block.height;
         } catch (error) {
             console.error(`Error fetching block height for blockhash ${blockhash}:`, error);
@@ -1126,7 +1126,7 @@ createLitecoinMultisigAddress(pubKey1, pubKey2) {
 },
 
 async findSuitableUTXO(address, minAmount) {
-    const utxos = await client.listUnspent(0, 9999999, [address]);
+    const utxos = await this.client.listUnspent(0, 9999999, [address]);
     const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
     if (!suitableUtxo) {
         throw new Error('No suitable UTXO found.');

@@ -6,6 +6,7 @@ const BigNumber = require('bignumber.js')
 const AMMPool = require('./AMM.js')
 const VolumeIndex = require('./volumeIndex.js')
 const OracleRegistry = require('./oracle.js')
+const PropertyManager = require('./property.js')
 
 class ContractRegistry {
     constructor() {
@@ -81,9 +82,19 @@ class ContractRegistry {
         if(params.whitelist==undefined||params.whitelist==null){
             params.whitelist=0
         }
+        if(params.native){
+            const propertyData1 = PropertyManager.getPropertyData(params.notionalPropertyId)
+            const propertyData2 = PropertyManager.getPropertyData(params.collateralPropertyId)
+            params.ticker = propertyData1.ticker+"/"+propertyData2.ticker+"-PERP"
+
+        }else if(!params.native&&params.underlyingOracleId!=0){
+            const oracleInfo = await OracleRegistry.getOracleInfo(params.underlyingOracleId)
+            params.ticker = oracleInfo.ticker+"-OPERP"+params.underlyingOracleId+"-"+seriesId
+        }
         // Create the contract series object
         const contractSeries = {
             id: seriesId,
+            ticker:params.ticker||seriesId+"-PERP",
             issuer: sender,
             native: params.native,
             underlyingOracleId: params.underlyingOracleId,
