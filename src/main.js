@@ -327,9 +327,7 @@ class Main {
                     const txId = valueData.txId;
                     
                     if (await Consensus.checkIfTxProcessed(txId)) {
-                        if (flag == true) {
-                            console.log('oddly the missing tx is being included in consensus');
-                        }
+                        console.log('scanning blockHeight '+blockHeight+' '+tx)
                         continue;
                     }
 
@@ -656,7 +654,7 @@ class Main {
             }
            //console.log('about to call construct consensus in block '+blockHeight)
            
-            //console.log(`Processed block ${blockHeight} successfully... max consensus height is `+maxConsensus);
+            console.log(`Processed block ${blockHeight} successfully...`);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
