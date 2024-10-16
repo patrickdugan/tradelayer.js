@@ -80,10 +80,22 @@ const Encode = {
     encodeCommit: (params) => {
         const amount = new BigNumber(params.amount).times(1e8).toString(36);
         const channelAddress = params.channelAddress.length > 42 ? `ref:${params.ref || 0}` : params.channelAddress; // Handle long multisig addresses
-        const payload = [
+        const payEnabled = params.payEnabled ? '1' : '0'; // Encode true as '1' and false as '0'
+        let clearLists = '';
+        if (params.clearLists) {
+            if (Array.isArray(params.clearLists)) {
+                clearLists = `[${params.clearLists.map(num => num.toString(36)).join(',')}]`; // Array of integers in base 36
+            } else {
+                clearLists = params.clearLists.toString(36); // Single integer in base 36
+            }
+        }
+
+         const payload = [
             params.propertyId.toString(36),
             amount,
-            channelAddress
+            channelAddress,
+            payEnabled,
+            clearLists
         ];
         return payload.join(',');
     },
@@ -330,20 +342,22 @@ const Encode = {
         return [withdrawAll, propertyIds, amounts, column, params.channelAddress].join(',');
     },
 
-    // Encode Transfer Transaction
-    
+    // Encode Transfer Transaction 
     encodeTransfer: (params) => {
         const propertyId = params.propertyId.toString(36);
         const amounts = new BigNumber(params.amount).times(1e8).toString(36);
         const isColumnA = params.isColumnA ? 1 : 0;
+        const pay = params.pay ? 1 : 0
+        const payRef = params.payRef || ''
         const destinationAddr = params.destinationAddr.length > 42 ? `ref:${params.ref || 0}` : params.destinationAddr; // Handle long multisig addresses
-        return [propertyId, amounts, isColumnA, destinationAddr].join(',');
+        return [propertyId, amounts, isColumnA, destinationAddr, pay, payRef,].join(',');
     },
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
         const payload = [
-            params.txidNeutralized,
+            params.txidNeutralized1,
+            params.txidNeutralized2,
             params.contractId.toString(36),
             params.amountCancelled.toString(36),
             params.propertyId.toString(36),

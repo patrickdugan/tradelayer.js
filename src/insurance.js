@@ -57,54 +57,44 @@ class InsuranceFund {
         // Adjust hedging strategy if needed
     }
 
+    // Save snapshot without Promise wrapper
     async saveSnapshot() {
-        let key = this.contractSeriesId.toString()
-        if(this.oracle){
-            key+=oracle
+        let key = this.contractSeriesId.toString();
+        if (this.oracle) {
+            key += this.oracle;
         }
-        let block = await TxUtils.getBlockCount()
+        const block = await TxUtils.getBlockCount();
         const snapshot = {
             balances: this.balances,
-            contractSeriesId: this.contractSeriesId, // Use a colon here
-            hedgeRatio: this.hedgeRatio, // Use a colon here
+            contractSeriesId: this.contractSeriesId,
+            hedgeRatio: this.hedgeRatio,
             block: block
         };
-        console.log('saving to insurance fund '+snapshot)
-        await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: key, value: snapshot }, (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+        console.log('Saving to insurance fund:', snapshot);
+
+        const dbInstance = await db.getDatabase('insurance');
+        await dbInstance.insertAsync({ key: key, value: snapshot });
     }
 
-
+    // Get snapshot without Promise wrapper
     async getSnapshot(key) {
-        return new Promise((resolve, reject) => {
-            db.getDatabase('insurance').findOne({ key: key }, (err, doc) => {
-                if (err) {
-                    console.error('Error retrieving snapshot:', err);
-                    reject(err);
-                } else {
-                    resolve(doc ? doc.value : null);
-                }
-            });
-        });
+        const dbInstance = await db.getDatabase('insurance');
+        const doc = await dbInstance.findOneAsync({ key: key });
+        return doc ? doc.value : null;
     }
 
+    // Record event without Promise wrapper
     async recordEvent(eventType, eventData) {
         const eventRecord = {
             type: eventType,
             data: eventData,
             timestamp: new Date().toISOString()
         };
-        await new Promise((resolve, reject) => {
-            db.getDatabase('insurance').insert({ key: `event-${eventRecord.timestamp}`, value: eventRecord }, (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+
+        const dbInstance = await db.getDatabase('insurance');
+        await dbInstance.insertAsync({ key: `event-${eventRecord.timestamp}`, value: eventRecord });
     }
+
 
       // New liquidation function
     static async liquidate(adminAddress, isOracle) {

@@ -263,51 +263,54 @@ class ConsensusDatabase {
 	}
 
 	// Function to fetch the latest activation from activations.db and push into the consensus vector
-		static async pushLatestActivationToConsensusVector() {
-		    try {
-		        // Fetch the latest activation from the activations database
-		        const activationsDb = await db.getDatabase('activations');
-		        const activations = await activationsDb.findAsync({}).sort({ blockNumber: -1 }).limit(1);
+	   static async pushLatestActivationToConsensusVector() {
+            try {
+                const activationsDb = await db.getDatabase('activations');
+                const activations = await activationsDb.findAsync({ _id: 'activationsList' });
 
-		        if (activations.length === 0) {
-		            console.log('No activations found in the database.');
-		            return;
-		        }
+                if (!activations || !activations[0] || !activations[0].value) {
+                    console.log('No activations found in the database.');
+                    return;
+                }
 
-		        const latestActivation = activations[0];
+                const activationsList = JSON.parse(activations[0].value);
+                let latestActivation = null;
+                let maxBlock = -1;
 
-		        // Get the project path (adjust if necessary for your environment)
-		        const projectPath = path.resolve(__dirname);
+                for (const key in activationsList) {
+                    const activation = activationsList[key];
+                    if (activation.activationBlock && activation.activationBlock > maxBlock) {
+                        maxBlock = activation.activationBlock;
+                        latestActivation = activation;
+                    }
+                }
 
-		        // Generate the JS code hash by hashing the necessary JS files (defaulting to empty string if no JS code is present)
-		        const codeHash = await hashCodeFiles(projectPath) || '';
+                if (!latestActivation) {
+                    console.log('No valid activation with an activationBlock found.');
+                    return;
+                }
 
-		        // WASM code hash placeholder (for now set to empty string, will be populated in the future)
-		        const wasmCodeHash = ''; // Future logic will populate this with WASM hash
+                const projectPath = path.resolve(__dirname);
+                const codeHash = await hashCodeFiles(projectPath) || '';
+                const wasmCodeHash = '';
+                const consensusHash = await generateConsensusHash();
 
-		        // Generate the consensus hash (current state of consensus, balances, etc.)
-		        const consensusHash = await generateConsensusHash();
+                const newConsensusEntry = {
+                    activation: latestActivation,
+                    codeHash,
+                    wasmCodeHash,
+                    consensusHash,
+                    blockNumber: maxBlock,
+                };
 
-		        // Add the new activation to the consensus vector
-		        const newConsensusEntry = {
-		            activation: latestActivation,     // Activation object from the DB
-		            codeHash,                         // Hash of the current JS codebase
-		            wasmCodeHash,                     // Hash of the current WASM/Rust codebase (empty for now)
-		            consensusHash,                    // Hash of the current consensus state
-		            blockNumber: latestActivation.blockNumber // Block number of this activation
-		        };
+                consensusVector.push(newConsensusEntry);
+                console.log('Latest activation pushed to consensus vector:', newConsensusEntry);
+                return newConsensusEntry;
 
-		        // Push into the consensus vector
-		        consensusVector.push(newConsensusEntry);
-
-		        console.log('Latest activation pushed to consensus vector:', newConsensusEntry);
-		        return newConsensusEntry;
-
-		    } catch (err) {
-		        console.error('Error fetching latest activation or updating consensus vector:', err);
-		    }
-		}
-
+            } catch (err) {
+                console.error('Error fetching latest activation or updating consensus vector:', err);
+            }
+        }
 
 
 

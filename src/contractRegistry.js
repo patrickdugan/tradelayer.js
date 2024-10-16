@@ -78,8 +78,8 @@ class ContractRegistry {
         // Generate a unique ID for the new contract series
         const seriesId = await ContractRegistry.getNextIdFromMap(contractList);
         const thisAMM = new AMMPool(0,1,10,seriesId)
-        if(whitelist==undefined||whitelist==null){
-            whitelist=0
+        if(params.whitelist==undefined||params.whitelist==null){
+            params.whitelist=0
         }
         // Create the contract series object
         const contractSeries = {
@@ -196,15 +196,17 @@ class ContractRegistry {
             });
     }
 
-   static async saveDataToDb(dataMap, dataType) {
+       static async saveDataToDb(dataMap, dataType) {
+        const dbInstance = await db.getDatabase('contractList');
         const dataArray = Array.from(dataMap.entries()).map(([id, data]) => ({
             id, data, type: dataType
         }));
 
-        await Promise.all(dataArray.map(entry => 
-            db.getDatabase('contractList').updateAsync({ id: entry.id }, entry, { upsert: true })
-        ));
+        for (const entry of dataArray) {
+            await dbInstance.updateAsync({ id: entry.id }, entry, { upsert: true });
+        }
     }
+
 
     // Function to save contract series, oracle contracts, or native contracts
     static async saveAllData() {

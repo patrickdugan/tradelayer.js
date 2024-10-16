@@ -7,18 +7,30 @@ class Database {
     constructor() {
         this.databases = {};
         this.initialized = false;
+        this.initializing = false
+        this.path = ''
     }
 
     async init(chain) {
-
-        //await new Promise(resolve => setTimeout(resolve, 300)); // Wait 0.3 seconds
-        // Wait for client to finish setting the chain
+        if(this.initializing||this.initialized){
+            return
+        }
+        this.initializing= true
 
         if (!chain) {
-            const instance = await ClientWrapper.getInstance()
-            chain = instance.chain //throw new Error('Unable to determine blockchain chain.');
+            const instance = await ClientWrapper.getInstance();
+            chain = instance.chain;
         }
 
+        while (!chain) {
+            console.log('Waiting for chain...');
+            await new Promise(resolve => setTimeout(resolve, 300));
+            const instance = await ClientWrapper.getInstance();
+            chain = instance.chain;
+        }
+
+        const dbPath = path.join(__dirname, '..', 'nedb-data', chain.toLowerCase());
+        this.path=dbPath
         const categories = [
             'txIndex', 'propertyList', 'oracleList', 'oracleData', 'contractList',
             'tallyMap', 'tallyMapDelta', 'marginMapDelta', 'marginMaps', 'clearlists',
@@ -28,26 +40,25 @@ class Database {
             'liquidations'
         ];
 
-        if(!chain){
-            console.log('wait for chain')
-            await new Promise(resolve => setTimeout(resolve, 300)); // Wait 0.3 seconds
-        }
-        const dbPath = path.join(__dirname, '..', 'nedb-data', chain.toLowerCase());
-
         categories.forEach(category => {
-            const db = new Datastore({ 
-                filename: path.join(dbPath, `${category}.db`), 
-                autoload: true 
-            });
+            try {
+                const db = new Datastore({ 
+                    filename: path.join(dbPath, `${category}.db`), 
+                    autoload: true 
+                });
 
-            db.findAsync = util.promisify(db.find.bind(db));
-            db.insertAsync = util.promisify(db.insert.bind(db));
-            db.removeAsync = util.promisify(db.remove.bind(db));
-            db.updateAsync = util.promisify(db.update.bind(db));
-            db.findOneAsync = util.promisify(db.findOne.bind(db));
-            db.countAsync = util.promisify(db.count.bind(db));
+                db.findAsync = util.promisify(db.find.bind(db));
+                db.insertAsync = util.promisify(db.insert.bind(db));
+                db.removeAsync = util.promisify(db.remove.bind(db));
+                db.updateAsync = util.promisify(db.update.bind(db));
+                db.findOneAsync = util.promisify(db.findOne.bind(db));
+                db.countAsync = util.promisify(db.count.bind(db));
 
-            this.databases[category] = db;
+                this.databases[category] = db;
+            } catch (error) {
+                console.error(`Error initializing database for category ${category}:`, error);
+                throw error; // Re-throw error after logging
+            }
         });
 
         this.initialized = true;

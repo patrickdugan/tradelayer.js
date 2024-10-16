@@ -90,18 +90,39 @@ const Decode = {
     // Decode Commit Token Transaction
     decodeCommitToken: (payload) => {
         const parts = payload.split(',');
-          let propertyId = Decode.decodePropertyId(parts[0] || '')
-          let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
-          let channelAddress = ''
-          let ref = false
-          if (parts[2].startsWith('ref:')) {
-             const referenceOutput = parts[2].split(':')[1];
-             ref = referenceOutput
-          }else{
-             channelAddress = parts[2] || ''
-          }
-          return {propertyId:propertyId, amount:amount, channelAddress:channelAddress, ref:ref}
+        let propertyId = Decode.decodePropertyId(parts[0] || '');
+        let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        
+        // Handle channelAddress or reference
+        let channelAddress = '';
+        let ref = false;
+        if (parts[2].startsWith('ref:')) {
+            ref = parts[2].split(':')[1];
+        } else {
+            channelAddress = parts[2] || '';
+        }
+
+        // Decode payEnabled
+        let payEnabled = parts[3] === '1';
+
+        // Decode clearLists
+        let clearLists = [];
+        if (parts[4] && parts[4].startsWith('[') && parts[4].endsWith(']')) {
+            clearLists = parts[4].slice(1, -1).split(',').map(num => parseInt(num, 36));
+        } else if (parts[4]) {
+            clearLists = [parseInt(parts[4], 36)];
+        }
+
+        return {
+            propertyId,
+            amount,
+            channelAddress,
+            ref,
+            payEnabled,
+            clearLists
+        };
     },
+
 
     // Decode On-chain Token for Token Transaction
     decodeOnChainTokenForToken: (payload) => {
@@ -349,18 +370,32 @@ const Decode = {
     // Decode Transfer Transaction
     decodeTransfer: (payload) => {
         const parts = payload.split(',');
-            let propertyId = Decode.decodePropertyId(parts[0] || '')
-            let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
-            let isColumnA = parts[2] === '1'
-            let toChannelAddress = ''
-            let ref = false
-          if (parts[2].startsWith('ref:')) {
-             const referenceOutput = parts[3].split(':')[1];
-             ref = referenceOutput
-          }else{
-             toChannelAddress = parts[3] || ''
-          }
-          return {propertyId:propertyId, amount:amount, isColumnA:isColumnA, toChannelAddress:toChannelAddress, ref:ref}
+        let propertyId = Decode.decodePropertyId(parts[0] || '');
+        let amount = new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        let isColumnA = parts[2] === '1';
+        
+        // Handle destinationAddr or reference
+        let toChannelAddress = '';
+        let ref = false;
+        if (parts[3].startsWith('ref:')) {
+            ref = parts[3].split(':')[1];
+        } else {
+            toChannelAddress = parts[3] || '';
+        }
+
+        // Decode pay and payRef
+        let pay = parts[4] === '1';
+        let payRef = parts[5] || '';
+
+        return {
+            propertyId,
+            amount,
+            isColumnA,
+            toChannelAddress,
+            ref,
+            pay,
+            payRef
+        };
     },
 
     // Decode Settle Channel PNL Transaction

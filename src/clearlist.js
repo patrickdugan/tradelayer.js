@@ -13,7 +13,8 @@ class clearlistManager {
             backupAddress
         };
 
-        await dbInstance.getDatabase('clearlists').updateAsync(
+        const base = await dbInstance.getDatabase('clearlists')
+        await base.updateAsync(
             { _id: clearlistId },
             { $set: { data: clearlistData } },
             { upsert: true }
@@ -24,7 +25,8 @@ class clearlistManager {
 
     static async loadClearlists() {
         try {
-            const clearLists = await dbInstance.getDatabase('attestations').findAsync({});
+            const base = await dbInstance.getDatabase('attestations')
+            const clearLists = await base.findAsync({});
             clearLists.forEach(({ _id, data }) => {
                 this.clearlists.set(_id, data);
             });
@@ -37,7 +39,8 @@ class clearlistManager {
 
     static async getList(id) {
         try {
-            const clearlist = await dbInstance.getDatabase('attestations').findOneAsync({ _id: id });
+            const base = await dbInstance.getDatabase('attestations')
+            const clearlist = await base.findOneAsync({ _id: id });
             if (clearlist) {
                 return clearlist.data;
             } else {
@@ -112,7 +115,8 @@ class clearlistManager {
 
     static async revokeAttestation(attestationId, targetAddress, revokeReason) {
         const attestationKey = `attestation:${targetAddress}`;
-        const attestation = await this.attestationsDb.findOneAsync({ _id: attestationKey });
+        const base= await dbInstance.getDatabase('attestations')
+        const attestation = await base.findOneAsync({ _id: attestationKey });
 
         if (!attestation) {
             throw new Error('Attestation not found');
@@ -132,15 +136,20 @@ class clearlistManager {
     }
 
     static async getAttestations(clearlistId) {
-        return this.attestationsDb.findAsync({ 'data.clearlistId': clearlistId });
+        const base = await dbInstance.getDatabase('attestations')
+        return await base.findAsync({ 'data.clearlistId': clearlistId });
     }
 
     static async getAttestationHistory(address, clearlistId) {
-        return this.attestationsDb.findAsync({ 'data.address': address });
+
+        const base = await dbInstance.getDatabase('attestations')
+        return await base.findAsync({ 'data.address': address });
     }
 
     static async isAddressInClearlist(clearlistId, address) {
-        const attestations = await this.attestationsDb.findAsync({
+
+        const base = await dbInstance.getDatabase('attestations')
+        const attestations = await base.findAsync({
             'data.clearlistId': clearlistId,
             'data.address': address,
             'data.status': 'active'

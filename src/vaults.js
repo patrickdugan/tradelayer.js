@@ -79,7 +79,8 @@ class SynthRegistry {
 
     // Check if a synthetic token exists
     static async exists(syntheticTokenId) {
-        const vaultsData = await db.getDatabase('syntheticTokens').findOneAsync({ _id: syntheticTokenId });
+        const base = await db.getDatabase('syntheticTokens')
+        const vaultsData = base.findOneAsync({ _id: syntheticTokenId });
         //console.log('inside exists ' + syntheticTokenId + ' ' + JSON.stringify(vaultsData));
         return vaultsData !== null;
     }
@@ -118,7 +119,8 @@ class SynthRegistry {
         console.log('about to load');
 
         // Ensure the database queries are awaited properly
-        const vaultsData = await db.getDatabase('vaults').findAsync({});
+        const base = await db.getDatabase('vaults')
+        const vaultsData = await base.findAsync({});
         //console.log('Vaults Data:', Array.isArray(vaultsData) ? vaultsData.length : 0, 'items');
         
         if (Array.isArray(vaultsData) && vaultsData.length > 0) {
