@@ -1,51 +1,58 @@
 const baseConverter = require('bigint-base-converter');
 
 // Define the Base 94 character set
-const base94Chars = [
-    ...Array(94).keys()
-].map((i) => String.fromCharCode(i + 33));
+const base94Chars = [...Array(94).keys()].map((i) => String.fromCharCode(i + 33));
 
-// Create a map for decoding
-const base94CharMap = Object.fromEntries(base94Chars.map((char, index) => [char, index]));
+// Create the conversion functions within an object
+const Base94Converter = {
+    // Convert decimal to base 94
+    toBase94(decimalString) {
+        return baseConverter(decimalString, 10, base94Chars.join(''));
+    },
 
-// Convert decimal to base 94
-function toBase94(decimalString) {
-    return baseConverter(decimalString, 10, base94Chars.join(''));
-}
+    // Convert base 94 back to decimal
+    fromBase94(base94String) {
+        return baseConverter(base94String, base94Chars.join(''), 10);
+    },
 
-// Convert base 94 back to decimal
-function fromBase94(base94String) {
-    return baseConverter(base94String, base94Chars.join(''), 10);
-}
+    // Convert hex to decimal
+    hexToDecimal(hex) {
+        return BigInt('0x' + hex).toString();
+    },
 
-// Helper functions for converting hex to decimal and back
-function hexToDecimal(hex) {
-    return BigInt('0x' + hex).toString();
-}
+    // Convert decimal to hex
+    decimalToHex(decimalString) {
+        return BigInt(decimalString).toString(16);
+    },
 
-function decimalToHex(decimalString) {
-    return BigInt(decimalString).toString(16);
-}
+    // Convert hex to Base 94
+    hexToBase94(hex) {
+        const decimalString = this.hexToDecimal(hex);
+        return this.toBase94(decimalString);
+    },
 
-// Convert a hexadecimal string to Base 94
-function hexToBase94(hex) {
-    const decimalString = hexToDecimal(hex);
-    return toBase94(decimalString);
-}
+    // Convert Base 94 back to hex
+    base94ToHex(base94String) {
+        const decimalString = this.fromBase94(base94String);
+        return this.decimalToHex(decimalString);
+    },
 
-// Convert a Base 94 string back to hexadecimal
-function base94ToHex(base94String) {
-    const decimalString = fromBase94(base94String);
-    return decimalToHex(decimalString);
-}
+    // Convert decimal to Base 94 including fractional parts
+    decimalToBase94(decimal) {
+        const [integerPart, fractionalPart] = decimal.toString().split('.');
+        const integerEncoded = this.toBase94(integerPart);
 
-// Example usage:
-const hex = 'eb06a8b414df86d70de3a0390fbc3e1b78598bcb51f67d33dba01d61954c2aa0';
-const base94Encoded = hexToBase94(hex);
-console.log(`Base 94 Encoded: ${base94Encoded}`);
+        // Encode fractional part by scaling it
+        let fractionalEncoded = '';
+        if (fractionalPart) {
+            const scale = Math.pow(10, fractionalPart.length);
+            const scaledFraction = BigInt(fractionalPart) * BigInt(scale) / BigInt('1' + '0'.repeat(fractionalPart.length));
+            fractionalEncoded = this.toBase94(scaledFraction.toString()) + '_'; // Using underscore as fractional separator
+        }
 
-const decodedHex = base94ToHex(base94Encoded);
-console.log(`Decoded back to Hex: ${decodedHex}`);
+        return `${integerEncoded}.${fractionalEncoded}`;
+    }
+};
 
-// Confirming it matches original hex
-console.log(`Match Original Hex: ${decodedHex === hex}`);
+// Export the object for use in other modules
+module.exports = Base94Converter;

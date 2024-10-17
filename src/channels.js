@@ -345,7 +345,7 @@ class Channels {
         }
     }
 
-    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, blockHeight) {
+    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight) {
         console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
@@ -382,8 +382,14 @@ class Channels {
             propertyId,
             tokenAmount,
             block: blockHeight,
-            columnAssigned: channelColumn
+            columnAssigned: channelColumn,
+            payEnabled: payEnabled
         };
+
+        if(payEnabled){        
+          channel.clearLists[channelColumn]=clearLists
+          channel.payEnabled[channelColumn]
+        }
         channel.participants[channelColumn]=senderAddress;
         channel.commits.push(commitRecord);
 

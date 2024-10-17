@@ -410,14 +410,29 @@ const Validity = {
               const senderIsParticipantB = participants.B === sender;
 
               // Invalidate if both participants are full and sender is neither A nor B
-              if (participantAFilled && participantBFilled && !senderIsParticipantA && !senderIsParticipantB) {
+            if (participantAFilled && participantBFilled && !senderIsParticipantA && !senderIsParticipantB) {
                 isValid = false;
                 reason = 'Both participants are full and the sender is not a participant, try making a new multisig.';
               }
             }
+
             if(!passes&&propertyData.whitelistId!=0){
              params.valid = false;
                     params.reason += `Sender address not listed in clearlist for the token`;
+            }
+
+             if (typeof params.payEnabled !== 'boolean') {
+                params.valid = false;
+                params.reason += 'payEnabled is not a boolean. ';
+            }
+
+            // Validate clearLists
+            if (params.clearLists) {
+                const invalidClearListItems = params.clearLists.filter(num => !Number.isInteger(num));
+                if (invalidClearListItems.length > 0) {
+                    params.valid = false;
+                    params.reason += 'clearLists contains non-integer values. ';
+                }
             }
 
             return params;
@@ -1728,6 +1743,7 @@ const Validity = {
            
             
             const hasSufficientBalance = Boolean(balance>=params.amount);
+            console.log('suf balance in transfer val ' +JSON.stringify(hasSufficientBalance))
             if (!hasSufficientBalance) {
                 params.valid = false;
                 params.reason += 'Insufficient balance for transfer; ';
@@ -1742,6 +1758,66 @@ const Validity = {
                     params.reason += 'Both columns of the desired transferee channel are occupied by commiters other than the commiter owning the transfered tokens.'
                 }
             }
+
+               // Ensure pay is a boolean; default to false if not provided
+            if (typeof params.pay === 'undefined' || params.pay === '') {
+                params.pay = false;
+            } else if (typeof params.pay !== 'boolean') {
+                params.valid = false;
+                params.reason += 'pay is not a boolean; ';
+            }
+
+            // Validate payRef if pay is enabled
+            if (params.pay && params.payRef) {
+                if (!Number.isInteger(Number(params.payRef)) || Number(params.payRef) < 0) {
+                    params.valid = false;
+                    params.reason += 'payRef is not a valid integer; ';
+                } else {
+                    // Retrieve channel information
+
+                    if (channel) {
+                        // Determine the relevant column (A or B) based on params.isColumnA
+                        const column = params.isColumnA ? 'A' : 'B';
+
+                        // Check if pay is enabled for the column
+                        if (!channel.payEnabled || !channel.payEnabled[column]) {
+                            params.valid = false;
+                            params.reason += `Pay not enabled for column ${column}; `;
+                        }
+
+                        // Check clearLists for the column
+                        const clearLists = channel.clearLists ? channel.clearLists[column] : undefined;
+                        if (clearLists) {
+                            // Retrieve the payRef address details from transaction outputs
+                            const outputs = await TxUtils.getTransactionOutputs(txid);
+                            const payRefOutput = outputs.find(output => output.vout === Number(params.payRef));
+
+                            if (!payRefOutput) {
+                                params.valid = false;
+                                params.reason += 'Invalid payRef output; ';
+                            } else {
+                                const payRefAddress = payRefOutput.scriptPubKey.addresses[0]; // Assuming single address per output                                // Check if payRefAddress matches any entry in the clearLists array
+                                params.payRefAddress = payRefAddress
+                                const isValidAttestation = await Promise.all(
+                                    clearLists.map(async (listId) => {
+                                        return await ClearList.isAddressInClearlist(listId, payRefAddress);
+                                    })
+                                );
+
+                                // If none of the clearLists contain a match, invalidate
+                                if (!isValidAttestation.includes(true)) {
+                                    params.valid = false;
+                                    params.reason += `No valid attestation for payRef address ${payRefAddress}; `;
+                                }
+                            }
+                        }
+                    } else {
+                        params.valid = false;
+                        params.reason += 'Sender channel not found; ';
+                    }
+                }
+            }
+
 
             return params;
         },

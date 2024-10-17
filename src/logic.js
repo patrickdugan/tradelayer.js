@@ -58,7 +58,7 @@ const Logic = {
                 await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.block, params.txid);
                 break;
             case 4:
-                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.block);
+                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block);
                 break;
             case 5:
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block, params.stop, params.post);
@@ -112,7 +112,7 @@ const Logic = {
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
-                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.block);
+                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.pay, params.payRefAddress, params.block);
                 break;
             case 23:
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
@@ -449,7 +449,7 @@ const Logic = {
                 return
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, block) {
+	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
        console.log('commiting tokens '+tokenAmount+' '+block)
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
@@ -458,7 +458,7 @@ const Logic = {
         await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
 
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, block);
+        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
         return;
@@ -858,11 +858,11 @@ const Logic = {
 	},
 
 
-	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, block) {
+	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, pay, payRefAddress, block) {
         let fromChannel = await Channels.getChannel(fromChannelAddress);
        
         console.log(`To channel ${toChannelAddress} not found. Adding to registry.`);
-        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount, block);
+        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount, false, '', block);
         let toChannel = await Channels.getChannel(toChannelAddress);   
 
         // Determine the correct column to deduct from in the fromChannel
@@ -870,22 +870,24 @@ const Logic = {
         console.log(JSON.stringify(fromChannel),fromColumn, isColumnA, amount, fromChannel[fromColumn][propertyId] )
         const channelColumn = Channels.assignColumnBasedOnAddress(toChannelAddress, fromChannelAddress);
         // Check if the fromChannel has enough balance
-        if (!fromChannel[fromColumn][propertyId] || fromChannel[fromColumn][propertyId] < amount) {
-            throw new Error('Insufficient balance for transfer');
-        }
 
         // Assign columns in the toChannel based on the address
         //await Channels.assignColumnBasedOnAddress(toChannelAddress, toChannelAddress);
 
         // Update balances in from channel
         fromChannel[fromColumn][propertyId] -= amount;
-
-        // Update the commit address for the destination column to be the commit address of the sender
-        if (isColumnA) {
-            toChannel.participants[channelColumn] = fromChannel.participants['A'];
-        } else {
-            toChannel.participants[channelColumn] = fromChannel.participants['B'];
+         // Assign the commit address based on pay status
+        if (pay && payRefAddress) {
+                // If pay is true and payRefAddress is provided, set it as the commit address
+                toChannel.participants[channelColumn] = payRefAddress;
+                console.log(`Setting commit address in toChannel ${channelColumn} as payRefAddress: ${payRefAddress}`);
+            } else {
+                // Otherwise, use the fromChannel's participant address
+                const senderCommitAddress = fromChannel.participants[fromColumn];
+                toChannel.participants[channelColumn] = senderCommitAddress;
+                console.log(`Setting commit address in toChannel ${channelColumn} as fromChannel participant address: ${senderCommitAddress}`);
         }
+
         TallyMap.updateChannelBalance(fromChannelAddress, propertyId, -amount,'transferDebit', block)
         TallyMap.updateChannelBalance(toChannelAddress, propertyId, amount, 'transferCredit', block)
 

@@ -1,5 +1,8 @@
 // txEncoder.js
 const BigNumber = require('bignumber.js');
+const base94 = require('./base94.js')
+const base256 = require('./base256.js')
+
 
 const Encode = {
     // Encode Simple Token Issue Transaction
@@ -361,16 +364,14 @@ const Encode = {
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
+        const base256Encoded1 = Base256Converter.hexToBase256(params.tradeid)
+        const base256Encoded2 = Base256Converter.hexToBase256(params.settleid);
+        const base94Encoded = Base94Converter.decimalToBase94(params.markPrice)
         const payload = [
-            params.txidNeutralized1,
-            params.txidNeutralized2,
-            params.contractId.toString(36),
-            params.amountCancelled.toString(36),
-            params.propertyId.toString(36),
-            params.amountSettled.toString(36),
-            params.close ? '1' : '0',
-            params.propertyId2 ? params.propertyId2.toString(36) : '0',
-            params.amountDelivered ? params.amountDelivered.toString(36) : '0',
+            base256Encoded1,
+            base256Encoded2,
+            base94Encoded,
+            params.close ? '1' : '0'
         ];
         return payload.join(',');
     },

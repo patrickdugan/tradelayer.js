@@ -401,19 +401,18 @@ const Decode = {
     },
 
     // Decode Settle Channel PNL Transaction
-    decodeSettleChannelPNL: (payload) => {
+   decodeSettleChannelPNL: (payload) => {
         const parts = payload.split(',');
+
         return {
-            txidNeutralized: parts[0] || '',
-            contractId: parseInt(parts[1] || '0', 36),
-            amountCancelled: parseInt(parts[2] || '0', 36),
-            propertyId: Decode.decodePropertyId(parts[3] || ''),
-            amountSettled: new BigNumber(parts[4] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            close: parts[5] === '1',
-            propertyId2: parts[6] ? Decode.decodePropertyId(parts[6]) : null,
-            amountDelivered: parts[7] ? new BigNumber(parts[7], 36).div(1e8).toNumber() : null,
+            txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
+            txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
+            markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
+
+            // Boolean flag for closing trade
+            close: parts[3] === '1'
         };
-    },
+    };
 
     // Decode Mint Synthetic Transaction
     decodeMintSynthetic: (payload) => {
