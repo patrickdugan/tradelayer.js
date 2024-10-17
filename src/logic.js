@@ -22,6 +22,7 @@ const MarginMap = require('./marginMap.js'); // Manages Margin Mapping
 const PropertyManager = require('./property.js'); // Manages properties
 const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
 const ClearList = require('./clearlist.js')
+const Scaling = require('./scaling.js')
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -115,7 +116,7 @@ const Logic = {
                 await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.pay, params.payRefAddress, params.block);
                 break;
             case 23:
-                await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block);
+                await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block,params.txid);
                 break;
             case 24:
                 await Logic.mintSynthetic(params.senderAddress, params.propertyId, params.contractId, params.amount, params.block, params.grossRequired, params.contracts, params.margin);
@@ -878,6 +879,7 @@ const Logic = {
         fromChannel[fromColumn][propertyId] -= amount;
          // Assign the commit address based on pay status
         if (pay && payRefAddress) {
+
                 // If pay is true and payRefAddress is provided, set it as the commit address
                 toChannel.participants[channelColumn] = payRefAddress;
                 console.log(`Setting commit address in toChannel ${channelColumn} as payRefAddress: ${payRefAddress}`);
@@ -898,55 +900,45 @@ const Logic = {
         return
     },
 
-	settleChannelPNL(channelAddress, txParams,block) {
-		    const {
-		        txidNeutralized,
-		        contractId,
-		        amountCancelled,
-		        propertyId,
-		        amountSettled,
-		        close,
-		        propertyId2,
-		        amountDelivered,
-		    } = txParams;
+	async settleChannelPNL(channelAddress, txParams, block,txid) {
+        const {
+            txidNeutralized1,
+            txidNeutralized2,
+            markPrice,
+            close
+        } = txParams;
 
-		    // Locate the trade channel
-		    const channel = this.channelsRegistry.get(channelAddress);
-		    if (!channel) {
-		        throw new Error('Trade channel not found');
-		    }
+        const blocked = await Scaling.isThisSettlementAlreadyNuetralized(txid)
+        if(txidNeutralized2){
+            await Scaling.nuetralizedSettlement(txidNeutralized2)
+        }
 
-		    // Neutralize specified contracts
-		    if (txidNeutralized) {
-		        // Logic to mark specified contracts as neutralized
-		        // This could involve updating the channel's contract states
-		    }
+        const trade = await Scaling.isTradePublished(txidNeutralized1)
+        let offset
+        if(trade.status=="unpublished"){
+            await Scaling.settlementLimbo(txid) //Must check settlement limbo for references in logic of channel trades
+        }else if(trade.status=="expiredContract"){
+            await Logic.typeSwitch(19,trade.params)
+        }else if(trade.status=="expiredToken"){
+            await Logic.typeSwitch(20,trade.params)
+        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
+            offset = Scaling.generateOffset(trade.params,markPrice)
+            await Logic.typeSwitch(19,offset.params)
+        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
+            offset = Scaling.generateOffset(trade.params,markPrice)
+            await Logic.typeSwitch(20,offset.params)
+        }else if(trade.status=="live"&&!close){
+            const last = await Scaling.queryPriorSettlements(txidNuetralized1, txidNeutralized2, channelAddress)
+            const settlement = await Scaling.settlePNL(last,mark,txidNuetralized1)
+        }
 
-		    // Process PNL settlement
-		    if (amountSettled && propertyId) {
-		        // Adjust balances for PNL settlement
-		        // You may need to fetch the current balances and then update them
-		        this.adjustChannelBalances(channelAddress, propertyId, amountSettled);
-		    }
+        // Step 1: Locate the trade channel
+        const channel = this.channelsRegistry.get(channelAddress);
+      
 
-		    // Close contracts if requested
-		    if (close && contractId) {
-		        // Logic to close the specified contract
-		        // This might involve updating the contract state and potentially transferring tokens
-		        this.closeContract(channelAddress, contractId);
-		    }
-
-		    // Handle exercise of options if specified
-		    if (propertyId2 && amountDelivered) {
-		        // Deliver the specified amount of propertyId2 in exercise of options
-		        this.handleOptionExercise(channelAddress, propertyId2, amountDelivered);
-		    }
-
-		    // Save the updated state of the channel
-		    this.channelsRegistry.set(channelAddress, channel);
-
-		    console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
-		},
+        console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
+        return
+    },
 
 		exerciseDerivative(sender, txParams,block) {
 		    const { contractId, amount } = txParams;
