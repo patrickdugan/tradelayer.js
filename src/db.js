@@ -3,6 +3,7 @@ const path = require('path');
 const util = require('util');
 const ClientWrapper = require('./client')
 
+
 class Database {
     constructor() {
         this.databases = {};
@@ -37,7 +38,7 @@ class Database {
             'attestations', 'clearing', 'consensus', 'persistence', 'volumeIndex',
             'channels', 'withdrawQueue', 'activations', 'insurance', 'orderBooks',
             'feeCache', 'tradeHistory', 'fundingEvents', 'vaults', 'syntheticTokens',
-            'liquidations'
+            'liquidations', 'scaling'
         ];
 
         categories.forEach(category => {

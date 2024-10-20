@@ -108,17 +108,19 @@ const Types = {
                 payload += Encode.encodePayToTokens(params);
                 break;
             case 31:
-                payload += Encode.encodePublishNewTx(params);
+                payload += Encode.encodeBatchSettlement(params)
                 break;
             case 32:
-                payload += Encode.encodeMintColoredCoin(params);
+                payload += Encode.encodeBatchMoveZkRollup(params)
                 break;
             case 33:
-                payload += Encode.encodeRegisterOPCTVCovenant(params);
+                payload += Encode.encodeMintColoredCoin(params);
                 break;
             case 34:
-                payload += Encode.zkSwap(params);
+                payload += Encode.encodeCrossLayerBridge(params)
                 break;
+            case 35:
+                payload += Encode.encodeBindSmartContract(params)
       default:
         throw new Error('Unknown transaction type');
     }
@@ -398,18 +400,18 @@ const Types = {
                 params = await Validity.validateIssueInvoice(sender, params, txId)
                 break;    
             case 31:
+                params = Decode.decodeBatchSettlement(encodedPayload.substr(index));
+                params.block=block
+                params.senderAddress= sender
+                params.txid=txId
+                //params = await Validity.validatePublishNewTx(sender, params, block)
+                break;
+            case 32:
                 params = Decode.decodeBatchMoveZkRollup(encodedPayload.substr(index));
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
                 //params = await Validity.validateBatchMoveZkRollup(sender, params, block)
-                break;
-            case 32:
-                params = Decode.decodePublishNewTx(encodedPayload.substr(index));
-                params.block=block
-                params.senderAddress= sender
-                params.txid=txId
-                //params = await Validity.validatePublishNewTx(sender, params, block)
                 break;
             case 33:
                 params = Decode.decodeColoredCoin(encodedPayload.substr(index));

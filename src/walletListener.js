@@ -235,9 +235,12 @@ app.post('/tl_listClearlists', async (req, res) => {
 app.post('/tl_showClearlist', async (req, res) => {
     try {
         console.log('Express calling clearlist');
-        {id}= req.body
+        
+        // Corrected the destructuring syntax
+        const { id } = req.body;
+        
         const clearLists = await Clearlist.getList(id);
-        res.json(propertiesArray);
+        res.json(clearLists);
     } catch (error) {
         console.error('Error fetching property list:', error);
         res.status(500).send('Error: ' + error.message);

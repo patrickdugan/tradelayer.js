@@ -456,6 +456,7 @@ const Encode = {
         return payload.join(',');
     },
 
+    encodeBatchSettlement: (params)=> {},
     // Encode Batch Move Zk Rollup Transaction
     encodeBatchMoveZkRollup: (params) => {
         // Assuming params.payments is an array of payment objects
@@ -479,10 +480,6 @@ const Encode = {
         return payload.join('|');
     },
 
-    // Encode Publish New Transaction Type
-    encodePublishNewTx: (params) => {
-        return params.ordinalRevealJSON; // Assuming this is a JSON string
-    },
 
     // Encode Create Derivative of LRC20 or RGB
     encodeColoredCoin: (params) => {
@@ -494,17 +491,6 @@ const Encode = {
         return payload.join(',');
     },
 
-    // Encode Register OP_CTV Covenant
-    encodeRegisterOPCTVCovenant: (params) => {
-        const payload = [
-            params.redeem,
-            params.txid,
-            params.associatedPropertyId1 ? params.associatedPropertyId1.toString(36) : '0',
-            params.associatedPropertyId2 ? params.associatedPropertyId2.toString(36) : '0',
-            params.covenantType.toString(36),
-        ];
-        return payload.join(',');
-    },
 
     // Encode cross TL chain bridging tx
     encodeCrossLayerBridge: (params) => {
@@ -514,7 +500,11 @@ const Encode = {
             params.destinationAddr
         ];
         return payload.join(',');
-    }
+    }, 
+
+    encodeBindSmartContract:(params)=> {
+
+    } 
 
 }
 

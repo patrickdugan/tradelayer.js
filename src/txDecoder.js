@@ -412,7 +412,7 @@ const Decode = {
             // Boolean flag for closing trade
             close: parts[3] === '1'
         };
-    };
+    },
 
     // Decode Mint Synthetic Transaction
     decodeMintSynthetic: (payload) => {

@@ -140,10 +140,10 @@ const Logic = {
                 await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce, params.block);
                 break;
             case 31:
-                await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);
+                Logic.batchSettlement(params);
                 break;
             case 32:
-                Logic.publishNewTx(params.ordinalRevealJSON, params.jsCode);
+                await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);
                 break;
             case 33:
                 Logic.coloredCoin(params);
@@ -152,7 +152,7 @@ const Logic = {
                 Logic.crossLayerBridge(params);
                 break;
             case 35:
-                Logic.OP_CTVCovenant(params);
+                Logic.smartContractBind(params);
                 break;
             default:
                 console.log(`Unhandled transaction type: ${txNumber}`);
@@ -908,9 +908,8 @@ const Logic = {
             close
         } = txParams;
 
-        const blocked = await Scaling.isThisSettlementAlreadyNuetralized(txid)
         if(txidNeutralized2){
-            await Scaling.nuetralizedSettlement(txidNeutralized2)
+            const settlement = await Scaling.nuetralizeSettlement(channel,txidNeutralized2)
         }
 
         const trade = await Scaling.isTradePublished(txidNeutralized1)
@@ -931,11 +930,7 @@ const Logic = {
             const last = await Scaling.queryPriorSettlements(txidNuetralized1, txidNeutralized2, channelAddress)
             const settlement = await Scaling.settlePNL(last,mark,txidNuetralized1)
         }
-
-        // Step 1: Locate the trade channel
-        const channel = this.channelsRegistry.get(channelAddress);
       
-
         console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
         return
     },
@@ -1396,6 +1391,10 @@ const Logic = {
 		    );
 	},
 
+    batchSettlement(sender, params, txid, block){
+
+    },
+
     publishNewTx(ordinalRevealJSON, jsCode) {
     // Validate the input JSON and JavaScript code
     if (!isValidJSON(ordinalRevealJSON)) {
@@ -1428,11 +1427,7 @@ const Logic = {
         return { newTxTypeId, newTx };
     },
 
-    createDerivativeOfLRC20OrRGB(/* parameters */) { /* ... */ },
-
-    registerOP_CTVCovenant(/* parameters */) { /* ... */ },
-
-    redeemOP_CTVCovenant(/* parameters */) { /* ... */ },
+    bindSmartContract(){},
 
     mintColoredCoin(/* parameters */) { /* ... */ }
 };

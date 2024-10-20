@@ -13,6 +13,7 @@ const MarginMap = require('./marginMap.js')
 const ClearList = require('./clearlist.js')
 const VolumeIndex = require('./VolumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
+const Scaling = require('./scaling.js')
 //const whiteLists = require('./whitelists.js')
 
 const Validity = {
@@ -1858,6 +1859,11 @@ const Validity = {
                 params.reason += 'Cannot settle PNL; terms not met; ';
             }
 
+            const isNuetralized = await Scaling.isThisSettlementAlreadyNuetralized(sender, txid)
+            if(isNuetralized){
+                params.valid = false
+                params.reason += "Settlement already invalidated by later settlement that updates it. "
+            }
             return params;
         },
 
@@ -2060,7 +2066,12 @@ const Validity = {
         return hasSufficientBalance.hasSufficient && isValidInvoiceTerms;
     },
 
-    // 31: Batch Move Zk Rollup
+    //31: BatchSettlement
+    validateBatchSettlement: (sender, params, txid, block) =>{
+
+    },
+
+    // 32: Batch Move Zk Rollup
     validateBatchMoveZkRollup: (params, zkVerifier, tallyMap) => {
         // Verify the zk proof with the zkVerifier
         const isZkProofValid = zkVerifier.verifyProof(params.zkProof);
