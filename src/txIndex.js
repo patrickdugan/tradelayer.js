@@ -18,7 +18,10 @@ class TxIndex {
     }
 
     static async init() {
-        this.client = await ClientWrapper.getInstance();
+        this.client = await ClientWrapper.getInstance(true);
+        if(!db.initialized){
+         await db.init(Client.chain, true);
+        }
         // Use this.this.client for this.client-related actions within TxIndex methods
     }
 
@@ -243,7 +246,7 @@ class TxIndex {
         const Types = require('./Types.js'); // Lazy load Types
         // Process the transaction...
         const sender = await TxUtils.getSender(txId);
-        const reference = await TxUtils.getReference(txId);
+        const reference = await TxUtils.getTransactionOutputs(txId);
         const decodedParams = Types.decodePayload(txId, marker, payload);
         return { sender, reference, payload, decodedParams, marker, txId};
     }
@@ -369,8 +372,6 @@ class TxIndex {
         });
     }
 
-
-
     static async resetIndexFlag() {
         await txIndexDB.del('indexExists');
         await txIndexDB.del('genesisBlock');
@@ -414,7 +415,7 @@ class TxIndex {
             }
         } catch (error) {
             console.error(`Error retrieving transaction data for ${txId}:`, error);
-            throw error;
+            reject(error);
         }
     }
 
@@ -432,7 +433,7 @@ class TxIndex {
             }
         } catch (error) {
             console.error('Error checking for index:', error);
-            throw error;
+            reject(error);
         }
     }
 

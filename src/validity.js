@@ -212,7 +212,7 @@ const Validity = {
         validateTradeTokenForUTXO: async (sender, params, txid,outputs) => {
             params.reason = '';
             params.valid = true;
-            console.log('inside validate UTXO  outputs'+JSON.stringify(outputs))
+            console.log('inside validate UTXO outputs '+JSON.stringify(outputs))
             const isAlreadyActivated = await activationInstance.isTxTypeActive(3);
             if (!isAlreadyActivated) {
                 params.valid = false;
@@ -253,42 +253,34 @@ const Validity = {
                 params.reason += 'Invalid sats expected; ';
             }
 
-            if (outputs == 0) {
+            if (outputs.length == 0) {
                 params.valid = false
                 params.reason += 'No outputs; ';
                 return
             }
 
             // Validate the payToAddress corresponds to the correct vOut
-            const vOut = outputs[params.payToAddress];
-            if (!vOut) {
-                params.valid = false;
-                params.reason += 'Invalid payToAddress, vOut not found; ';
-            } else {
-                const ltcReceived = parseFloat(vOut.value);
-                const satsExpectedFloat = BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
-                params.price = BigNumber(satsExpectedFloat).dividedBy(params.amount).decimalPlaces(8).toNumber()
-                if (ltcReceived < satsExpectedFloat) { // convert satsExpected to LTC
+                const satsExpectedFloat = new BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
+                params.price = new BigNumber(satsExpectedFloat).dividedBy(params.amount).decimalPlaces(8).toNumber()
+                if (params.satsDelivered < satsExpectedFloat) { // convert satsExpected to LTC
                     params.valid = true;
-                    params.reason += `Received LTC (${ltcReceived}) is less than expected; `;
-                    params.paymentPercent = BigNumber(ltcReceived).dividedBy(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
+                    params.reason += `Received LTC (${params.satsDelivered}) is less than expected; `;
+                    params.paymentPercent = new BigNumber(params.satsDelivered).dividedBy(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
                 }else{
-                    params.paymentPercent=BigNumber(ltcReceived).times(100000000)
+                    params.paymentPercent=100
                 }
-                params.satsReceived = BigNumber(ltcReceived).times(100000000).toNumber()
-                params.satsPaymentAddress = vOut.scriptPubKey.addresses[0];
-            }
-            const tokenOutput = outputs[params.tokenOutput]
-            params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
-
+         
             if (!Number.isInteger(params.tokenOutput)) {
                 params.valid = true;
-                params.reason += 'tokenOutput not an integer, defaulting to 3; ';
-                params.tokenOutput = 3;
-                params.tokenDeliveryAddress = outputs[params.tokenOutput].scriptPubKey.addresses[0];
+                params.reason += 'tokenOutput not an integer';
+                if(params.payToAddress == 0){params.tokenOutput = 1
+                }else if(reference.length<3){params.tokenOutput=0
+                }else{params.tokenOutput=3}
+
+                params.tokenDeliveryAddress = reference.find(ref => ref.vout === params.tokenOutput);
             }
 
-          let channel = await Channels.getChannel(sender);
+            let channel = await Channels.getChannel(sender);
 
             // Check if the channel is null or undefined
             if (!channel || channel === null) {
@@ -298,16 +290,18 @@ const Validity = {
                 return params;
             }
 
+            let column = params.columnA
+
             // Check if the necessary propertyId exists in channel["A"] or channel["B"]
             if (
-                (columnA === true && (!channel["A"] || !channel["A"][propertyId])) ||
-                (columnA === false && (!channel["B"] || !channel["B"][propertyId]))
+                (column === true && (!channel["A"] || !channel["A"][params.propertyId])) ||
+                (column === false && (!channel["B"] || !channel["B"][params.propertyId]))
             ) {
                 console.log(
                     'Inside missing channel property trigger in validate UTXO',
-                    columnA,
-                    channel["A"] ? channel["A"][propertyId] : 'undefined',
-                    channel["B"] ? channel["B"][propertyId] : 'undefined'
+                    column,
+                    channel["A"] ? channel["A"][params.propertyId] : 'undefined',
+                    channel["B"] ? channel["B"][params.propertyId] : 'undefined'
                 );
                 params.valid = false;
                 params.reason = 'No balance on the indicated channel and column';

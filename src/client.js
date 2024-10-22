@@ -12,28 +12,59 @@ class ClientWrapper {
     }
     this.chain = null;
     this.client = null;
-    clientInstance = this;
+    this.initializing = false
+    clientInstance = this;  // Assign the instance to the singleton variable
   }
 
    async init() {
-    this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 10000 };
-    console.log(this.config)
-    this.client = new Litecoin.Client(this.config);
-    const blockchainInfo = await this.getBlockchainInfo();
-    const isTest = blockchainInfo.chain === 'test';
-    console.log('is test '+isTest)
-    const networkInfo = await this.getNetworkInfo();
-    this.chain = this.determineChainFromSubversion(networkInfo.subversion);
 
-    if (!this.chain) throw new Error('Unable to determine blockchain chain.');
+     // If already initializing, wait for the process to finish
+    if (this.isInitializing) {
+      console.log('Client initialization already in progress. Waiting...');
+      return this.waitForInitialization();  // Wait for ongoing initialization to complete
+    }
 
-    this.config.port = isTest 
-      ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 18332)
-      : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 9332);
+    this.isInitializing = true; // Set flag to indicate initialization is in progress
 
-    this.client = this._createClientByChain(this.chain);
-    return this.chain
+    if(!this.client){
+      this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 10000 };
+      console.log(this.config)
+      this.client = new Litecoin.Client(this.config);
+
+      // Wait for the blockchain to finish initial block download and indexing
+      let isTest = true
+       try {
+          const blockchainInfo = await this.getBlockchainInfo();
+           isTest = blockchainInfo.chain === 'test';
+           console.log('is test '+isTest)
+        }catch (error) {
+            if (error.code === -28) {
+              console.log('Getting the err on the second call.');
+            }
+        }
+
+      const networkInfo = await this.getNetworkInfo();
+      this.chain = this.determineChainFromSubversion(networkInfo.subversion);
+
+      if (!this.chain) throw new Error('Unable to determine blockchain chain.');
+
+      this.config.port = isTest 
+        ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 18332)
+        : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 9332);
+
+      this.client = this._createClientByChain(this.chain);
+      }
+      return this.chain
   }
+
+   async waitForInitialization() {
+    while (this.isInitializing) {
+      await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms between checks
+    }
+    return this.chain;  // Return the chain after initialization completes
+  }
+
+
 
   _createClientByChain(chain) {
     switch (chain) {
@@ -44,10 +75,12 @@ class ClientWrapper {
       default:
         return new Litecoin.Client(this.config);
     }
-  }a
+  }
 
-   static async getInstance() {
+   static async getInstance(txIndex) {
     if (!clientInstance) {
+      if(txIndex){console.log('initializing client by way of txIndex')}
+        if(this.isInitializing){await this.waitForInitialization()}
       const clientWrapper = new ClientWrapper();
       await clientWrapper.init();
     }
@@ -124,9 +157,6 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'loadwallet'))(...params);
   }
 
-  listUnspent(...params) {
-    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))(...params);
-  }
 
   // Add this method to the ClientWrapper class
   async verifyClientChain() {

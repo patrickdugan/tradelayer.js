@@ -22,18 +22,48 @@ const port = 3000; // Choose a port that suits your setup
 
 app.use(express.json()); // Middleware to parse JSON bodies
 
-// Initialize Main
+// Function to check if the ClientWrapper is ready (with retries)
+async function waitForClientWrapper(maxRetries = 10, interval = 500) {
+    let retries = 0;
+    while (retries < maxRetries) {
+        try {
+            const client = await ClientWrapper.getInstance();  // Check if client is ready
+            if (client) {
+                console.log('Client is ready.');
+                return client;
+            }
+        } catch (error) {
+            console.log('ClientWrapper initialization not ready, retrying...');
+        }
+        retries++;
+        await new Promise(resolve => setTimeout(resolve, interval));  // Wait for interval before retrying
+    }
+    throw new Error('ClientWrapper failed to initialize after max retries.');
+}
+
+// Initialize Main once ClientWrapper is ready
 app.post('/tl_initmain', async (req, res) => {
     try {
-        console.log('Initializing');
-        const mainProcessor = await Main.getInstance(req.body.test);
-        mainProcessor.initialize();
-        res.status(200).send('Main process initialized successfully');
+        if (!isInitialized) {
+            console.log('Waiting for ClientWrapper initialization...');
+            const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
+            
+            console.log('Client and Database initialized successfully.');
+
+            // Initialize Main only after ClientWrapper is ready
+            const mainProcessor = await Main.getInstance(client, null, req.body.test);  // Pass client to Main
+            await mainProcessor.initialize();
+            
+            isInitialized = true;  // Mark as initialized
+            res.status(200).send('Main process initialized successfully');
+        } else {
+            res.status(200).send('Main process already initialized');
+        }
     } catch (error) {
+        console.error('Error during initialization:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
-
 // Validate address
 app.post('/tl_validateaddress', async (req, res) => {
     try {

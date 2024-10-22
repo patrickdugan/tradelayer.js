@@ -81,7 +81,7 @@ const Decode = {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amount: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             columnA: parts[2] === "1",
-            satsExpected: parseInt(parts[3] || '0', 36),
+            satsExpected: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             tokenOutput: parseInt(parts[4] || '0'),
             payToAddress: parseInt(parts[5] || '0')
         };

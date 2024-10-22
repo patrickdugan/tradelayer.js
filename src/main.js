@@ -17,6 +17,7 @@ let client
 let db
 (async () => {
     try {
+        console.log('initializing from the top')
         const { Client, Db } = await initialize();
         client = Client
         db = Db
@@ -73,6 +74,8 @@ const pause = false
 
 class Main {
     static instance;
+    static isInitializing = false;  // Add a flag to track initialization
+
 
     constructor(test) {
         console.log('inside main constructor '+Boolean(Main.instance))
@@ -82,6 +85,7 @@ class Main {
         }
 
         this.client=client// Use the already initialized clientInstance  // Initialize the client with the specified chain     
+ 
         console.log('client in main ' +this.client)
         //this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
@@ -93,12 +97,14 @@ class Main {
         Main.instance = this;
     }
 
-    static async getInstance(test) {
-        if (!Main.instance) {
-            console.log('getting main')
-            Main.instance = new Main(test);
+      static async getInstance() {
+        if (!Main.instance && !Main.isInitializing) {
+            Main.isInitializing = true;  // Set the flag to prevent multiple initializations
+            console.log('Initializing Main instance...');
+            Main.instance = new Main();
+            await Main.instance.initialize();
+            Main.isInitializing = false;  // Reset flag after initialization completes
         }
-        //this.client =client
         return Main.instance;
     }
 
@@ -107,6 +113,7 @@ class Main {
     }
 
     async initialize() {
+        await this.delay(300)
         const txIndex = await TxIndex.getInstance();
         try {
             await txIndex.initializeOrLoadDB(this.genesisBlock);
@@ -338,7 +345,7 @@ class Main {
                     console.log('type is '+type + ' height is '+blockHeight)
                     payload = payload.slice(1, payload.length).toString(36);
                     const senderAddress = valueData.sender.senderAddress;
-                    const referenceAddress = valueData.reference.address;
+                    const referenceAddress = valueData.reference;
                     const senderUTXO = valueData.sender.amount;
                     const referenceUTXO = valueData.reference.amount / COIN;
 

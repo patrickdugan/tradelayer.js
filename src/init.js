@@ -4,10 +4,8 @@ const Database = require('./db');
 
 async function waitForClientChain(client, timeout = 5000, interval = 150) {
     const startTime = Date.now();
-    while (!client.chain) {
-        if (Date.now() - startTime > timeout) {
-            throw new Error('Client chain initialization timed out.');
-        }
+    while (!client) {
+        
         await new Promise(resolve => setTimeout(resolve, interval));
     }
 }

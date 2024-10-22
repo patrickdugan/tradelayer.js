@@ -6,6 +6,7 @@ const Decode = require('./txDecoder'); // Update the path to your txDecoder.js f
 const Validity = require('./validity');
 const TxUtils = require('./txUtils')
 const TxIndex = require('./txIndex.js')
+const BigNumber = require('bignumber.js')
 
 const Types = {
   // Function to encode a payload based on the transaction ID and parameters
@@ -166,7 +167,6 @@ const Types = {
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 3:
-                try {
                     // This one is a bit different because we're also looking at TxUtil deconstruction of the UTXOs
                     // If we're working in API mode, we may need a flag to check, like if(params.API){outcall}else{TxUtils.decode}
                     console.log('inside case for type 3 '+encodedPayload)
@@ -175,33 +175,22 @@ const Types = {
                     params.senderAddress = sender;
                     params.txid = txId;
                     params.block=block
-                    let decode;
-                    try {
-                              const txHex = await TxIndex.fetchTransactionData(txId);
-                              decode = await TxIndex.DecodeRawTransaction(txHex);
-                        //console.log('Decoding UTXO trade: ' + JSON.stringify(decode));
-                    } catch (error) {
-                        console.log('error in decoding 3 on tx data '+error)
-                        if (error.code === -22) {
-                            //console.error('Error decoding raw transaction: ', error);
-                            decode = null; // Handle the error gracefully
-                        } else {
-                            throw error; // Rethrow if it's a different error
-                        }
-                    }
-                    //console.log(decode.decodedTx)
-                    if (decode) {
-                        params.satsPaymentAddress = decode.decodedTx.vout[params.payToAddress].scriptPubKey.addresses[0];
-                        params.satsDelivered = decode.decodedTx.vout[params.payToAddress].value;
-                        params.tokenDeliveryAddress = decode.decodedTx.vout[params.tokenOutput].scriptPubKey.addresses[0];
-                        //console.log(params.satsPaymentAddress,params.satsDelivered,params.tokenDeliveryAddress)
-                        params = await Validity.validateTradeTokenForUTXO(sender, params, txId, decode.decodedTx.vout);
-                    } else {
-                        console.log('Skipping UTXO trade processing due to decode failure.');
-                    }
-                } catch (error) {
-                    console.error('An error occurred while processing case 3:', error);
-                }
+                  // Find the payment address and delivery address from the reference data
+                    const paymentReference = reference.find(ref => ref.vout === params.payToAddress);
+                    const tokenDeliveryReference = reference.find(ref => ref.vout === params.tokenOutput);
+                    console.log('inside types for UTXO '+JSON.stringify(paymentReference)+' '+JSON.stringify(tokenDeliveryReference))
+                if (paymentReference && tokenDeliveryReference) {
+                    params.satsPaymentAddress = paymentReference.address;
+                    params.satsDelivered = new BigNumber(paymentReference.satoshis).dividedBy(1e8).toNumber();  // Convert satoshis to LTC or token equivalent
+                    params.tokenDeliveryAddress = tokenDeliveryReference.address;
+                    console.log('params '+params.satsPaymentAddress+ ' '+params.satsDelivered+' '+params.tokenDeliveryAddress)
+                    // Call the validate function with the updated params
+                    params = await Validity.validateTradeTokenForUTXO(sender, params, txId, reference);
+                } else {
+                    params.valid = false
+                    params.reason = "Missing outputs"
+                }           
+                      
                 break;
 
             case 4:

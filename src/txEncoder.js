@@ -68,11 +68,12 @@ const Encode = {
 
     encodeTradeTokenForUTXO: (params) => {
         const amount = new BigNumber(params.amountOffered).times(1e8).toNumber();
+        const sats = new BigNumber(params.satsExpected).times(1e8).toNumber();
             const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
             params.columnA,
-            params.satsExpected.toString(36),
+            params.sats.toString(36),
             params.tokenOutput,
             params.payToAddress
         ];
