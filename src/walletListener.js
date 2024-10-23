@@ -28,7 +28,7 @@ async function waitForClientWrapper(maxRetries = 10, interval = 500) {
     while (retries < maxRetries) {
         try {
             const client = await ClientWrapper.getInstance();  // Check if client is ready
-            if (client) {
+            if (client.chain) {
                 console.log('Client is ready.');
                 return client;
             }
@@ -41,9 +41,19 @@ async function waitForClientWrapper(maxRetries = 10, interval = 500) {
     throw new Error('ClientWrapper failed to initialize after max retries.');
 }
 
+let lastInitCall = Date.now();
+
 // Initialize Main once ClientWrapper is ready
 app.post('/tl_initmain', async (req, res) => {
     try {
+
+        const now = Date.now();
+        if (now - lastInitCall < 30000) {  // Only allow one call per second, adjust timing as needed
+            return res.status(429).send('Too many requests');  // Or simply ignore this call
+        }
+
+        lastInitCall = now;
+
         if (!isInitialized) {
             console.log('Waiting for ClientWrapper initialization...');
             const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
@@ -51,8 +61,8 @@ app.post('/tl_initmain', async (req, res) => {
             console.log('Client and Database initialized successfully.');
 
             // Initialize Main only after ClientWrapper is ready
-            const mainProcessor = await Main.getInstance(client, null, req.body.test);  // Pass client to Main
-            await mainProcessor.initialize();
+            const mainProcessor = await Main.getInstance(client);  // Pass client to Main
+            mainProcessor.initialize();
             
             isInitialized = true;  // Mark as initialized
             res.status(200).send('Main process initialized successfully');

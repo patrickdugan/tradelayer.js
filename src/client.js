@@ -27,7 +27,7 @@ class ClientWrapper {
     this.isInitializing = true; // Set flag to indicate initialization is in progress
 
     if(!this.client){
-      this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 10000 };
+      this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 30000 };
       console.log(this.config)
       this.client = new Litecoin.Client(this.config);
 
@@ -59,6 +59,7 @@ class ClientWrapper {
 
    async waitForInitialization() {
     while (this.isInitializing) {
+      console.log('waiting for initialization')
       await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms between checks
     }
     return this.chain;  // Return the chain after initialization completes
@@ -87,8 +88,8 @@ class ClientWrapper {
     return clientInstance;
   }
 
-  determineChainFromSubversion(subversion) {
-    console.log(subversion )
+  determineChainFromSubversion(subversion, flag) {
+    console.log('chain subversion '+subversion+' '+flag )
     subversion = subversion.toLowerCase();
     if (subversion.includes('litecoin')) return 'LTC';
     if (subversion.includes('bitcoin')) return 'BTC';
@@ -185,7 +186,7 @@ class ClientWrapper {
 
   async getChain() {
     const bleh= await this.getNetworkInfo(); // Double-check chain type  
-    return this.determineChainFromSubversion(bleh.subversion);
+    return this.determineChainFromSubversion(bleh.subversion, true);
   }
 
   async getTest(){

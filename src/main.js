@@ -77,7 +77,7 @@ class Main {
     static isInitializing = false;  // Add a flag to track initialization
 
 
-    constructor(test) {
+    constructor() {
         console.log('inside main constructor '+Boolean(Main.instance))
         if (Main.instance) {
             console.log('main already initialized')
@@ -113,13 +113,26 @@ class Main {
     }
 
     async initialize() {
-        await this.delay(300)
+          await this.delay(500)
+        console.log('db status '+db.initialized)
+        if(!db.initialized&&this.client.chain){
+            console.log('have client, awaiting db')
+            await db.init(this.client.chain)
+            await this.delay(300)
+            console.log('db status recheck '+db.initialized)
+        }else if(!db.initialized&&!this.client.chain){
+            console.log('no client no db, trying init again')
+            const { Client, Db } = await initialize();   
+               await this.delay(300)
+            console.log('db+client status recheck '+db.initialized+this.client.chain)
+        } 
         const txIndex = await TxIndex.getInstance();
+
         try {
             await txIndex.initializeOrLoadDB(this.genesisBlock);
             // Proceed with further operations after successful initialization
         } catch (error) {
-            console.log('boop')
+            console.log('boop '+error)
         }
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();

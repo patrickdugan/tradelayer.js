@@ -19,9 +19,7 @@ class TxIndex {
 
     static async init() {
         this.client = await ClientWrapper.getInstance(true);
-        if(!db.initialized){
-         await db.init(Client.chain, true);
-        }
+        //await db.init(this.client.chain)
         // Use this.this.client for this.client-related actions within TxIndex methods
     }
 
@@ -433,7 +431,6 @@ class TxIndex {
             }
         } catch (error) {
             console.error('Error checking for index:', error);
-            reject(error);
         }
     }
 
