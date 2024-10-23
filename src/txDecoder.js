@@ -1,14 +1,16 @@
 // txDecoder.js
 const BigNumber = require('bignumber.js');
+const base94 = require('./base94.js')
+const base256 = require('./base256.js')
 
 const Decode = {
    // Decode Activate TradeLayer Transaction
     decodeActivateTradeLayer(payload) {
         const parts = payload.split(',');
+        const decodedHash = parts[1] ? base94.base94ToHex(parts[1]) : '';
         return {
             txTypeToActivate: parts[0],
-            codeHash: parts[1] || '',
-            wasmHash: parts[2] || ''
+            codeHash: decodedHash
         };
     },
 

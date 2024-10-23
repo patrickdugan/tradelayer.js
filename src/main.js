@@ -102,7 +102,7 @@ class Main {
             Main.isInitializing = true;  // Set the flag to prevent multiple initializations
             console.log('Initializing Main instance...');
             Main.instance = new Main();
-            await Main.instance.initialize();
+            //await Main.instance.initialize();
             Main.isInitializing = false;  // Reset flag after initialization completes
         }
         return Main.instance;

@@ -8,10 +8,10 @@ const Encode = {
     // Encode Simple Token Issue Transaction
       encodeActivateTradeLayer(params) {
         // Assuming params has the codeHash and other fields
+        const base94Encoded = Base94Converter.decimalToBase94(params.codeHash)
         const payload =  {
             txTypeToActivate: params.txTypeToActivate,
-            codeHash: params.codeHash,
-            wasmHash: params.wasmHash
+            codeHash: base94Encoded
         };
         return payload.join(',')
     },

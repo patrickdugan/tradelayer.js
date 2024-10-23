@@ -371,40 +371,138 @@ class ConsensusDatabase {
 
 	  // Consensus handshake function: compares local and incoming hashes
 	static async consensusHandshake(incomingHashes) {
-	    await this.generateHashes(); // Generate both JS and WASM hashes
+        await this.generateHashes(); // Generate both JS and WASM hashes
+        await this.populateConsensusVectorFromActivations();
+        const localHashes = {
+            txIndexHash: this.txIndexHash,
+            consensusStateHash: this.consensusStateHash,
+            codeHash: this.codeHash || '',  // JavaScript hash
+            wasmCodeHash: this.wasmCodeHash || ''  // WASM/Rust hash
+        };
 
-	    const localHashes = {
-	        txIndexHash: this.txIndexHash,
-	        consensusStateHash: this.consensusStateHash,
-	        codeHash: this.codeHash || '',  // JavaScript hash
-	        wasmCodeHash: this.wasmCodeHash || ''  // WASM/Rust hash
-	    };
+        console.log('Local Hashes:', localHashes);
+        console.log('Incoming Hashes:', incomingHashes);
 
-	    console.log('Local Hashes:', localHashes);
-	    console.log('Incoming Hashes:', incomingHashes);
+        const txIndexMatch = localHashes.txIndexHash === incomingHashes.txIndexHash;
+        const consensusStateMatch = localHashes.consensusStateHash === incomingHashes.consensusStateHash;
+        const codeHashMatch = localHashes.codeHash === incomingHashes.codeHash;
+        const wasmCodeHashMatch = localHashes.wasmCodeHash === incomingHashes.wasmCodeHash;
 
-	    const match = (
-	        localHashes.txIndexHash === incomingHashes.txIndexHash &&
-	        localHashes.consensusStateHash === incomingHashes.consensusStateHash &&
-	        localHashes.codeHash === incomingHashes.codeHash &&
-	        localHashes.wasmCodeHash === incomingHashes.wasmCodeHash
-	    );
+        if (!txIndexMatch) {
+            console.warn('Transaction index hash does not match!');
+        }
+        if (!consensusStateMatch) {
+            console.warn('Consensus state hash does not match!');
+        }
+        if (!codeHashMatch) {
+            console.warn('Code hash does not match!');
+        }
+        if (!wasmCodeHashMatch) {
+            console.warn('WASM code hash does not match!');
+        }
 
-	    return match;
-	}
+        const match = txIndexMatch && consensusStateMatch && codeHashMatch && wasmCodeHashMatch;
+
+        return match;
+    }
 
 
+    async investigateDiscrepancy(incomingHashes) {
+        try {
+            // Load the latest activations list
+            const activations = await this.loadActivationsList();
+
+            // Loop through the activations to compare with incoming codeHash
+            for (const [key, activation] of Object.entries(activations)) {
+                if (activation.codeHash === incomingHashes.codeHash) {
+                    // If a match is found, check if the consensus hash also matches
+                    if (activation.consensusHash === incomingHashes.consensusHash) {
+                        return { status: 'match', message: 'Code and consensus hash match the existing version.' };
+                    } else {
+                        return { status: 'partial-match', message: 'Code hash matches but consensus hash differs.' };
+                    }
+                }
+            }
+
+            // If no matches are found
+            return { status: 'unknown', message: 'No matching code hash found in the activations list.' };
+
+        } catch (error) {
+            console.error('Error investigating discrepancy:', error);
+            return { status: 'error', message: 'Error investigating discrepancy.' };
+        }
+    }
+
+   // Function to call the handshake and handle discrepancies
     // Function to call the handshake and handle discrepancies
-    static async verifyConsensus(incomingHashes) {
-        const isHandshakeSuccessful = await this.consensusHandshake(incomingHashes);
+    // Function to call the handshake and handle discrepancies
+        static async verifyConsensus(incomingHashes) {
+            const isHandshakeSuccessful = await this.consensusHandshake(incomingHashes);
 
-        if (isHandshakeSuccessful) {
-            console.log("Handshake successful, consensus verified.");
-            return true;
-        } else {
-            console.log("Handshake failed, investigating discrepancies...");
-            await this.investigateDiscrepancy(incomingHashes);
-            return false;
+
+            if (isHandshakeSuccessful) {
+                console.log("Handshake successful, consensus verified.");
+                return true;
+            } else {
+                console.log("Handshake failed, investigating discrepancies...");
+                const status = await this.investigateDiscrepancy(incomingHashes);
+
+                if (status.status === 'unknown') {
+                    // No match found for the codeHash - claim is suspicious
+                    console.log("No matching codeHash found. This could be BS or a false claim.");
+                    return false;  // Call BS here and return false
+                } else if (status.status === 'partial-match') {
+                    // CodeHash matches, but consensusHash differs
+                    console.log("CodeHash matches but consensusHash differs. Attempting to reconstruct consensus...");
+
+                    // Call a function to reconstruct consensus based on the incoming codeHash
+                    const reconstructedConsensus = await this.reconstructConsensus(incomingHashes.codeHash);
+
+                    // Compare the reconstructed consensus with the incoming consensusHash
+                    if (reconstructedConsensus === incomingHashes.consensusHash) {
+                        console.log("Consensus reconstructed successfully, matches the incoming hash.");
+                        return true;
+                    } else {
+                        console.log("Reconstructed consensus does not match the incoming hash. Consensus mismatch.");
+                        return false;  // Return false if consensus reconstruction fails
+                    }
+                } else if (status.status === 'match') {
+                    // Everything matches, but somehow the handshake failed earlier, let's proceed anyway
+                    console.log("Code and consensus hash match, but handshake failed earlier. Proceeding...");
+                    return true;
+                }
+
+                return false; // Default to false if nothing else matches
+            }
+        }
+
+
+    // Function to reconstruct consensus based on codeHash
+    static async reconstructConsensus(codeHash) {
+        try {
+            // Load the activations list to ensure we have the latest consensus state
+            const activations = await this.loadActivationsList();
+
+            // Find the matching activation by codeHash
+            for (const [key, activation] of Object.entries(activations)) {
+                if (activation.codeHash === codeHash) {
+                    console.log('Found matching activation for reconstruction:', activation);
+
+                    // Regenerate the consensus state based on the activation we found
+                    const reconstructedConsensus = await this.stateConsensusHash();
+
+                    // Log and return the reconstructed consensus hash
+                    console.log('Reconstructed consensus hash:', reconstructedConsensus);
+                    return reconstructedConsensus;
+                }
+            }
+
+            // If no matching activation is found, return null
+            return null;
+
+        } catch (error) {
+            console.error('Error during consensus reconstruction:', error);
+            return null;  // Return null in case of an error
         }
     }
 
@@ -440,6 +538,31 @@ class ConsensusDatabase {
         await this.saveFlaggedIPsToDb();
 	}
 
+    // Function to populate consensus vector using the activations blob
+    static async populateConsensusVectorFromActivations() {
+        try {
+            const activations = await this.loadActivationsList();
+
+            for (const [key, activation] of Object.entries(activations)) {
+                if (activation.active) {
+                    const newEntry = {
+                        codeHash: activation.codeHash || '',  // The code hash for this activation
+                        activationBlock: activation.activationBlock || -1,  // The block it was activated
+                        consensusHash: activation.consensusHash || null  // Optional, if available
+                    };
+
+                    this.consensusVector.push(newEntry);
+                }
+            }
+
+            console.log('Consensus vector populated from activations:', this.consensusVector);
+            return this.consensusVector;
+
+        } catch (err) {
+            console.error('Error populating consensus vector from activations:', err);
+            return null;
+        }
+    }
 
     // Save the flagged IPs list to the database
     static async saveFlaggedIPsToDb() {

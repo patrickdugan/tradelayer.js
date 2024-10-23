@@ -1,5 +1,6 @@
 const crypto = require('crypto');
-const db = require('./db.js'); // Assuming db.js is correctly set up
+const db = require('../src/db.js'); // Assuming db.js is correctly set up
+const client = require('../src/client.js').getInstance()
 
 class ConsensusDatabase {
     // Function to generate SHA-256 hash
@@ -11,13 +12,15 @@ class ConsensusDatabase {
 
     // Function to get the latest instance of a DB
     static async getLatestInstance(dbName) {
-        const data = await db.getDatabase(dbName).findAsync({});
+        const base = await db.getDatabase(dbName)
+        const data = await base.findAsync({});
         return data.length > 0 ? data[data.length - 1] : null; // Get the latest entry
     }
 
     // Function to get all instances from a DB
     static async getAllInstances(dbName) {
-        const data = await db.getDatabase(dbName).findAsync({});
+        const base = await db.getDatabase(dbName)
+        const data = await base.findAsync({});
         return data; // Return all entries
     }
 
@@ -80,6 +83,8 @@ class ConsensusDatabase {
 
 // Test the stateConsensusHash function
 (async () => {
+    
+    await db.init('ltc')
     console.log('Generating stateConsensusHash...');
     const stateHash = await ConsensusDatabase.stateConsensusHash();
     console.log('Generated stateConsensusHash:', stateHash);

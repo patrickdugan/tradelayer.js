@@ -67,19 +67,16 @@ class Activation {
 
 
    // New Method to load activations list
-    async loadActivationsList() {
+      async loadActivationsList() {
         try {
             const activationsDB = await db.getDatabase('activations');
             const entries = await activationsDB.findAsync({});
-            //console.log('loaded activations '+JSON.stringify(entries))
+
             if (entries.length === 0) {
-                // If no entries found, initialize the txRegistry with default values
                 console.log('No activations list found, initializing with default values.');
                 this.txRegistry = this.initializeTxRegistry();
-                //console.log(this.txRegistry)
                 await this.saveActivationsList(); // Save the newly created default activations list
             } else {
-                // If entries are found, parse the activations list
                 let data = {};
                 entries.forEach(entry => {
                     data[entry._id] = entry.value;
@@ -87,22 +84,27 @@ class Activation {
 
                 if (data['activationsList']) {
                     this.txRegistry = JSON.parse(data['activationsList']);
-                    //console.log('Activations list loaded successfully.' + JSON.stringify(this.txRegistry));
+                    console.log('Activations list loaded successfully.');
                 } else {
                     console.error('Activations list not found in the database, initializing with default values.');
                     this.txRegistry = this.initializeTxRegistry();
                     await this.saveActivationsList(); // Save the newly created default activations list
                 }
             }
+
+            // Return the latest activations list (txRegistry)
+            return this.txRegistry;
         } catch (error) {
             console.error('Error loading activations list:', error);
             this.txRegistry = this.initializeTxRegistry(); // Initialize with default values in case of any error
             await this.saveActivationsList(); // Save the newly created default activations list
+            return this.txRegistry;
         }
     }
 
+
     // Example helper functions (implementations depend on your specific logic and data structures)
-    async activate(txType, block) {
+    async activate(txType, block, codeHash) {
         txType = parseInt(txType)
         //console.log('Activating transaction type:' +txType +(txType === 0) + ' block '+ block );
         await this.loadActivationsList(); // Make sure to load the activations list first
@@ -119,6 +121,9 @@ class Activation {
             console.log('balances '+ balances + "if undefined this is a repeat that successfully prevented inflation")
             this.txRegistry[txType].active = true;
             this.txRegistry[txType].activationBlock = block
+            if(codeHash){
+                this.txRegistry[txType].codeHash = codeHash
+            }
             //console.log(JSON.stringify(this.txRegistry))
             await this.saveActivationsList()
             await Consensus.pushLatestActivationToConsensusVector();
@@ -128,6 +133,9 @@ class Activation {
             if (this.txRegistry[txType]) {
                 this.txRegistry[txType].active = true;
                 this.txRegistry[txType].activationBlock = block
+                if(codeHash){
+                    this.txRegistry[txType].codeHash = codeHash
+                }
                 //console.log('activating '+txType+ ' '+JSON.stringify(this.txRegistry))
                 
                 await this.saveActivationsList();
