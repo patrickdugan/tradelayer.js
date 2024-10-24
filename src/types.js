@@ -176,6 +176,7 @@ const Types = {
                     params.txid = txId;
                     params.block=block
                   // Find the payment address and delivery address from the reference data
+                    console.log('inside type for utxo trade '+reference)
                     const paymentReference = reference.find(ref => ref.vout === params.payToAddress);
                     const tokenDeliveryReference = reference.find(ref => ref.vout === params.tokenOutput);
                     console.log('inside types for UTXO '+JSON.stringify(paymentReference)+' '+JSON.stringify(tokenDeliveryReference))

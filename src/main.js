@@ -422,7 +422,7 @@ class Main {
                         payload = payload.slice(1, payload.length).toString(36);
 
                         const senderAddress = txData.sender.senderAddress;
-                        const referenceAddress = txData.reference.address;
+                        const referenceAddress = txData.reference;
                         const senderUTXO = txData.sender.amount;
                         const referenceUTXO = txData.reference.amount / COIN;
                         console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
