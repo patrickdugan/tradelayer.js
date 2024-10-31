@@ -31,14 +31,16 @@ const Encode = {
 
     // Encode Send Transaction
     encodeSend(params) {
+        const isColoredOutput = params.isColoredOutput? '1':'0'
         if (params.sendAll) {
-            return `1;${params.address}`;
+            return `1;${params.address}`+','+isColoredOutput;
         } else if (Array.isArray(params.propertyId) && Array.isArray(params.amount)) {
             const payload = [
                 '0', // Not sendAll
                 '', // Address is omitted for multi-send
                 params.propertyId.map(id => Encode.encodePropertyId(id)).join(','),
-                params.amount.map(amt => amt.toString(36)).join(',')
+                params.amount.map(amt => amt.toString(36)).join(','),
+                isColoredOutput
             ];
             return payload.join(';');
         } else {
@@ -48,7 +50,8 @@ const Encode = {
                 '0', // Not sendAll
                 params.address,
                 encodedPropertyId,
-                params.amount.toString(36)
+                params.amount.toString(36),
+                isColoredOutput
             ];
             return payload.join(';');
         }
@@ -69,13 +72,15 @@ const Encode = {
     encodeTradeTokenForUTXO: (params) => {
         const amount = new BigNumber(params.amountOffered).times(1e8).toNumber();
         const sats = new BigNumber(params.satsExpected).times(1e8).toNumber();
+        const isColoredOutput = params.isColoredOutput? '1':'0'
             const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
             params.columnA,
             params.sats.toString(36),
             params.tokenOutput,
-            params.payToAddress
+            params.payToAddress,
+            isColoredOutput
         ];
         return payload.join(',');
     },
@@ -94,12 +99,15 @@ const Encode = {
             }
         }
 
-         const payload = [
+        const isColoredOutput = params.isColoredOutput? '1':'0'
+
+        const payload = [
             params.propertyId.toString(36),
             amount,
             channelAddress,
             payEnabled,
-            clearLists
+            clearLists,
+            isColoredOutput
         ];
         return payload.join(',');
     },
@@ -339,6 +347,8 @@ const Encode = {
             amountDesired.toString(36),
             params.columnAIsOfferer ? '1':'0',
             params.expiryBlock.toString(36),
+            params.Id1ColoredOutput ? '1':'0',
+            params.Id2ColoredOutput ? '1':'0'
         ];
         return payload.join(',');
     },
@@ -485,16 +495,17 @@ const Encode = {
     // Encode Create Derivative of LRC20 or RGB
     encodeColoredCoin: (params) => {
         const payload = [
-            params.lrc20TokenSeriesId1.toString(36),
-            params.lrc20TokenSeriesId2.toString(36),
-            params.rgb ? '1' : '0',
+            params.encodeDecodeRecode, //0, decode, 1 encode, 2 repairs a channel theft/unauthorized UTXO movement
+            params.propertyId.toString(36), //the TL account token being encoded
+            params.SatsRatio.toString(36), //how many sats of the account token are rounded to be encoded in 1 UTXO sat e.g. 100, 1000, 10000000
+            params.homeAddress //optional param to cite an addr such as a bridge or AMM depositee where this can recode if interrupted
         ];
         return payload.join(',');
     },
 
 
     // Encode cross TL chain bridging tx
-    encodeCrossLayerBridge: (params) => {
+    encodeAbstractionBridge: (params) => {
         const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
@@ -504,7 +515,14 @@ const Encode = {
     }, 
 
     encodeBindSmartContract:(params)=> {
-
+         const payload = [
+            params.contractHash,
+            params.type,
+            params.hostChain
+        ];
+        //these are all going to be corroborated by an additional ordinal reveal, 
+        //containing the code of the contract, the OP_Return should be included
+        return payload.join(',');
     } 
 
 }

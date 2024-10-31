@@ -32,17 +32,19 @@ const Decode = {
         const parts = payload.split(';');
         const sendAll = parts[0] === '1';
         const address = parts[1] || '';
-
+        let isColoredOutput = false
         if (sendAll) {
-            return { sendAll: sendAll, address: address };
-        } else if (parts.length === 4) {
+
+            return { sendAll: sendAll, address: address};
+        } else if (parts.length === 5||parts.length===4) {
             const propertyId = Decode.decodePropertyId(parts[2] || '');
             const amount = parseInt(parts[3] || '0', 36);
-            return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount };
-        } else {
+            isColoredOutput = parts[5]==='1' 
+            return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount, isColoredOutput: isColoredOutput };
+        } else if (parts[2].contains(',')){
             const propertyIds = (parts[2] || '').split(',').map(id => Decode.decodePropertyId(id));
             const amounts = (parts[3] || '').split(',').map(amt => parseInt(amt || '0', 36));
-            return { sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
+            return {sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
         }
     },
 
@@ -85,7 +87,8 @@ const Decode = {
             columnA: parts[2] === "1",
             satsExpected: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             tokenOutput: parseInt(parts[4] || '0'),
-            payToAddress: parseInt(parts[5] || '0')
+            payToAddress: parseInt(parts[5] || '0'),
+            isColoredOutput: parts[6] === "1"
         };
     },
 
@@ -115,13 +118,16 @@ const Decode = {
             clearLists = [parseInt(parts[4], 36)];
         }
 
+        const isColoredOutput = parts[5] ==='1'
+
         return {
             propertyId,
             amount,
             channelAddress,
             ref,
             payEnabled,
-            clearLists
+            clearLists,
+            isColoredOutput
         };
     },
 
@@ -356,6 +362,8 @@ const Decode = {
             amountDesired: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             columnAIsOfferer: parts[4] === '1',
             expiryBlock: parseInt(parts[5] || '0', 36),
+            Id1ColoredOutput: parts[6]=== '1',
+            Id2ColoredOutput: parts[7]=== '1'
         };
     },
 
@@ -459,28 +467,18 @@ const Decode = {
     // Decode Create Derivative of LRC20 or RGB
     decodeColoredCoin: (payload) => {
         const parts = payload.split(',');
+
+        // Ensure there are enough parts to avoid undefined access
         return {
-            propertyId1: parseInt(parts[0], 36),
-            lrc20TokenSeriesId2: parseInt(parts[1], 36),
-            rgb: parts[2] === '1'
+            encodeDecodeRecode: parseInt(parts[0], 10), // Assuming it's a numeric identifier
+            propertyId: parseInt(parts[1], 36), // The TL account token being encoded
+            satsRatio: parseInt(parts[2], 36), // How many sats of the account token
+            homeAddress: parts[3] || '' // Optional address, defaults to empty string if not provided
         };
     },
-
-    // Decode Register OP_CTV Covenant
-    decodeOPCTVCovenant: (payload) => {
-        const parts = payload.split(',');
-        return {
-            txid: parts[0],
-            associatedPropertyId1: parts[1] ? parseInt(parts[1], 36) : null,
-            associatedPropertyId2: parts[2] ? parseInt(parts[2], 36) : null,
-            covenantType: parseInt(parts[3], 36),
-            redeem: parts[4] === '1' // '1' indicates true, anything else is considered false
-        };
-    },
-
 
     // Decode Mint Colored Coin
-    decodeCrossLayerBridge: (payload) => {
+    decodeAbstractionBridge: (payload) => {
         const parts = payload.split(',');
         return {
             propertyId: parseInt(parts[0], 36),
