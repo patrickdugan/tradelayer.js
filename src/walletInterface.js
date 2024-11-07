@@ -43,7 +43,7 @@ const expressInterface = {
 
     async getOrderBook(params) {
         try {
-            const response = await axios.post(`${serverUrl}/tl_getorderbook`, { params: [propertyId1, propertyId2] });
+            const response = await axios.post(`${serverUrl}/tl_getorderbook`, { propertyId1, propertyId2 });
             return response.data;
         } catch (error) {
             console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);
@@ -53,7 +53,7 @@ const expressInterface = {
 
     async getContractOrderBook(params) {
         try {
-            const response = await axios.post(`${serverUrl}/tl_getcontractorderbook`, { params: [contractId] });
+            const response = await axios.post(`${serverUrl}/tl_getcontractorderbook`, {contractId });
             return response.data;
         } catch (error) {
             console.error('Error in getOrderBook:', error.response ? error.response.data : error.message);
