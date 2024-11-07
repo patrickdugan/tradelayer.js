@@ -84,7 +84,7 @@ const expressInterface = {
     async getContractPositionForAddressAndContractId(params) {
         try {
             const { address, contractId } = params;
-            const response = await axios.get(`${serverUrl}/tl_contractposition`, { params: [ address, contractId ] });
+            const response = await axios.get(`${serverUrl}/tl_contractposition`, { address, contractId});
             return response.data;
         } catch (error) {
             console.error('Error in getContractPositionForAddressAndContractId:', error.response ? error.response.data : error.message);
@@ -95,7 +95,7 @@ const expressInterface = {
     async getTradeHistory(params) {
         try {
             const { propertyId1, propertyId2 } = params;
-            const response = await axios.get(`${serverUrl}/tl_tradehistory`, { params: [ propertyId1, propertyId2] });
+            const response = await axios.get(`${serverUrl}/tl_tradehistory`, { propertyId1, propertyId2 });
             return response.data;
         } catch (error) {
             console.error('Error in getTradeHistory:', error.response ? error.response.data : error.message);
@@ -106,7 +106,7 @@ const expressInterface = {
     async getContractTradeHistory(params) {
         try {
             const { contractId } = params;
-            const response = await axios.get(`${serverUrl}/tl_contracttradehistory`, { params: [ contractId ] });
+            const response = await axios.get(`${serverUrl}/tl_contracttradehistory`, { contractId });
             return response.data;
         } catch (error) {
             console.error('Error in getContractTradeHistory:', error.response ? error.response.data : error.message);
@@ -117,7 +117,7 @@ const expressInterface = {
     async getFundingHistory(params) {
         try {
             const { contractId } = params;
-            const response = await axios.get(`${serverUrl}/tl_fundinghistory`, { params: [ contractId ] });
+            const response = await axios.get(`${serverUrl}/tl_fundinghistory`, { contractId });
             return response.data;
         } catch (error) {
             console.error('Error in getFundingHistory:', error.response ? error.response.data : error.message);
@@ -128,7 +128,7 @@ const expressInterface = {
     async getOracleHistory(params) {
         try {
             const { oracleId } = params;
-            const response = await axios.get(`${serverUrl}/tl_oraclehistory`, { params: [ oracleId] });
+            const response = await axios.get(`${serverUrl}/tl_oraclehistory`, { oracleId });
             return response.data;
         } catch (error) {
             console.error('Error in getOracleHistory:', error.response ? error.response.data : error.message);
