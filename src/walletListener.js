@@ -178,6 +178,28 @@ app.post('/tl_getMaxParsedHeight', async (req, res) => {
     }
 });
 
+app.post('/tl_getTrackHeight'), async (req,res) =>{
+    try {
+        const {} = req.body;
+        const height = await Consensus.getTrackHeight()
+        res.json(height);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+}
+
+app.post('/tl_checkSync'), async (req,res) =>{
+    try {
+        const {} = req.body;
+        const res = await Main.checkSync()
+        res.json(res);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+}
+
 app.post('/tl_pause', async (req, res) => {
     try {
         const {} = req.body;

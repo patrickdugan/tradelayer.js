@@ -92,6 +92,7 @@ class Main {
         this.getBlockCountAsync = () => this.client.getBlockCount();
         this.getNetworkInfoAsync = () => this.client.getNetworkInfo();
         this.genesisBlock = 3082500;
+        this.parseBlock = 0
         console.log(this.genesisBlock)
         //this.blockchainPersistence = new Persistence();
         Main.instance = this;
@@ -291,6 +292,7 @@ class Main {
             console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
+                this.parseBlock = blockHeight
                 if(blockHeight%10000==1){console.log('parsing towards real-time mode '+blockHeight)}
                 const blockData = txByBlockHeight[blockHeight];
 
@@ -333,6 +335,13 @@ class Main {
 
             await this.saveMaxProcessedHeight(maxProcessedHeight,false,null);
             return this.syncIfNecessary();
+        }
+
+        async checkSync(){
+            const consensusParse = this.parseBlock
+            const txIndex = await TxIndex.getInstance();
+            const txIndexParse = txIndex.parseBlock
+            return {consensus: consensusParse, txIndex: txIndexParse}
         }
 
         // Helper function to process a set of transactions

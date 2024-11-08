@@ -15,6 +15,7 @@ class TxIndex {
             return TxIndex.instance;
         }
         TxIndex.instance = this;
+        this.parseBlock = 0
     }
 
     static async init() {
@@ -60,6 +61,7 @@ class TxIndex {
         let chainTip = await this.fetchChainTip();
         console.log('building index until' + chainTip);
         for (let height = startHeight; height <= chainTip; height++) {
+            this.parseBlock = height
             if(height%1000==1){console.log('indexed to '+height)};
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)

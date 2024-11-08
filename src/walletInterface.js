@@ -144,6 +144,26 @@ const expressInterface = {
             console.error('Error in getMaxProcessedHeight:', error.response ? error.response.data : error.message);
             throw error;
         }
+    },
+
+    async getTrackHeight() {
+        try {
+            const response = await axios.post(`${serverUrl}/tl_getTrackHeight`, {});
+            return response.data;
+        } catch (error) {
+            console.error('Error in getMaxProcessedHeight:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    }
+
+    async checkSync() {
+        try {
+            const response = await axios.post(`${serverUrl}/tl_checkSync`, {});
+            return response.data;
+        } catch (error) {
+            console.error('Error in getMaxProcessedHeight:', error.response ? error.response.data : error.message);
+            throw error;
+        }
     }
 
 }
