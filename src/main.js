@@ -66,7 +66,7 @@ let activation
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
-const AMM = require('./AMM.js')
+const AMM = require('./amm.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
 const COIN = 100000000
