@@ -154,7 +154,7 @@ const expressInterface = {
             console.error('Error in getMaxProcessedHeight:', error.response ? error.response.data : error.message);
             throw error;
         }
-    }
+    },
 
     async checkSync() {
         try {
