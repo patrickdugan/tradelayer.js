@@ -47,12 +47,13 @@ let lastInitCall = Date.now();
 app.post('/tl_initmain', async (req, res) => {
     try {
 
-        const now = Date.now();
-        if (now - lastInitCall < 30000) {  // Only allow one call per second, adjust timing as needed
-            return res.status(429).send('Too many requests');  // Or simply ignore this call
+        if(req.wallet){
+            const now = Date.now();
+            if (now - lastInitCall < 30000) {  // Only allow one call per second, adjust timing as needed
+                return res.status(429).send('Too many requests');  // Or simply ignore this call
+            }
+            lastInitCall = now;
         }
-
-        lastInitCall = now;
 
         if (!isInitialized) {
             console.log('Waiting for ClientWrapper initialization...');
