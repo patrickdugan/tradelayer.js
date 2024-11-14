@@ -6,6 +6,7 @@ const expressInterface = {
         try {
             const response = await axios.post(`${serverUrl}/tl_initmain`, { test: true });
             console.log(response.data);
+            return response
         } catch (error) {
             console.error('Error:', error.response ? error.response.data : error.message);
         }
@@ -77,6 +78,17 @@ const expressInterface = {
             return response.data;
         } catch (error) {
             console.error('Error in listOracles:', error.response ? error.response.data : error.message);
+            throw error;
+        }
+    },
+
+    async getColumn(params){
+        try {
+            const { addressA, addressB } = params;
+            const response = await axios.get(`${serverUrl}/tl_getChannelColumn`, { addressA, addressB});
+            return response.data;
+        } catch (error) {
+            console.error('Error in getContractPositionForAddressAndContractId:', error.response ? error.response.data : error.message);
             throw error;
         }
     },
