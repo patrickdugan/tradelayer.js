@@ -459,7 +459,9 @@ const Encode = {
             params.strikePercentInterval.toString(36),
             params.europeanStyle ? '1' : '0',
         ];
-        return payload.join(',');
+        const type = 27;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Trade Bai Urbun Transaction
@@ -472,7 +474,9 @@ const Encode = {
             params.expiryBlock.toString(36),
             params.tradeExpiryBlock.toString(36),
         ];
-        return payload.join(',');
+        const type = 28;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Trade Murabaha Transaction
@@ -487,7 +491,9 @@ const Encode = {
             params.installmentInterval.toString(36),
             params.tradeExpiryBlock.toString(36),
         ];
-        return payload.join(',');
+        const type = 29;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Issue Invoice Transaction
@@ -499,7 +505,9 @@ const Encode = {
             params.optionalPropertyIdCollateral ? params.optionalPropertyIdCollateral.toString(36) : '0',
             params.receivesPayToToken ? '1' : '0',
         ];
-        return payload.join(',');
+        const type = 30;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     encodeBatchSettlement: (params)=> {},
