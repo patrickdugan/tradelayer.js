@@ -298,8 +298,8 @@ class Main {
 
                 //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
-                    if(blockHeight==3432676){
-                    console.log('troubleshooting 4'+JSON.stringify(blockData)+' '+'now funding part '+JSON.stringify(blockData.fundingTx)+' '+JSON.stringify(blockData.tradeTx))
+                    if(blockHeight==3496379||blockHeight==3496378){
+                    //console.log('troubleshooting commit/utxo-trade-combo '+JSON.stringify(blockData)+' '+'now funding part '+JSON.stringify(blockData.fundingTx)+' '+JSON.stringify(blockData.tradeTx))
                     }
                     // First process funding transactions
                     await this.processTxSet(blockData.fundingTx, blockHeight);
@@ -348,10 +348,7 @@ class Main {
         async processTxSet(txSet, blockHeight) {
             for (const txData of txSet) {
                 let flag = false;
-                if (blockHeight == 3432676) {
-                    console.log('troubleshooting 3 ' + JSON.stringify(txData));
-                    flag = true;
-                }
+               
 
                 for (const valueData of txData.value) {
                     const txId = valueData.txId;

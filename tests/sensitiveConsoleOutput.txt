@@ -1,0 +1,267 @@
+
+market data 746c tl 31,lfls,0,8hk,0,1
+Pre-decoded and Decoded Payload: 6a13746c33312c6c666c732c302c38686b2c302c31 31,lfls,0,8hk,0,1 decoding the whole thing jtl31,lfls,0,8hk,0,1
+payload 31,lfls,0,8hk,0,1[{"sender":{"senderAddress":"tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3","amount":0.000056},"reference":[{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}],"payload":"31,lfls,0,8hk,0,1","decodedParams":{},"marker":"tl","txId":"24b54beee90f642c0c9d2f1e500ad2481a28dee9a2c1ae33b6c3ac48229710ca"}]
+market data 746c tl 41,lfls,ref:0
+Pre-decoded and Decoded Payload: 6a0f746c34312c6c666c732c7265663a30 41,lfls,ref:0 decoding the whole thing jtl41,lfls,ref:0
+payload 41,lfls,ref:0[{"sender":{"senderAddress":"tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3","amount":0.000056},"reference":[{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}],"payload":"31,lfls,0,8hk,0,1","decodedParams":{},"marker":"tl","txId":"24b54beee90f642c0c9d2f1e500ad2481a28dee9a2c1ae33b6c3ac48229710ca"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542952},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195422060,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8"}]
+processing new tx [{"sender":{"senderAddress":"tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3","amount":0.000056},"reference":[{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}],"payload":"31,lfls,0,8hk,0,1","decodedParams":{},"marker":"tl","txId":"24b54beee90f642c0c9d2f1e500ad2481a28dee9a2c1ae33b6c3ac48229710ca"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542952},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195422060,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8"}]
+funding tx []
+funding tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542952},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195422060,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8"}]
+tx data in real-time{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542952},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195422060,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8"}
+params to go in during consensus builder 4  1,lfls,ref:0 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t3496378
+checking that type is here 4 3496378
+params.channelAddress tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+about to check tally for commit tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01
+return obj {"amount":null,"available":37.69,"reserved":0,"margin":0,"vesting":0,"channel":0}
+Checking senderTally in has hasSufficientBalance tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 {"amount":null,"available":37.69,"reserved":0,"margin":0,"vesting":0,"channel":0}
+checking balance in commit {"hasSufficient":true,"reason":""}0.01
+Activations list loaded successfully.
+true
+1
+true true undefined
+in getChannel 2nd hit undefined
+valid tx going in for processing 4{"propertyId":1,"amount":0.01,"channelAddress":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","ref":"0","payEnabled":false,"clearLists":[],"isColoredOutput":false,"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","txid":"c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8","block":3496378,"reason":"","valid":true} c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8blockHeight 3496378
+tx number and params 4 {
+  propertyId: 1,
+  amount: 0.01,
+  channelAddress: 'tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex',
+  ref: '0',
+  payEnabled: false,
+  clearLists: [],
+  isColoredOutput: false,
+  senderAddress: 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t',
+  txid: 'c45354aa2ff0e7142dde22f0e98470036006a77f9b1d7d0dcc132f5e0b82e6f8',
+  block: 3496378,
+  reason: '',
+  valid: true
+}
+commiting tokens 0.01 3496378
+inside updateBalance for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 -0.01 0 0 0 commit 3496378
+avail. balance change 37.69 37.68 -0.01
+reserve. balance change 0 0 -0.01
+saving delta {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","block":3496378,"property":1,"total":null,"avail":-0.01,"res":0,"mar":0,"vest":0,"channel":0,"type":"commit"}
+saving tallymap
+saving delta {"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","block":3496378,"property":1,"total":null,"avail":0,"res":0,"mar":0,"vest":0,"channel":0.01,"type":"channelReceive"}
+saving tallymap
+inside record Commit tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 3496378
+{"participants":{"A":"","B":""},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[],"A":{},"B":{},"lastCommitmentTime":3496378,"lastUsedColumn":null}
+last char in assign column based on last character t
+false
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496378,"lastUsedColumn":"B"}
+Committed 0.01 of propertyId 1 to B in channel for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+Committed 0.01 tokens of propertyId 1 from tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t to channel tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+Processed funding txs for block 3496378
+tx Data for block 3496378txData[{"sender":{"senderAddress":"tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3","amount":0.000056},"reference":[{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}],"payload":"31,lfls,0,8hk,0,1","decodedParams":{},"marker":"tl","txId":"24b54beee90f642c0c9d2f1e500ad2481a28dee9a2c1ae33b6c3ac48229710ca"}]
+tx data in real-time{"sender":{"senderAddress":"tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3","amount":0.000056},"reference":[{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}],"payload":"31,lfls,0,8hk,0,1","decodedParams":{},"marker":"tl","txId":"24b54beee90f642c0c9d2f1e500ad2481a28dee9a2c1ae33b6c3ac48229710ca"}
+params to go in during consensus builder 3  1,lfls,0,8hk,0,1 tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr33496378
+checking that type is here 3 3496378
+inside case for type 3 1,lfls,0,8hk,0,1
+{"propertyId":1,"amount":0.01,"columnA":false,"satsExpected":0.01,"tokenOutput":0,"payToAddress":1,"isColoredOutput":false}
+inside type for utxo trade [object Object],[object Object]
+inside types for UTXO {"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1} {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0}
+params tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8 0.00011 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+inside validate UTXO outputs [{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195429520,"vout":0},{"address":"tltc1qvlwcnwlhnja7wlj685ptwxej75mms9nyv7vuy8","satoshis":11000,"vout":1}]
+Activations list loaded successfully.
+true
+1
+Checking senderTally in has hasSufficientChannel tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3 1 0.01 0
+{"hasSufficient":false,"reason":"undefined"}
+reducing tokens to available 0.01 undefined
+true true undefined
+in getChannel 2nd hit undefined
+Channel is null or undefined for sender: tltc1qvy5ku429xdrad74nlpueeft3th80s3era8y6e08uezpxpvy09rwqjwgmr3
+invalid tx Channel not found for the sender
+Processed block 3496378 successfully...
+market data 746c tl 41,lfls,ref:0
+Pre-decoded and Decoded Payload: 6a0f746c34312c6c666c732c7265663a30 41,lfls,ref:0 decoding the whole thing jtl41,lfls,ref:0
+payload 41,lfls,ref:0[{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"}]
+market data 746c tl 41,lfls,ref:0
+Pre-decoded and Decoded Payload: 6a0f746c34312c6c666c732c7265663a30 41,lfls,ref:0 decoding the whole thing jtl41,lfls,ref:0
+payload 41,lfls,ref:0[{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"}]
+market data 746c tl 41,lfls,ref:0
+Pre-decoded and Decoded Payload: 6a0f746c34312c6c666c732c7265663a30 41,lfls,ref:0 decoding the whole thing jtl41,lfls,ref:0
+payload 41,lfls,ref:0[{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9540714},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195399680,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1"}]
+processing new tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9540714},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195399680,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1"}]
+funding tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"}]
+funding tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"}]
+funding tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"},{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9540714},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195399680,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1"}]
+tx data in real-time{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9542206},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195414600,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b"}
+params to go in during consensus builder 4  1,lfls,ref:0 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t3496379
+checking that type is here 4 3496379
+params.channelAddress tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+about to check tally for commit tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01
+return obj {"amount":null,"available":37.68,"reserved":0,"margin":0,"vesting":0,"channel":0}
+Checking senderTally in has hasSufficientBalance tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 {"amount":null,"available":37.68,"reserved":0,"margin":0,"vesting":0,"channel":0}
+checking balance in commit {"hasSufficient":true,"reason":""}0.01
+Activations list loaded successfully.
+true
+1
+false false {"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496378,"lastUsedColumn":"B"}
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496378,"lastUsedColumn":"B"}
+valid tx going in for processing 4{"propertyId":1,"amount":0.01,"channelAddress":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","ref":"0","payEnabled":false,"clearLists":[],"isColoredOutput":false,"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","txid":"285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b","block":3496379,"reason":"","valid":true} 285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855bblockHeight 3496379
+tx number and params 4 {
+  propertyId: 1,
+  amount: 0.01,
+  channelAddress: 'tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex',
+  ref: '0',
+  payEnabled: false,
+  clearLists: [],
+  isColoredOutput: false,
+  senderAddress: 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t',
+  txid: '285b8bffad54bf18f729e519b83508c638be49adc28fc4e3e33e3225fc2d855b',
+  block: 3496379,
+  reason: '',
+  valid: true
+}
+commiting tokens 0.01 3496379
+inside updateBalance for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 -0.01 0 0 0 commit 3496379
+avail. balance change 37.68 37.67 -0.01
+reserve. balance change 0 0 -0.01
+saving delta {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","block":3496379,"property":1,"total":null,"avail":-0.01,"res":0,"mar":0,"vest":0,"channel":0,"type":"commit"}
+saving tallymap
+saving delta {"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","block":3496379,"property":1,"total":null,"avail":0,"res":0,"mar":0,"vest":0,"channel":0.01,"type":"channelReceive"}
+saving tallymap
+inside record Commit tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 3496379
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496378,"lastUsedColumn":"B"}
+last char in assign column based on last character t
+false
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+Committed 0.01 of propertyId 1 to B in channel for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+Committed 0.01 tokens of propertyId 1 from tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t to channel tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+tx data in real-time{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.954146},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195407140,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a"}
+params to go in during consensus builder 4  1,lfls,ref:0 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t3496379
+checking that type is here 4 3496379
+params.channelAddress tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+about to check tally for commit tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01
+return obj {"amount":null,"available":37.67,"reserved":0,"margin":0,"vesting":0,"channel":0}
+Checking senderTally in has hasSufficientBalance tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 {"amount":null,"available":37.67,"reserved":0,"margin":0,"vesting":0,"channel":0}
+checking balance in commit {"hasSufficient":true,"reason":""}0.01
+Activations list loaded successfully.
+true
+1
+false false {"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+valid tx going in for processing 4{"propertyId":1,"amount":0.01,"channelAddress":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","ref":"0","payEnabled":false,"clearLists":[],"isColoredOutput":false,"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","txid":"630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a","block":3496379,"reason":"","valid":true} 630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930ablockHeight 3496379
+tx number and params 4 {
+  propertyId: 1,
+  amount: 0.01,
+  channelAddress: 'tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex',
+  ref: '0',
+  payEnabled: false,
+  clearLists: [],
+  isColoredOutput: false,
+  senderAddress: 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t',
+  txid: '630aab21d5d472c051a800bac4e00d9d66a1264ce0ef6ef7f113ac2b4ddf930a',
+  block: 3496379,
+  reason: '',
+  valid: true
+}
+commiting tokens 0.01 3496379
+inside updateBalance for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 -0.01 0 0 0 commit 3496379
+avail. balance change 37.67 37.66 -0.01
+reserve. balance change 0 0 -0.01
+saving delta {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","block":3496379,"property":1,"total":null,"avail":-0.01,"res":0,"mar":0,"vest":0,"channel":0,"type":"commit"}
+saving tallymap
+saving delta {"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","block":3496379,"property":1,"total":null,"avail":0,"res":0,"mar":0,"vest":0,"channel":0.01,"type":"channelReceive"}
+saving tallymap
+inside record Commit tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 3496379
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+last char in assign column based on last character t
+false
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+Committed 0.01 of propertyId 1 to B in channel for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+Committed 0.01 tokens of propertyId 1 from tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t to channel tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+tx data in real-time{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9540714},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195399680,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1"}
+params to go in during consensus builder 4  1,lfls,ref:0 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t3496379
+checking that type is here 4 3496379
+params.channelAddress tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+about to check tally for commit tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01
+return obj {"amount":null,"available":37.66,"reserved":0,"margin":0,"vesting":0,"channel":0}
+Checking senderTally in has hasSufficientBalance tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 {"amount":null,"available":37.66,"reserved":0,"margin":0,"vesting":0,"channel":0}
+checking balance in commit {"hasSufficient":true,"reason":""}0.01
+Activations list loaded successfully.
+true
+1
+false false {"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+valid tx going in for processing 4{"propertyId":1,"amount":0.01,"channelAddress":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","ref":"0","payEnabled":false,"clearLists":[],"isColoredOutput":false,"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","txid":"3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1","block":3496379,"reason":"","valid":true} 3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1blockHeight 3496379
+tx number and params 4 {
+  propertyId: 1,
+  amount: 0.01,
+  channelAddress: 'tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex',
+  ref: '0',
+  payEnabled: false,
+  clearLists: [],
+  isColoredOutput: false,
+  senderAddress: 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t',
+  txid: '3b4546ad93a7d77ee684ec1ae01ad7eb3f67183459cd41da92ed0f1940eba1f1',
+  block: 3496379,
+  reason: '',
+  valid: true
+}
+commiting tokens 0.01 3496379
+inside updateBalance for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 -0.01 0 0 0 commit 3496379
+avail. balance change 37.66 37.65 -0.01
+reserve. balance change 0 0 -0.01
+saving delta {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","block":3496379,"property":1,"total":null,"avail":-0.01,"res":0,"mar":0,"vest":0,"channel":0,"type":"commit"}
+saving tallymap
+saving delta {"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","block":3496379,"property":1,"total":null,"avail":0,"res":0,"mar":0,"vest":0,"channel":0.01,"type":"channelReceive"}
+saving tallymap
+inside record Commit tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 3496379
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+last char in assign column based on last character t
+false
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+Committed 0.01 of propertyId 1 to B in channel for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+Committed 0.01 tokens of propertyId 1 from tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t to channel tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+Processed funding txs for block 3496379
+Processed block 3496379 successfully...
+market data 746c tl 41,lfls,ref:0
+Pre-decoded and Decoded Payload: 6a0f746c34312c6c666c732c7265663a30 41,lfls,ref:0 decoding the whole thing jtl41,lfls,ref:0
+payload 41,lfls,ref:0[{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9539968},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195392220,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c"}]
+processing new tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9539968},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195392220,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c"}]
+funding tx [{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9539968},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195392220,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c"}]
+tx data in real-time{"sender":{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","amount":1.9539968},"reference":[{"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","satoshis":5460,"vout":0},{"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","satoshis":195392220,"vout":1}],"payload":"41,lfls,ref:0","decodedParams":{},"marker":"tl","txId":"b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c"}
+params to go in during consensus builder 4  1,lfls,ref:0 tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t3496380
+checking that type is here 4 3496380
+params.channelAddress tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex
+about to check tally for commit tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01
+return obj {"amount":null,"available":37.65,"reserved":0,"margin":0,"vesting":0,"channel":0}
+Checking senderTally in has hasSufficientBalance tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 {"amount":null,"available":37.65,"reserved":0,"margin":0,"vesting":0,"channel":0}
+checking balance in commit {"hasSufficient":true,"reason":""}0.01
+Activations list loaded successfully.
+true
+1
+false false {"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+valid tx going in for processing 4{"propertyId":1,"amount":0.01,"channelAddress":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","ref":"0","payEnabled":false,"clearLists":[],"isColoredOutput":false,"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","txid":"b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c","block":3496380,"reason":"","valid":true} b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353cblockHeight 3496380
+tx number and params 4 {
+  propertyId: 1,
+  amount: 0.01,
+  channelAddress: 'tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex',
+  ref: '0',
+  payEnabled: false,
+  clearLists: [],
+  isColoredOutput: false,
+  senderAddress: 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t',
+  txid: 'b9857ded99c93ebd704548598dee1f375f13f006c7d68c4864d5e144a0b0353c',
+  block: 3496380,
+  reason: '',
+  valid: true
+}
+commiting tokens 0.01 3496380
+inside updateBalance for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 -0.01 0 0 0 commit 3496380
+avail. balance change 37.65 37.64 -0.01
+reserve. balance change 0 0 -0.01
+saving delta {"address":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","block":3496380,"property":1,"total":null,"avail":-0.01,"res":0,"mar":0,"vest":0,"channel":0,"type":"commit"}
+saving tallymap
+saving delta {"address":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","block":3496380,"property":1,"total":null,"avail":0,"res":0,"mar":0,"vest":0,"channel":0.01,"type":"channelReceive"}
+saving tallymap
+inside record Commit tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t 1 0.01 3496380
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496379,"lastUsedColumn":"B"}
+last char in assign column based on last character t
+false
+{"participants":{"A":"","B":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t"},"channel":"tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex","commits":[{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496378,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496379,"columnAssigned":"B","payEnabled":false},{"senderAddress":"tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t","propertyId":1,"tokenAmount":0.01,"block":3496380,"columnAssigned":"B","payEnabled":false}],"A":{},"B":{"1":0},"lastCommitmentTime":3496380,"lastUsedColumn":"B"}
+Committed 0.01 of propertyId 1 to B in channel for tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t
+Committed 0.01 tokens of propertyId 1 from tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t to channel tltc1qy8gyqm0hd225yq57lresv6uua68l628ukqhh86gxgl5fltls9pvsv73rex

@@ -1,19 +1,19 @@
-// txEncoder.js
 const BigNumber = require('bignumber.js');
-const base94 = require('./base94.js')
-const base256 = require('./base256.js')
-
+const base94 = require('./base94.js');
+const base256 = require('./base256.js');
+const marker = 'tl';
 
 const Encode = {
     // Encode Simple Token Issue Transaction
-      encodeActivateTradeLayer(params) {
-        // Assuming params has the codeHash and other fields
-        const base94Encoded = Base94Converter.decimalToBase94(params.codeHash)
-        const payload =  {
+    encodeActivateTradeLayer(params) {
+        const base94Encoded = base94.decimalToBase94(params.codeHash);
+        const payload = {
             txTypeToActivate: params.txTypeToActivate,
-            codeHash: base94Encoded
+            codeHash: base94Encoded,
         };
-        return payload.join(',')
+        const type = 0;
+        const typeStr = type.toString(36);
+        return marker + typeStr + JSON.stringify(payload);
     },
 
     // Encode Token Issue Transaction
@@ -24,37 +24,40 @@ const Encode = {
             params.whitelists.map(val => val.toString(36)).join(','),
             params.managed ? '1' : '0',
             params.backupAddress,
-            params.nft ? '1' : '0'
+            params.nft ? '1' : '0',
         ];
-        return payload.join(',');
+        const type = 1;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Send Transaction
     encodeSend(params) {
-        const isColoredOutput = params.isColoredOutput? '1':'0'
+        const isColoredOutput = params.isColoredOutput ? '1' : '0';
+        let payload;
         if (params.sendAll) {
-            return `1;${params.address}`+','+isColoredOutput;
+            payload = ['1', params.address, isColoredOutput];
         } else if (Array.isArray(params.propertyId) && Array.isArray(params.amount)) {
-            const payload = [
+            payload = [
                 '0', // Not sendAll
                 '', // Address is omitted for multi-send
                 params.propertyId.map(id => Encode.encodePropertyId(id)).join(','),
                 params.amount.map(amt => amt.toString(36)).join(','),
-                isColoredOutput
+                isColoredOutput,
             ];
-            return payload.join(';');
         } else {
             const encodedPropertyId = this.encodePropertyId(params.propertyId);
-
-            const payload = [
+            payload = [
                 '0', // Not sendAll
                 params.address,
                 encodedPropertyId,
                 params.amount.toString(36),
-                isColoredOutput
+                isColoredOutput,
             ];
-            return payload.join(';');
         }
+        const type = 2;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(';');
     },
 
     encodePropertyId(propertyId) {
@@ -68,99 +71,101 @@ const Encode = {
         }
     },
 
-
+    // Encode Trade Token for UTXO Transaction
     encodeTradeTokenForUTXO: (params) => {
         const amount = new BigNumber(params.amountOffered).times(1e8).toNumber();
         const sats = new BigNumber(params.satsExpected).times(1e8).toNumber();
-        const isColoredOutput = params.isColoredOutput? '1':'0'
-            const payload = [
+        const isColoredOutput = params.isColoredOutput ? '1' : '0';
+        const payload = [
             params.propertyId.toString(36),
             params.amount.toString(36),
             params.columnA,
-            params.sats.toString(36),
+            sats.toString(36),
             params.tokenOutput,
             params.payToAddress,
-            isColoredOutput
+            isColoredOutput,
         ];
-        return payload.join(',');
+        const type = 3;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Commit Token Transaction
     encodeCommit: (params) => {
         const amount = new BigNumber(params.amount).times(1e8).toString(36);
-        const channelAddress = params.channelAddress.length > 42 ? `ref:${params.ref || 0}` : params.channelAddress; // Handle long multisig addresses
-        const payEnabled = params.payEnabled ? '1' : '0'; // Encode true as '1' and false as '0'
+        const channelAddress = params.channelAddress.length > 42 ? `ref:${params.ref || 0}` : params.channelAddress;
+        const payEnabled = params.payEnabled ? '1' : '0';
         let clearLists = '';
         if (params.clearLists) {
             if (Array.isArray(params.clearLists)) {
-                clearLists = `[${params.clearLists.map(num => num.toString(36)).join(',')}]`; // Array of integers in base 36
+                clearLists = `[${params.clearLists.map(num => num.toString(36)).join(',')}]`;
             } else {
-                clearLists = params.clearLists.toString(36); // Single integer in base 36
+                clearLists = params.clearLists.toString(36);
             }
         }
 
-        const isColoredOutput = params.isColoredOutput? '1':'0'
-
+        const isColoredOutput = params.isColoredOutput ? '1' : '0';
         const payload = [
             params.propertyId.toString(36),
             amount,
             channelAddress,
             payEnabled,
             clearLists,
-            isColoredOutput
+            isColoredOutput,
         ];
-        return payload.join(',');
+        const type = 4;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode On-chain Token for Token Transaction
     encodeOnChainTokenForToken: (params) => {
-        console.log('encoding token trade ' + JSON.stringify(params));
-        const amountOffered = new BigNumber(params.amountOffered).times(1e8).toNumber(); // Multiply by 100 million
-        const amountExpected = new BigNumber(params.amountExpected).times(1e8).toNumber(); // Multiply by 100 million
+        const amountOffered = new BigNumber(params.amountOffered).times(1e8).toNumber();
+        const amountExpected = new BigNumber(params.amountExpected).times(1e8).toNumber();
         const payload = [
             params.propertyIdOffered.toString(36),
             params.propertyIdDesired.toString(36),
             amountOffered.toString(36),
             amountExpected.toString(36),
             params.stop ? '1' : '0',
-            params.post ? '1' : '0'
+            params.post ? '1' : '0',
         ];
-        return payload.join(',');
+        const type = 5;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
-   
-    // Encode function
+    // Encode function to handle cancel orders
     encodeCancelOrder: (params) => {
         let encodedTx = params.isContract;
 
         if (params.isContract) {
-            // Encode contract cancellation with a single property ID
             encodedTx += `,${params.contractId.toString(36)},${params.cancelAll ? 1 : 0}`;
         } else {
-            // Encode token cancellation with two property IDs
             encodedTx += `,${params.offeredPropertyId.toString(36)},${params.desiredPropertyId.toString(36)},${params.cancelAll ? 1 : 0}`;
         }
 
-        let priceEncoded
-        // Encode optional price if provided
+        let priceEncoded;
         if (params.cancelParams && params.cancelParams.price !== undefined) {
-            if(params.isContract==0||params.isContract==false){
-                priceEncoded = new BigNumber(params.cancelParams.price).times(8).toString(36); // Encode and multiply by 8
-            }else if(params.isContract==1||params.isContract==true){
-               priceEncoded = params.cancelParams.price.toString(36);
+            if (params.isContract == 0 || params.isContract == false) {
+                priceEncoded = new BigNumber(params.cancelParams.price).times(8).toString(36);
+            } else if (params.isContract == 1 || params.isContract == true) {
+                priceEncoded = params.cancelParams.price.toString(36);
             }
 
             encodedTx += `,${priceEncoded}`;
             encodedTx += `,${params.cancelParams.side.toString(36)}`;
         }
 
-        // Encode cancel parameters
         if (params.cancelParams && params.cancelParams.txid) {
             encodedTx += `,${params.cancelParams.txid}`;
         }
 
-        return encodedTx;
+        const type = 6;
+        const typeStr = type.toString(36);
+        return marker + typeStr + encodedTx;
     },
+
 
     // Encode Create Whitelist Transaction
     encodeCreateWhitelist: (params) => {
@@ -168,12 +173,13 @@ const Encode = {
             params.backupAddress,
             params.name,
             params.url,
-            params.description
+            params.description,
         ];
-        return payload.join(',');
+        const type = 7;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
-    // Encode Update Whitelist Admin Transaction
     encodeUpdateAdmin: (params) => {
         const payload = [
             params.newAddress,
@@ -181,13 +187,14 @@ const Encode = {
             params.oracle ? '1' : '0',
             params.token ? '1' : '0',
             params.id.toString(36),
-            params.updateBackup ? '1':'0'
+            params.updateBackup ? '1' : '0'
         ];
-        return payload.join(',');
+        const type = 8;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
-
-    // Encode Issue Attestation Transaction
+    // Encode Issue Or Revoke Attestation Transaction
     encodeIssueOrRevokeAttestation: (params) => {
         const payload = [
             params.revoke,
@@ -195,10 +202,12 @@ const Encode = {
             params.targetAddress,
             params.metaData
         ];
-        return payload.join(',');
+        const type = 9;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
-    // Encode Revoke Attestation Transaction
+    // Encode AMM Pool Transaction
     encodeAMMPool: (params) => {
         const payload = [
             params.isRedeem, 
@@ -208,12 +217,12 @@ const Encode = {
             params.id2, 
             params.amount2,
         ];
-        return payload.join(',');
+        const type = 10;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
-    // ... Continue with the rest of the transaction types ...
-
-    // Example for Encode Create Oracle Transaction
+    // Encode Create Oracle Transaction
     encodeCreateOracle: (params) => {
         const payload = [
             params.ticker,
@@ -222,67 +231,69 @@ const Encode = {
             params.whitelists.map(whitelist => whitelist.toString(36)).join(','),
             params.lag.toString(36),
         ];
-        return payload.join(',');
+        const type = 11;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Grant Managed Token Transaction
-    encodeGrantManagedToken:(params) => {
-      const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
-      const payload = [
-        params.propertyid.toString(36),
-        amountGranted.toString(36),
-        params.addressToGrantTo,
-      ];
-      return payload.join(',');
+    encodeGrantManagedToken: (params) => {
+        const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
+        const payload = [
+            params.propertyid.toString(36),
+            amountGranted.toString(36),
+            params.addressToGrantTo,
+        ];
+        const type = 12;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Redeem Managed Token Transaction
-    encodeRedeemManagedToken:(params) => {
-      const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
-      const payload = [
-        params.propertyid.toString(36),
-        amountGranted.toString(36),
-        params.addressToGrantTo,
-      ];
-      return payload.join(',');
+    encodeRedeemManagedToken: (params) => {
+        const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
+        const payload = [
+            params.propertyid.toString(36),
+            amountGranted.toString(36),
+            params.addressToGrantTo,
+        ];
+        const type = 13;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Publish Oracle Data Transaction
-    encodePublishOracleData:(params) => {
-      const payload = [
-        params.oracleid.toString(36),
-        params.price.toString(36),
-      ];
-      if (params.high !== undefined) {
-        payload.push(params.high.toString(36));
-      }
-      if (params.low !== undefined) {
-        payload.push(params.low.toString(36));
-      }
-      if (params.close !== undefined) {
-        payload.push(params.close.toString(36));
-      }
-      return payload.join(',');
-    },
-
-    // Encode Update Oracle Admin Transaction
-    encodeUpdateOracleAdmin:(params) => {
-      return params.newAddress;
+    encodePublishOracleData: (params) => {
+        const payload = [
+            params.oracleid.toString(36),
+            params.price.toString(36),
+        ];
+        if (params.high !== undefined) {
+            payload.push(params.high.toString(36));
+        }
+        if (params.low !== undefined) {
+            payload.push(params.low.toString(36));
+        }
+        if (params.close !== undefined) {
+            payload.push(params.close.toString(36));
+        }
+        const type = 14;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Close Oracle Transaction
     encodeCloseOracle(id) {
-      return id.toString(36); // No parameters
+        const type = 15
+        const typeStr =type.toString(36)
+      return marker+typeStr.toString(36)+id.toString(36); // No parameters
     },
 
-     // Encode Create Future Contract Series Transaction
     encodeCreateFutureContractSeries: (params) => {
-    
         const onChainData = params.onChainData && params.onChainData.length > 0 ? 
             params.onChainData.map(data => `${data[0][0].toString(36)}:${data[0][1].toString(36)}`).join(';')
-            : ''
+            : '';
 
-        console.log('params.notionalValue '+params.notionalValue)
         const payload = [
             params.native ? '1' : '0',
             params.underlyingOracleId.toString(36),
@@ -296,16 +307,20 @@ const Encode = {
             params.inverse ? '1' : '0',
             params.fee !== undefined ? params.fee ? '1' : '0' : '0'
         ];
-        return payload.join(',');
+        const type = 16;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Exercise Derivative Transaction
-    encodeExerciseDerivative:(params) => {
-      const payload = [
-        params.derivativeContractId.toString(36),
-        params.amount.toString(36),
-      ];
-      return payload.join(',');
+    encodeExerciseDerivative: (params) => {
+        const payload = [
+            params.derivativeContractId.toString(36),
+            params.amount.toString(36),
+        ];
+        const type = 17;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Trade Contract On-chain Transaction
@@ -316,11 +331,13 @@ const Encode = {
             params.amount.toString(36),
             params.sell ? '1' : '0',
             params.insurance ? '1' : '0',
-            params.reduce ? '1':'0',
-            params.post ? '1':'0',
-            params.stop ? '1':'0'
+            params.reduce ? '1' : '0',
+            params.post ? '1' : '0',
+            params.stop ? '1' : '0'
         ];
-        return payload.join(',');
+        const type = 18;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Trade Contract in Channel Transaction
@@ -333,7 +350,9 @@ const Encode = {
             params.expiryBlock.toString(36),
             params.insurance ? '1' : '0',
         ];
-        return payload.join(',');
+        const type = 19;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Trade Tokens in Channel Transaction
@@ -345,46 +364,56 @@ const Encode = {
             params.propertyId2.toString(36),
             amountOffered.toString(36),
             amountDesired.toString(36),
-            params.columnAIsOfferer ? '1':'0',
+            params.columnAIsOfferer ? '1' : '0',
             params.expiryBlock.toString(36),
-            params.Id1ColoredOutput ? '1':'0',
-            params.Id2ColoredOutput ? '1':'0'
+            params.Id1ColoredOutput ? '1' : '0',
+            params.Id2ColoredOutput ? '1' : '0'
         ];
-        return payload.join(',');
+        const type = 20;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Withdrawal Transaction
     encodeWithdrawal: (params) => {
         const amounts = new BigNumber(params.amountOffered).times(1e8).toNumber().toString();
-        const withdrawAll = params.withdrawAll
-        const propertyIds = params.propertyId.toString(36)/*.map(id => id.toString(36)).join(';')*/;
-        const column = params.column //0 is A, 1 is B
-        return [withdrawAll, propertyIds, amounts, column, params.channelAddress].join(',');
+        const withdrawAll = params.withdrawAll;
+        const propertyIds = params.propertyId.toString(36);
+        const column = params.column; // 0 is A, 1 is B
+        const payload = [withdrawAll, propertyIds, amounts, column, params.channelAddress].join(',');
+        const type = 21;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload;
     },
 
-    // Encode Transfer Transaction 
+    // Encode Transfer Transaction
     encodeTransfer: (params) => {
         const propertyId = params.propertyId.toString(36);
         const amounts = new BigNumber(params.amount).times(1e8).toString(36);
         const isColumnA = params.isColumnA ? 1 : 0;
-        const pay = params.pay ? 1 : 0
-        const payRef = params.payRef || ''
-        const destinationAddr = params.destinationAddr.length > 42 ? `ref:${params.ref || 0}` : params.destinationAddr; // Handle long multisig addresses
-        return [propertyId, amounts, isColumnA, destinationAddr, pay, payRef,].join(',');
+        const pay = params.pay ? 1 : 0;
+        const payRef = params.payRef || '';
+        const destinationAddr = params.destinationAddr.length > 42 ? `ref:${params.ref || 0}` : params.destinationAddr;
+        const payload = [propertyId, amounts, isColumnA, destinationAddr, pay, payRef].join(',');
+        const type = 22;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload;
     },
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
-        const base256Encoded1 = Base256Converter.hexToBase256(params.tradeid)
+        const base256Encoded1 = Base256Converter.hexToBase256(params.tradeid);
         const base256Encoded2 = Base256Converter.hexToBase256(params.settleid);
-        const base94Encoded = Base94Converter.decimalToBase94(params.markPrice)
+        const base94Encoded = Base94Converter.decimalToBase94(params.markPrice);
         const payload = [
             base256Encoded1,
             base256Encoded2,
             base94Encoded,
             params.close ? '1' : '0'
         ];
-        return payload.join(',');
+        const type = 23;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Mint Synthetic Transaction
@@ -394,7 +423,9 @@ const Encode = {
             params.contractIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        const type = 24;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Redeem Synthetic Transaction
@@ -404,7 +435,9 @@ const Encode = {
             params.contractIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        const type = 25;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Pay to Tokens Transaction
@@ -414,7 +447,9 @@ const Encode = {
             params.propertyIdUsed.toString(36),
             params.amount.toString(36),
         ];
-        return payload.join(',');
+        const type = 26;
+        const typeStr = type.toString(36);
+        return marker + typeStr + payload.join(',');
     },
 
     // Encode Create Option Chain Transaction

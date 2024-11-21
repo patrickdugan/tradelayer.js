@@ -4,7 +4,7 @@ async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-const expressInterface = require('../src/interfaceExpress.js');
+const expressInterface = require('../src/walletInterface.js');
 
 async function runTest() {
     await expressInterface.initMain();

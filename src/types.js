@@ -67,61 +67,36 @@ const Types = {
                 payload += Encode.encodeCreateFutureContractSeries(params);
                 break;
             case 17:
-                payload += Encode.encodeUpdateOracleAdmin(params);
-                break;
-            case 18:
-                payload += Encode.encodeCloseOracle();
-                break;
-            case 19:
-                payload += Encode.encodeCreateOracleFutureContract(params);
-                break;
-            case 20:
                 payload += Encode.encodeExerciseDerivative(params);
                 break;
-            case 21:
-                payload += Encode.encodeNativeContractWithOnChainData(params);
-                break;
-            case 22:
+            case 18:
                 payload += Encode.encodeTradeContractOnchain(params);
                 break;
-            case 23:
+            case 19:
                 payload += Encode.encodeTradeContractChannel(params);
                 break;
-            case 24:
+            case 20:
                 payload += Encode.encodeTradeTokensChannel(params);
                 break;
-            case 25:
+            case 21:
                 payload += Encode.encodeWithdrawal(params);
                 break;
-            case 26:
+            case 22:
                 payload += Encode.encodeTransfer(params);
                 break;
-            case 27:
+            case 23:
                 payload += Encode.encodeSettleChannelPNL(params);
                 break;
-            case 28:
+            case 24:
                 payload += Encode.encodeMintSynthetic(params);
                 break;
-            case 29:
+            case 25:
                 payload += Encode.encodeRedeemSynthetic(params);
                 break;
-            case 30:
+            case 26:
                 payload += Encode.encodePayToTokens(params);
                 break;
-            case 31:
-                payload += Encode.encodeBatchSettlement(params)
-                break;
-            case 32:
-                payload += Encode.encodeBatchMoveZkRollup(params)
-                break;
-            case 33:
-                payload += Encode.encodeMintColoredCoin(params);
-                break;
-            case 34:
-                payload += Encode.encodeCrossLayerBridge(params)
-                break;
-            case 35:
-                payload += Encode.encodeBindSmartContract(params)
+           
       default:
         throw new Error('Unknown transaction type');
     }
