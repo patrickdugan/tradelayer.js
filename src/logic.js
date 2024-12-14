@@ -56,7 +56,7 @@ const Logic = {
                 break;
             case 3:
                 console.log('about to call utxo trade logic '+JSON.stringify(params))
-                await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.block, params.txid);
+                await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.tagWithdraw, params.block, params.txid);
                 break;
             case 4:
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block);
@@ -168,7 +168,7 @@ const Logic = {
 
         // Log or handle the result of activation
         console.log('activation result ' +activationResult);
-    
+
         return activationResult; // You might want to return this for further processing
  
     },
@@ -358,7 +358,7 @@ const Logic = {
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, block, txid) {
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {
 	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -399,8 +399,15 @@ const Logic = {
             //So we debit there and then credit them to the token delivery address, which we took in the parsing
             //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
             await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
-            await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
-            const key = '0-'+propertyId
+            if(tagWithdraw!=null&&typeof tagWithdraw==string ){
+                 await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,'UTXOTokenTradeCredit',block)
+                 await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block) {
+
+            }else{
+                  await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
+         
+            }
+             const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
             const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
             console.log(' price in UTXO '+price)

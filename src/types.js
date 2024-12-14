@@ -155,6 +155,18 @@ const Types = {
                     const paymentReference = reference.find(ref => ref.vout === params.payToAddress);
                     const tokenDeliveryReference = reference.find(ref => ref.vout === params.tokenOutput);
                     console.log('inside types for UTXO '+JSON.stringify(paymentReference)+' '+JSON.stringify(tokenDeliveryReference))
+                    if(params.tagWithdraw!=null&&Number.isInteger(params.tagWithdraw)){
+                        const coldWithdrawObject = reference.find(ref => ref.vout === params.tagWithdraw);
+
+                        if (coldWithdrawObject) {
+                            // Assign the address of the matching object
+                            const params.tagWithdraw = coldWithdrawObject.address;
+                            console.log(`Cold withdraw address: ${coldWithdrawAddress}`);
+                        } else {
+                            console.log(`No matching vout found for tagWithdraw: ${params.tagWithdraw}`);
+                        }
+                    }
+                    
                 if (paymentReference && tokenDeliveryReference) {
                     params.satsPaymentAddress = paymentReference.address;
                     params.satsDelivered = new BigNumber(paymentReference.satoshis).dividedBy(1e8).toNumber();  // Convert satoshis to LTC or token equivalent

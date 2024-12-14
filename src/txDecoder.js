@@ -88,7 +88,8 @@ const Decode = {
             satsExpected: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             tokenOutput: parseInt(parts[4] || '0'),
             payToAddress: parseInt(parts[5] || '0'),
-            isColoredOutput: parts[6] === "1"
+            isColoredOutput: parts[6] === "1",
+            tagWithdraw: parts[7] || null
         };
     },
 

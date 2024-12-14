@@ -236,7 +236,7 @@ const Validity = {
                 params.valid = false;
                 params.reason = 'Transaction type activated after tx';
             }
-
+            
 
             const property = PropertyList.getPropertyData(params.propertyId)
 
