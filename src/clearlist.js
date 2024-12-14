@@ -2,7 +2,7 @@ const dbInstance = require('./db.js');
 
 class clearlistManager {
     static clearlists = new Map();
-
+    static banlist = ["US", "KP", "SY", "RU", "IR", "CU"];
     static async createClearlist(adminAddress, name, url, description, backupAddress) {
 
         const clearlistId = await this.getNextId();
@@ -94,14 +94,14 @@ class clearlistManager {
         return maxId + 1;
     }
 
-    static async addAttestation(clearlistId, address, metaData) {
+    static async addAttestation(clearlistId, address, metaData,block) {
         const attestationId = address;
         const attestationData = {
-            clearlistId,
-            address,
+            listId:clearlistId,
+            address: address,
             status: 'active',
-            metaData,
-            timestamp: new Date().toISOString()
+            data: metaData,
+            timestamp: block
         };
 
         await this.attestationsDb.updateAsync(
@@ -113,7 +113,7 @@ class clearlistManager {
         return attestationId;
     }
 
-    static async revokeAttestation(attestationId, targetAddress, revokeReason) {
+    static async revokeAttestation(attestationId, targetAddress, revokeReason,block) {
         const attestationKey = `attestation:${targetAddress}`;
         const base= await dbInstance.getDatabase('attestations')
         const attestation = await base.findOneAsync({ _id: attestationKey });
@@ -125,7 +125,7 @@ class clearlistManager {
         attestation.data.status = 'revoked';
         attestation.data.id = attestationId;
         attestation.data.revokeReason = revokeReason;
-        attestation.data.timestamp = new Date().toISOString();
+        attestation.data.timestamp = block
 
         await this.attestationsDb.updateAsync(
             { _id: attestationKey },
@@ -133,6 +133,72 @@ class clearlistManager {
         );
 
         return attestationId;
+    }
+
+    static async getCountryCodeByAddress(address) {
+        try {
+            const base = await dbInstance.getDatabase('attestations');
+            
+            // Fetch all attestations for the given address
+            const attestations = await base.findAsync({ 'data.address': address });
+
+            if (!attestations || attestations.length === 0) {
+                console.log(`No attestations found for address: ${address}`);
+                return null; // No attestations for this address
+            }
+
+            // Loop through attestations to find one with clearListId: 0 and a valid countryCode
+            for (const attestation of attestations) {
+                const { listId, data} = attestation.data;
+                
+                if (clearListId === 0 && data) {
+                    return {
+                        address,
+                        countryCode: data,
+                        blockHeight: attestation.data.blockHeight || null, // Optional blockHeight in metadata
+                    };
+                }
+            }
+
+            // If no valid attestation with clearListId: 0 and countryCode is found
+            console.log(`No valid attestation with clearListId 0 and country code found for address: ${address}`);
+            return null;
+        } catch (error) {
+            console.error(`Error fetching country code for address ${address}:`, error);
+            return null; // Gracefully return null on error
+        }
+    }
+
+    static async setBanlist(banlistArray,block) {
+        try {
+            const base = await dbInstance.getDatabase('banlist');
+            await base.updateAsync(
+                { _id: 'globalBanlist' }, // Fixed ID for the banlist entity
+                { $set: { data: banlistArray, timestamp: block } },
+                { upsert: true }
+            );
+            console.log('Banlist updated successfully.');
+        } catch (error) {
+            console.error('Error updating Banlist in database:', error);
+            throw error;
+        }
+        this.banlist= banlistArray
+    }
+
+    static async getBanlist() {
+        try {
+            const base = await dbInstance.getDatabase('banlist');
+            const banlist = await base.findOneAsync({ _id: 'globalBanlist' });
+            if (banlist) {
+                return banlist.data; // Return the banlist array
+            } else {
+                console.log('No Banlist found in the database.');
+                return null; // Return null if no Banlist exists
+            }
+        } catch (error) {
+            console.error('Error fetching Banlist from database:', error);
+            throw error;
+        }
     }
 
     static async getAttestations(clearlistId) {

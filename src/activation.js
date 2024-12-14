@@ -16,7 +16,7 @@ class Activation {
        
         this.consensusVector = {};
         this.txRegistry = this.initializeTxRegistry()
-
+        this.init()
         Activation.instance = this; // Set the instance
     }
 
@@ -48,6 +48,10 @@ class Activation {
             Activation.instance = new Activation();
         }
         return Activation.instance;
+    }
+
+    getAdmin(){
+        return this.adminAddress
     }
 
     async saveActivationsList() {
@@ -146,6 +150,33 @@ class Activation {
             }
         }
     }
+
+        /**
+     * Checks if more than 90% of the activations in the transaction registry are true.
+     * @returns {boolean} - Returns true if >90% of activations are true, otherwise false.
+     */
+    async areActivationsAboveThreshold() {
+        await this.loadActivationsList(); // Ensure the registry is up-to-date
+
+        const totalTxTypes = Object.keys(this.txRegistry).length;
+        if (totalTxTypes === 0) {
+            console.error('Transaction registry is empty.');
+            return false;
+        }
+
+        // Count active transactions
+        const activeCount = Object.values(this.txRegistry).reduce((count, tx) => {
+            return tx.active ? count + 1 : count;
+        }, 0);
+
+        const activationPercentage = (activeCount / totalTxTypes) * 100;
+
+        console.log(`Active transactions: ${activeCount}/${totalTxTypes} (${activationPercentage.toFixed(2)}%)`);
+
+        // Check if >90% of activations are true
+        return activationPercentage > 90;
+    }
+
 
     initializeTxRegistry() {
         // Initialize the transaction registry

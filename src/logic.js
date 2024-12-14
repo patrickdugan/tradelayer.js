@@ -1,7 +1,7 @@
 
 const TradeChannels = require('./channels.js')
 const Activation = require('./activation.js')
-const activation = Activation.getInstance("tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8");
+const activation = Activation.getInstance();
 // Custom modules for TradeLayer
 //const Clearing =require('./clearing.js')
 //const Persistence = require('./Persistence.js'); // Handles data persistence
@@ -74,7 +74,7 @@ const Logic = {
                 await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
                 break;
             case 9:
-                await Logic.issueOrRevokeAttestation(params.clearlistId, params.targetAddress, params.clearlistRegistry, params.block);
+                await Logic.issueOrRevokeAttestation(params.sender, params.clearlistId, params.targetAddress, params.metadata, params.block);
                 break;
             case 10:
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
@@ -168,6 +168,7 @@ const Logic = {
 
         // Log or handle the result of activation
         console.log('activation result ' +activationResult);
+    
         return activationResult; // You might want to return this for further processing
  
     },
@@ -586,9 +587,8 @@ const Logic = {
 
 		        // Validate input parameters
 		        if (!adminAddress) {
-		            throw new Error('Admin address is required to create a clearlist');
+		            return console.log('Admin address is required to create a clearlist');
 		        }
-
 
 		        // Create the clearlist
 		        const clearlistId = await ClearList.createclearlist({
@@ -608,7 +608,6 @@ const Logic = {
 
     async updateAdmin(whitelist,token,oracle, newAddress, id, updateBackup, block) {
 
-
 	    if(whitelist){
                 await ClearList.updateAdmin(id, newAddress,updateBackup);
         }else if(token){
@@ -622,16 +621,31 @@ const Logic = {
 	},
 
 
-    async issueOrRevokeAttestation(clearlistId, targetAddress, clearlistRegistry, metaData, revoke) {
-
+    async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block) {
+        const admin = activation.getAdmin()
+        if(sender==admin&&clearlistId==0){
+            await updateBannedCountries(metaData,block)
+            return
+        }
         if(!revoke){
-             await ClearList.addAttestion(clearlistId, targetAddress,metaData);
+             await ClearList.addAttestion(clearlistId, targetAddress,metaData, block);
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
-            await ClearList.revokeAttestation(clearlistId,targetAddress,metaData)
+            await ClearList.revokeAttestation(clearlistId,targetAddress,metaData, block)
         }
         return
 	},
+
+    async updateBannedCountries(bannedCountriesGlobal, block) {
+            // Validate input: Must be an array of two-character strings
+            if (!Array.isArray(bannedCountriesGlobal) || !bannedCountriesGlobal.every(code => typeof code === 'string' && code.length === 2)) {
+                return console.log('Invalid input: bannedCountriesGlobal must be an array of two-character strings.');
+            }
+
+            console.log('Using default global Banlist:', bannedCountriesGlobal);
+            await Clearlist.setBanList(bannedCountriesGlobal,block); // Update Clearlist object with default
+    }
+
 
    async AMMPool(sender, block, isRedeem, isContract, id, amount, id2, amount2) {
         let ammInstance;
