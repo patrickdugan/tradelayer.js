@@ -50,7 +50,7 @@ class TradeLayerManager {
 
     static async getInstance(adminAddress, chain){
         if (!TradeLayerManager.instance) {
-            TradeLayerManager.instance = new TradeLayerManager(adminAddress.chain);
+            TradeLayerManager.instance = new TradeLayerManager(adminAddress,chain);
             console.log('generating new TL manager')
         }
         console.log('returning TL Manager')
