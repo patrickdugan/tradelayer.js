@@ -137,15 +137,24 @@ const Validity = {
                 params.reason = 'propertyId not found in Property List'
                 return params
             }
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-            if(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4){
-                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
+
+            const admin = activationInstance.getAdmin()
+            console.log('admin in send '+admin)
+            if(sender!=admin){
+                const admin = activationInstance.getAdmin()
+                if(sender!=admin){
+                      let bans = await ClearList.getBanlist()
+                    if(bans==null){bans = bannedCountries}
+                    const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                    if(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4){
+                         if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                        params.valid = false;
+                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                         }
+                    }
+                }
             }
+          
 
             const TallyMap = require('./tally.js')
             const senderTally = await TallyMap.getTally(sender, params.propertyIds);
@@ -398,15 +407,17 @@ const Validity = {
                     break
                 }
             }
-
-           const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-            if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
-                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
+           const admin = activationInstance.getAdmin()
+           if(sender!=admin){
+               let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
+                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                     }
+                }
             }
 
             const channelData =await Channels.getChannel(params.channelAddress)
@@ -485,15 +496,18 @@ const Validity = {
                 params.valid =false
                 params.reason += "Cannot trade token against its own type"
             }
-
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-            if(params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4){
-                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
+            const admin = activationInstance.getAdmin()
+            console.log('admin '+admin)
+            if(sender!=admin){
+                let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                if(params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4){
+                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                     }
+                }
             }
 
             const TallyMap = require('./tally.js')
@@ -811,15 +825,18 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
-
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-            if(params.Id1 == 1||params.Id1 == 2||params.Id1 == 3||params.propertyIdDesired == 4||params.Id2 == 1||params.Id2 == 2||params.Id2 == 3||params.Id2 == 4){
-                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
+            const admin = activationInstance.getAdmin()
+            console.log('admin '+admin)
+            if(sender!=admin){
+                let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                if(params.Id1 == 1||params.Id1 == 2||params.Id1 == 3||params.propertyIdDesired == 4||params.Id2 == 1||params.Id2 == 2||params.Id2 == 3||params.Id2 == 4){
+                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                     }
+                }
             }
 
             const is = await Validity.isActivated(params.block,txid,10)
@@ -1206,13 +1223,16 @@ const Validity = {
                 params.reason+= "contractId not found"
                 return params
             }
-
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-            if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation'; 
+            const admin = activationInstance.getAdmin()
+            console.log('admin '+admin)
+            if(sender!=admin){
+                let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation'; 
+                }
             }
 
             const MarginMap = require('./marginMap.js')
@@ -1327,18 +1347,20 @@ const Validity = {
                 console.log('exiting contract channel validity for lack of commit addr '+JSON.stringify(params))
                 return params
             }
-
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
-            if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
-            }
-            const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
-            if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
+            const admin = activationInstance.getAdmin()
+            if(sender!=admin){
+                let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
+                if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
+                }
+                const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
+                if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
+                }
             }
             
             
@@ -1544,22 +1566,25 @@ const Validity = {
                 params.reason += "Tx sender is not found to be a channel address"
                 return params
             }
-
-            const bans = await ClearList.getBanlist()
-            if(bans==null){bans = bannedCountries}
-            const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
-            if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
-            }
-             const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
-            if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                 if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
-                params.valid = false;
-                params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
-                 }
+            const admin = activationInstance.getAdmin()
+            console.log('admin in channel token '+admin)
+            if(sender!=admin){
+                let bans = await ClearList.getBanlist()
+                if(bans==null){bans = bannedCountries}
+                const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
+                if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
+                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
+                     }
+                }
+                 const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
+                if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
+                     if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
+                    params.valid = false;
+                    params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
+                     }
+                }
             }
 
 

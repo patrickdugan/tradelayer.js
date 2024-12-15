@@ -171,7 +171,7 @@ class clearlistManager {
 
     static async setBanlist(banlistArray,block) {
         try {
-            const base = await dbInstance.getDatabase('banlist');
+            const base = await dbInstance.getDatabase('clearlists');
             await base.updateAsync(
                 { _id: 'globalBanlist' }, // Fixed ID for the banlist entity
                 { $set: { data: banlistArray, timestamp: block } },
@@ -187,8 +187,8 @@ class clearlistManager {
 
     static async getBanlist() {
         try {
-            const base = await dbInstance.getDatabase('banlist');
-            const banlist = await base.findOneAsync({ _id: 'globalBanlist' });
+            const base = await dbInstance.getDatabase('clearlists');
+            const banlist = await base.findAsync({ _id: 'globalBanlist' });
             if (banlist) {
                 return banlist.data; // Return the banlist array
             } else {
