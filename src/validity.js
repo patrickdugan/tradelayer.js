@@ -115,8 +115,6 @@ const Validity = {
         validateSend: async (sender, params, txid) => {
             params.reason = '';
             params.valid= true
-            const bans = await Clearlist.getBanlist()
-            if(bans==null){bans = bannedCountries}
             //console.log('send params ' +JSON.stringify(params))
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(2);

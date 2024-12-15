@@ -401,8 +401,7 @@ const Logic = {
             await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
             if(tagWithdraw!=null&&typeof tagWithdraw==string ){
                  await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,'UTXOTokenTradeCredit',block)
-                 await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block) {
-
+                 await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block)
             }else{
                   await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
          
@@ -651,7 +650,7 @@ const Logic = {
 
             console.log('Using default global Banlist:', bannedCountriesGlobal);
             await Clearlist.setBanList(bannedCountriesGlobal,block); // Update Clearlist object with default
-    }
+    },
 
 
    async AMMPool(sender, block, isRedeem, isContract, id, amount, id2, amount2) {

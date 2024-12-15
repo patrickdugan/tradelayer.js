@@ -160,7 +160,7 @@ const Types = {
 
                         if (coldWithdrawObject) {
                             // Assign the address of the matching object
-                            const params.tagWithdraw = coldWithdrawObject.address;
+                            params.tagWithdraw = coldWithdrawObject.address;
                             console.log(`Cold withdraw address: ${coldWithdrawAddress}`);
                         } else {
                             console.log(`No matching vout found for tagWithdraw: ${params.tagWithdraw}`);
