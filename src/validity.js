@@ -137,7 +137,7 @@ const Validity = {
                 params.reason = 'propertyId not found in Property List'
                 return params
             }
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
             if(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4){
@@ -399,7 +399,7 @@ const Validity = {
                 }
             }
 
-           const bans = await Clearlist.getBanlist()
+           const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
             if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
@@ -486,7 +486,7 @@ const Validity = {
                 params.reason += "Cannot trade token against its own type"
             }
 
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
             if(params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4){
@@ -812,7 +812,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
             if(params.Id1 == 1||params.Id1 == 2||params.Id1 == 3||params.propertyIdDesired == 4||params.Id2 == 1||params.Id2 == 2||params.Id2 == 3||params.Id2 == 4){
@@ -1207,7 +1207,7 @@ const Validity = {
                 return params
             }
 
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
             if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
@@ -1328,7 +1328,7 @@ const Validity = {
                 return params
             }
 
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
             if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
@@ -1545,7 +1545,7 @@ const Validity = {
                 return params
             }
 
-            const bans = await Clearlist.getBanlist()
+            const bans = await ClearList.getBanlist()
             if(bans==null){bans = bannedCountries}
             const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
             if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
