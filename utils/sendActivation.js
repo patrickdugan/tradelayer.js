@@ -1,8 +1,8 @@
-const PropertyManager = require('./property.js');
-const TallyMap = require('./tally.js');
-const Logic = require('./logic.js');
+//const PropertyManager = require('./property.js');
+//const TallyMap = require('./tally.js');
+//const Logic = require('./logic.js');
 const litecore = require('bitcore-lib-ltc');
-const TxUtils = require('./txUtils');
+const TxUtils = require('../src/txUtils');
 
 function generateNewAddress() {
     const privateKey = new litecore.PrivateKey(); // Generate a new private key
@@ -16,6 +16,6 @@ function generateNewAddress() {
     //const { address, privateKey } = generateNewAddress();
     //console.log('Generated new address:', address);
 
-    TxUtils.activationTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',25)
+    TxUtils.activationTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',9)
 
 

@@ -3,29 +3,34 @@ const dbInstance = require('./db.js');
 class clearlistManager {
     static clearlists = new Map();
     static banlist = ["US", "KP", "SY", "RU", "IR", "CU"];
-    static async createClearlist(adminAddress, name, url, description, backupAddress) {
 
-        const clearlistId = await this.getNextId();
+    static async createClearlist(adminAddress, name, url, description, backupAddress,id) {
+
+        if(!id){
+            id = await this.getNextId();
+        }
+        
         const clearlistData = {
-            adminAddress,
-            name,
-            description,
-            backupAddress
+            id: id,
+            admin: adminAddress,
+            name: name,
+            description: description,
+            backup: backupAddress
         };
 
         const base = await dbInstance.getDatabase('clearlists')
         await base.updateAsync(
-            { _id: clearlistId },
+            { _id: id },
             { $set: { data: clearlistData } },
             { upsert: true }
         );
 
-        return clearlistId;
+        return clearlistData;
     }
 
     static async loadClearlists() {
         try {
-            const base = await dbInstance.getDatabase('attestations')
+            const base = await dbInstance.getDatabase('clearlists')
             const clearLists = await base.findAsync({});
             clearLists.forEach(({ _id, data }) => {
                 this.clearlists.set(_id, data);
@@ -36,6 +41,27 @@ class clearlistManager {
             console.error('Error loading clearlists from the database:', error);
         }
     }
+
+    static async getClearlistById(clearlistId) {
+        try {
+            // Load all clearlists into memory
+            await this.loadClearlists();
+
+            // Check if the clearlistId exists in the Map
+            if (this.clearlists.has(clearlistId)) {
+                const clearlistData = this.clearlists.get(clearlistId);
+                console.log(`Clearlist found: ID ${clearlistId}`, clearlistData);
+                return clearlistData;
+            }
+
+            console.log(`Clearlist ID ${clearlistId} not found.`);
+            return false; // Return false if the clearlistId doesn't exist
+        } catch (error) {
+            console.error(`Error finding clearlist with ID ${clearlistId}:`, error.message);
+            throw error;
+        }
+    }
+
 
     static async getList(id) {
         try {

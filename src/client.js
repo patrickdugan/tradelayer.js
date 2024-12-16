@@ -3,6 +3,7 @@ const Litecoin = require('litecoin');
 const Bitcoin = require('bitcoin');
 const Doge = require('dogecoind-rpc');
 
+
 let clientInstance = null;
 
 class ClientWrapper {
@@ -44,6 +45,7 @@ class ClientWrapper {
         }
 
       const networkInfo = await this.getNetworkInfo();
+      console.log('determining chain in init ')
       this.chain = this.determineChainFromSubversion(networkInfo.subversion);
 
       if (!this.chain) throw new Error('Unable to determine blockchain chain.');
@@ -83,6 +85,7 @@ class ClientWrapper {
       if(txIndex){console.log('initializing client by way of txIndex')}
         if(this.isInitializing){await this.waitForInitialization()}
       const clientWrapper = new ClientWrapper();
+    console.log('constructed client wrapper now init')
       await clientWrapper.init();
     }
     return clientInstance;
@@ -185,7 +188,8 @@ class ClientWrapper {
   }
 
   async getChain() {
-    const bleh= await this.getNetworkInfo(); // Double-check chain type  
+    const bleh= await this.getNetworkInfo(); // Double-check chain type
+    console.log('determining chain in get chain')  
     return this.determineChainFromSubversion(bleh.subversion, true);
   }
 

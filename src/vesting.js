@@ -25,10 +25,15 @@ class TradeLayerManager {
             this.baseVolume = 100;
             this.minRebate = 0.00000625;
             this.maxRebate = 0.0001;
-            this.initialTokenAmount = 600000;
+            this.initialTokenAmount = 100000;
             this.tickerSymbol = 'TB';
             this.hedgeLeverage = 5;
             this.expiryInterval = 12960
+            this.sponsorAddress = "bc1qhc2cj60auf67e0pa3dfd46cvg0fehchx56vw0f"
+            this.freePortion = 0.4
+            this.insurancePortion = 0.1
+            this.vestingPortion = 0.5
+            this.salePortion = 0
         } else if (this.chain === 'DOGE') {
             this.baseVolume = 2000000;
             this.minRebate = 0.00000125;
@@ -37,14 +42,24 @@ class TradeLayerManager {
             this.tickerSymbol = 'TD';
             this.hedgeLeverage = 10;
             this.expiryInterval = 129600
+            this.sponsorAddress = "D8HA73pAhxK7eNXSUVhQrWpUkrszUDGs7Z"
+            this.freePortion = 0.25
+            this.insurancePortion = 0.15
+            this.vestingPortion = 0.5
+            this.salePortion = 0
         } else { // Default to Litecoin (LTC)
             this.baseVolume = 1000;
             this.minRebate = 0.000003125;
             this.maxRebate = 0.0001;
-            this.initialTokenAmount = 1500000;
+            this.initialTokenAmount = 500000;
             this.tickerSymbol = 'TL';
             this.hedgeLeverage = 5;
             this.expiryInterval= 51840
+            this.sponsorAddress = "MWip91xMhaEmDn5oUW5NDNbWSDyG5dSK9Q"
+            this.freePortion = 0.1
+            this.salePortion = 0.1
+            this.insurancePortion = 0.3
+            this.vestingPortion = 0.5
         }
     }
 
@@ -62,6 +77,7 @@ class TradeLayerManager {
          const alreadyInitialized = await TallyMap.checkInitializationFlag();
         
         if(this.adminAddress==undefined||this.adminAddress==null){
+            console.log('lag with admin assignment')
             this.adminAddress="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
         }
          
@@ -73,11 +89,11 @@ class TradeLayerManager {
             const incomeTicker = ticker+"I"
             const incomeVestTicker = incomeTicker + "VEST"
             var TLVESTTokenId = 2;
-            const TLVESTTotalAmount = new BigNumber(TLTotalAmount).dividedBy(2).toNumber();
-            var amountToInsuranceFund = new BigNumber(TLVESTTotalAmount).times(0.6).toNumber();
-            const TLInitialLiquidity = new BigNumber(TLVESTTotalAmount).times(0.4).toNumber();
-            const TLVESTReserve = TLTotalAmount-amountToInsuranceFund-TLInitialLiquidity
-            const TLIVESTinitialLiquidity = TLTotalAmount
+            const TLVESTTotalAmount = new BigNumber(TLTotalAmount).times(this.vestingPortion).toNumber();
+            var amountToInsuranceFund = new BigNumber(TLTotalAmount).times(this.insurancePortion).toNumber();
+            const TLInitialLiquidity = new BigNumber(TLTotalAmount).times(this.salePortion).toNumber();
+            const freeTranche = new BigNumber(TLTotalAmount).times(this.freePortion).toNumber();
+            const TLIVESTinitialLiquidity = new BigNumber(TLTotalAmount).times(3).toNumber()
             const TLITotalAmount = TLIVESTinitialLiquidity+1
             const propertyManager = PropertyManager.getInstance()
             TLTokenId = await propertyManager.createToken(ticker, TLTotalAmount, 'Fixed', 0);
@@ -110,6 +126,7 @@ class TradeLayerManager {
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount, 0, 0, TLVESTTotalAmount);
             await TallyMap.updateBalance(this.adminAddress, TLIVESTToken, 1500000, 0,0, 1500000)
             await TallyMap.updateBalance(this.adminAddress, TLI, 1,0,0,0)
+            await TallyMap.updateBalance(this.sponsorAddress, TLTokenId, freeTranche,0,0,0)
 
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
@@ -156,7 +173,8 @@ class TradeLayerManager {
             'Issuer Whitelist',
             '',
             'Oracles and Tokens included in Liquidity Reward',
-            ''
+            this.sponsorAddress,
+            1
         );
 
         // Initialize market maker whitelist
@@ -164,7 +182,9 @@ class TradeLayerManager {
             this.adminAddress,
             'Market Maker Whitelist',
             '',
-            'Market Makers and active traders who do not wash trade.'
+            'Market Makers and active traders who do not wash trade.',
+            this.sponsorAddress,
+            2
         );
 
         console.log(`Issuer whitelist created with ID: ${issuerClearlistId}`);

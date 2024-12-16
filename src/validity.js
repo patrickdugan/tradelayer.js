@@ -33,32 +33,37 @@ const Validity = {
         },
 
         // 0: Activate TradeLayer
-        validateActivateTradeLayer: async (sender, params,txid) => {
+        validateActivateTradeLayer: async (sender, params, txid) => {
             params.valid = true;
-            console.log('inside validating activation '+JSON.stringify(params))
-            const adminAddress =await activationInstance
-             //console.log('trying to debug this strings passing thing '+parseInt(params.txTypeToActivate)+params.txTypeToActivate +parseInt(params.txTypeToActivate)==NaN)
-            if(isNaN(parseInt(params.txTypeToActivate))==true){
+            console.log('Validating activation:', JSON.stringify(params));
+
+            const txTypes = Array.isArray(params.txTypeToActivate)
+                ? params.txTypeToActivate
+                : [parseInt(params.txTypeToActivate)];
+
+            if (txTypes.some(isNaN)) {
                 params.valid = false;
-                params.reason = 'Tx Type is not an integer';
+                params.reason = 'Tx Type contains non-integer values';
+                return params;
             }
-
+            const admin = activationInstance.getAdmin()
             // Check if the sender is the admin address
-            if (sender != "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8") {
-                params.valid=false
+            if (sender !== admin) {
+                params.valid = false;
                 params.reason = 'Not sent from admin address';
+                return params;
             }
 
-            // Check if the txTypeToActivate is already activated
-
-            if(params.txTypeToActivate>35){
+            // Check if the txTypeToActivate is within bounds
+            if (txTypes.some(txType => txType > 35 || txType < 0)) {
                 params.valid = false;
                 params.reason = 'Tx Type out of bounds';
+                return params;
             }
 
             return params;
         },
-  
+
          // 1: Token Issue
         validateTokenIssue: async (sender, params,txid) => {
             params.valid=true
@@ -140,19 +145,23 @@ const Validity = {
 
             const admin = activationInstance.getAdmin()
             console.log('admin in send '+admin)
-            if(sender!=admin){
-                const admin = activationInstance.getAdmin()
-                if(sender!=admin){
+            if(sender!=admin&&(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4)){
                       let bans = await ClearList.getBanlist()
+                      console.log('banlist '+JSON.stringify(bans))
                     if(bans==null){bans = bannedCountries}
+                        console.log('bans again '+bans)
                     const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-                    if(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4){
-                         if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    const receiverCountryInfo = await ClearList.getCountryCodeByAddress(params.address)
+                    console.log('sender country info '+JSON.stringify(senderCountryInfo))
+                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))){
                         params.valid = false;
                         params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                         }
                     }
-                }
+                    if ((!receiverCountryInfo || bans.includes(receiverCountryInfo.countryCode))){
+                        params.valid = false;
+                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                    }
+                    
             }
           
 
@@ -786,12 +795,13 @@ const Validity = {
             const clearlistId = params.id;
 
             // Assuming ClearList or an equivalent instance is available
+            console.log('this clearlist id' +clearlistId)
             const clearlist = await ClearList.getClearlistById(clearlistId); // Implement this method as per your clearlist management logic
-
+            console.log('testing logic in attest validity '+Boolean(!clearlist)+Boolean(clearlistId!=0))
             if (!clearlist&&clearlistId!=0) {
                 params.valid = false;
                 params.reason += `Clearlist with ID ${clearlistId} not found; `;
-            } else if(clearlistID!=0){
+            } else if(clearlistId!=0){
                 // Check if the sender matches the admin address of the clearlist
                 if (sender !== clearlist.adminAddress) {
                     params.valid = false;
@@ -799,7 +809,7 @@ const Validity = {
                 }
             }
 
-            if(sender!=params.targetAddress&&clearListId==0){
+            if(sender!=params.targetAddress&&clearlistId==0){
                     params.valid = false;
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
             }

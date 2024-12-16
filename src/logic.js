@@ -160,18 +160,22 @@ const Logic = {
         return 
     },
 
-    async activateTradeLayer(txType, block, codeHash) { 
-    		 // Assuming the transaction object has properties like 'txId' and 'senderAddress'
-        // Call the activateSystem method from the Activation class instance
-        //console.log('in activate TradeLayer logic function '+ txType+ ' block ' +block)
-        const activationResult = await activation.activate(txType, block, codeHash);
+    async activateTradeLayer(txTypes, block, codeHash) {
+        if (!Array.isArray(txTypes)) {
+            txTypes = [txTypes];
+        }
 
-        // Log or handle the result of activation
-        console.log('activation result ' +activationResult);
+        const results = [];
+        for (const txType of txTypes) {
+            console.log(`Activating txType: ${txType} at block: ${block}`);
+            const activationResult = await activation.activate(txType, block, codeHash);
+            console.log(`Activation result for txType ${txType}:`, activationResult);
+            results.push({ txType, result: activationResult });
+        }
 
-        return activationResult; // You might want to return this for further processing
- 
+        return results; // Return an array of results for further processing
     },
+
 
     async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
         const propertyManager = PropertyManager.getInstance();
@@ -597,7 +601,7 @@ const Logic = {
 		        }
 
 		        // Create the clearlist
-		        const clearlistId = await ClearList.createclearlist({
+		        const clearlistData = await ClearList.createclearlist({
 		            adminAddress,
 		            name,
 		            url,
@@ -607,8 +611,7 @@ const Logic = {
 
 		        // Return a message with the new clearlist ID
 		        return {
-		            message: `clearlist created successfully with ID: ${clearlistId}`,
-		            clearlistId
+		            message: `clearlist created successfully with ID: ${clearlistData.id}`
 		        };
 		},
 

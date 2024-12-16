@@ -6,15 +6,14 @@ const marker = 'tl';
 const Encode = {
     // Encode Simple Token Issue Transaction
     encodeActivateTradeLayer(params) {
-        const base94Encoded = base94.decimalToBase94(params.codeHash);
-        const payload = {
-            txTypeToActivate: params.txTypeToActivate,
-            codeHash: base94Encoded,
-        };
+        const txTypeEncoded = Array.isArray(params.txTypeToActivate)
+                ? params.txTypeToActivate.join(';')
+                : params.txTypeToActivate;
+        const base94Encoded = base94.hexToBase94(params.codeHash);
         const type = 0;
-        const typeStr = type.toString(36);
-        return marker + typeStr + JSON.stringify(payload);
+        return marker + type + ',' + txTypeEncoded + ',' + base94Encoded;
     },
+
 
     // Encode Token Issue Transaction
     encodeTokenIssue(params) {
@@ -198,7 +197,7 @@ const Encode = {
     encodeIssueOrRevokeAttestation: (params) => {
         const payload = [
             params.revoke,
-            params.id,
+            params.id.toString(36),
             params.targetAddress,
             params.metaData
         ];

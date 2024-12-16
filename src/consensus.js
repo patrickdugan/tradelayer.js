@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const util = require('util');
 const fsPromises = fs.promises;
+const basePath = path.join(__dirname);
 
 class ConsensusDatabase {
         static consensusVector = [];
@@ -227,7 +228,7 @@ class ConsensusDatabase {
     }
 
 // Function to hash files in the specified folder
-	static async hashFiles(basePath) {
+	static async hashFiles() {
 	    try {
 	        let combinedContent = ''; // Initialize empty string to hold combined file content
 
@@ -239,7 +240,9 @@ class ConsensusDatabase {
 			];
 	        // Loop through each file, read its content, and append to combinedContent
 	        for (const file of jsFiles) {
-	            const filePath = path.join(basePath, `${file}.js`);
+                console.log('file name '+file)
+                const name = file+'.js'
+	            const filePath = path.join(basePath, name);
 
 	            if (fs.existsSync(filePath)) {
                     const fileContent = await fsPromises.readFile(filePath, 'utf8');
@@ -251,6 +254,7 @@ class ConsensusDatabase {
 
 	        // Stringify the combined content
 	        const combinedContentString = JSON.stringify(combinedContent);
+            //console.log('combinedContent '+combinedContentString)
 
 	        // Generate a SHA-256 hash of the combined content
 	        const hash = crypto.createHash('sha256');

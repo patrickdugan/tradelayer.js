@@ -63,12 +63,10 @@ async function sendTransactionWithParams(fromAddress, toAddress, propertyid, amo
         console.log('Prepared Parameters:', { privateKey, utxo });
 
         // Call TxUtils.sendTransaction with the prepared parameters
-        const hex = await TxUtils.sendTransaction(fromAddress, toAddress, propertyid, amount, false,
+        const txid = await TxUtils.sendTransaction(fromAddress, toAddress, propertyid, amount, false,
             privateKey,
             utxo
         );
-
-        sendrawtransactionAsync(hex)
 
         console.log('Transaction sent successfully.');
     } catch (error) {
@@ -78,9 +76,9 @@ async function sendTransactionWithParams(fromAddress, toAddress, propertyid, amo
 
 // Example usage
 sendTransactionWithParams(
+    'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr',
     'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',
-    'tltc1q9shql037ls5a4hlyc467ckxtxgfjupa2djedep',
     1,
-    100,
+    10,
     false
 );

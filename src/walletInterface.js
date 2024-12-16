@@ -24,7 +24,7 @@ const expressInterface = {
 
     async getAllBalancesForAddress(params) {
         try {
-            const response = await axios.post(`${serverUrl}/tl_getallbalancesforaddress`, { params:[address] });
+            const response = await axios.post(`${serverUrl}/tl_getAllBalancesForAddress`, { params:[address] });
             return response.data;
         } catch (error) {
             console.error('Error in getAllBalancesForAddress:', error.response ? error.response.data : error.message);

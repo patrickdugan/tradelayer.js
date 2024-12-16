@@ -5,14 +5,17 @@ const base256 = require('./base256.js')
 
 const Decode = {
    // Decode Activate TradeLayer Transaction
-    decodeActivateTradeLayer(payload) {
+      decodeActivateTradeLayer(payload) {
         const parts = payload.split(',');
+        const txTypes = parts[0].includes(';') ? parts[0].split(';').map(Number) : [parseInt(parts[0])];
         const decodedHash = parts[1] ? base94.base94ToHex(parts[1]) : '';
+        console.log('Decoded txTypes:', txTypes, 'Decoded Hash:', decodedHash);
         return {
-            txTypeToActivate: parts[0],
+            txTypeToActivate: txTypes,
             codeHash: decodedHash
         };
     },
+
 
     // Decode Token Issue Transaction
     decodeTokenIssue: (payload) => {

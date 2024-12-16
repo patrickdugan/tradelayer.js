@@ -1,18 +1,15 @@
 const baseConverter = require('bigint-base-converter');
 
 // Define the Base 94 character set
-const base94Chars = [...Array(94).keys()].map((i) => String.fromCharCode(i + 33));
+const base94Chars = Array.from({ length: 94 }, (_, i) => String.fromCharCode(i + 33));
+//console.log(base94Chars); // Should print valid ASCII printable characters
+
 
 // Create the conversion functions within an object
 const Base94Converter = {
     // Convert decimal to base 94
     toBase94(decimalString) {
         return baseConverter(decimalString, 10, base94Chars.join(''));
-    },
-
-    // Convert base 94 back to decimal
-    fromBase94(base94String) {
-        return baseConverter(base94String, base94Chars.join(''), 10);
     },
 
     // Convert hex to decimal
@@ -37,21 +34,45 @@ const Base94Converter = {
         return this.decimalToHex(decimalString);
     },
 
-    // Convert decimal to Base 94 including fractional parts
-    decimalToBase94(decimal) {
+    validateBase94Input(input) {
+        for (const char of input) {
+            if (!base94Chars.includes(char)) {
+                throw new Error(`Invalid Base94 character detected: ${char}`);
+            }
+        }
+    },
+
+   decimalToBase94(decimal) {
+        if (!decimal) return null; // Validate input
+
         const [integerPart, fractionalPart] = decimal.toString().split('.');
+        console.log('integer part '+integerPart)
         const integerEncoded = this.toBase94(integerPart);
 
-        // Encode fractional part by scaling it
         let fractionalEncoded = '';
         if (fractionalPart) {
             const scale = Math.pow(10, fractionalPart.length);
             const scaledFraction = BigInt(fractionalPart) * BigInt(scale) / BigInt('1' + '0'.repeat(fractionalPart.length));
-            fractionalEncoded = this.toBase94(scaledFraction.toString()) + '_'; // Using underscore as fractional separator
+            fractionalEncoded = this.toBase94(scaledFraction.toString());
         }
 
-        return `${integerEncoded}.${fractionalEncoded}`;
+        return fractionalPart ? `${integerEncoded}|${fractionalEncoded}` : integerEncoded;
+    },
+
+    fromBase94(base94String) {
+        if (!base94String) return null; // Validate input
+
+        const [integerEncoded, fractionalEncoded] = base94String.split('|');
+        const integerDecoded = this.fromBase94(integerEncoded);
+        let fractionalDecoded = '0';
+
+        if (fractionalEncoded) {
+            fractionalDecoded = BigInt(this.fromBase94(fractionalEncoded)).toString();
+        }
+
+        return `${integerDecoded}.${fractionalDecoded}`;
     }
+
 };
 
 // Export the object for use in other modules

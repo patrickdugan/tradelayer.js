@@ -687,7 +687,7 @@ async addInputs(utxos, rawTx) {
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
             transaction.change(fromAddress);
 
-            let payload = 'tl2' + Encode.encodeSend({
+            let payload = Encode.encodeSend({
                 sendAll: sendAll,
                 address: toAddress,
                 propertyId: propertyId,
@@ -711,9 +711,10 @@ async addInputs(utxos, rawTx) {
 
     async activationTransaction(adminAddress, txTypeToActivate) {
         try {
-            let activationPayload = 'tl0' + Encode.encodeActivateTradeLayer({
+            const codeHash = await Consensus.hashFiles()
+            let activationPayload = Encode.encodeActivateTradeLayer({
                 txTypeToActivate: txTypeToActivate,
-                codeHash: await Consensus.hashFiles()
+                codeHash: codeHash
             });
 
             const utxos = await this.client.listUnspent(1, 9999999, [adminAddress]);
@@ -731,7 +732,7 @@ async addInputs(utxos, rawTx) {
             const privateKey = await this.client.dumpprivkey(adminAddress);
             transaction.sign(privateKey);
 
-            const serializedTx = transaction.serialize();
+            const serializedTx = transaction.uncheckedSerialize();
             const txid = await this.client.sendrawtransaction(serializedTx);
 
             console.log(`Activation transaction sent successfully. TXID: ${txid}`);

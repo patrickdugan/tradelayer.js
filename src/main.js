@@ -115,8 +115,8 @@ class Main {
 
     async initialize() {
           await this.delay(500)
-        console.log('db status '+db.initialized)
-        if(!db.initialized&&this.client.chain){
+        console.log('db status '+db)
+        if(!db&&this.client.chain){
             console.log('have client, awaiting db')
             await db.init(this.client.chain)
             await this.delay(300)

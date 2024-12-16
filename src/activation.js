@@ -9,20 +9,25 @@ const testAdmin = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
 class Activation {
     static instance = null;  // Static instance holder
 
-    constructor() {
+    constructor(chain) {
         if (Activation.instance) {
             return Activation.instance;
         }
        
         this.consensusVector = {};
         this.txRegistry = this.initializeTxRegistry()
-        this.init()
+        //this.init(chain)
         Activation.instance = this; // Set the instance
     }
 
-     async init() {
+     async init(chain) {
                 const client = await ClientWrapper.getInstance()
-                this.chain = await client.getChain();
+                if(!chain){
+                    console.log('assigning chain '+client.chain)
+                    this.chain = await client.getChain() 
+                }else{
+                    this.chain = await client.getChain(chain);
+                }
                 this.test = await client.getTest();
                 this.updateAdminAddress()
             }
@@ -43,9 +48,10 @@ class Activation {
     }
 
     // Static method to get the singleton instance
-    static getInstance() {
+    static getInstance(chain) {
         if (!Activation.instance) {
-            Activation.instance = new Activation();
+            console.log('generate activation instance')
+            Activation.instance = new Activation(chain);
         }
         return Activation.instance;
     }
