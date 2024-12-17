@@ -220,7 +220,6 @@ const Types = {
                 params = await Validity.validateUpdateAdmin(sender, params, txId)
                 break;
             case 9:
-           
                 params = Decode.decodeIssueOrRevokeAttestation(encodedPayload.substr(index));
                 params.block=block
                 params.senderAddress = sender
@@ -409,7 +408,7 @@ const Types = {
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                //params = await Validity.validateCriossLayerBridge(sender, params, block)
+                //params = await Validity.validateCrossLayerBridge(sender, params, block)
                 break;
             case 35:
                 params = Decode.decodeSmartContractBind(encodedPayload.substr(index));

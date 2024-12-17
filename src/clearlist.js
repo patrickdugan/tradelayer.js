@@ -178,7 +178,7 @@ class clearlistManager {
             for (const attestation of attestations) {
                 const { listId, data} = attestation.data;
                 
-                if (clearListId === 0 && data) {
+                if (listId === 0 && data) {
                     return {
                         address,
                         countryCode: data,

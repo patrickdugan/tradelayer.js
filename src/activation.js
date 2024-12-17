@@ -178,9 +178,9 @@ class Activation {
         const activationPercentage = (activeCount / totalTxTypes) * 100;
 
         console.log(`Active transactions: ${activeCount}/${totalTxTypes} (${activationPercentage.toFixed(2)}%)`);
-
+        console.log('above threshold? '+Boolean(activationPercentage > 90))
         // Check if >90% of activations are true
-        return activationPercentage > 90;
+        return Boolean(activationPercentage > 90);
     }
 
 

@@ -20,8 +20,6 @@ const Decode = {
 
         // Decode codeHash
         const decodedHash = parts[1] 
-            ? BigInt('0x' + parseInt(parts[1], 36).toString(16)).toString(16) 
-            : '';
 
         console.log('Decoded txTypes:', txTypes, 'Decoded Hash:', decodedHash);
 

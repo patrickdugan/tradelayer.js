@@ -32,38 +32,56 @@ const Validity = {
             return true
         },
 
-        // 0: Activate TradeLayer
+        //Type 0: Activation
         validateActivateTradeLayer: async (sender, params, txid) => {
             params.valid = true;
-            console.log('Validating activation:', JSON.stringify(params));
+            console.log('Raw txTypeToActivate:', JSON.stringify(params.txTypesToActivate));
 
-            const txTypes = Array.isArray(params.txTypeToActivate)
-                ? params.txTypeToActivate
-                : [parseInt(params.txTypeToActivate)];
+            let txTypes = [];
 
-            /*if (txTypes.some(isNaN)) {
+            // Sanitize txTypeToActivate into an array of valid numbers
+            if (Array.isArray(params.txTypesToActivate)) {
+                txTypes = params.txTypesToActivate
+                    .map(tx => Number(tx)) // Convert all elements to numbers
+                    .filter(tx => !isNaN(tx)); // Remove any invalid numbers (NaN)
+            } else if (params.txTypeToActivate !== undefined && params.txTypesToActivate !== null) {
+                const num = Number(params.txTypesToActivate);
+                if (!isNaN(num)) {
+                    txTypes = [num];
+                }
+            }
+
+            console.log('Sanitized txTypes:', txTypes);
+
+            // Check if txTypes array is empty (invalid input)
+            if (txTypes.length === 0) {
                 params.valid = false;
-                params.reason = 'Tx Type contains non-integer values';
+                params.reason = 'Tx Type contains non-integer or invalid values';
                 return params;
-            }*/
-            const admin = activationInstance.getAdmin()
-            console.log('sender vs. admin in activate '+sender + ' '+admin)
-            // Check if the sender is the admin address
+            }
+
+            // Check if sender is the admin address
+            const admin = activationInstance.getAdmin();
+            console.log('Sender vs Admin:', sender, admin);
             if (sender !== admin) {
                 params.valid = false;
                 params.reason = 'Not sent from admin address';
                 return params;
             }
 
-            // Check if the txTypeToActivate is within bounds
+            // Check if txTypes are within valid bounds
             if (txTypes.some(txType => txType > 35 || txType < 0)) {
                 params.valid = false;
                 params.reason = 'Tx Type out of bounds';
                 return params;
             }
 
+            // All checks passed
+            params.txTypesToActivate = txTypes;
+            console.log('Validated txTypesToActivate:', txTypes);
             return params;
         },
+
 
          // 1: Token Issue
         validateTokenIssue: async (sender, params,txid) => {
@@ -146,23 +164,20 @@ const Validity = {
 
             const admin = activationInstance.getAdmin()
             console.log('admin in send '+admin)
-            if(sender!=admin&&(params.propertyIds == 1||params.propertyIds == 2||params.propertyIds == 3||params.propertyIds == 4)){
+            if(sender!=admin&&(params.propertyIds == 1||params.propertyIds == 4)){
                       let bans = await ClearList.getBanlist()
                       console.log('banlist '+JSON.stringify(bans))
                     if(bans==null){bans = bannedCountries}
                         console.log('bans again '+bans)
                     const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-                    const receiverCountryInfo = await ClearList.getCountryCodeByAddress(params.address)
                     console.log('sender country info '+JSON.stringify(senderCountryInfo))
                     if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))){
+                        if(activationInstance.areActivationsAboveThreshold()){
                         params.valid = false;
                         params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+          
+                        }
                     }
-                    if ((!receiverCountryInfo || bans.includes(receiverCountryInfo.countryCode))){
-                        params.valid = false;
-                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                    }
-                    
             }
           
 
@@ -423,10 +438,12 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
                 if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
-                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                    params.valid = false;
-                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                     }
+                    if(!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    if(activationInstance.areActivationsAboveThreshold()){
+                        params.valid = false;
+                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                        }
+                    }
                 }
             }
 
@@ -512,11 +529,13 @@ const Validity = {
                 let bans = await ClearList.getBanlist()
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-                if(params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4){
-                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                if(params.propertyIdOffered == 1||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 4){
+                    if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    if(activationInstance.areActivationsAboveThreshold()){
                     params.valid = false;
                     params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
                      }
+                    }
                 }
             }
 
@@ -745,7 +764,7 @@ const Validity = {
                     }
                 }
 
-                if (params.oracle) {
+                if(params.oracle) {
                     const admin = await OracleList.isAdmin(sender, params.id);
                     if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!==sender) {
                         params.valid = false;
@@ -753,7 +772,7 @@ const Validity = {
                     }
                 }
 
-                if (params.token) {
+                if(params.token) {
                     const tokenInfo = await PropertyList.getPropertyData(params.id)
                     if (tokenInfo.issuer !== sender||tokenInfo.backupAddress!==sender){
                         params.valid = false;
@@ -1242,7 +1261,7 @@ const Validity = {
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
                 if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
                     params.valid = false;
-                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation'; 
+                    params.reason += 'Sender cannot trade contracts from a banned country or lacking country code attestation'; 
                 }
             }
 
@@ -1584,17 +1603,21 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
                 if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                    params.valid = false;
-                    params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
-                     }
+                    if(activationInstance.areActivationsAboveThreshold()){
+                        if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                            params.valid = false;
+                            params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
+                        }
+                    }
                 }
                  const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
                 if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                     if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
-                    params.valid = false;
-                    params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
-                     }
+                    if(activationInstance.areActivationsAboveThreshold()){
+                        if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
+                            params.valid = false;
+                            params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
+                        }
+                    }
                 }
             }
 
