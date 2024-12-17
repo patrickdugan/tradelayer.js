@@ -14,6 +14,7 @@ const TxUtils = require('./txUtils.js')
 const Consensus = require('./consensus.js')
 const Channels = require('./channels.js')
 const Types = require('./types.js')
+const ClearList = require('./clearlist.js')
 
 
 let isInitialized = false; // A flag to track the initialization status
@@ -109,6 +110,21 @@ app.post('/tl_getChannelColumn', async (req,res) =>{
         res.status(500).send('Error: ' + error.message);
     }
 })
+app.post('/tl_getAttestations', async (req, res) => {
+    try {
+        const { address, id } = req.body;
+
+        // Query database for attestations with listId 0 and matching address
+        const column = await Clearlist.getAttestationHistory(address, id);
+        const filteredResults = column.filter(entry => entry.data?.listId === id);
+
+        res.json(filteredResults);
+    } catch (error) {
+        console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 
 /*app.post('/tl_decodeTx', async (req, res) => {
     try {
