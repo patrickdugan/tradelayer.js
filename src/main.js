@@ -114,9 +114,9 @@ class Main {
     }
 
     async initialize() {
-          await this.delay(500)
+          await this.delay(1500)
         console.log('db status '+db)
-        if(!db&&this.client.chain){
+        if(!db&&this.client){
             console.log('have client, awaiting db')
             await db.init(this.client.chain)
             await this.delay(300)
@@ -395,8 +395,8 @@ class Main {
                     if (flag) {
                         console.log('missing tx decode ' + decodedParams);
                     }
-                    //console.log('decoded params ' +JSON.stringify(decodedParams))
-                    //decodedParams.block = blockHeight;
+                    console.log('decoded params ' +JSON.stringify(decodedParams))
+                    decodedParams.block = blockHeight;
 
                     if (decodedParams.valid === true) {
                         console.log('consensus marking valid tx '+decodedParams)
@@ -404,7 +404,7 @@ class Main {
                         await Logic.typeSwitch(type, decodedParams);
                         await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     } else {
-                        console.log('consensus marking valid tx '+decodedParams)
+                        console.log('consensus marking invalid tx '+decodedParams)
                         await Consensus.markTxAsProcessed(txId, decodedParams);
                         await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     }

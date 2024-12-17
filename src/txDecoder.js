@@ -5,16 +5,32 @@ const base256 = require('./base256.js')
 
 const Decode = {
    // Decode Activate TradeLayer Transaction
-      decodeActivateTradeLayer(payload) {
+     decodeActivateTradeLayer(payload) {
         const parts = payload.split(',');
-        const txTypes = parts[0].includes(';') ? parts[0].split(';').map(Number) : [parseInt(parts[0])];
-        const decodedHash = parts[1] ? base94.base94ToHex(parts[1]) : '';
+        console.log('payload '+payload)
+        console.log('parts '+parts[0])
+        console.log('split array '+parts[0].split(';'))
+        // Decode txType(s)
+        const txTypes = parts[0].includes(';') 
+            ? parts[0].split(';').map(value => {
+                const num = parseInt(value, 10); // Parse as integer
+                return isNaN(num) ? null : num; // Handle invalid entries
+            })
+            : [parseInt(parts[0], 10)]; // Single value case
+
+        // Decode codeHash
+        const decodedHash = parts[1] 
+            ? BigInt('0x' + parseInt(parts[1], 36).toString(16)).toString(16) 
+            : '';
+
         console.log('Decoded txTypes:', txTypes, 'Decoded Hash:', decodedHash);
+
         return {
-            txTypeToActivate: txTypes,
+            txTypesToActivate: txTypes.filter(txType => txType !== null), // Remove invalid txTypes
             codeHash: decodedHash
         };
     },
+
 
 
     // Decode Token Issue Transaction
@@ -209,11 +225,12 @@ const Decode = {
     // Decode Issue Attestation Transaction
     decodeIssueOrRevokeAttestation: (payload) => {
         const parts = payload.split(',');
+        console.log('decoding attestation '+JSON.stringify(parts))
         return {
             revoke: parts[0] === '1',
             id: parseInt(parts[1] || '0', 36),
-            targetAddress: parts[3] || '',
-            metaData: parts[4] || ''
+            targetAddress: parts[2] || '',
+            metaData: parts[3] || ''
         };
     },
 

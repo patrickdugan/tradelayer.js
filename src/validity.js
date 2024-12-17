@@ -41,12 +41,13 @@ const Validity = {
                 ? params.txTypeToActivate
                 : [parseInt(params.txTypeToActivate)];
 
-            if (txTypes.some(isNaN)) {
+            /*if (txTypes.some(isNaN)) {
                 params.valid = false;
                 params.reason = 'Tx Type contains non-integer values';
                 return params;
-            }
+            }*/
             const admin = activationInstance.getAdmin()
+            console.log('sender vs. admin in activate '+sender + ' '+admin)
             // Check if the sender is the admin address
             if (sender !== admin) {
                 params.valid = false;
@@ -808,7 +809,7 @@ const Validity = {
                     params.reason += `Sender ${sender} is not authorized to issue or revoke attestations for clearlist ${clearlistId}; `;
                 }
             }
-
+            console.log('params in validate attestation '+sender+' '+params.targetAddress)
             if(sender!=params.targetAddress&&clearlistId==0){
                     params.valid = false;
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;

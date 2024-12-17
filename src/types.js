@@ -206,18 +206,25 @@ const Types = {
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 7:
-                params.block=block
                 params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));
+                params.block=block
+                params.senderAddress = sender
+                params.txid = txId
                 params = await Validity.validateCreateWhitelist(sender, params, txId)
                 break;
             case 8:
-                params.block=block
                 params = Decode.decodeUpdateAdmin(encodedPayload.substr(index));
+                params.block=block
+                params.senderAddress = sender
+                params.txid = txId
                 params = await Validity.validateUpdateAdmin(sender, params, txId)
                 break;
             case 9:
-                params.block=block
+           
                 params = Decode.decodeIssueOrRevokeAttestation(encodedPayload.substr(index));
+                params.block=block
+                params.senderAddress = sender
+                params.txid = txId
                 params = await Validity.validateIssueOrRevokeAttestation(sender, params, txId)
                 break;
             case 10:

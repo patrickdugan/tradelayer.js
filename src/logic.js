@@ -46,7 +46,7 @@ const Logic = {
         console.log('tx number and params ' +txNumber, params)
         switch (txNumber) {
            case 0:
-                await Logic.activateTradeLayer(params.txTypeToActivate, params.block, params.codeHash);
+                await Logic.activateTradeLayer(params.txTypesToActivate, params.block, params.codeHash);
                 break;
             case 1:
                 await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT, params.block);
@@ -74,7 +74,7 @@ const Logic = {
                 await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
                 break;
             case 9:
-                await Logic.issueOrRevokeAttestation(params.sender, params.clearlistId, params.targetAddress, params.metadata, params.block);
+                await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block);
                 break;
             case 10:
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
@@ -164,7 +164,7 @@ const Logic = {
         if (!Array.isArray(txTypes)) {
             txTypes = [txTypes];
         }
-
+        console.log('inside activate logic '+txTypes)
         const results = [];
         for (const txType of txTypes) {
             console.log(`Activating txType: ${txType} at block: ${block}`);
@@ -633,11 +633,13 @@ const Logic = {
     async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block) {
         const admin = activation.getAdmin()
         if(sender==admin&&clearlistId==0){
+            console.log('admin updating banlist')
             await updateBannedCountries(metaData,block)
             return
         }
         if(!revoke){
-             await ClearList.addAttestion(clearlistId, targetAddress,metaData, block);
+            console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block)
+             await ClearList.addAttestation(clearlistId, targetAddress,metaData, block);
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
             await ClearList.revokeAttestation(clearlistId,targetAddress,metaData, block)

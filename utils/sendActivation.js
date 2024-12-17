@@ -16,6 +16,6 @@ function generateNewAddress() {
     //const { address, privateKey } = generateNewAddress();
     //console.log('Generated new address:', address);
 
-    TxUtils.activationTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',9)
+    TxUtils.activationTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',[7,8,9])
 
 

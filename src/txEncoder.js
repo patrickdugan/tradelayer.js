@@ -9,9 +9,10 @@ const Encode = {
         const txTypeEncoded = Array.isArray(params.txTypeToActivate)
                 ? params.txTypeToActivate.join(';')
                 : params.txTypeToActivate;
-        const base94Encoded = base94.hexToBase94(params.codeHash);
+        const base36hex = BigInt('0x' + params.codeHash).toString(36); // Hex to Base 36
+        //const base94Encoded = base94.hexToBase94(params.codeHash);
         const type = 0;
-        return marker + type + ',' + txTypeEncoded + ',' + base94Encoded;
+        return marker + type + txTypeEncoded + ',' + base36hex//base94Encoded;
     },
 
 

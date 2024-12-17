@@ -130,7 +130,8 @@ class clearlistManager {
             timestamp: block
         };
 
-        await this.attestationsDb.updateAsync(
+        const base = await dbInstance.getDatabase('attestations')
+        await base.updateAsync(
             { _id: attestationId },
             { $set: { data: attestationData } },
             { upsert: true }
