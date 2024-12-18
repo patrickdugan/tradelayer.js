@@ -228,7 +228,7 @@ const Decode = {
             revoke: parts[0] === '1',
             id: parseInt(parts[1] || '0', 36),
             targetAddress: parts[2] || '',
-            metaData: parts[3] || ''
+            metaData: parts[3].toUpperCase() || ''
         };
     },
 

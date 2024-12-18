@@ -232,12 +232,19 @@ class clearlistManager {
         const base = await dbInstance.getDatabase('attestations')
         return await base.findAsync({ 'data.clearlistId': clearlistId });
     }
-
+    
     static async getAttestationHistory(address, clearlistId) {
+        const base = await dbInstance.getDatabase('attestations');
 
-        const base = await dbInstance.getDatabase('attestations')
-        return await base.findAsync({ 'data.address': address });
+        // Fetch all matching records for the address and listId
+        const records = await base.findAsync({ 'data.address': address, 'data.listId': clearlistId });
+
+        // Sort by timestamp (descending)
+        const sortedRecords = records.sort((a, b) => b.data.timestamp - a.data.timestamp);
+
+        return sortedRecords; // Return sorted array
     }
+
 
     static async isAddressInClearlist(clearlistId, address) {
 

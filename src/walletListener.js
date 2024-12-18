@@ -110,15 +110,15 @@ app.post('/tl_getChannelColumn', async (req,res) =>{
         res.status(500).send('Error: ' + error.message);
     }
 })
+
 app.post('/tl_getAttestations', async (req, res) => {
     try {
         const { address, id } = req.body;
 
-        // Query database for attestations with listId 0 and matching address
-        const column = await Clearlist.getAttestationHistory(address, id);
-        const filteredResults = column.filter(entry => entry.data?.listId === id);
+        // Fetch and sort attestations
+        const attestationHistory = await Clearlist.getAttestationHistory(address, id);
 
-        res.json(filteredResults);
+        res.json(attestationHistory); // Send the sorted array back
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
