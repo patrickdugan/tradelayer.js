@@ -72,6 +72,21 @@ const genesisBlock = 3082500
 const COIN = 100000000
 const pause = false
 
+const GENESIS_BLOCK_HEIGHTS = {
+    BTC: {
+        test: 3520000,  // Replace with actual testnet genesis block height
+        main: 880000,  // Replace with actual mainnet genesis block height
+    },
+    DOGE: {
+        test: 6815000,  // Replace with actual testnet genesis block height
+        main: 5520000,  // Replace with actual mainnet genesis block height
+    },
+    LTC: {
+        test: 3082500,  // Replace with actual testnet genesis block height
+        main: 2812000,  // Replace with actual mainnet genesis block height
+    }
+};
+
 class Main {
     static instance;
     static isInitializing = false;  // Add a flag to track initialization
@@ -91,7 +106,7 @@ class Main {
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = () => this.client.getBlockCount();
         this.getNetworkInfoAsync = () => this.client.getNetworkInfo();
-        this.genesisBlock = 3082500;
+        this.genesisBlock = 600000
         this.parseBlock = 0
         console.log(this.genesisBlock)
         //this.blockchainPersistence = new Persistence();
@@ -128,7 +143,24 @@ class Main {
             console.log('db+client status recheck '+db.initialized+this.client.chain)
         } 
         const txIndex = await TxIndex.getInstance();
+        this.test = this.client.getTest()
+        this.chain = this.client.getChain()
+        
+        if (this.test !== undefined && this.chain !== undefined) {
+            const networkType = this.test ? 'test' : 'main'; // Map boolean to 'test' or 'main'
+            const genesisConfig = GENESIS_BLOCK_HEIGHTS?.[this.chain];
+            
+            if (genesisConfig && genesisConfig[networkType] !== undefined) {
+                this.genesisBlock = genesisConfig[networkType];
+                console.log(`Genesis Block for ${this.chain} (${networkType}): ${this.genesisBlock}`);
+            } else {
+                console.error(`Genesis block not configured for chain: ${this.chain} (${networkType})`);
+            }
+        } else {
+            console.error('Chain or test flag is undefined. Cannot set genesis block.');
+        }
 
+        console.log('genesis block in tx index init '+this.genesisBlock)
         try {
             await txIndex.initializeOrLoadDB(this.genesisBlock);
             // Proceed with further operations after successful initialization

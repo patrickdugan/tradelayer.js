@@ -116,7 +116,7 @@ app.post('/tl_getAttestations', async (req, res) => {
         const { address, id } = req.body;
 
         // Fetch and sort attestations
-        const attestationHistory = await Clearlist.getAttestationHistory(address, id);
+        const attestationHistory = await ClearList.getAttestationHistory(address, id);
 
         res.json(attestationHistory); // Send the sorted array back
     } catch (error) {
