@@ -143,9 +143,10 @@ class Main {
             console.log('db+client status recheck '+db.initialized+this.client.chain)
         } 
         const txIndex = await TxIndex.getInstance();
-        this.test = this.client.getTest()
-        this.chain = this.client.getChain()
-        
+        this.test = await this.client.getTest()
+        this.chain = await this.client.getChain()
+        console.log('this.test '+this.test+' '+this.chain)
+        console.log('block heights '+GENESIS_BLOCK_HEIGHTS)
         if (this.test !== undefined && this.chain !== undefined) {
             const networkType = this.test ? 'test' : 'main'; // Map boolean to 'test' or 'main'
             const genesisConfig = GENESIS_BLOCK_HEIGHTS?.[this.chain];
