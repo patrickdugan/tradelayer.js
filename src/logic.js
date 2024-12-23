@@ -375,29 +375,52 @@ const Logic = {
                //look at the channel balance where the commited tokens we're selling for LTC exist
         
         console.log('inside logic for UTXO trade '+tokensToDeliver+' '+price, columnA)
-            let channel = await Channels.getChannel(senderAddress)
-            let channelBalance 
-            if(columnA==true){
-                channelBalance = channel["A"][propertyId]
-                
-            }else if(columnA==false){
-                channelBalance = channel["B"][propertyId]
-            }
-            //We need this function to be valid and flexible since the LTC UTXO is a fact in the Litecoin protocol
-            //So we make sure that you get as many tokens as are available and if the parameters fall short thats
-            //something you have to monitor before you co-sign.
-            if(tokensToDeliver>channelBalance){
-                tokensToDeliver=channelBalance
-            }
-            console.log(tokensToDeliver+' '+channelBalance)
+           let channel = await Channels.getChannel(senderAddress);
+           if(!channel){
+                console.log('failed UTXO trade no commited tokens ')
+                return
+           }
+            let channelBalance;
 
-            //Debits the tokens from the correct column of the channel
-            if(columnA==true){
-                channel["A"][propertyId]-=tokensToDeliver
-            }else if(columnA==false){
-                channel["B"][propertyId]-=tokensToDeliver
+            // Default to column with balance if specified column has none
+            if (columnA === true) {
+                channelBalance = channel["A"]?.[propertyId] || 0;
+                if (channelBalance === 0) {
+                    console.log(`No balance in column A. Defaulting to column B.`);
+                    columnA = false; // Switch to column B
+                    channelBalance = channel["B"]?.[propertyId] || 0;
+                }
+            } else if (columnA === false) {
+                channelBalance = channel["B"]?.[propertyId] || 0;
+                if (channelBalance === 0) {
+                    console.log(`No balance in column B. Defaulting to column A.`);
+                    columnA = true; // Switch to column A
+                    channelBalance = channel["A"]?.[propertyId] || 0;
+                }
             }
-            Channels.setChannel(senderAddress,channel)
+
+            // If both columns are empty, handle the failure
+            if (channelBalance === 0) {
+                console.log(`No balance available in either column for property ID ${propertyId}`);
+                return; // Exit early, or set tokensToDeliver to 0 as appropriate
+            }
+
+            // Ensure tokensToDeliver does not exceed available balance
+            if (tokensToDeliver > channelBalance) {
+                tokensToDeliver = channelBalance;
+            }
+            console.log(`${tokensToDeliver} tokens to deliver out of ${channelBalance} available`);
+
+            // Debit tokens from the correct column
+            if (columnA === true) {
+                channel["A"][propertyId] -= tokensToDeliver;
+            } else if (columnA === false) {
+                channel["B"][propertyId] -= tokensToDeliver;
+            }
+
+            // Save updated channel state
+            await Channels.setChannel(senderAddress, channel);
+
             console.log('channel adjusted for token sale '+JSON.stringify(channel["A"])+' '+JSON.stringify(channel["B"]))
             //the tokens exist both as channel object balances and reserve balance on the channel address, which is the sender
             //So we debit there and then credit them to the token delivery address, which we took in the parsing

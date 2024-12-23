@@ -1,5 +1,6 @@
 const dbInstance = require('./db.js');
 const TallyMap = require('./tally.js')
+const BigNumber = require('bignumber.js')
 
 class Channels {
       // Initialize channelsRegistry as a static property
@@ -228,72 +229,64 @@ class Channels {
             }
     }
 
-    static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
-        // Get the channel information from the registry map object
+  static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
         const channel = this.channelsRegistry.get(existingChannelAddress);
 
-        // Check if there's a commit address
+        // Fallback to default logic if channel doesn't exist or is uninitialized
         if (!channel || !channel.commitAddress) {
-            // If there's no commit address, use default logic
             return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
         }
-        let defaultColumn = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-        let lastUsedColumn = channel.data.lastUsedColumn
-        if(defaultColumn==lastUsedColumn){
-          // Define the characters considered odd
-          const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
-          
-          // Get the last characters of the addresses
-          const existingLastChar = existingChannelAddress[existingChannelAddress.length - 1].toUpperCase();
-          const newLastChar = newCommitAddress[newCommitAddress.length - 1].toUpperCase();
 
-          // Check if the existing address has been assigned to Column A
-          const existingIsOdd = oddCharacters.includes(existingLastChar);
-          const newIsOdd = oddCharacters.includes(newLastChar);
-          let bumpColumn 
-          // Check if both addresses are odd or even
-          if (existingIsOdd === newIsOdd) {
-              // If both addresses are odd or even, compare the last characters
-              if (existingLastChar === newLastChar) {
-                  // Compare second-to-last characters
-                  const existingSecondLastChar = existingChannelAddress[existingChannelAddress.length - 2].toUpperCase();
-                  const newSecondLastChar = newCommitAddress[newCommitAddress.length - 2].toUpperCase();
+        const defaultColumn = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+        const lastUsedColumn = channel.data.lastUsedColumn;
 
-                  // If second-to-last characters are the same, compare third-to-last characters and so on
-                  if (existingSecondLastChar === newSecondLastChar) {
-                      for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
-                          const existingChar = existingChannelAddress[existingChannelAddress.length - i].toUpperCase();
-                          const newChar = newCommitAddress[newCommitAddress.length - i].toUpperCase();
-                          if (existingChar !== newChar) {
-                              // If the new address trumps the existing one, bump the existing address
-                              if (existingChar < newChar) {
-                                  bumpColumn = existingChar < newChar ? 'A' : 'B'
-                                  Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                              }
-                              return existingChar < newChar ? 'B' : 'A'; // Assign to opposite column
-                          }
-                      }
-                  } else {
-                      // If the new address trumps the existing one, bump the existing address
-                      if (existingSecondLastChar < newSecondLastChar) {
-                          bumpColumn = existingSecondLastChar < newSecondLastChar ? 'A' : 'B'
-                          Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                      }
-                      return existingSecondLastChar < newSecondLastChar ? 'B' : 'A'; // Assign to opposite column
-                  }
-              } else {
-                  // If the new address trumps the existing one, bump the existing address
-                  if (existingLastChar < newLastChar) {
-                      existingLastChar < newLastChar ? 'A' : 'B';
-                      Channels.bumpColumnAssignment(existingChannelAddress, channel.commitAddress, bumpColumn);
-                  }
-                  return existingLastChar < newLastChar ? 'B' : 'A'; // Assign to opposite column
-              }
-          } else {
-              return existingIsOdd ? 'B' : 'A'; // If they are different, assign to opposite of existing
-          }
+        // Respect the existing state if the default column matches the last used column
+        if (defaultColumn === lastUsedColumn) {
+            return defaultColumn === 'A' ? 'B' : 'A';
         }
+
+        // Helper function to check if a character is odd
+        const isOddCharacter = (char) =>
+            ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'].includes(
+                char.toUpperCase()
+            );
+
+        // Get the last and second-to-last characters
+        const existingLastChar = existingChannelAddress.slice(-1).toUpperCase();
+        const newLastChar = newCommitAddress.slice(-1).toUpperCase();
+
+        // Compare odd/even of the last characters
+        const existingIsOdd = isOddCharacter(existingLastChar);
+        const newIsOdd = isOddCharacter(newLastChar);
+
+        if (existingIsOdd === newIsOdd) {
+            // Fall back to a deeper tie-breaker if both are odd/even
+            const existingSecondLastChar = existingChannelAddress.slice(-2, -1).toUpperCase();
+            const newSecondLastChar = newCommitAddress.slice(-2, -1).toUpperCase();
+
+            if (existingSecondLastChar !== newSecondLastChar) {
+                return existingSecondLastChar < newSecondLastChar ? 'B' : 'A';
+            }
+
+            // For deeper ties, compare further back in the string
+            for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
+                const existingChar = existingChannelAddress.slice(-i, -i + 1).toUpperCase();
+                const newChar = newCommitAddress.slice(-i, -i + 1).toUpperCase();
+
+                if (existingChar !== newChar) {
+                    const bumpColumn = existingChar < newChar ? 'A' : 'B';
+                    Channels.bumpColumnAssignment(existingChannelAddress, defaultColumn, bumpColumn);
+                    return existingChar < newChar ? 'B' : 'A';
+                }
+            }
+        }
+
+        // Assign the opposite column if no other logic applies
+        const bumpColumn = existingIsOdd ? 'B' : 'A';
+        Channels.bumpColumnAssignment(existingChannelAddress, defaultColumn, bumpColumn);
+        return existingIsOdd ? 'B' : 'A';
     }
+
 
     static assignColumnBasedOnLastCharacter(address) {
         // Get the last character of the address
@@ -369,13 +362,20 @@ class Channels {
         console.log(JSON.stringify(channel))
         // Determine the column for the sender address
         const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
-
+        console.log('assinging column in recordCommit' +channelColumn)
         // Update the balance in the specified column
         if (!channel[channelColumn][propertyId]) {
             channel[channelColumn][propertyId] = 0;
         }
-        channel[channelColumn][propertyId] += parseInt(tokenAmount);
+        
+    const existingBalance = new BigNumber(channel[channelColumn][propertyId] || 0);
 
+    // Add the tokenAmount with 8-decimal precision
+    channel[channelColumn][propertyId] = existingBalance
+        .plus(new BigNumber(tokenAmount))
+        .decimalPlaces(8) // Ensure precision is limited to 8 decimals
+        .toNumber();
+        console.log('modifying column balance '+tokenAmount+' '+channel[channelColumn][propertyId])
         // Add the commit record to the channel
         const commitRecord = {
             senderAddress,

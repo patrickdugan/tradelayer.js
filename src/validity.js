@@ -323,34 +323,6 @@ const Validity = {
                 params.tokenDeliveryAddress = reference.find(ref => ref.vout === params.tokenOutput);
             }
 
-            let channel = await Channels.getChannel(sender);
-
-            // Check if the channel is null or undefined
-            if (!channel || channel === null) {
-                console.log('Channel is null or undefined for sender:', sender);
-                params.valid = false;
-                params.reason = 'Channel not found for the sender';
-                return params;
-            }
-
-            let column = params.columnA
-
-            // Check if the necessary propertyId exists in channel["A"] or channel["B"]
-            if (
-                (column === true && (!channel["A"] || !channel["A"][params.propertyId])) ||
-                (column === false && (!channel["B"] || !channel["B"][params.propertyId]))
-            ) {
-                console.log(
-                    'Inside missing channel property trigger in validate UTXO',
-                    column,
-                    channel["A"] ? channel["A"][params.propertyId] : 'undefined',
-                    channel["B"] ? channel["B"][params.propertyId] : 'undefined'
-                );
-                params.valid = false;
-                params.reason = 'No balance on the indicated channel and column';
-                return params;
-            }
-
             console.log('Inside validate UTXO trade', JSON.stringify(params));
             return params;
         },
@@ -399,14 +371,6 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
-
-            const is = await Validity.isActivated(params.block,txid,4)
-            console.log(is)
-            if (!is) {
-                params.valid = false;
-                params.reason = 'Transaction type activated after tx';
-            }
-
 
             if(params.propertyId==2||params.propertyId==3){
                 params.valid=false
