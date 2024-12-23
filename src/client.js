@@ -45,7 +45,7 @@ class ClientWrapper {
         }
 
       const networkInfo = await this.getNetworkInfo();
-      console.log('determining chain in init ')
+      console.log('determining chain in init '+JSON.stringify(networkInfo))
       this.chain = this.determineChainFromSubversion(networkInfo.subversion);
 
       if (!this.chain) throw new Error('Unable to determine blockchain chain.');

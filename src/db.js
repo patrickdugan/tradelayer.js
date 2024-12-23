@@ -10,6 +10,7 @@ class Database {
         this.initialized = false;
         this.initializing = false
         this.path = ''
+        this.test=false
     }
 
     async init(chain) {
@@ -18,10 +19,13 @@ class Database {
         }
         this.initializing= true
 
+        const instance = await ClientWrapper.getInstance();
         if (!chain) {
-            const instance = await ClientWrapper.getInstance();
-            chain = instance.chain;
+            
+            chain = await instance.getChain();
         }
+
+        this.test = await instance.getTest() 
 
         while (!chain) {
             console.log('Waiting for chain...');
@@ -29,8 +33,12 @@ class Database {
             const instance = await ClientWrapper.getInstance();
             chain = instance.chain;
         }
-
-        const dbPath = path.join(__dirname, '..', 'nedb-data', chain.toLowerCase());
+        let test = 'test'
+        if(this.test==false){
+            test = 'main'
+        }
+        const folderName = chain.toLowerCase()+'-'+test
+        const dbPath = path.join(__dirname, '..', 'nedb-data', folderName);
         this.path=dbPath
         const categories = [
             'txIndex', 'propertyList', 'oracleList', 'oracleData', 'contractList',
