@@ -8,12 +8,49 @@ const ClientWrapper = require('./client.js')
 class TradeLayerManager {
     static instance = null;
 
-    constructor(adminAddress,chain) {
+   
+    constructor(adminAddress, chain, test) {
         if (!TradeLayerManager.instance) {
             this.adminAddress = adminAddress;
-            this.setChainParams(chain);
+            this.chain = chain; // Temporarily set
+            this.test = test
+            this.ensureChainInitialized(); // Check chain and initialize correctly
             TradeLayerManager.instance = this;
         }
+    }
+
+    async ensureChainInitialized() {
+        console.log("Checking for valid chain...");
+        const client = ClientWrapper.getInstance();
+        
+        let attempts = 0;
+        const maxAttempts = 10; // Maximum retries
+        const delay = 2000; // Delay between retries (ms)
+
+        while (attempts < maxAttempts) {
+            try {
+                const chainInfo = await client.getChain();
+                const testInfo = await client.getTest()
+                if (chainInfo && chainInfo.chain) {
+                    this.chain = chainInfo.chain;
+                    this.test = testInfo
+                    console.log(`Chain initialized: ${this.chain}`);
+                    this.setChainParams(this.chain);
+                    return;
+                }
+            } catch (error) {
+                console.error(`Error fetching chain status (attempt ${attempts + 1}):`, error);
+            }
+
+            attempts++;
+            console.log(`Retrying chain initialization... (${attempts}/${maxAttempts})`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        // Fallback in case of failure
+        console.error("Failed to initialize chain. Using default chain.");
+        this.chain = "BTC"; // Default to BTC if initialization fails
+        this.setChainParams(this.chain);
     }
 
     setChainParams(chain) {
@@ -78,7 +115,14 @@ class TradeLayerManager {
         
         if(this.adminAddress==undefined||this.adminAddress==null){
             console.log('lag with admin assignment')
-            this.adminAddress="tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"
+
+            if (this.chain === 'BTC') {
+                this.adminAddress = this.test ? 'tb1q8f84erfegxhaylmvpfll9m5rgwymqy4akjnnvq' : 'bc1qktknrnx2jcchjhtqanz0uy8ae02xryxq2vxeem';
+            } else if (this.chain === 'DOGE') {
+                this.adminAddress = this.test ? 'nop27JQWbGr95ySHXZMzCg8XXxYzbCBZAW' : 'DLSfu9qvEggkeXAgCAwBBw5BVLvMCtkewz';
+            } else if (this.chain === 'LTC') {
+                this.adminAddress = this.test ? 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8' : 'MTmoyPkhRQoJ172ZqxcsVumPZfJ';
+            }
         }
          
         if (!alreadyInitialized) {
@@ -170,7 +214,7 @@ class TradeLayerManager {
         // Initialize issuer whitelist
         const issuerClearlistId = ClearList.createClearlist(
             this.adminAddress,
-            'Issuer Whitelist',
+            'Issuer Clearlist',
             '',
             'Oracles and Tokens included in Liquidity Reward',
             this.sponsorAddress,
@@ -180,15 +224,25 @@ class TradeLayerManager {
         // Initialize market maker whitelist
         const marketMakerClearlistId = ClearList.createClearlist(
             this.adminAddress,
-            'Market Maker Whitelist',
+            'Market Maker Clearlist',
             '',
             'Market Makers and active traders who do not wash trade.',
             this.sponsorAddress,
             2
         );
 
-        console.log(`Issuer whitelist created with ID: ${issuerClearlistId}`);
-        console.log(`Market maker whitelist created with ID: ${marketMakerClearlistId}`);
+          const accreditedListId = ClearList.createClearlist(
+            this.adminAddress,
+            'Accredited Clearlist',
+            '',
+            'Exempt from restrictions on native tokens.',
+            this.sponsorAddress,
+            3
+        );
+
+        console.log(`Issuer clearlist created with ID: ${issuerClearlistId}`);
+        console.log(`Market maker clearlist created with ID: ${marketMakerClearlistId}`);
+        console.log(`Acc. clearlist created with ID: ${accreditedListId}`)
     }
 
     static async updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC, cumulativeVolumeGlobal, currentBlockVolumeGlobal) {

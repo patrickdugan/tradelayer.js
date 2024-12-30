@@ -170,8 +170,9 @@ const Validity = {
                     if(bans==null){bans = bannedCountries}
                         console.log('bans again '+bans)
                     const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                    const isAcc = await ClearList.isAddressInClearlist(3,sender)
                     console.log('sender country info '+JSON.stringify(senderCountryInfo))
-                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))){
+                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))&&!isAcc){
                         if(activationInstance.areActivationsAboveThreshold()){
                         params.valid = false;
                         params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
@@ -402,7 +403,9 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
                 if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
-                    if(!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                      const isAcc = await ClearList.isAddressInClearlist(3,sender)
+                    console.log('sender country info '+JSON.stringify(senderCountryInfo))
+                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))&&!isAcc){
                     if(activationInstance.areActivationsAboveThreshold()){
                         params.valid = false;
                         params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
@@ -494,11 +497,11 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
                 if(params.propertyIdOffered == 1||params.propertyIdOffered == 4||params.propertyIdDesired == 1||params.propertyIdDesired == 4){
-                    if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                    if(activationInstance.areActivationsAboveThreshold()){
+                    const isAcc = await ClearList.isAddressInClearlist(3,sender)
+                    console.log('sender country info '+JSON.stringify(senderCountryInfo))
+                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))&&!isAcc){
                     params.valid = false;
                     params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                     }
                     }
                 }
             }
@@ -1567,8 +1570,10 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressA);
                 if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                    if(activationInstance.areActivationsAboveThreshold()){
-                        if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                    if(!activationInstance.areActivationsAboveThreshold()){
+                          const isAcc = await ClearList.isAddressInClearlist(3,sender)
+                    console.log('sender country info '+JSON.stringify(senderCountryInfo))
+                    if ((!senderCountryInfo || bans.includes(senderCountryInfo.countryCode))&&!isAcc){
                             params.valid = false;
                             params.reason += 'Commiter A cannot handle TL or TLI from a banned country or lacking country code attestation';
                         }
@@ -1576,8 +1581,10 @@ const Validity = {
                 }
                  const BCountryInfo = await ClearList.getCountryCodeByAddress(commitAddressB);
                 if(params.propertyIdDesired == 1||params.propertyIdDesired == 2||params.propertyIdDesired == 3||params.propertyIdDesired == 4||params.propertyIdOffered == 1||params.propertyIdOffered == 2||params.propertyIdOffered == 3||params.propertyIdOffered == 4){
-                    if(activationInstance.areActivationsAboveThreshold()){
-                        if (!BCountryInfo || bans.includes(BCountryInfo.countryCode)) {
+                    if(!activationInstance.areActivationsAboveThreshold()){
+                          const isAcc = await ClearList.isAddressInClearlist(3,sender)
+                    console.log('sender country info '+JSON.stringify(senderCountryInfo))
+                    if ((!BCountryInfo || bans.includes(BCountryInfo.countryCode))&&!isAcc){
                             params.valid = false;
                             params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
                         }

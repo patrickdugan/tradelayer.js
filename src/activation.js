@@ -126,7 +126,7 @@ class Activation {
             //console.log('in the activate 0 block')
             // Handle the special case for the initial transaction
             //const TL = .getInstance(testAdmin);
-            const tradeLayerManager = await TradeLayerManager.getInstance(this.adminAddress, this.chain);
+            const tradeLayerManager = await TradeLayerManager.getInstance(this.adminAddress, this.chain,this.test);
             const balances = await tradeLayerManager.initializeTokens(block); //await TradeLayerManager.initializeContractSeries(); going to save this for the activation of native contracts
             console.log('balances '+ balances + "if undefined this is a repeat that successfully prevented inflation")
             this.txRegistry[txType].active = true;
