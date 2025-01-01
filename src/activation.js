@@ -34,11 +34,11 @@ class Activation {
 
     updateAdminAddress() {
         if (this.chain === 'BTC') {
-            this.adminAddress = this.test ? 'tb1q8f84erfegxhaylmvpfll9m5rgwymqy4akjnnvq' : 'bc1qktknrnx2jcchjhtqanz0uy8ae02xryxq2vxeem';
+            this.adminAddress = this.test ? 'tb1q8f84erfegxhaylmvpfll9m5rgwymqy4akjnnvq' : 'bc1qktknrnx2jcchjht9anz0uy8ae02xryxq2vxeem';
         } else if (this.chain === 'DOGE') {
             this.adminAddress = this.test ? 'nop27JQWbGr95ySHXZMzCg8XXxYzbCBZAW' : 'DLSfu9qvEggkeXAgCAwBBw5BVLvMCtkewz';
         } else if (this.chain === 'LTC') {
-            this.adminAddress = this.test ? 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8' : 'MTmoyPkhRQoJ172ZqxcsVumPZfJ';
+            this.adminAddress = this.test ? 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8' : 'MTmoypkhRQoJ172ZqxcsVumPZfJ8KCrQCB';
         }
     }
 
