@@ -14,15 +14,22 @@ class TradeLayerManager {
             this.adminAddress = adminAddress;
             this.chain = chain; // Temporarily set
             this.test = test
-            this.ensureChainInitialized(); // Check chain and initialize correctly
             TradeLayerManager.instance = this;
         }
     }
 
     async ensureChainInitialized() {
-        console.log("Checking for valid chain...");
-        const client = ClientWrapper.getInstance();
-        
+        console.log("Checking for valid chain..."+this.chain+' '+this.test);
+
+        // Skip initialization if chain and test are already set
+
+        if (this.chain && this.test !== undefined) {
+            console.log(`Chain already initialized: ${this.chain}, Test: ${this.test}`);
+            this.setChainParams(this.chain);
+            return;
+        }
+
+        const client = await ClientWrapper.getInstance();
         let attempts = 0;
         const maxAttempts = 10; // Maximum retries
         const delay = 2000; // Delay between retries (ms)
@@ -30,10 +37,11 @@ class TradeLayerManager {
         while (attempts < maxAttempts) {
             try {
                 const chainInfo = await client.getChain();
-                const testInfo = await client.getTest()
-                if (chainInfo && chainInfo.chain) {
-                    this.chain = chainInfo.chain;
-                    this.test = testInfo
+                const testInfo = await client.getTest();
+                console.log('chain and test '+chainInfo+' '+testInfo)
+                if (chainInfo && testInfo!==undefined) {
+                    this.chain = chainInfo;
+                    this.test = testInfo;
                     console.log(`Chain initialized: ${this.chain}`);
                     this.setChainParams(this.chain);
                     return;
@@ -103,6 +111,7 @@ class TradeLayerManager {
     static async getInstance(adminAddress, chain){
         if (!TradeLayerManager.instance) {
             TradeLayerManager.instance = new TradeLayerManager(adminAddress,chain);
+            await TradeLayerManager.instance.ensureChainInitialized();
             console.log('generating new TL manager')
         }
         console.log('returning TL Manager')
@@ -112,16 +121,16 @@ class TradeLayerManager {
     async initializeTokens(block) {
         const TallyMap = require('./tally.js');
          const alreadyInitialized = await TallyMap.checkInitializationFlag();
-        
+        console.log('initalizaing with admin '+this.adminAddress+' '+this.chain+' '+this.test)
         if(this.adminAddress==undefined||this.adminAddress==null){
             console.log('lag with admin assignment')
 
             if (this.chain === 'BTC') {
-                this.adminAddress = this.test ? 'tb1q8f84erfegxhaylmvpfll9m5rgwymqy4akjnnvq' : 'bc1qktknrnx2jcchjhtqanz0uy8ae02xryxq2vxeem';
+                this.adminAddress = this.test ? 'tb1q8f84erfegxhaylmvpfll9m5rgwymqy4akjnnvq' : 'bc1qktknrnx2jcchjht9anz0uy8ae02xryxq2vxeem,';
             } else if (this.chain === 'DOGE') {
                 this.adminAddress = this.test ? 'nop27JQWbGr95ySHXZMzCg8XXxYzbCBZAW' : 'DLSfu9qvEggkeXAgCAwBBw5BVLvMCtkewz';
             } else if (this.chain === 'LTC') {
-                this.adminAddress = this.test ? 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8' : 'MTmoyPkhRQoJ172ZqxcsVumPZfJ';
+                this.adminAddress = this.test ? 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8' : 'MTmoypkhRQoJ172ZqxcsVumPZfJ8KCrQCB';
             }
         }
          

@@ -17,7 +17,7 @@ async function hashFiles(basePath) {
 
         // Loop through each file, read its content, and append to combinedContent
         for (const file of jsFiles) {
-            const filePath = path.join(basePath, `${file}.js`);
+            const filePath = path.join(basePath, `../src/${file}.js`);
 
             if (fs.existsSync(filePath)) {
                 const fileContent = fs.readFileSync(filePath, 'utf8');
