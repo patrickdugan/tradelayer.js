@@ -45,23 +45,37 @@ const Decode = {
     },
 
         // Decode Send Transaction
-    decodeSend: (payload) => {
-        const parts = payload.split(';');
-        const sendAll = parts[0] === '1';
-        const address = parts[1] || '';
-        let isColoredOutput = false
-        if (sendAll) {
+    decodeSend(payload){
+    const parts = payload.split(';');
+    const sendAll = parts[0] === '1';
+    const address = parts[1] || '';
+    let isColoredOutput = false;
 
-            return { sendAll: sendAll, address: address};
-        } else if (parts.length === 5||parts.length===4) {
-            const propertyId = Decode.decodePropertyId(parts[2] || '');
-            const amount = parseInt(parts[3] || '0', 36);
-            isColoredOutput = parts[5]==='1' 
-            return { sendAll: sendAll, address: address, propertyIds: propertyId, amounts: amount, isColoredOutput: isColoredOutput };
-        } else if (parts[2].contains(',')){
-            const propertyIds = (parts[2] || '').split(',').map(id => Decode.decodePropertyId(id));
-            const amounts = (parts[3] || '').split(',').map(amt => parseInt(amt || '0', 36));
-            return {sendAll: sendAll, propertyIds: propertyIds.map((id, index) => ({ propertyId: id, amounts: amounts[index] })) };
+    // Helper function to decode amounts correctly
+    decodeAmount = (encoded) => {
+            const isDecimal = encoded.endsWith('~'); // Check for decimal flag `~`
+            const numStr = isDecimal ? encoded.slice(0, -1) : encoded;
+            const value = new BigNumber(parseInt(numStr, 36));
+            if(isDecimal){console.log('decimal value encountered' +value)}
+            return isDecimal ? value.div(1e8).toNumber() : value.toNumber();
+        };
+
+        if (sendAll) {
+            return { sendAll, address };
+        } else if (parts.length === 5 || parts.length === 4) {
+            const propertyIds = parseInt(parts[2], 36) || 0;
+            const amounts = decodeAmount(parts[3] || '0');
+            isColoredOutput = parts[5] === '1';
+
+            return { sendAll, address, propertyIds, amounts, isColoredOutput };
+        } else if (parts[2].includes(',')) {
+            const propertyIds = (parts[2] || '').split(',').map(id => parseInt(id, 36));
+            const amounts = (parts[3] || '').split(',').map(decodeAmount);
+
+            return {
+                sendAll,
+                propertyIds: propertyIds.map((id, index) => ({ propertyIds: id, amounts: amounts[index] }))
+            };
         }
     },
 

@@ -5,30 +5,27 @@ const Encode = require('../src/txEncoder.js');
 
 // Assuming standard fee and other constants are defined
 const STANDARD_FEE = 3000; // Standard fee in satoshis
-const DUST_THRESHOLD = 5460;
+const DUST_THRESHOLD = 54600;
 
 async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
-    let send = amountToSend-STANDARD_FEE
+    let send = (amountToSend*100000000)-STANDARD_FEE
     try {
         // Fetch the private key for the sender address
         // Fetch UTXOs for the sender address
 
         //console.log('bleh '+litecore.Script.buildScriptHashOut('d9feb2d55d2c022d4fc463ab54dcbdd75f7b0ebc'))
          const utxos = [{
-          txId: 'ae5ca8a023576e90a661685b8ca16a98abecd75fb5e3473b60f53413f150de11',
+          txId: 'a750adc0f1801f4848e529d3d0c8478c20b384d0688486b318c9dc3ef11be60b',
           outputIndex: 0,
           address: senderAddress,
-          script: "a914fa55f5d92be2c5ea8c2ec3a7630cc4ebf22b963587",
-          satoshis: 497000, // Amount in satoshis
+          script: "a914d9feb2d55d2c022d4fc463ab54dcbdd75f7b0ebc87",
+          satoshis: 0.00044 * 1e8, // Amount in satoshis
         }]
         const params = {
-              sendAll: 0, // Activation types
-              propertyId: 1,
-              amount: 10000,
-              address: "ltc1q6c2gdte3pcf49at8z9ylnxy40ljlgaw5dqhxca",
-              isColoredOutput: 0
+              txTypeToActivate: 9, // Activation types
+              codeHash: '11b89e7aa5bd3f2b42b25003a76efbc2c191c80ab06526f303f05443d2881fcf'
             };
-    const opReturnData = Encode.encodeSend(params);
+    const opReturnData = Encode.encodeActivateTradeLayer(params);
     console.log('payload '+opReturnData)
     const opReturnScript = litecore.Script.buildDataOut(opReturnData);
         // Create a new transaction
@@ -53,10 +50,10 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 }
 
 // Replace with actual values
-const senderAddress = "MWip91xMhaEmDn5oUW5NDNbWSDyG5dSK9Q"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
-const recipientAddress = "MWip91xMhaEmDn5oUW5NDNbWSDyG5dSK9Q"
+const senderAddress = "MTmoypkhRQoJ172ZqxcsVumPZfJ8KCrQCB"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
+const recipientAddress = "MTmoypkhRQoJ172ZqxcsVumPZfJ8KCrQCB"
 //tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2"//tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
-const amountToSend = 497000; // Amount of LTC to send
+const amountToSend = 0.00044; // Amount of LTC to send
 
 // Execute the function to send Litecoin
 sendLitecoin(senderAddress, recipientAddress, amountToSend);

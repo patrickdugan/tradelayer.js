@@ -8,26 +8,30 @@ const ClientWrapper = require('./client.js'); // Wait for client to initialize//
 const transparentIndex = [];
 
 class TxIndex {
-     static instance;
+     static instance=null;
 
     constructor() {
         if (TxIndex.instance) {
             return TxIndex.instance;
         }
+        this.client=null
         TxIndex.instance = this;
         this.parseBlock = 0
     }
 
     static async init() {
         this.client = await ClientWrapper.getInstance(true);
+        console.log('this.client '+this.client.chain)
         //await db.init(this.client.chain)
         // Use this.this.client for this.client-related actions within TxIndex methods
+        return this
     }
 
     static async getInstance(test) {
         if (!TxIndex.instance) {
             TxIndex.instance = new TxIndex(test);
         }
+        console.log('calling init in txindex')
         await this.init()
         return TxIndex.instance;
     }
@@ -62,7 +66,7 @@ class TxIndex {
         console.log('building index until' + chainTip);
         for (let height = startHeight; height <= chainTip; height++) {
             this.parseBlock = height
-            if(height%1000==1){console.log('indexed to '+height)};
+            if(height%100==1){console.log('indexed to '+height)};
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)
             await this.processBlockData(blockData, height);
@@ -130,14 +134,9 @@ class TxIndex {
             const txIndexDB = await db.getDatabase('txIndex');
             //console.log(blockData)
             let txDetails =[]
-            let flag = false
-            if(blockHeight==3496378){flag=true}
         for(const txId of blockData.tx){
-            if(flag){console.log('ding ding mising tx id? '+txId)}
             const txHex = await TxIndex.fetchTransactionData(txId, false, blockData.hash);
-            if(flag){console.log(txHex)}
-            const txData = await TxIndex.DecodeRawTransaction(txHex, flag);
-            if(flag){console.log('tx data for missing txid' +txData)}
+            const txData = await TxIndex.DecodeRawTransaction(txHex);
             if (txData != null && txData!= undefined && txData.marker === 'tl') {
                 const payload = txData.payload;
                 const thisTx = await TxIndex.processTransaction(payload, txId, txData.marker);
@@ -198,24 +197,22 @@ class TxIndex {
         }
     }*/
 
-    static async DecodeRawTransaction(rawTx,flag) {
+    static async DecodeRawTransaction(rawTx) {
         try {
             const decodedTx = await this.client.decoderawtransaction(rawTx);
-            
 
             const opReturnOutput = decodedTx.vout.find(output => output.scriptPubKey.type === 'nulldata');
 
             if (opReturnOutput) {
                 //console.log(opReturnOutput)
                 const opReturnData = opReturnOutput.scriptPubKey.hex;
-                if(flag){console.log('OP_RETURN Data:', opReturnData)};
+                //console.log('OP_RETURN Data:', opReturnData)
                 // Extract and log the "tl" marker
 
                  // Check if the hex contains the marker "746c" (which corresponds to "tl")
                 let markerHex = "746c"; // Hex for "tl"
                 let payloadStart =8
-                let markerPosition = opReturnData.indexOf(markerHex); // Check if the marker is anywhere in the string
-                if(flag){console.log('marker position '+markerPosition)}
+                let markerPosition = opReturnData.indexOf(markerHex); 
                 if (markerPosition === -1||markerPosition>6) {
                     //console.error('Marker "tl" not found in OP_RETURN data');
                     return null;
@@ -226,9 +223,7 @@ class TxIndex {
                 }else if(markerHex==opReturnData.substring(6,10)){
                     payloadStart=10
                 }; // '746c' for 'tl'
-                let marker = Buffer.from(markerHex, 'hex').toString();
-                if(flag){console.log('checking marker '+marker+ ' payload start '+payloadStart)}
-                // Extract and log the actual payload
+                let marker = Buffer.from(markerHex, 'hex').toString();  // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(payloadStart);
                 const payload = Buffer.from(payloadHex, 'hex').toString();
                 console.log('market data ' +markerHex+' '+marker+' '+payload)
@@ -392,7 +387,7 @@ class TxIndex {
             } else {
                 // Handle the case where MaxHeight hasn't been set yet
                 //console.log('MaxHeight not found in txIndexDB.');
-                return 3082500; // or an appropriate default/fallback value
+                return null; // or an appropriate default/fallback value
             }
         } catch (err) {
             console.error('Error finding MaxIndexedBlock:', err);

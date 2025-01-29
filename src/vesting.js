@@ -75,9 +75,9 @@ class TradeLayerManager {
             this.hedgeLeverage = 5;
             this.expiryInterval = 12960
             this.sponsorAddress = "bc1qhc2cj60auf67e0pa3dfd46cvg0fehchx56vw0f"
-            this.freePortion = 0.4
+            this.freePortion = 0
             this.insurancePortion = 0.1
-            this.vestingPortion = 0.5
+            this.vestingPortion = 0.8999
             this.salePortion = 0
         } else if (this.chain === 'DOGE') {
             this.baseVolume = 2000000;
@@ -89,7 +89,7 @@ class TradeLayerManager {
             this.expiryInterval = 129600
             this.sponsorAddress = "D8HA73pAhxK7eNXSUVhQrWpUkrszUDGs7Z"
             this.freePortion = 0.25
-            this.insurancePortion = 0.15
+            this.insurancePortion = 0.25
             this.vestingPortion = 0.5
             this.salePortion = 0
         } else { // Default to Litecoin (LTC)

@@ -7,7 +7,7 @@ const interface = require('../src/walletInterface.js')
 
 const clientConfig = {
     host: '127.0.0.1',
-    port: 18332, // Testnet RPC port
+    port: 8332, // Testnet RPC port
     user: 'user',
     pass: 'pass',
     timeout: 10000
@@ -130,4 +130,4 @@ async function issueAttestation(metadata) {
 }
 
 // Run the attestation script
-buildSignAndSendTransaction('tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr','CL');
+buildSignAndSendTransaction('ltc1qehzkx0fpdydj48njs63hyqu02luzcxn66rtqjj','CL');

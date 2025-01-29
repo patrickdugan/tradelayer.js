@@ -14,7 +14,7 @@ async function waitForClientChain(client, timeout = 5000, interval = 150) {
 async function initialize() {
     const Client = await ClientWrapper.getInstance();
     await waitForClientChain(Client);  // Wait for Client.chain to be defined
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 500));
      console.log('showing chain in startup '+Client.chain)
     await Database.init(Client.chain);
     return { Client, Db: Database };

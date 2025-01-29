@@ -28,7 +28,7 @@ class ClientWrapper {
     this.isInitializing = true; // Set flag to indicate initialization is in progress
 
     if(!this.client){
-      this.config = { host: '127.0.0.1', port: 8332, user: 'user', pass: 'pass', timeout: 30000 };
+      this.config = { host: '127.0.0.1', port: 8332, user: 'user', pass: 'pass', timeout: 60000 };
       console.log(this.config)
       this.client = new Litecoin.Client(this.config);
 
@@ -52,7 +52,7 @@ class ClientWrapper {
 
       this.config.port = isTest 
         ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 18332)
-        : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 9332);
+        : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 8332);
 
       this.client = this._createClientByChain(this.chain);
       }

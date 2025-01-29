@@ -83,7 +83,7 @@ const GENESIS_BLOCK_HEIGHTS = {
     },
     LTC: {
         test: 3082500,  // Replace with actual testnet genesis block height
-        main: 2812000,  // Replace with actual mainnet genesis block height
+        main: 2819000,  // Replace with actual mainnet genesis block height
     }
 };
 
@@ -556,7 +556,8 @@ class Main {
                     blockNumber = await this.enterRecoveryMode(latestProcessedBlock, blockNumber);
                 }
 
-                const blockData = await TxIndex.fetchBlockData(blockNumber);
+                //const blockData = await TxIndex.fetchBlockData(blockNumber);
+                const blockData = await this.fetchWithRetry(blockNumber);
                 await this.processBlock(blockData, blockNumber);
                 let trackHeight = blockNumber;
                 //console.log('updating trackHeight'+trackHeight)
@@ -639,7 +640,7 @@ class Main {
     /*sub-function of real-time mode, breaks things into 3 steps*/
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
-        const tx= await this.blockHandlerBegin(blockData.hash, blockNumber);
+        const tx= await this.blockHandlerBegin(blockData, blockNumber);
 
         // Process each transaction in the block
         blockNumber = await this.blockHandlerMid(tx, blockNumber);
@@ -656,9 +657,27 @@ class Main {
         process.exit(0); // or use another method to exit gracefully
       }
 
-    async blockHandlerBegin(blockHash, blockHeight) {
+      async fetchWithRetry(blockNumber, retries = 3, delayMs = 1000) {
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                      return await TxIndex.fetchBlockData(blockNumber);  // Directly call the function
+                } catch (error) {
+                    if (error.code === 'ETIMEDOUT') {
+                        console.warn(`Attempt ${attempt + 1} failed with ETIMEDOUT.`);
+                        if (attempt === retries) throw error; // Re-throw if max retries reached
+                        await this.delay(delayMs * Math.pow(2, attempt)); // Exponential backoff
+                    } else {
+                        throw error; // Rethrow non-timeout errors
+                    }
+                }
+            }
+        }
+
+
+
+    async blockHandlerBegin(blockData, blockHeight) {
         try {
-            const blockData = await TxIndex.fetchBlockData(blockHeight);
+            //const blockData = await TxIndex.fetchBlockData(blockHeight);
             const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
             
             if(txDetails.length>=1){
@@ -687,6 +706,9 @@ class Main {
             return otherTxs;  // Store remaining txs for mid-processing
         } catch (error) {
             console.error(`Error in blockHandlerBegin at block ${blockHeight}:`, error);
+            if(error&&error.includes('ETIMEDOUT')){
+                return this.blockHandlerBegin('',blockHeight)
+            }
             return []
         }
 
