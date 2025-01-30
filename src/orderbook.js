@@ -633,8 +633,8 @@ class Orderbook {
                          // Get the existing position sizes for buyer and seller
             const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
             // Determine if the trade reduces the position size for buyer or seller
-            const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&side==false);
-            const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && side==true);
+            const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&sell==false);
+            const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && sell==true);
             const initialReduce = false
             //console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
             let initMargin = 0
