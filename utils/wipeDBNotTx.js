@@ -1,7 +1,7 @@
 const Datastore = require('nedb');
 const path = require('path');
 
-const chain = 'ltc-main'; // Change this to 'btc' or 'doge' as needed
+const chain = 'ltc-test'; // Change this to 'btc' or 'doge' as needed
 const baseDir = path.join(__dirname, '..', 'nedb-data', chain);
 
 function clearDatastore(dbPath, dbName) {

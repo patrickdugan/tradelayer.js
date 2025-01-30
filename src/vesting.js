@@ -214,7 +214,6 @@ class TradeLayerManager {
         // Create the contract series
         return await ContractList.createContractSeries(this.adminAddress, params, block);
 
-
         // Additional setup if required, such as initializing order books, setting initial market conditions, etc.
     }
 

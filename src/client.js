@@ -28,7 +28,7 @@ class ClientWrapper {
     this.isInitializing = true; // Set flag to indicate initialization is in progress
 
     if(!this.client){
-      this.config = { host: '127.0.0.1', port: 8332, user: 'user', pass: 'pass', timeout: 60000 };
+      this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 60000 };
       console.log(this.config)
       this.client = new Litecoin.Client(this.config);
 

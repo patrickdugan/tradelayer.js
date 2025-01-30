@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const TxUtils = require('./txUtils.js'); // Assuming TxUtils contains necessary functions
+const TxUtils = require('../src/txUtils.js'); // Assuming TxUtils contains necessary functions
 
 async function generateTrades(adminAddress) {
     const contractId = 4; // Contract ID for the trades
@@ -26,7 +26,7 @@ async function generateTrades(adminAddress) {
 }
 
 // Address for the trades
-const adminAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr' 
+const adminAddress = 'tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw'//'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr' 
 //tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8'
 //'//tltc1q7r6x4v67n8vnaftnz8pk33yvf9t9gpynuwdfgk'
 //tltc1q8xw3vsvkv77dpj59nqn30rxlc9m3xjw76cgrac'

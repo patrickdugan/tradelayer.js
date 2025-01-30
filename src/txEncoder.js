@@ -43,7 +43,7 @@ const Encode = {
             const isWholeNumber = Boolean(amt%1==0);
 
             return isWholeNumber
-                ? scaledAmt.integerValue().toString(36)  // Normal base36 encoding
+                ? amt.toString(36)  // Normal base36 encoding
                 : scaledAmt.integerValue().toString(36) + '~';  // Base36 with `~` flag
         };
 

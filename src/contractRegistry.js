@@ -83,14 +83,21 @@ class ContractRegistry {
             params.whitelist=0
         }
         if(params.native){
-            const propertyData1 = PropertyManager.getPropertyData(params.notionalPropertyId)
-            const propertyData2 = PropertyManager.getPropertyData(params.collateralPropertyId)
+            let propertyData1 = await PropertyManager.getPropertyData(params.notionalPropertyId)
+            let propertyData2 = await PropertyManager.getPropertyData(params.collateralPropertyId)
+            if(params.notionalPropertyId==0){
+                propertyData1={ticker:"LTC"}
+                console.log('property data in create contract series special ed. '+JSON.stringify(propertyData1)+' '+JSON.stringify(propertyData2))
+            }
             params.ticker = propertyData1.ticker+"/"+propertyData2.ticker+"-PERP"
 
         }else if(!params.native&&params.underlyingOracleId!=0){
             const oracleInfo = await OracleRegistry.getOracleInfo(params.underlyingOracleId)
-            params.ticker = oracleInfo.ticker+"-OPERP"+params.underlyingOracleId+"-"+seriesId
+            params.ticker = oracleInfo.name.ticker+"-OPERP"+params.underlyingOracleId+"-"+seriesId
+            console.log('params in create oracle contract '+JSON.stringify(params))
         }
+
+
         // Create the contract series object
         const contractSeries = {
             id: seriesId,

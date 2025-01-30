@@ -767,7 +767,7 @@ const Logic = {
             onChainData: onChainData,
             notionalPropertyId: notionalPropertyId,
             notionalValue: notionalValue,
-            collateralProperty: collateralPropertyId,
+            collateralPropertyId: collateralPropertyId,
             leverage:leverage, 
             expiryPeriod: expiryPeriod, 
             series:series, 

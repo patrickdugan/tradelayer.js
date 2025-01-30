@@ -155,8 +155,10 @@ const Validity = {
             }
 
             if(!validateAddress(params.address)){
-                const valid = TxUtils.validateAddressWrapper(params.address)
-                if(!valid.isValid){
+                const valid = await TxUtils.validateAddressWrapper(params.address)
+                console.log('double checking validity with rpc '+JSON.stringify(valid))
+                console.log('valid? '+valid.isvalid)
+                if(!valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -370,7 +372,7 @@ const Validity = {
             if(params.channelAddress!=''){
                 if(!validateAddress(params.channelAddress)){
                     const valid = TxUtils.validateAddressWrapper(params.channelAddress)
-                    if(!valid.isValid){
+                    if(!valid.isvalid){
                         params.valid= false
                         params.reason = 'Destination address is not validly formed.'
                     }
@@ -712,7 +714,7 @@ const Validity = {
             }
 
             if(!validateAddress(params.backupAddress)){
-                const valid = TxUtils.validateAddressWrapper(params.backupAddress)
+                const valid = await TxUtils.validateAddressWrapper(params.backupAddress)
                 if(!valid.isValid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
@@ -780,8 +782,8 @@ const Validity = {
                 }
 
                 if(!validateAddress(params.newAddress)){
-                const valid = TxUtils.validateAddressWrapper(params.newAddress)
-                if(!valid.isValid){
+                const valid = await TxUtils.validateAddressWrapper(params.newAddress)
+                if(!valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -935,8 +937,8 @@ const Validity = {
             }
 
             if(!validateAddress(params.addressToGrantTo)){
-                const valid = TxUtils.validateAddressWrapper(params.addressToGrantTo)
-                if(!valid.isValid){
+                const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
+                if(!valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -1850,8 +1852,8 @@ const Validity = {
             }
 
             if(!validateAddress(params.toChannelAddress)){
-                const valid = TxUtils.validateAddressWrapper(params.toChannelAddress)
-                if(!valid.isValid){
+                const valid = await TxUtils.validateAddressWrapper(params.toChannelAddress)
+                if(!valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -2331,7 +2333,7 @@ function validateAddress(address) {
 
   for (const [networkName, netConfig] of Object.entries(networks)) {
     const { P2PKH, P2SH, bech32 } = netConfig;
-
+    console.log('validating address form '+JSON.stringify(netConfig))
     // Match based on the prefix
     if (
       (address.startsWith("1") && P2PKH === 0x00) || // Bitcoin P2PKH
@@ -2360,7 +2362,8 @@ function validateAddress(address) {
     // Validate P2SH
     return validateBase58Checksum(address, P2SH);
   } else if (bech32 && address.toLowerCase().startsWith(bech32)) {
-    // Validate Bech32
+    // Validate bech32
+    console.log('validating bech32 '+bech32 +' '+address)
     return validateBech32(address, bech32);
   }
 
