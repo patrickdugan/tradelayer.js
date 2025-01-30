@@ -2,7 +2,7 @@ const litecoin = require('litecoin');
 const util = require('util');
 const litecore = require('bitcore-lib-ltc');
 const encoder = require('../src/txEncoder.js'); // Assuming encoder handles OP_RETURN payloads
-
+const BigNumber = require('bignumber.js')
 const clientConfig = {
     host: '127.0.0.1',
     port: 18332,
@@ -45,7 +45,8 @@ async function createAndSendContractTrade(senderAddress, tradeParams, blockHeigh
         const privateKeyWIF = await dumpPrivKeyAsync(senderAddress);
         const privateKey = new litecore.PrivateKey(privateKeyWIF);
         const senderPublicKey = privateKey.toPublicKey();
-        
+       
+        console.log('checking values for trade tx '+selectedUtxo+' '+new BigNumber(selectedUtxo.amount).times(1e8).toNumber()) 
         // Construct the transaction
         const tx = new litecore.Transaction()
             .from(selectedUtxo) // Use the first available UTXO
@@ -53,7 +54,7 @@ async function createAndSendContractTrade(senderAddress, tradeParams, blockHeigh
                 script: litecore.Script.buildDataOut(tradePayload), // Attach OP_RETURN
                 satoshis: 0 // No value in OP_RETURN output
             }))
-            .to(senderAddress, selectedUtxo.amount * 1e8 - STANDARD_FEE) // Send change back
+            .to(senderAddress, new BigNumber(selectedUtxo.amount).times(1e8).toNumber() - STANDARD_FEE) // Send change back
             .fee(STANDARD_FEE)
             .sign(privateKey);
 
@@ -85,7 +86,7 @@ async function structuredTestTrades() {
   const aliceBuy = {
     contractId: contractId,
     amount: 5,
-    price: 5000,
+    price: 987,
     sell: false // buy
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
@@ -95,7 +96,7 @@ async function structuredTestTrades() {
   const bobSell = {
     contractId: contractId,
     amount: 5,
-    price: 5000,
+    price: 972,
     sell: true 
   };
   //await createAndSendContractTrade(bobAddress, bobSell, 100);
@@ -110,7 +111,7 @@ async function structuredTestTrades() {
   const bobClose = {
     contractId: contractId,
     amount: 2,
-    price: 5100,
+    price: 1015,
     sell: false // buy to close
   };
   await createAndSendContractTrade(bobAddress, bobClose, 101);
@@ -118,7 +119,7 @@ async function structuredTestTrades() {
   const aliceClose = {
     contractId: contractId,
     amount: 3,
-    price: 5050,
+    price: 1008,
     sell: true // buy
   };
 

@@ -507,9 +507,6 @@ class MarginMap {
 
             return { contracts: contractShort, margin: marginToReturn, available: availToReturn, excess: excess, rPNL: accountingPNL, reduction:reduction };
         }
-
-
-
         
     calculateMarginRequirement(contracts, price, inverse) {
         

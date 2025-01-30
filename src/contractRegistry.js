@@ -399,7 +399,8 @@ class ContractRegistry {
             const collateralValue = await ContractRegistry.getCollateralValue(contractInfo);
             return BigNumber(collateralValue).div(leverage);
             */
-            return notionalBN.div(leverageBN).decimalPlaces(8).toNumber();
+
+            return notionalBN.times(price).div(leverageBN).decimalPlaces(8).toNumber();
         }
     }
 

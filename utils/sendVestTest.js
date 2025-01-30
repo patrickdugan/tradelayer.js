@@ -77,7 +77,7 @@ async function sendTransactionWithParams(fromAddress, toAddress, propertyid, amo
 // Example usage
 sendTransactionWithParams(
     'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',
-    'tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc',
+    'tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw',
     5,
     1000,
     false
