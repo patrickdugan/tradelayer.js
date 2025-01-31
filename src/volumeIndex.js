@@ -32,7 +32,7 @@ class VolumeIndex {
         return
     }
 
-       static async updateCumulativeVolumes(volume, type, id) {
+    static async updateCumulativeVolumes(volume, type, id) {
         await this.getCumulativeVolumes()
         if (type === "contract") {
             const collateralId = await Contracts.getCollateralId(id);
@@ -226,11 +226,12 @@ class VolumeIndex {
             trades.forEach(trade => {
                 const tradeVolume = new BigNumber(trade.value.volume);
                 
-                if(trade._id.includes('0')){
+                if(trade._id.toString().includes('0')){
                     console.log(tradeVolume)
                     totalLTCVolume = totalLTCVolume.plus(tradeVolume);
                 }
-                    totalVolume=totalVolume.plus(tradeVolume)
+                
+                totalVolume=totalVolume.plus(tradeVolume)
                 
             });
             totalLTCVolume= totalLTCVolume.toNumber()
@@ -243,8 +244,6 @@ class VolumeIndex {
             //throw new Error(`Failed to fetch block volumes for block ${blockHeight}`);
         }
     }
-
-
 
     static async getVolumeDataById(id) {
         return await db.getDatabase('volumeIndex').findOneAsync({ _id: id });
@@ -331,8 +330,6 @@ class VolumeIndex {
         const vwap = sumVolumeTimesPrice / totalVolume;
         return vwap;
     }
-
-
     
     static async getVwapData(propertyId1, propertyId2, trailingBlocks) {
         try {

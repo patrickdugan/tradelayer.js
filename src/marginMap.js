@@ -201,8 +201,8 @@ class MarginMap {
         if(close==false&&flip==false){
             if(position.contracts==0){
                 if(position.avgPrice==undefined||position.avgPrice==null){
-                    console.log('setting avg. price as trade price for new position '+position.avgPrice)
                     position.avgPrice=price
+                    console.log('setting avg. price as trade price for new position '+position.avgPrice)
                 }else{
                     position.avgPrice=price
                 }
@@ -257,7 +257,7 @@ class MarginMap {
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
         const balanceBN = new BigNumber(available);
         const marginBN = new BigNumber(margin);
-        const contractsBN = new BigNumber(contracts);
+        const contractsBN = new BigNumber(Math.abs(contracts));
         const notionalValueBN = new BigNumber(notionalValue);
         const avgPriceBN = new BigNumber(avgPrice)
 
@@ -265,7 +265,6 @@ class MarginMap {
         //inverese short  const liquidationPrice = (quantity * (1 / liquidationPrice-1 / averageEntryPrice)) / -(accountBalance - orderMargin - (quantity / averageEntryPrice) * maintenanceMarginRate - (quantity * fee) / bankruptcyPrice);
         const totalCollateralBN = balanceBN.plus(marginBN)
         const positionNotional = notionalValueBN.times(contractsBN)
-
         let bankruptcyPriceBN = new BigNumber(0)
         let liquidationPriceBN = new BigNumber(0)
 
@@ -283,13 +282,13 @@ class MarginMap {
                    console.log('calculating linear long '+avgPrice+' total coll.'+(available+margin)+' position notional '+(notionalValue*contracts))
                 }
             }else{
-                console.log('inside calc liq short linear '+totalCollateralBN.toNumber()+' '+positionNotional.times(avgPriceBN).toNumber()+' avg '+avgPriceBN.toNumber()+' total/notional '+totalCollateralBN.dividedBy(positionNotional).toNumber())
-          
-                bankruptcyPriceBN = (avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional))).times(0.995);
-                liquidationPriceBN = bankruptcyPriceBN.minus(avgPriceBN.plus(bankruptcyPriceBN).times(0.5))
-                console.log('calculating linear short '+avgPrice+' total coll.'+(available+margin)+' position notional '+(notionalValue*contracts))
-            }
+                 console.log('inside calc liq short linear', totalCollateralBN.toNumber(), positionNotional.times(avgPriceBN).toNumber(), 
+                'avg', avgPriceBN.toNumber(), 'total/notional', totalCollateralBN.dividedBy(positionNotional).toNumber());
 
+                bankruptcyPriceBN = (avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional))).times(0.995);
+                liquidationPriceBN = bankruptcyPriceBN.minus(bankruptcyPriceBN.minus(avgPriceBN).times(0.5));
+                console.log('calculating linear short', avgPrice, 'total coll.', (available + margin), 'position notional', (notionalValue * contracts));
+            }
         } else {
             // Inverse contracts
             // Calculate liquidation price for long inverse position
@@ -662,7 +661,7 @@ class MarginMap {
         }
 
         // Adjust the sign based on the isBuy flag
-        pnl = isBuy ? pnl.negated() : pnl;
+        pnl = isBuy ? pnl*-1 : pnl;
 
         // Modify the position object
         // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
@@ -726,38 +725,24 @@ class MarginMap {
         return pnl;
     }*/
 
-    async settlePNL(address, contracts, price, avgEntry, contractId, currentBlockHeight) {
+    async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight) {
             const pos = this.margins.get(address);
 
             if (!pos) return 0;
             const ContractRegistry = require('./ContractRegistry.js')
-            // Check if the contract is associated with an oracle
-            const isOracleContract = await ContractRegistry.isOracleContract(contractId);
-
-            let oraclePrice;
-            if (isOracleContract) {
-                // Retrieve the oracle ID associated with the contract
-                const oracleId = await ContractRegistry.getOracleId(contractId);
-
-                // Retrieve the latest oracle data for the previous block
-                const oracleData = await ContractRegistry.getLatestOracleData(oracleId, currentBlockHeight - 1);
-                //console.log('inside settlePNL oracle retrieval '+JSON.stringify(oracleData)+' '+JSON.stringify(oracleData.data)+' '+JSON.stringify(oracleData.data.price))
-                oraclePrice = oracleData.data.price
-            }
-
-            // Use settlement price based on the oracle data or LIFO Avg. Entry
-            const settlementPrice = isOracleContract ? oraclePrice : avgEntry;
+            // Check if the contract is associated with an orac
 
             // Calculate PnL based on settlement price
-            console.log('inside settlePNL ' +settlementPrice+' '+price+' is oracle '+isOracleContract+'oracle price '+oraclePrice+' '+avgEntry)
-            const pnl = new BigNumber((price - settlementPrice) * Math.abs(contracts));
+            console.log('inside settlePNL ' +lastMark+' '+price+' is oracle '+isOracleContract+'oracle price '+oraclePrice+' '+avgEntry)
+            const pnl = new BigNumber((price - lastMark) * Math.abs(contracts));
             console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
             if (contracts < 0) {
                 pnl.negated(); // Invert the value if contracts is negative
             }
             // Update margin and unrealized PnL
             //pos.margin -= Math.abs(pnl);
-            pos.unrealizedPNL -= pnl;
+            const uPNLBN = new BigNumber(pos.unrealizedPNL)
+            pos.unrealizedPNL-= uPNLBN.minus(pnl).toDecimal(8).toNumber()
             this.margins.set(address, pos)
             await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   

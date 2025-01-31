@@ -895,8 +895,6 @@ class Orderbook {
             return accepted;
         }
 
-
-
         async processContractMatches(matches, currentBlockHeight, channel) {
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js')
@@ -928,8 +926,8 @@ class Orderbook {
                     match.inverse = isInverse
 
                     let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
-                    const lastMark = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight)
-                    const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId,lastMark)
+                    const notionalValue = await ContractRegistry.getNotionalValue(match.sellOrder.contractId,match.tradePrice)
+                    console.log('returned notionalValue '+notionalValue)
                     let reserveBalanceA = await TallyMap.getTally(match.sellOrder.sellerAddress,collateralPropertyId)
                     let reserveBalanceB = await TallyMap.getTally(match.buyOrder.buyerAddress,collateralPropertyId)
                     if(debugFlag){
@@ -960,6 +958,7 @@ class Orderbook {
                         sellerReReserve=true
                     }
 
+                    console.log('about to calc fee '+match.buyOrder.amount+' '+match.sellOrder.maker+' '+match.buyOrder.maker+' '+isInverse+' '+match.tradePrice+' '+notionalValue+' '+channel)
                     let buyerFee = this.calculateFee(match.buyOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
                     let sellerFee = this.calculateFee(match.sellOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
 
@@ -1141,7 +1140,8 @@ class Orderbook {
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
-
+                    let lastMark = ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
+                    if(lastMark==null){lastMark=trade.price}
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     if (isBuyerReducingPosition||isBuyerFlippingPosition) {
@@ -1277,6 +1277,7 @@ class Orderbook {
                 let BNnotionalValue=new BigNumber(notionalValue)
                 let BNlastMark = new BigNumber(lastMark)
                 let BNamount = new BigNumber(amount)
+
                 console.log('inside calc fee ' +lastMark+' '+notionalValue)
               if((sellMaker==false&&buyMaker==false)||channel==true){
                         if(isInverse) {
@@ -1339,7 +1340,8 @@ class Orderbook {
 
         async locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee,isBuyerReducingPosition,isSellerReducingPosition){
                     const TallyMap = require('./tally.js');
-
+                       const MarginMap = require('./marginMap.js')
+                    const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     let buyFeeFromMargin = false
                     let buyFeeFromReserve = false
                     let buyFeeFromAvailable = false

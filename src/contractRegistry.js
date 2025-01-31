@@ -335,21 +335,37 @@ class ContractRegistry {
         //console.log('inside get notional '+contractId)
             const contractData = await this.getContractInfo(contractId);
             const BNMark = new BigNumber(mark)
-            if(contractId==3){
-                console.log('contract data in getNotionalValue '+JSON.stringify(contractData))
-            }
+            const BNNotional = new BigNumber(contractData.notionalValue)
         try {
-            if (contractData && contractData.native && contractData.notionalValue !== undefined && contractData.inverse==true) {
-                const BNnotionalValue = new BigNumber(contractData.notionalValue)
-                const notionalValue = new BigNumber(1).dividedBy(BNMark).multipliedBy(BNnotionalValue).decimalPlaces(8).toNumber();
-                return notionalValue;
-            } else if(contractData.inverse==false && contractData.native==false) {
+           if (contractData.native && contractData.inverse) {
+            console.log(`Calculating Notional Value for Inverse Native Contract`);
+
+            const notionalValue = new BigNumber(1)
+                .dividedBy(BNMark)
+                .multipliedBy(BNNotional)
+                .decimalPlaces(8)
+                .toNumber();
+
+            console.log(`Calculated Notional Value: ${notionalValue}`);
+            return notionalValue;
+        }else if (!contractData.native && !contractData.inverse) {
+            console.log(`Calculating Notional Value for Linear Contract`+BNNotional+' '+BNMark);
+            const notionalValue = BNNotional.times(BNMark).decimalPlaces(8).toNumber();
+
+            console.log(`Calculated Notional Value: ${notionalValue}`);
+            return notionalValue;
+        }else if (!contractData.native && contractData.inverse) {
+                console.log(`Calculating Notional Value for Inverse Oracle Contract`);
+
                 const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
-                return latestPrice.price*contractData.notionalValue; // or any default value
-            } else if(contractData.inverse==true && contractData.native==false){
-                const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
-                const value = new BigNumber(1).dividedBy(latestPrice.price).multipliedBy(contractData.notionalValue);
-                return value // or any default value
+                const value = new BigNumber(1)
+                    .dividedBy(BNMark)
+                    .multipliedBy(BNNotional)
+                    .decimalPlaces(8)
+                    .toNumber();
+
+                console.log(`Calculated Notional Value: ${value}`);
+                return value;
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
