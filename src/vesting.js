@@ -256,6 +256,8 @@ class TradeLayerManager {
     static async updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC, cumulativeVolumeGlobal, currentBlockVolumeGlobal) {
         const propertyData1 = await PropertyManager.getPropertyData(2)
         const propertyData2 = await PropertyManager.getPropertyData(3)
+        if(cumulativeVolumeLTC==0){cumulativeVolumeLTC=1}
+        if(cumulativeVolumeGlobal==0){cumulativeVolumeGlobal=1}
         if(propertyData1==null){
             return null    
         }
@@ -269,7 +271,12 @@ class TradeLayerManager {
         const logScaleMin2 = new BigNumber(10000000);
         const logScaleMax2 = new BigNumber(1000000000000);
         console.log('inside update vesting '+cumulativeVolumeLTC+' '+currentBlockVolumeLTC+' '+cumulativeVolumeGlobal+' '+currentBlockVolumeGlobal+' '+maxTokens2+' '+maxTokens3)
-
+        let tliMin = true
+        /*if((cumulativeVolumeLTC+currentBlockVolumeLTC)<logScaleMax1){
+            return null
+        }else if((cumulativeVolumeLTC+currentBlockVolumeLTC)<logScaleMax2){
+            tliMin =false
+        }*/
         // Convert inputs to BigNumber
         cumulativeVolumeLTC = new BigNumber(cumulativeVolumeLTC);
         currentBlockVolumeLTC = new BigNumber(currentBlockVolumeLTC);
@@ -284,34 +291,44 @@ class TradeLayerManager {
 
                // First Tranche Vesting (Based on LTC volume)
         let vestingFactorPrev1 = new BigNumber(Math.log(cumulativeVolumeLTC.toNumber())).div(Math.log(logScaleMax1.toNumber()));
+        console.log('vesting factor prev 1 '+Math.log(cumulativeVolumeLTC.toNumber())+' '+logScaleMax1.toNumber()+' '+vestingFactorPrev1.toNumber())
         vestingFactorPrev1 = BigNumber.min(BigNumber.max(vestingFactorPrev1, new BigNumber(0)), new BigNumber(1));
-
+        console.log('vesting fact prev 1 after filter '+vestingFactorPrev1.toNumber())
         let vestingFactorNew1 = new BigNumber(Math.log(newCumulativeVolumeLTC.toNumber())).div(Math.log(logScaleMax1.toNumber()));
         vestingFactorNew1 = BigNumber.min(BigNumber.max(vestingFactorNew1, new BigNumber(0)), new BigNumber(1));
-
+        console.log('vesting factor new 1 '+Math.log(newCumulativeVolumeLTC.toNumber())+' '+logScaleMax1.toNumber()+' '+vestingFactorNew1.toNumber())
+     
         const vestingFactorDifference1 = vestingFactorNew1.minus(vestingFactorPrev1);
-
-        // Second Tranche Vesting (Based on Global volume)
-        let vestingFactorPrev2 = new BigNumber(Math.log(cumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
-        vestingFactorPrev2 = BigNumber.min(BigNumber.max(vestingFactorPrev2, new BigNumber(0)), new BigNumber(1));
-
-        let vestingFactorNew2 = new BigNumber(Math.log(newCumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
-        vestingFactorNew2 = BigNumber.min(BigNumber.max(vestingFactorNew2, new BigNumber(0)), new BigNumber(1));
-
-        const vestingFactorDifference2 = vestingFactorNew2.minus(vestingFactorPrev2);
-
-          // Calculate the vesting amount based on the total difference and max vesting tokens
-        let vestingAmount = vestingFactorDifference1.multipliedBy(maxTokens2);
-
+        console.log(vestingFactorDifference1.toNumber())
+           let vestingAmount = vestingFactorDifference1.multipliedBy(maxTokens2);
+         console.log('vesting amt '+vestingAmount.toNumber())
         // Round vesting amount to 8 decimal places
         vestingAmount = vestingAmount.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
 
+        // Second Tranche Vesting (Based on Global volume)
+        if(tliMin){
+        let vestingFactorPrev2 = new BigNumber(Math.log(cumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
+        console.log('vesting factor prev 2 '+Math.log(cumulativeVolumeLTC.toNumber())+' '+logScaleMax2.toNumber()+' '+vestingFactorPrev2.toNumber())
+        vestingFactorPrev2 = BigNumber.min(BigNumber.max(vestingFactorPrev2, new BigNumber(0)), new BigNumber(1));
+        console.log('vesting fact prev 2 after filter '+vestingFactorPrev2.toNumber())
+        
+        let vestingFactorNew2 = new BigNumber(Math.log(newCumulativeVolumeGlobal.toNumber())).div(Math.log(logScaleMax2.toNumber()));
+        vestingFactorNew2 = BigNumber.min(BigNumber.max(vestingFactorNew2, new BigNumber(0)), new BigNumber(1));
+        console.log('vesting factor new 2 '+Math.log(newCumulativeVolumeLTC.toNumber())+' '+logScaleMax1.toNumber()+' '+vestingFactorNew2.toNumber())
+     
+        const vestingFactorDifference2 = vestingFactorNew2.minus(vestingFactorPrev2);
+         console.log(vestingFactorDifference2.toNumber())
+          // Calculate the vesting amount based on the total difference and max vesting tokens
+     
         // Calculate the vesting amount based on the total difference and max vesting tokens
         let vestingAmount2 = vestingFactorDifference2.multipliedBy(maxTokens3);
-
+        console.log('calculating TLIVEST amount new volume log'+Math.log(newCumulativeVolumeGlobal.toNumber())+' log of log scale max 2'+logScaleMax2.toNumber()+' vestingFactorDifference2 '+vestingFactorDifference2.toNumber())
         // Round vesting amount to 8 decimal places
         vestingAmount2 = vestingAmount2.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
         console.log('ending vest calc '+vestingAmount+' '+vestingAmount2)
+        }else{
+            let vestingAmount2=0
+        }
         return {two:vestingAmount,three:vestingAmount2};
     }
 

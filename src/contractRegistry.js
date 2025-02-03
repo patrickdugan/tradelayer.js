@@ -336,6 +336,7 @@ class ContractRegistry {
             const contractData = await this.getContractInfo(contractId);
             const BNMark = new BigNumber(mark)
             const BNNotional = new BigNumber(contractData.notionalValue)
+            console.log('checking notional and mark in getNotionalValue '+contractData.notionalValue +' '+mark)
         try {
            if (contractData.native && contractData.inverse) {
             console.log(`Calculating Notional Value for Inverse Native Contract`);
@@ -347,25 +348,26 @@ class ContractRegistry {
                 .toNumber();
 
             console.log(`Calculated Notional Value: ${notionalValue}`);
-            return notionalValue;
+            
+            return{notionalValue:notionalValue, notionalPerContract:contractData.notionalValue};
         }else if (!contractData.native && !contractData.inverse) {
             console.log(`Calculating Notional Value for Linear Contract`+BNNotional+' '+BNMark);
             const notionalValue = BNNotional.times(BNMark).decimalPlaces(8).toNumber();
 
             console.log(`Calculated Notional Value: ${notionalValue}`);
-            return notionalValue;
+            return{notionalValue:notionalValue, notionalPerContract:contractData.notionalValue};
         }else if (!contractData.native && contractData.inverse) {
                 console.log(`Calculating Notional Value for Inverse Oracle Contract`);
 
                 const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
-                const value = new BigNumber(1)
+                const notionalValue = new BigNumber(1)
                     .dividedBy(BNMark)
                     .multipliedBy(BNNotional)
                     .decimalPlaces(8)
                     .toNumber();
 
                 console.log(`Calculated Notional Value: ${value}`);
-                return value;
+                return {notionalValue:notionalValue, perContractNotional:contractData.notionalValue};
             }
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);

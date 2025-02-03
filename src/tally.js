@@ -479,9 +479,10 @@ class TallyMap {
         if (currentFee === undefined||currentFee==0||isNaN(currentFee)) {
             currentFee = 0; // Set currentFee to 0 if it's undefined
         }
-
+        let currentFeeBN = new BigNumber(currentFee)
+        let feeAmountBN = new BigNumber(feeAmount)
         // Update the fee cache by adding the new fee amount
-        let updatedFee = currentFee + feeAmount;
+        let updatedFee = currentFeeBN.plus(feeAmountBN).decimalPlaces(8).toNumber();
         this.feeCache.set(propertyId, updatedFee);
 
         console.log('Updated fee cache for property ' + propertyId + ': ' + updatedFee);

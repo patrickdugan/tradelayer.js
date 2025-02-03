@@ -569,6 +569,7 @@ class MarginMap {
         //let remainingMargin = new BigNumber(pos.margin).plus(pnl);
         //if(pnl>0){
             let remainingMargin = new BigNumber(pos.margin)
+            let feeBN = new BigNumber(fee)
         //}
         //console.log('inside reduce margin ' + JSON.stringify(remainingMargin.toNumber()));
 
@@ -595,17 +596,17 @@ class MarginMap {
             // Now you can use the minus method
             posMargin = posMargin.minus(reduction);
 
-            // Assign the updated pos.margin
-            pos.margin = posMargin.decimalPlaces(8).toNumber();    
-            console.log('updating margin in reduce '+pos.margin)
             if(feeDebit){
                 console.log('debiting fee in reduce margin '+fee)
-                pos.margin-=fee
-                reduction = reduction.toNumber()
-                reduction -=fee
-            }else{
-                reduction.toNumber()
+                posMargin.minus(feeBN)
+                reduction.minus(feeBN)
             }
+
+            // Assign the updated pos.margin
+            pos.margin = posMargin.decimalPlaces(8).toNumber();    
+            reduction = reduction.toNumber()
+            console.log('updating margin in reduce '+pos.margin)
+           
             //console.log('margin map cannot have negative margin '+pos.margin+' '+reduction)
              
         this.margins.set(address, pos);
@@ -631,7 +632,7 @@ class MarginMap {
         if (!pos) return new BigNumber(0);
 
         let pnl;
-        //console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
+        console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
         
         if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
             console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
@@ -642,12 +643,11 @@ class MarginMap {
         const notionalValueBN = new BigNumber(notionalValue);
 
         if (isInverse) {
+            let one = new BigNumber(1)
             // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
-            pnl = priceBN
-                .minus(1)
-                .dividedBy(avgPriceBN.minus(1))
+            pnl = one.dividedBy(avgPriceBN).minus(one.dividedBy(priceBN))
                 .times(contractsBN)
-                .times(notionalValueBN).decimalPlaces(8).toNumber();
+                .times(notionalValueBN)
 
             //console.log('pnl ' + pnl.toNumber());
         } else {
@@ -655,19 +655,20 @@ class MarginMap {
             pnl = priceBN
                 .minus(avgPriceBN)
                 .times(contractsBN)
-                .times(notionalValueBN).decimalPlaces(8).toNumber();
+                .times(notionalValueBN);
 
             //console.log('pnl ' + pnl.toNumber());
         }
 
         // Adjust the sign based on the isBuy flag
-        pnl = isBuy ? pnl*-1 : pnl;
+        pnl = isBuy ? pnl.times(-1) : pnl;
+        pnl = pnl.decimalPlaces(8).toNumber()
 
         // Modify the position object
         // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
         // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
 
-        //console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
+        console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
         await this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
       
         return pnl;
@@ -733,7 +734,7 @@ class MarginMap {
             // Check if the contract is associated with an orac
 
             // Calculate PnL based on settlement price
-            console.log('inside settlePNL ' +lastMark+' '+price+' is oracle '+isOracleContract+'oracle price '+oraclePrice+' '+avgEntry)
+            console.log('inside settlePNL ' +lastMark+' '+price)
             const pnl = new BigNumber((price - lastMark) * Math.abs(contracts));
             console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
             if (contracts < 0) {
@@ -742,7 +743,7 @@ class MarginMap {
             // Update margin and unrealized PnL
             //pos.margin -= Math.abs(pnl);
             const uPNLBN = new BigNumber(pos.unrealizedPNL)
-            pos.unrealizedPNL-= uPNLBN.minus(pnl).toDecimal(8).toNumber()
+            pos.unrealizedPNL -= uPNLBN.minus(pnl).decimalPlaces(8).toNumber();
             this.margins.set(address, pos)
             await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL')
   
