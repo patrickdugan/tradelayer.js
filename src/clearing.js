@@ -456,7 +456,6 @@ class Clearing {
                 if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
                     throw new Error("Inconsistent balance updates detected");
                 }
-
                     // Save audit data
                     const auditData = this.prepareAuditData(); 
                     await this.saveAuditData(blockHeight, auditData);

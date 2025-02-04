@@ -704,13 +704,14 @@ class Main {
 
             // Pass other transactions to `blockHandlerMid` for processing later
             return otherTxs;  // Store remaining txs for mid-processing
-        } catch (error) {
+       } catch (error) {
             console.error(`Error in blockHandlerBegin at block ${blockHeight}:`, error);
-            if(error&&error.includes('ETIMEDOUT')){
-                return this.blockHandlerBegin('',blockHeight)
+            if (error && error.includes('ETIMEDOUT')) {  // ❌ This will throw a TypeError
+                return this.blockHandlerBegin('', blockHeight);
             }
-            return []
+            return [];
         }
+
 
          // Check for reorganization using ReOrgChecker
         /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place

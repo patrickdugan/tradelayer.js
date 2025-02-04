@@ -303,7 +303,7 @@ class PropertyManager {
         try {
             const base = await db.getDatabase('propertyList')
             const propertyData = await base.findOneAsync({ _id: 'propertyIndex' });
-            console.log('property list ' +JSON.stringify(propertyData))
+            //console.log('property list ' +JSON.stringify(propertyData))
             if (propertyData && propertyData.value) {
                 const parsedData = JSON.parse(propertyData.value);
                 console.log(propertyId)

@@ -2333,7 +2333,7 @@ function validateAddress(address) {
 
   for (const [networkName, netConfig] of Object.entries(networks)) {
     const { P2PKH, P2SH, bech32 } = netConfig;
-    console.log('validating address form '+JSON.stringify(netConfig))
+    //console.log('validating address form '+JSON.stringify(netConfig))
     // Match based on the prefix
     if (
       (address.startsWith("1") && P2PKH === 0x00) || // Bitcoin P2PKH

@@ -130,4 +130,4 @@ async function issueAttestation(metadata) {
 }
 
 // Run the attestation script
-buildSignAndSendTransaction('tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc','CL');
+buildSignAndSendTransaction('tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m','CL');

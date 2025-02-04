@@ -14,7 +14,7 @@ const client = new Litecoin.Client({
 const loadWalletAsync = util.promisify(client.cmd.bind(client, 'loadwallet'))
 async function load(){
 
-const loadwallet = await loadWalletAsync('wallet.dat')
+const loadwallet = await loadWalletAsync(''/*wallet.dat'*/)
 }
 
 load()

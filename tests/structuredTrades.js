@@ -24,7 +24,7 @@ async function createAndSendContractTrade(senderAddress, tradeParams, blockHeigh
     try {
         console.log(`Fetching UTXOs for ${senderAddress}...`);
         const utxos = await listUnspentAsync(1, 9999999, [senderAddress]);
-
+        console.log(JSON.stringify(utxos))
         if (!utxos || utxos.length === 0) {
             throw new Error(`No UTXOs found for address: ${senderAddress}`);
         }
@@ -73,9 +73,9 @@ async function createAndSendContractTrade(senderAddress, tradeParams, blockHeigh
 }
 
 // Suppose these are two test addresses with enough LTC & collateral
-const aliceAddress = 'tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw';
-const bobAddress = 'tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc';
-const carolAddress = 'tltc1q8zst4zp7d37l075ktg0dymvde60du8wejgzjuq'
+const aliceAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr'//tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw';
+const bobAddress = 'tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m'//tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc';
+const carolAddress = 'tltc1qqgru3cahyq5tj7l5q066ssv33gg3v7z9auxkcg'
 
 contractId =2 
 // We'll create & broadcast a series of trades. 
@@ -85,21 +85,21 @@ async function structuredTestTrades() {
   // ============ 1) Alice places a BUY at price 5000, amount=5 ============
   const aliceBuy = {
     contractId: contractId,
-    amount: 5,
-    price: 987,
-    sell: false // buy
+    amount: 3,
+    price: 1085,
+    sell: true // buy
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
-  //await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
+  await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
 
   // ============ 2) Bob places a SELL at price 5000, amount=5 ============
   const bobSell = {
     contractId: contractId,
-    amount: 5,
-    price: 972,
-    sell: true 
+    amount: 4,
+    price: 1090,
+    sell: false 
   };
-  //await createAndSendContractTrade(bobAddress, bobSell, 100);
+  await createAndSendContractTrade(bobAddress, bobSell, 100);
 
   // We'll assume these both appear in block #100 or so. 
   // In your real setup, you might need to manually confirm the block is mined
@@ -110,20 +110,20 @@ async function structuredTestTrades() {
   // so he's effectively reducing his short from 5 to 3. 
   const bobClose = {
     contractId: contractId,
-    amount: 2,
-    price: 1015,
-    sell: false // buy to close
+    amount: 5,
+    price: 1045,
+    sell: true // buy to close
   };
-  await createAndSendContractTrade(bobAddress, bobClose, 101);
+  //await createAndSendContractTrade(bobAddress, bobClose, 101);
 
   const aliceClose = {
     contractId: contractId,
-    amount: 3,
-    price: 1008,
-    sell: true // buy
+    amount: 7,
+    price: 1050,
+    sell: false // buy
   };
 
-  await createAndSendContractTrade(aliceAddress, aliceClose, 101);
+  //await createAndSendContractTrade(aliceAddress, aliceClose, 101);
 
 
   // Done
