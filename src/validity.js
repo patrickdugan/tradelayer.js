@@ -951,22 +951,10 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isPropertyAdmin = PropertyList.isAdmin(params.senderAddress, params.propertyId);
-            if (!isPropertyAdmin) {
-                params.valid = false;
-                params.reason += 'Sender is not admin of the property; ';
-            }
-
-            const isManagedProperty = PropertyList.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyList.isManagedAndAdmin(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
-                params.reason += 'Property is not of managed type; ';
-            }
-
-            const hasSufficientBalance = TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount);
-            if (hasSufficientBalance.hasSufficient==false) {
-                params.valid = false;
-                params.reason += 'Insufficient balance to grant tokens; ';
+                params.reason += 'Property is not of managed type or admin does not match';
             }
 
             return params;

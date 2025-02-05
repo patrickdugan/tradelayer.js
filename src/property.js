@@ -163,6 +163,38 @@ class PropertyManager {
         }
     }
 
+    static async isManagedAndAdmin(propertyId,address) {
+        try {
+            // Load the property index from the database
+            const base = await db.getDatabase('propertyList');
+            const propertyIndex = await base.findOneAsync({ _id: 'propertyIndex' });
+
+            if (!propertyIndex || !propertyIndex.value) {
+                throw new Error('Property index not found.');
+            }
+
+            // Parse the JSON string to get the array of arrays
+            const parsedIndex = JSON.parse(propertyIndex.value);
+
+            // Find the property entry by propertyId
+            const propertyEntry = parsedIndex.find(entry => entry[0] === propertyId);
+
+            if (!propertyEntry) {
+                throw new Error(`Property with ID ${propertyId} not found.`);
+            }
+
+            // Check if the property type is 2 (Managed)
+            const propertyData = propertyEntry[1];
+            return propertyData.type === 2&&propertyData.issuer===address;
+        } catch (error) {
+            console.error(`Error checking if property ID ${propertyId} is managed:`, error);
+            return false;
+        }
+    }
+
+
+
+
     static async updateTotalInCirculation(propertyId, amountChange) {
         const propertyData = await PropertyManager.getPropertyData(propertyId);
 

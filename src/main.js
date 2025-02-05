@@ -4,13 +4,7 @@ class ShutdownEmitter extends EventEmitter {}
 const shutdownEmitter = new ShutdownEmitter();
 //const fetch = require('node-fetch'); // For HTTP requests (e.g., price lookups)
 const util = require('util')
-//const listen = require('./listener');
-// Custom modules for TradeLayer
-//const Clearing =require('./clearing.js')
-//const Persistence = require('./Persistence.js'); // Handles data persistence
-//const Orderbook = require('./orderbook.js'); // Manages the order book
-//const InsuranceFund = require('./insurance.js'); // Manages the insurance fund
-//const ReOrgChecker = require('./reOrg.js');
+const ReOrgChecker = require('./reOrg.js');
 // main.js
 const initialize = require('./init');
 let client 
@@ -328,40 +322,49 @@ class Main {
                 this.parseBlock = blockHeight
                 if(blockHeight%10000==1){console.log('parsing towards real-time mode '+blockHeight)}
                 const blockData = txByBlockHeight[blockHeight];
-
+                const skip = true
                 //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
                     if(blockHeight==3496379||blockHeight==3496378){
                     //console.log('troubleshooting commit/utxo-trade-combo '+JSON.stringify(blockData)+' '+'now funding part '+JSON.stringify(blockData.fundingTx)+' '+JSON.stringify(blockData.tradeTx))
                     }
                     // First process funding transactions
-                    await this.processTxSet(blockData.fundingTx, blockHeight);
+                    const skips = await this.processTxSet(blockData.fundingTx, blockHeight);
 
                     // Then process trade transactions
-                    await this.processTxSet(blockData.tradeTx, blockHeight);
-                }
-
-                // Handle cumulative volumes and vesting after each block
-                const cumVolumes = await VolumeIndex.getCumulativeVolumes();
-                const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
-                if (thisBlockVolumes.global > 0) {
-                    console.log('This is a block volume! ' + thisBlockVolumes);
-                    const updateVesting = await TradeLayerManager.updateVesting(
-                        cumVolumes.ltcPairTotalVolume,
-                        thisBlockVolumes.ltcPairs,
-                        cumVolumes.globalCumulativeVolume,
-                        thisBlockVolumes.global
-                    );
-                    if (updateVesting != null && updateVesting != undefined && thisBlockVolumes != 0) {
-                        console.log('Update Vesting in block ' + blockHeight + ' ' + JSON.stringify(updateVesting));
-                        await TallyMap.applyVesting(2, updateVesting.two, blockHeight);
-                        await TallyMap.applyVesting(3, updateVesting.three, blockHeight);
+                    const skips2 = await this.processTxSet(blockData.tradeTx, blockHeight);
+                    if((skips+skips2)<(blockData.fundingTx.length+blockData.tradeTx.length)){
+                        console.log('skip to my lou my darlin '+skips +' '+skips2+' '+blockData.fundingTx.length+' '+blockData.tradeTx.length)
+                        skip=false
+                        if((skips+skips2)>0){
+                            throw error("somehow there are already processed transactions in a partially processed block")
+                        }
                     }
                 }
 
-                // Additional processing steps like withdrawal and clearing
-                await Channels.processWithdrawals(blockHeight);
-                await Clearing.clearingFunction(blockHeight);
+                // Handle cumulative volumes and vesting after each block
+                if(skip==true){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
+                    const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
+                    const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
+                    if (thisBlockVolumes.global > 0){
+                        console.log('This is a block volume! ' + thisBlockVolumes);
+                        const updateVesting = await TradeLayerManager.updateVesting(
+                            cumulativeVolumes.ltcPairTotalVolume,
+                            thisBlockVolumes.ltcPairs,
+                            cumulativeVolumes.globalCumulativeVolume,
+                            thisBlockVolumes.global
+                        );
+                        if (updateVesting != null && updateVesting != undefined && thisBlockVolumes != 0) {
+                            console.log('Update Vesting in block ' + blockHeight + ' ' + JSON.stringify(updateVesting));
+                            await TallyMap.applyVesting(2, updateVesting.two, blockHeight);
+                            await TallyMap.applyVesting(3, updateVesting.three, blockHeight);
+                        }
+                    }
+
+                    // Additional processing steps like withdrawal and clearing
+                    await Channels.processWithdrawals(blockHeight);
+                    await Clearing.clearingFunction(blockHeight);
+                }
 
                 maxProcessedHeight = blockHeight;
             }
@@ -379,6 +382,7 @@ class Main {
 
         // Helper function to process a set of transactions
         async processTxSet(txSet, blockHeight) {
+            let skips = 0
             for (const txData of txSet) {
                 let flag = false;
                
@@ -388,6 +392,7 @@ class Main {
                     
                     if (await Consensus.checkIfTxProcessed(txId)) {
                         //console.log('scanning blockHeight '+blockHeight+' '+txId)
+                        skips++
                         continue;
                     }
 
@@ -741,14 +746,8 @@ class Main {
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
-       // Loop through contracts to trigger liquidations
-        /*for (const contract of ContractsRegistry.getAllContracts()) {
-            if (MarginMap.needsLiquidation(contract)) {
-                const orders = await MarginMap.triggerLiquidations(contract);
-                // Handle the created liquidation orders
-                // ...
-            }
-        }*/
+           const blob = await Clearing.makeSettlement(blockHeight, contract);
+
         return null 
         //console.log('processed ' + blockHash)
     }
@@ -769,22 +768,7 @@ class Main {
                     await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
                     }   
                 }
-                //console.log(`Finished processing block ${blockHeight}`);
-        // Additional logic for end of block processing
-
-        // Call the method to process confirmed withdrawals
-        /*await Channels.processConfirmedWithdrawals();
-         for (const contract of ContractsRegistry.getAllContracts()) {
-            // Check if the contract has open positions
-            if (ContractsRegistry.hasOpenPositions(contract)) {
-                // Perform settlement tasks for the contract
-                let positions = await Clearing.fetchPositionsForAdjustment(blockHeight, contract);
-                const blob = await Clearing.makeSettlement(blockHeight, contract);
-
-                // Perform audit tasks for the contract
-                await Clearing.auditSettlementTasks(blockHeight, blob.positions, blob.balanceChanges);
-            }
-        }*/
+ 
         return //console.log('block finish '+blockHeight)
     }
 

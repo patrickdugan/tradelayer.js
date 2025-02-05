@@ -620,9 +620,9 @@ class ContractRegistry {
 
      // Determine if a contract is an oracle contract
     static async isOracleContract(contractId) {
-        //console.log('inside is oracle contract '+contractId)
+        console.log('inside is oracle contract '+contractId)
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        //console.log(JSON.stringify(contractInfo))
+        console.log(JSON.stringify(contractInfo))
         return contractInfo && contractInfo.native === false;
     }
 

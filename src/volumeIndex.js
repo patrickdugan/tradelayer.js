@@ -28,7 +28,7 @@ class VolumeIndex {
         );
 
         // Update global cumulative volume variables
-        await VolumeIndex.updateCumulativeVolumes(ltcVolume, type,id);
+        await VolumeIndex.updateCumulativeVolumes(ltcVolume, type,id,blockHeight);
         return
     }
 
@@ -58,7 +58,7 @@ class VolumeIndex {
         }
     }
 
-    static async updateCumulativeVolumes(volume, type, id) {
+    static async updateCumulativeVolumes(volume, type, id, block) {
             let {globalCumulativeVolume, ltcPairTotalVolume } = await this.getCumulativeVolumes()
             // Assuming the volume is directly in LTC
             let BNGlobal = new BigNumber(globalCumulativeVolume)
@@ -73,14 +73,14 @@ class VolumeIndex {
             const base = await db.getDatabase('volumeIndex')
             await base.updateAsync(
                 { _id: 'ltcPairCumulativeVolume' },
-                { value: ltcPairTotalVolume },
+                { value: {ltcPairTotalVolume:ltcPairTotalVolume, block: block }},
                 { upsert: true }
             );
         
         console.log('saving global cum. volume '+globalCumulativeVolume)
         await base.updateAsync(
             {   _id: 'globalCumulativeVolume'},
-            { value: globalCumulativeVolume },
+            { value: {globalCumulativeVolume:globalCumulativeVolume, block:block }},
             { upsert: true }
         );
         return
@@ -129,16 +129,23 @@ class VolumeIndex {
         }
     }
 
-    static async getCumulativeVolumes() {
+    static async getCumulativeVolumes(block) {
         let globalCumulativeVolume = 0
         let contractCumulativeVolume = 0
         let ltcPairTotalVolume = 0
         // Check if globalCumulativeVolume and ltcPairTotalVolume are defined and not zero
            try {
                 const base = await db.getDatabase('volumeIndex')
-                const globalCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'globalCumulativeVolume' });
-                if(globalCumulativeVolumeFromDB){
-                    globalCumulativeVolume = globalCumulativeVolumeFromDB.value
+                    const globalCumulativeVolumeFromDB = await base.findOneAsync({ 
+                        _id: 'globalCumulativeVolume',
+                        'value.block':  { $lt: block }  // Filter for the specific block
+                    });
+                    if (globalCumulativeVolumeFromDB){
+
+            // Sort by block in descending order and take the highest
+                    const sortedData = globalCumulativeVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
+                    const latestEntry = sortedData[0];
+                    globalCumulativeVolume = latestEntry.value.globalCumulativeVolume
                 }
             } catch (error) {
                 console.error('Error fetching global cumulative volume:', error);
@@ -147,9 +154,12 @@ class VolumeIndex {
 
             try {
                 const base = await db.getDatabase('volumeIndex')
-                const contractCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'contractCumulativeVolume' });
+                const contractCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'contractCumulativeVolume', 'value.block': { $lt: block } });
                 if (contractCumulativeVolumeFromDB) {
-                    contractCumulativeVolume = contractCumulativeVolumeFromDB.value;
+            // Sort by block in descending order and take the highest
+                    const sortedData = contractCumulativeVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
+                    const latestEntry = sortedData[0];
+                    contractCumulativeVolume = latestEntry.value.contractCumulativeVolume
                 }
             } catch (error) {
                 console.error('Error fetching global cumulative volume:', error);
@@ -158,10 +168,13 @@ class VolumeIndex {
 
             try {
                 const base = await db.getDatabase('volumeIndex')
-                const ltcPairTotalVolumeFromDB = await base.findOneAsync({ _id: 'ltcPairCumulativeVolume' });
+                const ltcPairTotalVolumeFromDB = await base.findOneAsync({ _id: 'ltcPairCumulativeVolume','value.block': block  });
                 if (ltcPairTotalVolumeFromDB) {
-                    ltcPairTotalVolume = ltcPairTotalVolumeFromDB.value;
-                }
+            // Sort by block in descending order and take the highest
+                    const sortedData = ltcPairTotalVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
+                    const latestEntry = sortedData[0];
+                    ltcPairTotalVolume = latestEntry.value.ltcPairTotalVolume
+                }     
             } catch (error) {
                 console.error('Error fetching LTC pair total volume:', error);
                 // Handle or log the error as needed

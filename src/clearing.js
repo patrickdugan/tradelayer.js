@@ -171,54 +171,76 @@ class Clearing {
         }
     }
 
-    static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
-        // Determine if the contract is an oracle contract
-        const ContractRegistry = require('./contractRegistry.js')
-        //console.log('inside isPrice updated '+contractId, blockHeight)
-        const isOracle = await ContractRegistry.isOracleContract(contractId);
-        let latestData;
-        //console.log('checking if contract is oracle '+contractId +' '+isOracle)
-        if (isOracle) {
-            let oracleId = await ContractRegistry.getOracleId(contractId)
-            // Query the database for the latest oracle data for the given contract
-            //console.log('oracle id '+oracleId)
-            const base = await db.getDatabase('oracleData')         
-            const latestData = base.findAsync({ oracleId: oracleId });
-            //console.log('is price updated ' +JSON.stringify(latestData))
-            if (latestData.length>0) {
-                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
-                const latestBlockData = sortedData[sortedData.length-1];
-                const lastPriceEntry = latestBlockData[latestBlockData.length-1]
-                //console.log('checking data '+sortedData+ ' ok now latest Block data '+latestBlockData+' last price entry '+lastPriceEntry)
-                // Now, latestBlockData contains the document with the highest blockHeight
-                if(lastPriceEntry.blockHeight==blockHeight){
-                    console.log('latest data '+lastPriceEntry.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(lastPriceEntry && lastPriceEntry.blockHeight == blockHeight) )
-                    return true
-                }
-            } else {
-                //console.error('No data found for contractId:', contractId);
-            }
-        } /*else {
-            // Access the database where volume index data is stored
-            const volumeIndexDB = db.getDatabase('volumeIndex');
-                        // Query the database for the latest volume index data for the given contract
-            const latestData = await volumeIndexDB.findOneAsync({ contractId: contractId });
-            if (latestData) {
-                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
-                const latestBlockData = sortedData[0];
-                // Now, latestBlockData contains the document with the highest blockHeight
-                if(latestData.blockHeight==blockHeight){
+       static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
+        try {
+            const ContractRegistry = require('./contractRegistry.js');
+            const base = await db.getDatabase('oracleData');
+            const volumeIndexDB = await db.getDatabase('volumeIndex');
 
-                console.log('Latest Block Data:', latestBlockData);
-                    //console.log('latest data '+latestData.blockHeight + ' blockHeight '+blockHeight + ' latestData exists and its block = current block ' +Boolean(latestData && latestData.blockHeight == blockHeight) )
-                    return true
+            const isOracle = await ContractRegistry.isOracleContract(contractId);
+            //console.log('oracle? '+isOracle)
+            if (isOracle) {
+                // Handle Oracle-based contracts
+                const oracleId = await ContractRegistry.getOracleId(contractId);
+                //console.log(`Checking Oracle price update for Oracle ID ${oracleId} at block height ${blockHeight}`);
+
+                // Fetch oracle data
+                const oracleData = await base.findAsync({ oracleId });
+                if (!oracleData || oracleData.length === 0) {
+                    //console.warn(`No oracle data found for Oracle ID ${oracleId}`);
+                    return false;
                 }
+
+                // Sort data by blockHeight
+                oracleData.sort((a, b) => b.blockHeight - a.blockHeight);
+
+                const [latestEntry, previousEntry] = oracleData;
+                console.log("blah "+latestEntry+' '+previousEntry+' '+JSON.stringify(oracleData) )
+                if (!previousEntry) {
+                    //console.log(`Only one oracle data entry found for Oracle ID ${oracleId}. Assuming no price change.`);
+                    return false;
+                }
+
+                const latestPrice = latestEntry.data.price;
+                const previousPrice = previousEntry.data.price;
+                if(latestPrice!=previousPrice){
+                    console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
+                }
+                
+                return latestPrice !== previousPrice;
             } else {
-                //console.error('No data found for contractId:', contractId);
+                // Handle Native contracts
+                const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
+                //console.log(`Checking native price update for pair ${pairKey} at block height ${blockHeight}`);
+
+                // Fetch volume index data
+                const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
+                if (!volumeData || volumeData.length === 0) {
+                    //console.warn(`No volume index data found for pair ${pairKey}`);
+                    return false;
+                }
+
+                // Sort by blockHeight
+                volumeData.sort((a, b) => b.value.blockHeight - a.value.blockHeight);
+
+                const [latestEntry, previousEntry] = volumeData;
+
+                if (!previousEntry) {
+                    //console.log(`Only one volume index entry found for pair ${pairKey}. Assuming no price change.`);
+                    return false;
+                }
+
+                const latestPrice = latestEntry.value.price;
+                const previousPrice = previousEntry.value.price;
+                if(latestPrice!==previousPrice){
+                    console.log(`Native prices: latest=${latestPrice}, previous=${previousPrice}`);
+                }
+                return latestPrice !== previousPrice;
             }
-        }*/
-        //console.log('no new data')
-        return false; // No updated data for this block height
+        } catch (error) {
+            console.error(`Error checking price update for contract ID ${contractId}:`, error.message);
+            return false; // Default to no update in case of an error
+        }
     }
 
     static async makeSettlement(blockHeight) {
@@ -229,7 +251,8 @@ class Clearing {
         for (const contract of contracts) {
             let id = contract[1].id
             // Check if there is updated price information for the contract
-            //console.log('inside make settlement '+JSON.stringify(contract), contract[1].id)
+            //console.log('inside make settlement '+id+' '+blockHeight)
+            const newPrice = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)
             if (await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)) {
                 console.log('new price')
                 // Proceed with processing for this contract
