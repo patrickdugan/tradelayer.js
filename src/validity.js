@@ -951,13 +951,13 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyList.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyList.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';
@@ -990,13 +990,13 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isPropertyAdmin = PropertyRegistry.isAdmin(params.senderAddress, params.propertyId);
+            const isPropertyAdmin = PropertyList.isAdmin(params.senderAddress, params.propertyId);
             if (!isPropertyAdmin) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of the property; ';
             }
 
-            const isManagedProperty = PropertyRegistry.isManagedProperty(params.propertyId);
+            const isManagedProperty = PropertyList.isManagedProperty(params.propertyId);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type; ';

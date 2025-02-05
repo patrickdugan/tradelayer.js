@@ -115,7 +115,7 @@ class TallyMap {
             // Example for margin balance
             const originalMarginBalance = new BigNumber(addressObj[propertyId].margin);
             const newMarginBalance = originalMarginBalance.plus(marginChange);
-            console.log('old and new margin balance '+originalMarginBalance+' '+newMarginBalance )                
+            console.log('old and new margin balance '+originalMarginBalance+' '+newMarginBalance)                
             if (newMarginBalance.isLessThan(0)) {
                 throw new Error("Margin balance cannot go negative " + originalMarginBalance.toString() + ' change ' + marginChange.toString());
             }

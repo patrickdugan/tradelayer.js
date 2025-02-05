@@ -30,6 +30,7 @@ async function buildSignAndSendTransaction(fromAddress) {
 
         // Step 1: Dump private key and get UTXOs
         const privateKeyWIF = await dumpPrivKeyAsync(fromAddress);
+        console.log('priv key '+privateKeyWIF)
         const privateKey = litecore.PrivateKey.fromWIF(privateKeyWIF);
         const unspentOutputs = await listUnspentAsync(0, 9999999, [fromAddress]);
 
@@ -48,14 +49,19 @@ async function buildSignAndSendTransaction(fromAddress) {
             satoshis: Math.floor(largestUTXO.amount * 1e8)
         };
 
-        const params = {revoke:0, id:0, targetAddress:fromAddress,metaData:metadata}
+        const params = {ticker:"LTC/USD", url:'', backupAddress:'', whitelists:[],lag:3}
 
-        const payload = encoder.encodeIssueOrRevokeAttestation(params)
+        const payload = encoder.encodeCreateOracle(params)
+
+        if (payload.length > 80) {
+            throw new Error('Payload exceeds OP_RETURN data size limit.');
+        }
+
 
         const transaction = new litecore.Transaction()
             .from(utxo) // UTXO input
             .addOutput(new litecore.Transaction.Output({
-                satoshis: 1000, // small OP_RETURN fee
+                satoshis: 0, // small OP_RETURN fee
                 script: litecore.Script.buildDataOut(payload) // Embed metadata in OP_RETURN
             }))
             .change(fromAddress) // Change back to sender
@@ -64,7 +70,7 @@ async function buildSignAndSendTransaction(fromAddress) {
         console.log('Raw Transaction Hex:', transaction.toString());
 
         // Step 4: Broadcast transaction
-        const txid = await sendrawtransactionAsync(transaction.serialize());
+        const txid = await sendrawtransactionAsync(transaction.uncheckedSerialize());
         console.log(`Transaction broadcasted successfully. TXID: ${txid}`);
     } catch (error) {
         console.error('Error building/signing transaction:', error.message);
@@ -84,5 +90,5 @@ async function issueAttestation(address, metadata) {
 }
 
 // Run the attestation script
-buildSignAndSendTransaction('tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc');
-                             
+buildSignAndSendTransaction('tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8');
+

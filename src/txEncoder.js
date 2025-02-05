@@ -240,7 +240,7 @@ const Encode = {
             params.whitelists.map(whitelist => whitelist.toString(36)).join(','),
             params.lag.toString(36),
         ];
-        const type = 11;
+        const type = 13;
         const typeStr = type.toString(36);
         return marker + typeStr + payload.join(',');
     },
@@ -253,7 +253,7 @@ const Encode = {
             amountGranted.toString(36),
             params.addressToGrantTo,
         ];
-        const type = 12;
+        const type = 11;
         const typeStr = type.toString(36);
         return marker + typeStr + payload.join(',');
     },
@@ -266,7 +266,7 @@ const Encode = {
             amountGranted.toString(36),
             params.addressToGrantTo,
         ];
-        const type = 13;
+        const type = 12;
         const typeStr = type.toString(36);
         return marker + typeStr + payload.join(',');
     },

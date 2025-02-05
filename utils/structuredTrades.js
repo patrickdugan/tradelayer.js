@@ -18,7 +18,7 @@ const dumpPrivKeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'));
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client, 'sendrawtransaction'));
 
 // Standard fee for Litecoin transactions
-const STANDARD_FEE = 1000; // in satoshis (0.00001 LTC)
+const STANDARD_FEE = 2700; // in satoshis (0.00001 LTC)
 
 async function createAndSendContractTrade(senderAddress, tradeParams, blockHeight) {
     try {
@@ -77,7 +77,7 @@ const aliceAddress = 'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr'//tltc1qtee90
 const bobAddress = 'tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m'//tltc1qxcyu5682whfzpjunwu6ek39dvc8lqmjtvxmscc';
 const carolAddress = 'tltc1qqgru3cahyq5tj7l5q066ssv33gg3v7z9auxkcg'
 
-contractId =2 
+contractId =3
 // We'll create & broadcast a series of trades. 
 // Make sure you have wallet handling in your code or direct signing.
 
@@ -86,7 +86,7 @@ async function structuredTestTrades() {
   const aliceBuy = {
     contractId: contractId,
     amount: 3,
-    price: 1085,
+    price: 103.5,
     sell: true // buy
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
@@ -96,7 +96,7 @@ async function structuredTestTrades() {
   const bobSell = {
     contractId: contractId,
     amount: 4,
-    price: 1090,
+    price: 104,
     sell: false 
   };
   await createAndSendContractTrade(bobAddress, bobSell, 100);
@@ -111,19 +111,19 @@ async function structuredTestTrades() {
   const bobClose = {
     contractId: contractId,
     amount: 5,
-    price: 1045,
+    price: 104.5,
     sell: true // buy to close
   };
-  //await createAndSendContractTrade(bobAddress, bobClose, 101);
+  await createAndSendContractTrade(bobAddress, bobClose, 101);
 
   const aliceClose = {
     contractId: contractId,
     amount: 7,
-    price: 1050,
+    price: 105,
     sell: false // buy
   };
 
-  //await createAndSendContractTrade(aliceAddress, aliceClose, 101);
+  await createAndSendContractTrade(aliceAddress, aliceClose, 101);
 
 
   // Done

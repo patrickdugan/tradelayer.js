@@ -1,5 +1,5 @@
 var db = require('./db')
-
+var BigNumber = require('bignumber.js')
 const Insurance = require('./insurance.js')
 
 class OracleList {
@@ -85,7 +85,7 @@ class OracleList {
         });
 
         console.log('Latest oracle data:', JSON.stringify(latestDataPoint));
-        return latestDataPoint.data;
+        return latestDataPoint.data.price;
     }
 
 
@@ -95,7 +95,21 @@ class OracleList {
 
             // Prepare oracle data
             const oracleData = { price, high, low, close, blockHeight };
-
+            const lastPrice = await OracleList.getOraclePrice(oracleId)
+            console.log('last price '+lastPrice)
+            const priceBN = new BigNumber(price)
+            const lastPriceBN = new BigNumber(lastPrice)
+            const circuitLimitUp = new BigNumber(1.05).times(lastPriceBN).toNumber()
+            const circuitLimitDown = new BigNumber(0.95).times(lastPriceBN).toNumber()
+            console.log('price, limits '+price, lastPrice, circuitLimitDown, circuitLimitUp)
+            console.log('ergo, >limit up , <limit down' + Boolean(price>circuitLimitUp)+' '+Boolean(price<circuitLimitDown))
+            if(lastPrice!=1){
+                if(price>circuitLimitUp){
+                    oracleData.price = circuitLimitUp
+                }else if(price <circuitLimitDown){
+                    oracleData.price = circuitLimitDown
+                }
+            } 
             // Update in-memory oracle data (optional)
             const oracleKey = `oracle-${oracleId}`;
             instance.oracles.set(oracleKey, oracleData);
