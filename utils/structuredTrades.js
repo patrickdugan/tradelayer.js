@@ -90,13 +90,13 @@ async function structuredTestTrades() {
     sell: true // buy
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
-  await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
+  //await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
 
   // ============ 2) Bob places a SELL at price 5000, amount=5 ============
   const bobSell = {
     contractId: contractId,
     amount: 4,
-    price: 104,
+    price: 108,
     sell: false 
   };
   await createAndSendContractTrade(bobAddress, bobSell, 100);
@@ -114,7 +114,7 @@ async function structuredTestTrades() {
     price: 104.5,
     sell: true // buy to close
   };
-  await createAndSendContractTrade(bobAddress, bobClose, 101);
+  //await createAndSendContractTrade(bobAddress, bobClose, 101);
 
   const aliceClose = {
     contractId: contractId,
@@ -123,7 +123,7 @@ async function structuredTestTrades() {
     sell: false // buy
   };
 
-  await createAndSendContractTrade(aliceAddress, aliceClose, 101);
+  //await createAndSendContractTrade(aliceAddress, aliceClose, 101);
 
 
   // Done

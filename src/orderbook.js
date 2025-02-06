@@ -673,63 +673,164 @@ class Orderbook {
 
             return matchResult
         }
+ async matchContractOrders(orderBook) {
+            if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+                return { orderBook: orderBook, matches: [] }; // Return empty matches if no orders
+            }
 
-        async matchContractOrders(orderBook) {
-    if (!orderBook || !orderBook.buy.length || !orderBook.sell.length) {
-        return { orderBook, matches: [] };
-    }
+            let matches = [];
 
-    const matches = [];
-    const maxIterations = 10000; // Safeguard
-    let iterationCount = 0;
+            // Sort buy and sell orders by price and time
+            orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time); // Highest price first
+            orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time); // Lowest price first
 
-    orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.time - b.time);
-    orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.time - b.time);
+            let counter =0 
+            // Match orders
+            while (orderBook.sell.length > 0 && orderBook.buy.length > 0) {
+                let sellOrder = orderBook.sell[0];
+                let buyOrder = orderBook.buy[0];
+                counter+=1
+                //console.log('matching loop count '+counter)
+                //console.log(JSON.stringify(buyOrder))
+                // Remove orders with zero amounts
+                if (BigNumber(sellOrder.amount).isZero()) {
+                    orderBook.sell.shift();
+                    continue;
+                }
+                if (BigNumber(buyOrder.amount).isZero()) {
+                    orderBook.buy.shift();
+                    continue;
+                }
 
-    while (orderBook.buy.length && orderBook.sell.length) {
-        if (++iterationCount > maxIterations) {
-            console.error('Infinite loop detected, aborting.');
-            break;
+                let txid= ''
+
+                if(sellOrder.reduce==true){
+                      let sellerPosition = await marginMap.getPositionForAddress(sellOrder.sender, buyOrder.contractId);
+                      if(sellerPosition.contracts<=0){
+                        //reduce only order is auto-cancelled
+                        orderBook.sell.shift();
+                      }else if(sellerPosition.contracts>sellOrder.amount){
+                        sellOrder.amount=sellerPosition.contracts
+                      }
+                }else if(buyOrder.reduce==true){
+                    let buyerPosition = await marginMap.getPositionForAddress(buyOrder.sender, buyOrder.contractId);
+                    if(buyerPosition.contracts>=0){
+                        //reduce only order is auto-cancelled
+                        orderBook.buy.shift();
+                    }else if(sellerPosition.contracts>sellOrder.amount){
+                        buyOrder.amount=buyerPosition.contracts
+                    }
+                }
+
+                let tradePrice
+                let bumpTrade = false
+                let post = false
+                    if(sellOrder.blockTime == buyOrder.blockTime){
+                        console.log('trades in the same block, defaulting to buy order')
+                        tradePrice = buyOrder.price
+                        if(sellOrder.post){
+                            tradePrice = sellOrder.price
+                            post = true
+                            sellOrder.maker=true
+                            buyOrder.maker=false
+                        }else if(buyOrder.post){
+                            tradePrice = buyOrder.price
+                            post = true
+                            buyOrder.maker=true
+                            sellOrder.maker=false
+                        }else{
+                            sellOrder.maker=false
+                            buyOrder.maker=false
+                        }
+                    }else{
+                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                        sellOrder.maker = Boolean(sellOrder.blockTime < buyOrder.blockTime)
+                        buyOrder.maker = Boolean(buyOrder.blockTime < sellOrder.blockTime)
+                        if(sellOrder.blockTime < buyOrder.blockTime&&buyOrder.post==true){
+                            bumpTrade = true
+                        }
+                        if(buyOrder.blockTime < sellOrder.blockTime&&sellOrder.post==true){
+                            bumpTrade = true
+                        }
+                    } 
+                    if(sellOrder.blockTime == buyOrder.blockTime){
+                        console.log('contract trades in the same block, defaulting to buy order')
+                        tradePrice = buyOrder.price
+                    }else{
+                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                    }
+                    if(buyOrder.txid=="5f248411be5c28e85bee768498f16aeb90ce988e34efbb4038434fd0af235975"){
+                        console.log('ding ding ')
+                    }
+                    if(!sellOrder.maker){
+                        txid = sellOrder.txid
+                    }else if(!buyOrder.maker){
+                        txid = buyOrder.txid
+                    }
+
+                // Check for price match
+                if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                    const ContractRegistry = require('./contractRegistry.js')
+                    // Calculate the amount to be traded
+                    let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
+                    let perContract = await ContractRegistry.getInitialMargin(buyOrder.contractId, tradePrice);
+                    let marginUsed = BigNumber(perContract).times(tradeAmount).decimalPlaces(8).toNumber()
+                    //console.log('trade amount calc in contract match '+tradeAmount + ' '+sellOrder.amount + ' '+buyOrder.amount)
+                    
+                      //console.log('about to do anti-wash trade '+JSON.stringify(sellOrder)+JSON.stringify(buyOrder))
+
+                        if (sellOrder.sender === buyOrder.sender) {
+                            // Remove the maker order from the book
+                            if (sellOrder.maker) {
+                                orderBook.sell.shift();
+                                //console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
+                                console.log(JSON.stringify(orderBook))
+                            } else if (buyOrder.maker) {
+                                orderBook.buy.shift();
+                                //console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
+
+                            }
+                            continue
+                        }
+
+
+                    // Update orders after the match
+                    sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
+                    buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
+
+                    if(bumpTrade==false){
+                        // Add match to the list
+                        matches.push({ 
+                            sellOrder: { ...sellOrder, contractId: sellOrder.contractId, amount: tradeAmount.toNumber(), sellerAddress: sellOrder.sender, sellerTx: sellOrder.txid,liq:sellOrder.isLiq, maker: sellOrder.maker, marginUsed: marginUsed, initialReduce: sellOrder.initialReduce}, 
+                            buyOrder: { ...buyOrder, contractId: buyOrder.contractId, amount: tradeAmount.toNumber(), buyerAddress: buyOrder.sender, buyerTx: buyOrder.txid, liq:buyOrder.isLiq, maker:buyOrder.maker, marginUsed: marginUsed, initialReduce: buyOrder.initialReduce},
+                            tradePrice,
+                            txid: txid
+                        });
+
+                        // Remove filled orders from the order book
+                        if (sellOrder.amount === 0) {
+                            orderBook.sell.shift();
+                        }
+                        if (buyOrder.amount === 0) {
+                            orderBook.buy.shift();
+                        }
+                    }else if(bumpTrade==true){
+                        if(buyOrder.post==true){
+                            buyOrder.price=sellOrder.price-this.tickSize
+                        }
+                        if(sellOrder.post==true){
+                            sellOrder.price=buyOrder.price+this.tickSize
+                        }
+                    }
+                } else {
+                    break; // No more matches possible
+                }
+            }
+
+            return { orderBook: orderBook, matches:matches };
         }
 
-        const sellOrder = orderBook.sell[0];
-        const buyOrder = orderBook.buy[0];
-
-        if (sellOrder.amount <= 0 || buyOrder.amount <= 0) {
-            sellOrder.amount <= 0 && orderBook.sell.shift();
-            buyOrder.amount <= 0 && orderBook.buy.shift();
-            continue;
-        }
-
-        if (sellOrder.sender === buyOrder.sender) {
-            sellOrder.maker ? orderBook.sell.shift() : orderBook.buy.shift();
-            continue; // Skip self-trades
-        }
-
-        if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break; // No match
-
-        const tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
-        const tradePrice = sellOrder.blockTime === buyOrder.blockTime
-            ? buyOrder.price
-            : sellOrder.blockTime < buyOrder.blockTime
-                ? sellOrder.price
-                : buyOrder.price;
-
-        matches.push({
-            sellOrder: { ...sellOrder, amount: tradeAmount },
-            buyOrder: { ...buyOrder, amount: tradeAmount },
-            tradePrice,
-        });
-
-        sellOrder.amount -= tradeAmount;
-        buyOrder.amount -= tradeAmount;
-
-        sellOrder.amount <= 0 && orderBook.sell.shift();
-        buyOrder.amount <= 0 && orderBook.buy.shift();
-    }
-
-    return { orderBook, matches };
-}
 
 
         async evaluateBasicLiquidityReward(match, channel, contract) {

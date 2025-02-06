@@ -94,7 +94,7 @@ class OracleList {
             const instance = OracleList.getInstance();
 
             // Prepare oracle data
-            const oracleData = { price, high, low, close, blockHeight };
+            const oracleData = { price, high, low, close };
             const lastPrice = await OracleList.getOraclePrice(oracleId)
             console.log('last price '+lastPrice)
             const priceBN = new BigNumber(price)

@@ -203,6 +203,7 @@ class Clearing {
                 const latestPrice = latestEntry.data.price;
                 const previousPrice = previousEntry.data.price;
                 if(latestPrice!=previousPrice&&blockHeight==latestEntry.data.blockHeight){
+                    console.log('ssdfs'+blockHeight+' '+latestEntry.data.blockHeight)
                     console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
                     return true
                 }else{

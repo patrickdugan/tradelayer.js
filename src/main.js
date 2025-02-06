@@ -746,7 +746,7 @@ class Main {
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
-           const blob = await Clearing.makeSettlement(blockHeight, contract);
+           const blob = await Clearing.clearingFunction(blockHeight);
 
         return null 
         //console.log('processed ' + blockHash)
