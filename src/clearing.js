@@ -195,7 +195,6 @@ class Clearing {
                 oracleData.sort((a, b) => b.blockHeight - a.blockHeight);
 
                 const [latestEntry, previousEntry] = oracleData;
-                console.log("blah "+latestEntry+' '+previousEntry+' '+JSON.stringify(oracleData) )
                 if (!previousEntry) {
                     //console.log(`Only one oracle data entry found for Oracle ID ${oracleId}. Assuming no price change.`);
                     return false;
@@ -203,12 +202,14 @@ class Clearing {
 
                 const latestPrice = latestEntry.data.price;
                 const previousPrice = previousEntry.data.price;
-                if(latestPrice!=previousPrice){
+                if(latestPrice!=previousPrice&&blockHeight==latestEntry.data.blockHeight){
                     console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
+                    return true
+                }else{
+                    return false
                 }
-                
-                return latestPrice !== previousPrice;
             } else {
+                const contractInfo = ContractRegistry.getContractInfo(contractId)
                 // Handle Native contracts
                 const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
                 //console.log(`Checking native price update for pair ${pairKey} at block height ${blockHeight}`);
