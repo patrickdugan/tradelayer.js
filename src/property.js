@@ -338,7 +338,7 @@ class PropertyManager {
             //console.log('property list ' +JSON.stringify(propertyData))
             if (propertyData && propertyData.value) {
                 const parsedData = JSON.parse(propertyData.value);
-                console.log(propertyId)
+                //console.log(propertyId)
                 // Check if propertyId is a synthetic ID
                 if (typeof propertyId === 'string' && propertyId.startsWith('s')) {
                     console.log('inside get property synthetic '+propertyId)

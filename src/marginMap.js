@@ -239,12 +239,12 @@ class MarginMap {
         console.log('isLong '+isLong)
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log('liquidation info ' +JSON.stringify(liquidationInfo));
-        if(liquidationInfo==null&&position.contracts==0){
+        if(liquidationInfo==null||position.contracts==0){
             position.liqPrice=0
             position.bankruptcyPrice=0
             position.avgPrice=price
         }else{
-            position.liqPrice = liquidationInfo.liquidationPrice
+            position.liqPrice = liquidationInfo.liquidationPrice || null
             position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice   
         }
         this.margins.set(address, position);  
@@ -750,11 +750,44 @@ class MarginMap {
             return pnl.decimalPlaces(8).toNumber();
     }
 
+    async updateMargin(address, contractId, newMargin) {
+    console.log(`Updating margin for ${address} on contract ${contractId} to ${newMargin}`);
+
+    // Ensure the position exists
+    let position = this.margins.get(address);
+
+    if (!position) {
+        console.warn(`No position found for ${address} on contract ${contractId}, initializing a new one.`);
+        position = {
+            contracts: 0,
+            margin: 0,
+            unrealizedPNL: 0,
+            avgPrice: 0,
+        };
+    }
+
+    // Update the margin
+    position.margin = new BigNumber(newMargin).decimalPlaces(8).toNumber();
+
+    // Save the updated position
+    this.margins.set(address, position);
+
+    // Record the change in margin map deltas
+    await this.recordMarginMapDelta(address, contractId, position.contracts, 0, newMargin, 0, 0, 'updateMargin');
+
+    // Persist changes to the database
+    await this.saveMarginMap(true);
+
+    console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
+}
+
+
     async clear(position, address, pnlChange, avgPrice,contractId) {
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
-            position.unrealizedPNL+=pnlChange
+            const uPNLBN = new BigNumber(position.unrealizedPNL)
+            position.unrealizedPNL=new BigNumber(pnlChange).plus(position.unrealizedPNL).decimalPlaces(8).toNumber()
             this.margins.set(address, position)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice')
             return position

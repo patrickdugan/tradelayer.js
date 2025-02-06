@@ -273,9 +273,10 @@ const Encode = {
 
     // Encode Publish Oracle Data Transaction
     encodePublishOracleData: (params) => {
+        const formattedPrice = new BigNumber(params.price).times(1e4).toNumber()
         const payload = [
             params.oracleid.toString(36),
-            params.price.toString(36),
+            formattedPrice.toString(36),
         ];
         if (params.high !== undefined) {
             payload.push(params.high.toString(36));

@@ -99,8 +99,8 @@ class OracleList {
             console.log('last price '+lastPrice)
             const priceBN = new BigNumber(price)
             const lastPriceBN = new BigNumber(lastPrice)
-            const circuitLimitUp = new BigNumber(1.05).times(lastPriceBN).toNumber()
-            const circuitLimitDown = new BigNumber(0.95).times(lastPriceBN).toNumber()
+            const circuitLimitUp = new BigNumber(1.05).times(lastPriceBN).decimalPlaces(4).toNumber()
+            const circuitLimitDown = new BigNumber(0.95).times(lastPriceBN).decimalPlaces(4).toNumber()
             console.log('price, limits '+price, lastPrice, circuitLimitDown, circuitLimitUp)
             console.log('ergo, >limit up , <limit down' + Boolean(price>circuitLimitUp)+' '+Boolean(price<circuitLimitDown))
             if(lastPrice!=1){

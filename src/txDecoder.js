@@ -293,10 +293,11 @@ const Decode = {
     // Decode Publish Oracle Data Transaction
     decodePublishOracleData: (payload) => {
         const parts = payload.split(',');
-        const data = {
+        let data = {
             oracleId: parseInt(parts[0] || '0', 36), // Decode oracleId as the first part
             price: parseInt(parts[1] || '0', 36)     // Adjust indices for other parts
         };
+        data.price = new BigNumber(data.price).div(1e4).decimalPlaces(4).toNumber()
         if (parts[2]) {
             data.high = parseInt(parts[2], 36);
         }

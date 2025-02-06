@@ -186,7 +186,7 @@ class Clearing {
 
                 // Fetch oracle data
                 const oracleData = await base.findAsync({ oracleId });
-                if (!oracleData || oracleData.length === 0) {
+                if(!oracleData || oracleData.length === 0){
                     //console.warn(`No oracle data found for Oracle ID ${oracleId}`);
                     return false;
                 }
@@ -202,10 +202,13 @@ class Clearing {
 
                 const latestPrice = latestEntry.data.price;
                 const previousPrice = previousEntry.data.price;
-                if(latestPrice!=previousPrice&&blockHeight==latestEntry.data.blockHeight){
-                    console.log('ssdfs'+blockHeight+' '+latestEntry.data.blockHeight)
+                  //console.log('ssdfs'+blockHeight+' '+latestEntry.blockHeight)
+                    //console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
+                console.log('latest price obj '+JSON.stringify(latestPrice))              
+                if(latestPrice!=previousPrice&&blockHeight==latestEntry.blockHeight){
+                    console.log('ssdfs'+blockHeight+' '+latestEntry.blockHeight)
                     console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
-                    return true
+                    return latestPrice
                 }else{
                     return false
                 }
@@ -234,10 +237,12 @@ class Clearing {
 
                 const latestPrice = latestEntry.value.price;
                 const previousPrice = previousEntry.value.price;
-                if(latestPrice!==previousPrice){
+                if(latestPrice!=previousPrice&&blockHeight==latestEntry.blockHeight){
                     console.log(`Native prices: latest=${latestPrice}, previous=${previousPrice}`);
+                    return latestPrice
+                }else{
+                    return false
                 }
-                return latestPrice !== previousPrice;
             }
         } catch (error) {
             console.error(`Error checking price update for contract ID ${contractId}:`, error.message);
@@ -255,18 +260,19 @@ class Clearing {
             // Check if there is updated price information for the contract
             //console.log('inside make settlement '+id+' '+blockHeight)
             const newPrice = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)
-            if (await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)) {
-                console.log('new price')
+            if (newPrice!=false) {
+                console.log('new price '+newPrice)
                 // Proceed with processing for this contract
                 console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
                 let collateralId = await ContractRegistry.getCollateralId(id)
                 let inverse = await ContractRegistry.isInverse(id)
-                const notionalValue = await ContractRegistry.getNotionalValue(id)
-                if(notionalValue==1){
+                const notionalValue = await ContractRegistry.getNotionalValue(id, newPrice)
+                console.log('notional obj '+JSON.stringify(notionalValue))
+                if(notionalValue.notionalValue==1){
                     continue
                 }
                 // Update margin maps based on mark prices and current contract positions
-                let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue); //problem child
+                let {positions, isLiq} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue.notionalPerContract); //problem child
 
                  // Perform additional tasks like loss socialization if needed
                 if(isLiq){
@@ -346,42 +352,52 @@ class Clearing {
         return {positions, isLiq};
     }
 
-    static async getPriceChange(blockHeight, contractId){
-        const ContractRegistry = require('./contractRegistry.js');
-        let isOracleContract = await ContractRegistry.isOracleContract(contractId)
-        let oracleId = null
-        let propertyId1 = null
-        let propertyId2 = null
-        let latestData
-        if(isOracleContract){
-            oracleId = await ContractRegistry.getOracleId(contractId)
-            const base = await db.getDatabase('oracleData')
-            latestData = await base.findAsync({ oracleId: oracleId });
-            //console.log('inside oracle getPriceChange ' +JSON.stringify(latestData))
-        }else{
-            console.log('inside get price change in clearing')
-            let info = await ContractRegistry.getContractInfo(contractId)
-            propertyId1 = info.native.native.onChainData[0]
-            propertyId2 = info.native.native.onChainData[1]
-            latestData = await volumeIndexDB.findOneAsync({propertyId1:propertyId1,propertyId2:propertyId2})
+    static async getPriceChange(blockHeight, contractId) {
+    const ContractRegistry = require('./contractRegistry.js');
+    let isOracleContract = await ContractRegistry.isOracleContract(contractId);
+    let oracleId = null;
+    let propertyId1 = null;
+    let propertyId2 = null;
+    let latestData = [];
+
+    if (isOracleContract) {
+        oracleId = await ContractRegistry.getOracleId(contractId);
+        const base = await db.getDatabase('oracleData');
+        latestData = await base.findAsync({ oracleId: oracleId });
+
+    } else {
+        console.log('Inside getPriceChange() for native contract');
+        let info = await ContractRegistry.getContractInfo(contractId);
+        propertyId1 = info?.native?.onChainData?.[0];
+        propertyId2 = info?.native?.onChainData?.[1];
+        
+        if (!propertyId1 || !propertyId2) {
+            console.warn(`No valid properties found for contract ${contractId}`);
+            return { lastPrice: null, thisPrice: null };
         }
-            //console.log('is price updated ' +JSON.stringify(latestData))
-                const sortedData = [latestData].sort((a, b) => b.blockHeight - a.blockHeight);
-                const latestBlockData = sortedData[sortedData.length-1];
-                const lastPriceEntry = latestBlockData[latestBlockData.length-1]
-                const currentMarkPrice = lastPriceEntry.data.price;
-                let previousMarkPrice = null
-                
-                if(latestData.length>1){
-                    previousMarkPrice = latestBlockData[latestBlockData.length-2].data.price
-                }
-                    console.log('checking mark price current and last '+currentMarkPrice+' '+previousMarkPrice)
-                return {lastPrice: previousMarkPrice, thisPrice:currentMarkPrice}
+
+        latestData = await volumeIndexDB.findAsync({ propertyId1, propertyId2 });
     }
 
-    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){
-      
+    // Ensure data is an array before sorting
+    const sortedData = Array.isArray(latestData) ? latestData.sort((a, b) => b.blockHeight - a.blockHeight) : [];
+    if (sortedData.length === 0) {
+        console.warn(`No price data found for contract ${contractId}`);
+        return { lastPrice: null, thisPrice: null };
+    }
 
+    // Get latest and previous prices
+    const latestBlockData = sortedData[0]; // Most recent entry
+    const currentMarkPrice = latestBlockData?.data?.price || null;
+    const previousMarkPrice = sortedData.length > 1 ? sortedData[1]?.data?.price : null;
+
+    console.log(`Checking mark price: Current=${currentMarkPrice}, Previous=${previousMarkPrice}`);
+    
+    return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
+}
+
+
+    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){
         // Calculate P&L change for the position based on the number of contracts
         // Assuming a long position benefits from a price increase and vice versa
         let pnl 
@@ -398,7 +414,6 @@ class Clearing {
                 .dividedBy(avgPriceBN.minus(1))
                 .times(contractsBN)
                 .times(notionalValueBN);
-
             //console.log('pnl ' + pnl.toNumber());
         } else {
             // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
@@ -406,7 +421,6 @@ class Clearing {
                 .minus(avgPriceBN)
                 .times(contractsBN)
                 .times(notionalValueBN);
-
             //console.log('pnl ' + pnl.toNumber());
         }
 
@@ -417,7 +431,7 @@ class Clearing {
         }
         //pnl = position.contracts>0 ? pnl : pnl.negated();
         console.log('pnl '+pnl.toNumber())
-        return pnl.toNumber();
+        return pnl.decimalPlaces(8).toNumber();
     }
 
     static async getBalance(holderAddress) {
@@ -597,7 +611,7 @@ class Clearing {
             let volume = 0;
             let bankruptcyVWAP = 0;
             let oracleTwap = 0;
-
+            const ContractRegistry = require('./contractRegistry.js')
             let isOracleContract = await ContractRegistry.isOracleContract(contractId);
             let notionalSize = await ContractRegistry.getNotionalValue(contractId)
             let marginMap = await MarginMap.getInstance(contractId)
