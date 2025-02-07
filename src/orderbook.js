@@ -450,17 +450,13 @@ class Orderbook {
             return { orderBook: orderBookCopy, matches: matches };
         }
 
-
-
         async processTokenMatches(matches, blockHeight, txid, channel) {
             const TallyMap = require('./tally.js');
             if (!Array.isArray(matches) || matches.length === 0) {
                 //console.log('No valid matches to process');
                 return;
             }
-
-             //see if the trade qualifies for increased Liquidity Reward
-          
+             //see if the trade qualifies for increased Liquidity Reward          
 
             for (const match of matches) {
                 if (!match.sellOrder || !match.buyOrder) {
@@ -673,6 +669,49 @@ class Orderbook {
 
             return matchResult
         }
+
+        async estimateLiquidation(liquidationOrder) {
+    const { contractId, size, side } = liquidationOrder;
+    
+    // Load the order book for the given contract
+    const orderBookKey = `${contractId}`;
+    const orderbookData = await this.loadOrderBook(orderBookKey, false);
+
+    let orders = side === 'sell' ? orderbookData.buy : orderbookData.sell; // Match against the opposite side
+
+    if (!orders || orders.length === 0) {
+        return { estimatedFillPrice: null, filledSize: 0, partialFillPercent: 0, filled: false };
+    }
+
+    // Sort orders by price (ascending for buy orders, descending for sell orders)
+    orders = side === 'sell'
+        ? orders.sort((a, b) => b.price - a.price) // Sell side: match highest bids first
+        : orders.sort((a, b) => a.price - b.price); // Buy side: match lowest asks first
+
+    let remainingSize = size;
+    let totalCost = 0;
+    let filledSize = 0;
+
+    for (let order of orders) {
+        let fillAmount = Math.min(remainingSize, order.amount);
+        totalCost += fillAmount * order.price;
+        filledSize += fillAmount;
+        remainingSize -= fillAmount;
+
+        if (remainingSize <= 0) break;
+    }
+
+    let estimatedFillPrice = filledSize > 0 ? totalCost / filledSize : null;
+    let partialFillPercent = (filledSize / size) * 100;
+    
+    return {
+        estimatedFillPrice,
+        filledSize,
+        partialFillPercent,
+        filled: filledSize >= size
+    };
+}
+
 
 async matchContractOrders(orderBook) {
     if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
@@ -922,12 +961,12 @@ async matchContractOrders(orderBook) {
                     let buyerReReserve= false
                     let sellerReReserve = false
                     if(!isBuyerReducingPosition&&match.buyOrder.initialReduce==true){
-                        await ContractRegistry.moveCollateralToReserve(match.buyOrder.buyerAddress, match.buyOrder.contractId, match.buyOrder.amount, match.tradePrice,blockTime) //first we line up the capital
+                        await ContractRegistry.moveCollateralToReserve(match.buyOrder.buyerAddress, match.buyOrder.contractId, match.buyOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
                         buyerReReserve=true
                     }
 
                     if(!isSellerReducingPosition&&match.sellOrder.initialReduce==true){
-                        await ContractRegistry.moveCollateralToReserve(match.sellOrder.sellerAddress, match.buyOrder.contractId, match.sellOrder.amount, match.tradePrice,blockTime) //first we line up the capital
+                        await ContractRegistry.moveCollateralToReserve(match.sellOrder.sellerAddress, match.buyOrder.contractId, match.sellOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
                         sellerReReserve=true
                     }
 

@@ -287,14 +287,16 @@ class TallyMap {
             const senderTally = await this.getTally(senderAddress, propertyId);
             console.log('Checking senderTally in has hasSufficientBalance', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
-            if (!senderTally || senderTally.available === undefined) {
+            if(!senderTally || senderTally.available === undefined){
                 return { hasSufficient: false, reason: 'undefined' };
             }
 
             //console.log('Available tokens:', senderTally.available, 'Required amount:', requiredAmount);
 
-            if (senderTally.available < requiredAmount) {
-                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: requiredAmount-senderTally.available, available:senderTally.available };
+            if(senderTally.available < requiredAmount){
+                const availBN = new BigNumber(senderTally.available)
+                const shortfall = new BigNumber(requiredAmount).minus(availBN).decimalPlaces(8).toNumber
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall:shortfall, available:senderTally.available };
             }
 
             return { hasSufficient: true, reason: '' };

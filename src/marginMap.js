@@ -534,7 +534,7 @@ class MarginMap {
      * @param {string} address - The address of the position holder.
      * @param {string} contractId - The ID of the contract.
      */
-    async checkMarginMaintainance(address, contractId) {
+    async checkMarginMaintainance(address, contractId){
         let position = this.margins.get(address);
 
         if (!position) {
@@ -544,12 +544,13 @@ class MarginMap {
 
         const ContractRegistry = require('./contractRegistry.js')
         // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = await ContractRegistry.getInitialMargin(contractId);
+        let initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgEntry);
         let initialMarginBN = new BigNumber(initialMargin)
         let contractsBN = new BigNumber(position.contracts)
         let maintenanceMarginFactorBN = new BigNumber(0.5)
         let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
-
+        console.log('components '+initialMargin+' '+position.contracts+' '+contractId+' '+position.avgEntry)
+        console.log('checking maint margin '+position.margin+' '+position.unrealizedPNL+' <? '+maintenanceMargin)
         if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
@@ -767,7 +768,7 @@ class MarginMap {
     }
 
     // Update the margin
-    position.margin = new BigNumber(newMargin).decimalPlaces(8).toNumber();
+    position.margin += new BigNumber(newMargin).decimalPlaces(8).toNumber();
 
     // Save the updated position
     this.margins.set(address, position);
@@ -793,7 +794,7 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(position, blockHeight, contractId) {
+    async triggerLiquidations(position, blockHeight, contractId,total) {
         // Logic to handle the liquidation process
         // This could involve creating liquidation orders and updating the contract's state
 
@@ -804,7 +805,7 @@ class MarginMap {
         return liquidationOrder;
     }
 
-    generateLiquidationOrder(position, contractId) {
+    generateLiquidationOrder(position, contractId,total) {
                 // Liquidate 50% of the position if below maintenance margin
                 let side 
                 if(position.contracts>0){
@@ -815,7 +816,7 @@ class MarginMap {
                     return "err:0 contracts"
                 }
                 const liquidationSize = position.contracts * 0.5;
-                const liquidationOrder={
+                let liquidationOrder={
                     address: position.address,
                     contractId: contractId,
                     size: liquidationSize,
@@ -823,6 +824,9 @@ class MarginMap {
                     side: side,
                     bankruptcyPrice: position.bankruptcyPrice
 
+                }
+                if(total){
+                    liquidationOrder.price = position.bankruptcyPrice
                 }
         return liquidationOrder;
     }

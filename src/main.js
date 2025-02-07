@@ -343,7 +343,9 @@ class Main {
                 }
 
                 // Handle cumulative volumes and vesting after each block
-                if(skip==true){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
+                //console.log('skip block? '+skip)
+                //if(skip==false){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
+                //    console.log('skip block '+blockHeight+' '+skip)
                     const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
                     const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
                     if (thisBlockVolumes.global > 0){
@@ -364,7 +366,7 @@ class Main {
                     // Additional processing steps like withdrawal and clearing
                     await Channels.processWithdrawals(blockHeight);
                     await Clearing.clearingFunction(blockHeight);
-                }
+                //}
 
                 maxProcessedHeight = blockHeight;
             }
