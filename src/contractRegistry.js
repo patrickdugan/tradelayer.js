@@ -463,11 +463,20 @@ class ContractRegistry {
         console.log('initialMarginPerContract '+initialMarginPerContract)
         const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
         console.log('collateralPropertyId '+collateralPropertyId)
-        const totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).decimalPlaces(8).toNumber();
+        const amountBN = new BigNumber(Math.abs(amount))
+        const initialMarginBN = new BigNumber(initialMarginPerContract)
+        const totalInitialMargin = initialMarginBN.times(amountBN).decimalPlaces(8).toNumber();
         console.log('Total Initial Margin to reserve ' +totalInitialMargin+' '+sender+' '+collateralPropertyId)
-        // Move collateral to reservd position
-        await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin',block);
-        return totalInitialMargin
+        // Move collateral to reserved position
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender,collateralPropertyId,totalInitialMargin)
+        console.log(hasSufficientBalance.hasSufficient)
+        if(hasSufficientBalance.hasSufficient){
+            await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin',block); 
+            return totalInitialMargin
+        }else{
+            return null
+        }
+        
     }
 
    static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker,flag){

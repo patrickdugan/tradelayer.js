@@ -815,7 +815,9 @@ class MarginMap {
                 }else if(position.contracts==0){
                     return "err:0 contracts"
                 }
-                const liquidationSize = position.contracts * 0.5;
+                const liquidationSize = new BigNumber(position.contracts).dividedBy(2)
+                    .decimalPlaces(0, BigNumber.ROUND_UP).toNumber();
+
                 let liquidationOrder={
                     address: position.address,
                     contractId: contractId,

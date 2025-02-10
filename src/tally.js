@@ -332,12 +332,38 @@ class TallyMap {
         }
     }
 
+    static async hasSufficientMargin(senderAddress, propertyId, requiredAmount) {
+        try {
+            const senderTally = await this.getTally(senderAddress, propertyId);
+            console.log('Checking senderTally in has hasSufficientMargin', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
+
+            if (!senderTally || senderTally.margin === undefined) {
+                return { hasSufficient: false, reason: 'undefined' };
+            }
+
+            console.log('Margin tokens:', senderTally.margin, 'Required amount:', requiredAmount);
+
+            if (senderTally.margin < requiredAmount) {
+                let requiredBN = new BigNumber(requiredAmount)
+                let marginBN = new BigNumber(senderTally.margin)
+                let shortfall= requiredBN.minus(marginBN).toNumber()
+                console.log('insufficient tokens ' +shortfall)
+                return { hasSufficient: false, reason: 'Insufficient available balance', shortfall: shortfall };
+            }
+
+            return { hasSufficient: true, reason: '' };
+        } catch (error) {
+            console.error('Error in hasSufficientBalance:', error);
+            return { hasSufficient: false, reason: 'Unexpected error checking balance' };
+        }
+    }    
+
     static async hasSufficientChannel(senderAddress, propertyId, requiredAmount) {
         try {
             const senderTally = await this.getTally(senderAddress, propertyId);
             console.log('Checking senderTally in has hasSufficientChannel', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
-            if (!senderTally || senderTally.reserved === undefined) {
+            if (!senderTally || senderTally.channel === undefined) {
                 return { hasSufficient: false, reason: 'undefined' };
             }
 

@@ -6,6 +6,7 @@ const ContractRegistry = require('./contractRegistry.js')
 const VolumeIndex= require('./volumeIndex.js')
 const Channels = require('./channels.js')
 const ClearList = require('./clearlist.js')
+const Consensus = require('./consensus.js')
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -16,10 +17,14 @@ class Orderbook {
         }
          // Static async method to get an instance of Orderbook
         static async getOrderbookInstance(orderBookKey) {
-            const orderbook = new Orderbook(orderBookKey);
-            this.orderBooks= await orderbook.loadOrderBook(orderBookKey); // Load or create the order book
+            const orderbook = new Orderbook(orderBookKey); // Create instance
+            orderbook.orderBooks[orderBookKey] = await orderbook.loadOrderBook(orderBookKey); // Load orderbook
+            console.log("Returning Orderbook instance:", orderbook);
+            console.log("Does it have estimateLiquidation?", typeof orderbook.estimateLiquidation);
             return orderbook;
         }
+
+
 
          async loadOrderBook(key,contract) {
                 const stringKey = typeof key === 'string' ? key : String(key);
@@ -791,7 +796,7 @@ async matchContractOrders(orderBook) {
         // **📌 Fix: Compute Initial Margin Here**
            const ContractRegistry = require('./contractRegistry.js')
         let initialMarginPerContract = await ContractRegistry.getInitialMargin(buyOrder.contractId, tradePrice);
-        if (!initialMarginPerContract || isNaN(initialMarginPerContract)) {
+        if(!initialMarginPerContract || isNaN(initialMarginPerContract)){
             console.error(`Invalid initialMarginPerContract: ${initialMarginPerContract} for contract ${buyOrder.contractId} at price ${tradePrice}`);
             initialMarginPerContract = 0; // Prevent NaN errors
         }
@@ -844,7 +849,87 @@ async matchContractOrders(orderBook) {
 }
 
 
+    async getAddressOrders(address, side) {
+        // Load the order book for the current instance's contractId
+        const orderBookKey = `${this.orderBookKey}`;
+        const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
+        if (!orderbookData) {
+            console.error(`No order book found for contract ${this.orderBookKey}`);
+            return [];
+        }
+
+        // Determine whether to check buy or sell orders
+        let orders = side ? orderbookData.buy : orderbookData.sell;
+
+        // Filter orders by matching the given address
+        return orders.filter(order => order.sender === address);
+    }
+
+     async cancelContractOrdersForSize(address, contractId, blockHeight, side, size) {
+        // Load the order book for the current instance's contractId
+        const orderBookKey = `${this.orderBookKey}`;
+        const orderbookData = await this.loadOrderBook(orderBookKey, false);
+
+        if (!orderbookData) {
+            console.error(`No order book found for contract ${this.orderBookKey}`);
+            return [];
+        }
+
+        // Determine the order side (buy or sell)
+        let orders = side ? orderbookData.buy : orderbookData.sell;
+
+        // Sort orders based on distance from market:
+        // - Buy orders: Sort ascending (lowest price first)
+        // - Sell orders: Sort descending (highest price first)
+        orders = side
+            ? orders.sort((a, b) => a.price - b.price)  // Buy side (cancel lowest first)
+            : orders.sort((a, b) => b.price - a.price); // Sell side (cancel highest first)
+
+        let remainingSize = new BigNumber(size);
+        let cancelledOrders = [];
+
+        for (let i = 0; i < orders.length; i++) {
+            const order = orders[i];
+
+            // Only process orders belonging to the given address
+            if (order.sender !== address) {
+                continue;
+            }
+
+            let orderSizeBN = new BigNumber(order.amount);
+            let cancelSize = BigNumber.minimum(orderSizeBN, remainingSize);
+
+            // Cancel the order
+            cancelledOrders.push({
+                txid: order.txid, // Transaction ID of the order being cancelled
+                amountCancelled: cancelSize.toNumber(),
+                price: order.price,
+            });
+
+            // Reduce remaining size to satisfy cancellation
+            remainingSize = remainingSize.minus(cancelSize);
+
+            // Remove order from orderbook if fully cancelled
+            if (orderSizeBN.isLessThanOrEqualTo(cancelSize)) {
+                orders.splice(i, 1);
+                i--; // Adjust index since we removed an element
+            } else {
+                // Update order amount in the order book
+                order.amount = orderSizeBN.minus(cancelSize).toNumber();
+            }
+
+            // If we have fully satisfied the requested size, stop processing
+            if (remainingSize.isLessThanOrEqualTo(0)) {
+                break;
+            }
+        }
+
+        // Save the updated order book
+        await this.saveOrderBook(orderBookKey, orderbookData);
+
+        return cancelledOrders;
+    }
 
         async evaluateBasicLiquidityReward(match, channel, contract) {
             var accepted = false
@@ -960,14 +1045,24 @@ async matchContractOrders(orderBook) {
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                     let buyerReReserve= false
                     let sellerReReserve = false
-                    if(!isBuyerReducingPosition&&match.buyOrder.initialReduce==true){
-                        await ContractRegistry.moveCollateralToReserve(match.buyOrder.buyerAddress, match.buyOrder.contractId, match.buyOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
-                        buyerReReserve=true
+                    console.log('logic requirements to move collat. to reserve '+isBuyerReducingPosition+' '+isSellerReducingPosition+' '+match.buyOrder.initialReduce+' '+match.sellOrder.initialReduce)
+                    if(!isBuyerReducingPosition){
+                        const result = await ContractRegistry.moveCollateralToReserve(match.buyOrder.buyerAddress, match.buyOrder.contractId, match.buyOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
+                        if(result ==null){
+                            return 
+                        }else{
+                             buyerReReserve=true
+                        }
+                       
                     }
 
-                    if(!isSellerReducingPosition&&match.sellOrder.initialReduce==true){
-                        await ContractRegistry.moveCollateralToReserve(match.sellOrder.sellerAddress, match.buyOrder.contractId, match.sellOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
-                        sellerReReserve=true
+                    if(!isSellerReducingPosition){
+                        const result =await ContractRegistry.moveCollateralToReserve(match.sellOrder.sellerAddress, match.buyOrder.contractId, match.sellOrder.amount, match.tradePrice,currentBlockHeight) //first we line up the capital
+                        if(result ==null){
+                            return 
+                        }else{
+                            sellerReReserve=true
+                        }
                     }
 
                     console.log('about to calc fee '+match.buyOrder.amount+' '+match.sellOrder.maker+' '+match.buyOrder.maker+' '+isInverse+' '+match.tradePrice+' '+notionalValue+' '+channel)
@@ -1356,7 +1451,7 @@ async matchContractOrders(orderBook) {
                 }
         }
 
-        async locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee,isBuyerReducingPosition,isSellerReducingPosition,block){
+        async locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee,isBuyerReducingPosition,isSellerReducingPosition,block,isLiq){
                     const TallyMap = require('./tally.js');
                     const MarginMap = require('./marginMap.js')
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
@@ -1372,61 +1467,40 @@ async matchContractOrders(orderBook) {
                     console.log('locating fee')
                     let buyerAvail = TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress,collateralPropertyId, buyerFee)
                     let sellerAvail = TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress,collateralPropertyId, sellerFee)
+                    let buyerReserve = TallyMap.hasSufficientReserve(match.buyOrder.buyerAddress,collateralPropertyId, buyerFee)
+                    let sellerReserve = TallyMap.hasSufficientReserve(match.sellOrder.sellerAddress,collateralPropertyId, sellerFee)
+                    let buyerMargin = TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId, buyerFee)
+                    let sellerMargin = TallyMap.hasSufficientMargin(match.sellOrder.sellerAddress,collateralPropertyId, sellerFee)
+                                  
                     buyerAvail = buyerAvail.hasSufficient
                     sellerAvail = sellerAvail.hasSufficient
+                    buyerReserve = buyerReserve.hasSufficient
+                    sellerReserve = sellerReserve.hasSufficient
+                    buyerMargin = buyerMargin.hasSufficient
+                    sellerMargin = sellerMargin.hasSufficient
                     if(buyerAvail){
                                 
                         await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,-buyerFee,0,0,0,'contractFee',block)
-                                feeInfo.buyFeeFromAvailable= true
-                                return feeInfo
+                            feeInfo.buyFeeFromAvailable= true
+                    }else if(buyerReserve){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee',block)
+                            feeInfo.buyFeeFromReserve= true
+                    }else if(buyerMargin){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee',block)
+                            feeInfo.buyFeeFromMargin= true
                     }
-                    if(sellerAvail){
-                         await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee',block)
-                            feeInfo.sellFeeFromAvailable=true
-                            return feeInfo
-                    }
-            if(isBuyerReducingPosition){
-                        if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
-                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee',block)                   
-                                feeInfo.buyFeeFromReserve=true
-                        }else{
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee',block)
-                            feeInfo.buyFeeFromMargin=true
-                        }        
-                    }else{
-                        if(reserveBalanceB.margin<buyerFee||reserveBalanceB.margin==undefined){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,-buyerFee,0,0,'contractFee',block)
-                            feeInfo.buyFeeFromReserve=true
-                        }else{
-                            if(reserveBalanceB.reserve<buyerFee){
-                                await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-buyerFee,0,'contractFee',block)
-                                feeInfo.buyFeeFromMargin=true
-                                await marginMap.feeMarginReduce(match.buyOrder.buyerAddress,match.buyerPosition,buyerFee,match.buyerOrder.contractId)
-                            } 
-                        }
 
-                    }
-                    if(isSellerReducingPosition){
-                        if(reserveBalanceA.margin<buyerFee||reserveBalanceA.margin==undefined){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
+                    if(sellerAvail){
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee',block)
+                            feeInfo.sellFeeFromAvailable=true
+                    }else if(sellerReserve){
+                        await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee',block)
                             feeInfo.sellFeeFromReserve=true
-                        }else{   
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee')
-                            feeInfo.sellFeeFromMargin=true
-                            await marginMap.feeMarginReduce(match.sellOrder.sellerAddress,match.sellerPosition,sellerFee,match.sellOrder.contractId)               
-                        }
-                    }else{
-                        console.log('inside fee deduction '+match.sellOrder.sellerAddress)
-                        if(reserveBalanceA.margin<sellerFee||reserveBalanceA.margin==undefined){
-                            if(reserveBalanceA.reserve<sellerFee||reserveBalanceA.reserve==undefined){
-                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,0,-sellerFee,0,0,'contractFee')
-                                feeInfo.sellFeeFromReserve=true
-                            }else{
-                                await TallyMap.updateBalance(match.sellOrder.sellerAddress,collateralPropertyId,-sellerFee,0,0,0,'contractFee')
-                                feeInfo.sellFeeFromAvailable=true
-                            }
-                        }
+                    }else if(sellerMargin){
+                        await TallyMap.updateBalance(match.buyOrder.buyerAddress,collateralPropertyId,0,0,-sellerFee,0,'contractFee',block)
+                            feeInfo.sellFeeFromMargin= true
                     }
+
                     return feeInfo
         }
 
