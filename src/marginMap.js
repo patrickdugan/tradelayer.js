@@ -830,22 +830,34 @@ class MarginMap {
         return liquidationOrder;
     }
 
-    async saveLiquidationOrders(contractId, position, order, blockHeight) {
-        try {
-            // Access the marginMaps database
-            const liquidationsDB = await db.getDatabase('liquidations');
+   async saveLiquidationOrders(contractId, position, order, blockHeight) {
+    try {
+        // Access the liquidations database
+        const liquidationsDB = await db.getDatabase('liquidations');
 
-            // Construct the key and value for storing the liquidation orders
-            const key = `liquidationOrders-${contractId}-${blockHeight}`;
-            const value = { _id: key, order: order, position: position, blockHeight: blockHeight, upsert:true };
+        // Construct the key and value for storing the liquidation orders
+        const key = `liquidationOrders-${contractId}-${blockHeight}`;
+        const value = {
+            _id: key, // Ensure uniqueness by setting the _id field
+            order: order,
+            position: position,
+            blockHeight: blockHeight
+        };
 
-            // Save the liquidation orders in the marginMaps database
-            await liquidationsDB.insertAsync(value);
-        } catch (error) {
-            console.error(`Error saving liquidation orders for contract ${contractId} at block height ${blockHeight}:`, error);
-            throw error;
-        }
+        // Use updateAsync with upsert to insert or update the document
+        await liquidationsDB.updateAsync(
+            { _id: key }, // Query to find the document
+            { $set: value }, // Data to set/update
+            { upsert: true } // Enable upsert (insert if not found)
+        );
+
+        console.log(`Successfully saved liquidation order for contract ${contractId} at block height ${blockHeight}`);
+    } catch (error) {
+        console.error(`Error saving liquidation orders for contract ${contractId} at block height ${blockHeight}:`, error);
+        throw error;
     }
+}
+
 
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
         const liquidationsDB = await db.getDatabase('liquidations');
