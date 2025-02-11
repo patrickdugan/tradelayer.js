@@ -172,7 +172,6 @@ class MarginMap {
             true,
             match.buyerPosition,
             match.inverse,
-            channelTrade,
             close,
             flip,
             match.buyOrder.contractId
@@ -185,7 +184,6 @@ class MarginMap {
             false,
             match.sellerPosition,
             match.inverse,
-            channelTrade,
             close,
             flip,
             match.sellOrder.contractId
@@ -193,7 +191,7 @@ class MarginMap {
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, channelTrade, close,flip,contractId) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId) {
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
@@ -211,7 +209,6 @@ class MarginMap {
                 console.log('about to call updateAveragePrice '+amount+' '+price+' '+contractId)
                 position.avgPrice=await this.updateAveragePrice(position,amount,price,contractId, isBuyOrder)
                 console.log('after the avg price function '+position.avgPrice)
-
             }
         }else if(flip==true&&close==false){
             //this is the first trade in the new direction of the flip so its price is the avg. entry price
@@ -228,7 +225,7 @@ class MarginMap {
         const ContractList = require('./contractRegistry.js')
         const TallyMap = require('./tally.js')
         const contractInfo = await ContractList.getContractInfo(contractId)
-        //console.log('contract Info in updateContractBalances' + JSON.stringify(contractInfo))
+        console.log('contract Info in updateContractBalances' + JSON.stringify(contractInfo))
         const notionalValue = contractInfo.notionalValue
         const collateralId = contractInfo.collateralPropertyId
         console.log('about to call getTally in updateContractBalances '+address +' '+collateralId)
@@ -840,7 +837,7 @@ class MarginMap {
 
             // Construct the key and value for storing the liquidation orders
             const key = `liquidationOrders-${contractId}-${blockHeight}`;
-            const value = { _id: key, order: order, position: position, blockHeight: blockHeight };
+            const value = { _id: key, order: order, position: position, blockHeight: blockHeight, upsert:true };
 
             // Save the liquidation orders in the marginMaps database
             await liquidationsDB.insertAsync(value);
