@@ -218,7 +218,8 @@ class MarginMap {
         // For buy orders, increase contracts and adjust margin
         // Calculate the new position size and margin adjustment
         console.log('position size before update '+position.contracts)
-        let newPositionSize = isBuyOrder ? BigNumber(position.contracts).plus(amount).toNumber() : BigNumber(position.contracts).minus(amount).toNumber();
+        const amountBN = new BigNumber(amount)
+        let newPositionSize = isBuyOrder ? BigNumber(position.contracts).plus(amountBN).toNumber() : BigNumber(position.contracts).minus(amountBN).toNumber();
         console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
         position.contracts=newPositionSize
         
@@ -785,7 +786,7 @@ class MarginMap {
                 position.unrealizedPNL=0
             }
             const uPNLBN = new BigNumber(position.unrealizedPNL)
-            position.unrealizedPNL=new BigNumber(pnlChange).plus(position.unrealizedPNL).decimalPlaces(8).toNumber()
+            position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
             this.margins.set(address, position)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice')
             return position
@@ -815,15 +816,17 @@ class MarginMap {
                 const liquidationSize = new BigNumber(position.contracts).dividedBy(2)
                     .decimalPlaces(0, BigNumber.ROUND_UP).toNumber();
 
+                    
                 let liquidationOrder={
                     address: position.address,
                     contractId: contractId,
-                    size: liquidationSize,
+                    size: Math.abs(liquidationSize),
                     price: position.liqPrice,
                     side: side,
                     bankruptcyPrice: position.bankruptcyPrice
 
                 }
+
                 if(total){
                     liquidationOrder.price = position.bankruptcyPrice
                 }

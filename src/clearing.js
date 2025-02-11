@@ -364,7 +364,7 @@ class Clearing {
                             await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -marginDent,0,'clearingLossPostCancel', blockHeight);
                             if (await marginMap.checkMarginMaintainance(position.address,contractId)){
                              let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId,false);
-                             console.log('liquidation!: '+JSON.stringify(liq))
+                             console.log('partial liquidation: '+JSON.stringify(liq))
                              marginMap.updateContractBalances(position.address, liq.size,liq.price,liq.side,position,inverse,true,false,contractId)
                                 if(liq!="err:0 contracts"){
                                   let orderbook = await Orderbooks.getOrderbookInstance(contractId)
