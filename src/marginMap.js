@@ -764,15 +764,16 @@ class MarginMap {
             avgPrice: 0,
         };
     }
-
+    const marginBN = new BigNumber(position.margin)
+    const marginChange = new BigNumber(newMargin).plus(marginBN).decimalPlaces(8).toNumber();
     // Update the margin
-    position.margin += new BigNumber(newMargin).decimalPlaces(8).toNumber();
+    position.margin = marginChange
 
     // Save the updated position
     this.margins.set(address, position);
 
     // Record the change in margin map deltas
-    await this.recordMarginMapDelta(address, contractId, position.contracts, 0, newMargin, 0, 0, 'updateMargin');
+    await this.recordMarginMapDelta(address, contractId, position.contracts, 0, marginChange, 0, 0, 'updateMargin');
 
     // Persist changes to the database
     await this.saveMarginMap(true);
@@ -816,7 +817,7 @@ class MarginMap {
                 const liquidationSize = new BigNumber(position.contracts).dividedBy(2)
                     .decimalPlaces(0, BigNumber.ROUND_UP).toNumber();
 
-                    
+
                 let liquidationOrder={
                     address: position.address,
                     contractId: contractId,

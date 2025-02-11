@@ -326,7 +326,8 @@ class Clearing {
                     let totalCollateral = tally.available+tally.margin
                     await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, 0,0,'clearingLoss', blockHeight);
                     console.log('fully utilized available margin for '+JSON.stringify(newPosition))
-                    let marginDent = Math.abs(pnlChange)-tally.available
+                    let availBN = new BigNumber(tally.available)
+                    let marginDent = new BigNumber(Math.abs(pnlChange)).minus(availBN).decimalPlaces(8).toNumber()
                     if(totalCollateral>Math.abs(pnlChange)&&marginDent<tally.margin){
 
                         await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss', blockHeight);
@@ -352,16 +353,18 @@ class Clearing {
                       let orderbook = await Orderbooks.getOrderbookInstance(contractId)
                       const cancelledOrders = await orderbook.cancelAllContractOrders(position.address,contractId,blockHeight)
                       let postCancel = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent)
+                      console.log('post cancel '+postCancel.hasSufficient)
                       if(postCancel.hasSufficient){
                         //init margins from cancelled orders on this contract is enough
                            await TallyMap.updateBalance(position.address, collateralId, marginDent, 0, 0,0,'clearingLossPostCancel', blockHeight);
                            continue 
                       }else{
                             let postCancelTally = await TallyMap.getTally(position.address,collateralId)
+                         console.log('pre-blaiven '+JSON.stringify(postCancel.shortfall)+' '+tally.margin)
                          if(Math.abs(postCancel.shortfall)<tally.margin){
                             //recovered init margin from reserve on cancels plus margin is enough but maybe partial liq
-                            marginDent = Math.abs(postCancel.shortfall)*-1
-                            await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -marginDent,0,'clearingLossPostCancel', blockHeight);
+                            console.log('blaiven '+postCancel.shortfall+' '+marginDent)
+                            await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancel.shortfall,0,'clearingLossPostCancel', blockHeight);
                             if (await marginMap.checkMarginMaintainance(position.address,contractId)){
                              let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId,false);
                              console.log('partial liquidation: '+JSON.stringify(liq))
