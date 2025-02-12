@@ -171,7 +171,7 @@ class Clearing {
         }
     }
 
-       static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
+    static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
         try {
             const ContractRegistry = require('./contractRegistry.js');
             const base = await db.getDatabase('oracleData');
@@ -333,19 +333,20 @@ class Clearing {
                         await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent,0,'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId,-marginDent)    
                         if (await marginMap.checkMarginMaintainance(position.address,contractId)){
-                             let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId,false);
-                             console.log('liquidation!: '+JSON.stringify(liq))
-                             marginMap.updateContractBalances(position.address, liq.size,liq.price,liq.side,position,inverse,true,false,contractId)
+                            let liq = await marginMap.generateLiquidationOrder(newPosition, contractId,false);
+                            const splat = await orderbook.estimateLiquidation(liq)
+                            console.log('liquidation!: '+JSON.stringify(liq)+' splat?'+JSON.stringify(splat))
+                            marginMap.updateContractBalances(position.address, liq.size,liq.price,liq.side,position,inverse,true,false,contractId)
                              
                             const cancelledOrders = await orderbook.cancelContractOrdersForSize(position.address,contractId,blockHeight,liq.side,liq.size)
                             console.log('canceling orders for liquidated chunk '+JSON.stringify(cancelledOrders))
-                             if(liq!="err:0 contracts"){
+                            if(liq!="err:0 contracts"){
                               let orderbook = await Orderbooks.getOrderbookInstance(contractId)
                                 isLiq.push(liq)
                                 orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true)
-                             }else{
+                            }else{
                                 isLiq.push(console.log(liq))
-                             }
+                            }
                         }
                     }else{
                         //danger zone
@@ -353,20 +354,17 @@ class Clearing {
                       let orderbook = await Orderbooks.getOrderbookInstance(contractId)
                       const cancelledOrders = await orderbook.cancelAllContractOrders(position.address,contractId,blockHeight)
                       let postCancel = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent)
-                      console.log('post cancel '+postCancel.hasSufficient)
                       if(postCancel.hasSufficient){
                         //init margins from cancelled orders on this contract is enough
                            await TallyMap.updateBalance(position.address, collateralId, marginDent, 0, 0,0,'clearingLossPostCancel', blockHeight);
                            continue 
                       }else{
                             let postCancelTally = await TallyMap.getTally(position.address,collateralId)
-                         console.log('pre-blaiven '+JSON.stringify(postCancel.shortfall)+' '+tally.margin)
-                         if(Math.abs(postCancel.shortfall)<tally.margin){
+                        if(Math.abs(postCancel.shortfall)<tally.margin){
                             //recovered init margin from reserve on cancels plus margin is enough but maybe partial liq
-                            console.log('blaiven '+postCancel.shortfall+' '+marginDent)
                             await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancel.shortfall,0,'clearingLossPostCancel', blockHeight);
                             if (await marginMap.checkMarginMaintainance(position.address,contractId)){
-                             let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId,false);
+                             let liq = await marginMap.generateLiquidationOrder(newPosition,contractId,false);
                              console.log('partial liquidation: '+JSON.stringify(liq))
                              marginMap.updateContractBalances(position.address, liq.size,liq.price,liq.side,position,inverse,true,false,contractId)
                                 if(liq!="err:0 contracts"){
@@ -379,22 +377,23 @@ class Clearing {
                             }  
                             continue  
                          }else{
-                            let liq = await marginMap.triggerLiquidations(newPosition, blockHeight,contractId,true);
-                             console.log('liquidation!: '+JSON.stringify(liq))
+                            let systemicLoss = postCancel.shortfall-tally.margin
+                            let liq = await marginMap.generateLiquidationOrder(newPosition,contractId,true);
+                            console.log('liquidation!: '+JSON.stringify(liq))
                              if(liq!="err:0 contracts"){
+                                  const splat = await orderbook.estimateLiquidation(liq)
                                   isLiq.push(liq)
     await TallyMap.updateBalance(position.address, collateralId, 0, 0, -tally.margin,0,'clearingLoss', blockHeight);
-                          await marginMap.updateMargin(position.address,contractId,-position.margin)               
+                            await marginMap.updateMargin(position.address,contractId,-position.margin)               
                             marginMap.updateContractBalances(position.address, liq.size,liq.price,liq.side,position,inverse,true,false,contractId)
                             //zero out contract margin and balance 
-                     
-                                  const splat = await orderbook.estimateLiquidation(liq)
-        orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side, false,blockHeight,'liq',position.address,true) 
+                            
+        orderbook.addContractOrder(contractId, liq.price,liq.size,liq.side,false,blockHeight,'liq',position.address,true) 
                                   if(splat.filled==false){
-                                    //we know the order didn't get filled at the bankruptcy price and 
-                                    const pnlChangeBN = new BigNumber(Math.abs(pnlChange))
-                                    const totalCollateralBN = new BigNumber(totalCollateral)
-                                    const filledBN = new BigNumber(splat.partialFillPercent)
+                                    const filledBN = new BigNumber(splat.filled)
+                                    const liqSizeBN = new BigNumber(liq.size)
+                                    const remainder = liqSizeBN.minus(filledBN).toNumber()
+                                    const result = await marginMap.simpleDeleverage(contractId,remainder,liq.side,liq.price)
                                     systemicLoss+= pnlChangeBN.minus(totalCollateral).times(filledBN).decimalPlaces(8).toNumber()
                                   }
                              }else{

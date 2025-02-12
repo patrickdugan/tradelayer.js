@@ -675,7 +675,7 @@ class Orderbook {
             return matchResult
         }
 
-        async estimateLiquidation(liquidationOrder) {
+async estimateLiquidation(liquidationOrder) {
     const { contractId, size, side } = liquidationOrder;
     
     // Load the order book for the given contract

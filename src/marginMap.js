@@ -793,17 +793,6 @@ class MarginMap {
             return position
     }
 
-    async triggerLiquidations(position, blockHeight, contractId,total) {
-        // Logic to handle the liquidation process
-        // This could involve creating liquidation orders and updating the contract's state
-
-        // Example:
-        const liquidationOrder = this.generateLiquidationOrder(position, contractId);
-        await this.saveLiquidationOrders(contractId, position, liquidationOrder, blockHeight);
-
-        return liquidationOrder;
-    }
-
     generateLiquidationOrder(position, contractId,total) {
                 // Liquidate 50% of the position if below maintenance margin
                 let side 
@@ -861,6 +850,194 @@ class MarginMap {
         throw error;
     }
 }
+
+async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
+    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
+
+    let remainingSize = new BigNumber(unfilledContracts);
+    // Fetch all positions from marginMap
+    const allPositions = await this.getAllPositions();
+
+    // Filter positions for the correct side (side=false -> sell longs, side=true -> buy shorts)
+    let relevantPositions = allPositions.filter(position =>
+        (side && position.contracts < 0) || (!side && position.contracts > 0)
+    );
+
+    // Sort by unrealized PNL in descending order (biggest winners first)
+    relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+
+    if (relevantPositions.length === 0) {
+        console.log(`No suitable counterparties found for deleveraging.`);
+        return;
+    }
+
+    console.log(`Identified ${relevantPositions.length} candidates for deleveraging.`);
+
+    while (!remainingSize.isZero() && relevantPositions.length > 1) {
+        let topPosition = relevantPositions[0];
+        let secondPosition = relevantPositions[1];
+
+        let topContracts = new BigNumber(Math.abs(topPosition.contracts));
+        let secondContracts = new BigNumber(Math.abs(secondPosition.contracts));
+
+        // Find the difference to even out #1 and #2
+        let difference = topContracts.minus(secondContracts);
+        let amountToRemove = BigNumber.min(difference, remainingSize);
+
+        console.log(`Balancing ${topPosition.address} and ${secondPosition.address} by removing ${amountToRemove} contracts.`);
+
+        await this.adjustDeleveraging(topPosition.address, contractId, amountToRemove, side);
+        remainingSize = remainingSize.minus(amountToRemove);
+
+        if (remainingSize.isZero()) break;
+
+        // Resort after modification
+        relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+    }
+
+    console.log(`Remaining size after simple deleveraging: ${remainingSize.toString()}`);
+
+    if (!remainingSize.isZero()) {
+        console.log(`WARNING: Unable to fully deleverage. ${remainingSize} contracts remain.`)
+    }
+
+    console.log(`Simple deleveraging complete.`);
+}
+
+// Adjust deleveraging position
+async adjustDeleveraging(address, contractId, size, side) {
+    console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId}`);
+
+    let position = await this.getPositionForAddress(address, contractId);
+
+    if (!position) return;
+
+    position.contracts = new BigNumber(position.contracts).plus(side ? size : -size).toNumber();
+
+    if (position.contracts === 0) {
+        position.liqPrice = null;
+        position.bankruptcyPrice = null;
+    }
+
+    this.margins.set(address, position);
+    await this.saveMarginMap(true);
+}
+
+
+async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
+    console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
+
+    let remainingSize = new BigNumber(unfilledContracts);
+
+    // Load marginMap instance for the given contractId
+    const marginMap = await MarginMap.getInstance(contractId);
+
+    // Fetch all positions from marginMap
+    const allPositions = await marginMap.getAllPositions();
+
+    // Load contract details for collateral filtering
+    const contractInfo = await ContractRegistry.getContractInfo(contractId);
+    const collateralId = contractInfo.collateralPropertyId;
+    const notionalValue = new BigNumber(contractInfo.notionalValue);
+
+    let potentialCounterparties = [];
+
+    for (let position of allPositions) {
+        if (position.contracts === 0) continue; // Skip inactive positions
+
+        // Ensure the position belongs to the same collateral pool
+        if (position.collateralId !== collateralId) continue;
+
+        // Fetch available and reserved balances from TallyMap
+        const tally = await TallyMap.getTally(position.address, collateralId);
+        const availableCollateral = new BigNumber(tally.available);
+        const reservedCollateral = new BigNumber(tally.reserved);
+
+        // Calculate position notional value at liquidation price
+        const positionNotional = notionalValue.times(Math.abs(position.contracts)).times(liqPrice);
+
+        // Compute net exposure by summing positions for this collateral across all contracts
+        const totalExposure = await calculateNetExposure(position.address, collateralId);
+
+        // Ensure the side is opposite (we need shorts to absorb long liquidations and vice versa)
+        const isCounterparty = side ? position.contracts < 0 : position.contracts > 0;
+
+        if (isCounterparty) {
+            // Calculate leverage = (position notional) / (available + reserved collateral)
+            const totalCollateral = availableCollateral.plus(reservedCollateral);
+            const leverage = totalCollateral.isZero() ? new BigNumber(Infinity) : positionNotional.dividedBy(totalCollateral);
+
+            potentialCounterparties.push({
+                address: position.address,
+                contracts: position.contracts,
+                leverage,
+                exposure: totalExposure
+            });
+        }
+    }
+
+    // Sort counterparties by highest leverage, then by naked exposure (descending order)
+    potentialCounterparties.sort((a, b) => {
+        if (!b.exposure && a.exposure) return 1; // Prefer naked positions
+        if (!a.exposure && b.exposure) return -1;
+        return b.leverage.minus(a.leverage).toNumber(); // Highest leverage first
+    });
+
+    // Match positions for deleveraging
+    for (let counterparty of potentialCounterparties) {
+        if (remainingSize.isZero()) break;
+
+        let absorbAmount = new BigNumber(Math.abs(counterparty.contracts));
+        let matchedAmount = BigNumber.min(remainingSize, absorbAmount);
+
+        console.log(`Matching ${matchedAmount} contracts to ${counterparty.address}`);
+
+        await executeDeleveraging(counterparty.address, contractId, matchedAmount, side, liqPrice);
+
+        remainingSize = remainingSize.minus(matchedAmount);
+    }
+
+    if (!remainingSize.isZero()) {
+        console.log(`WARNING: Unable to fully deleverage ${remainingSize.toString()} contracts`);
+    }
+    console.log(`Deleveraging complete.`);
+}
+
+// Helper function to compute net exposure across all contract positions for an address
+async calculateNetExposure(address, collateralId) {
+    const allContracts = await ContractRegistry.getContractsForCollateral(collateralId);
+    let netExposure = new BigNumber(0);
+
+    for (let contract of allContracts) {
+        const marginMap = await MarginMap.getInstance(contract.contractId);
+        const position = await marginMap.getPositionForAddress(address, contract.contractId);
+        if (position) {
+            netExposure = netExposure.plus(position.contracts);
+        }
+    }
+    return netExposure;
+}
+
+// Helper function to execute deleveraging trade
+async executeDeleveraging(address, contractId, size, side, liqPrice) {
+    console.log(`Executing deleveraging: ${address} ${size} contracts at ${liqPrice}`);
+    
+    const marginMap = await MarginMap.getInstance(contractId);
+    let position = await marginMap.getPositionForAddress(address, contractId);
+
+    if (!position) return;
+
+    position.contracts = new BigNumber(position.contracts).plus(side ? size : -size).toNumber();
+
+    if (position.contracts === 0) {
+        position.liqPrice = null;
+        position.bankruptcyPrice = null;
+    }
+
+    marginMap.margins.set(address, position);
+    await marginMap.saveMarginMap(true);
+}
+
 
 
     async fetchLiquidationVolume(blockHeight, contractId, mark) {
