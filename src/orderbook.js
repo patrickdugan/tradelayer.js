@@ -676,8 +676,8 @@ class Orderbook {
         }
 
 async estimateLiquidation(liquidationOrder) {
-    const { contractId, size, side } = liquidationOrder;
-    
+    const { contractId, size, side, price: liquidationPrice } = liquidationOrder; // Adding liqPrice from order
+
     // Load the order book for the given contract
     const orderBookKey = `${contractId}`;
     const orderbookData = await this.loadOrderBook(orderBookKey, false);
@@ -685,7 +685,14 @@ async estimateLiquidation(liquidationOrder) {
     let orders = side === 'sell' ? orderbookData.buy : orderbookData.sell; // Match against the opposite side
 
     if (!orders || orders.length === 0) {
-        return { estimatedFillPrice: null, filledSize: 0, partialFillPercent: 0, filled: false };
+        return {
+            estimatedFillPrice: null,
+            filledSize: 0,
+            partialFillPercent: 0,
+            filled: false,
+            trueLiqPrice: null,
+            liquidationLoss: null
+        };
     }
 
     // Sort orders by price (ascending for buy orders, descending for sell orders)
@@ -693,29 +700,46 @@ async estimateLiquidation(liquidationOrder) {
         ? orders.sort((a, b) => b.price - a.price) // Sell side: match highest bids first
         : orders.sort((a, b) => a.price - b.price); // Buy side: match lowest asks first
 
-    let remainingSize = size;
-    let totalCost = 0;
-    let filledSize = 0;
+    let remainingSize = new BigNumber(size);
+    let totalCost = new BigNumber(0);
+    let filledSize = new BigNumber(0);
+    let trueLiqPrice = new BigNumber(liquidationPrice);
+    let foundLiqPrice = false;
 
     for (let order of orders) {
-        let fillAmount = Math.min(remainingSize, order.amount);
-        totalCost += fillAmount * order.price;
-        filledSize += fillAmount;
-        remainingSize -= fillAmount;
+        let fillAmount = BigNumber.min(remainingSize, order.amount);
+        totalCost = totalCost.plus(fillAmount.times(order.price));
+        filledSize = filledSize.plus(fillAmount);
+        remainingSize = remainingSize.minus(fillAmount);
 
-        if (remainingSize <= 0) break;
+        if (!foundLiqPrice && remainingSize.isGreaterThan(0)) {
+            // The first price beyond the filled orders
+            trueLiqPrice = new BigNumber(order.price);
+            foundLiqPrice = true;
+        }
+
+        if (remainingSize.isZero()) break;
     }
 
-    let estimatedFillPrice = filledSize > 0 ? totalCost / filledSize : null;
-    let partialFillPercent = (filledSize / size) * 100;
-    
+    let estimatedFillPrice = filledSize.isGreaterThan(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
+    let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
+    let filled = filledSize.isGreaterThanOrEqualTo(size);
+
+    // Calculate liquidation loss if order is unfilled
+    let liquidationLoss = remainingSize.isGreaterThan(0)
+        ? remainingSize.times(trueLiqPrice.minus(estimatedFillPrice)).toNumber()
+        : 0;
+
     return {
         estimatedFillPrice,
-        filledSize,
+        filledSize: filledSize.toNumber(),
         partialFillPercent,
-        filled: filledSize >= size
+        filled,
+        trueLiqPrice: trueLiqPrice.toNumber(),
+        liquidationLoss
     };
 }
+
 
 
 async matchContractOrders(orderBook) {
