@@ -691,7 +691,8 @@ async estimateLiquidation(liquidationOrder) {
             partialFillPercent: 0,
             filled: false,
             trueLiqPrice: null,
-            liquidationLoss: null
+            liquidationLoss: null,
+            bookEmpty: true // No orders available in the book
         };
     }
 
@@ -705,12 +706,16 @@ async estimateLiquidation(liquidationOrder) {
     let filledSize = new BigNumber(0);
     let trueLiqPrice = new BigNumber(liquidationPrice);
     let foundLiqPrice = false;
+    let bookEmpty = true; // Assume book is empty until proven otherwise
 
     for (let order of orders) {
         let fillAmount = BigNumber.min(remainingSize, order.amount);
         totalCost = totalCost.plus(fillAmount.times(order.price));
         filledSize = filledSize.plus(fillAmount);
         remainingSize = remainingSize.minus(fillAmount);
+
+        // Mark that the book has liquidity
+        bookEmpty = false;
 
         if (!foundLiqPrice && remainingSize.isGreaterThan(0)) {
             // The first price beyond the filled orders
@@ -725,9 +730,15 @@ async estimateLiquidation(liquidationOrder) {
     let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
     let filled = filledSize.isGreaterThanOrEqualTo(size);
 
+    // If there is still remaining size, determine the book is empty
+    if (remainingSize.isGreaterThan(0)) {
+        bookEmpty = true;
+        trueLiqPrice = null;
+    }
+
     // Calculate liquidation loss if order is unfilled
     let liquidationLoss = remainingSize.isGreaterThan(0)
-        ? remainingSize.times(trueLiqPrice.minus(estimatedFillPrice)).toNumber()
+        ? remainingSize.times(trueLiqPrice ? trueLiqPrice.minus(estimatedFillPrice) : 0).toNumber()
         : 0;
 
     return {
@@ -735,10 +746,12 @@ async estimateLiquidation(liquidationOrder) {
         filledSize: filledSize.toNumber(),
         partialFillPercent,
         filled,
-        trueLiqPrice: trueLiqPrice.toNumber(),
-        liquidationLoss
+        trueLiqPrice: trueLiqPrice ? trueLiqPrice.toNumber() : null,
+        liquidationLoss,
+        bookEmpty
     };
 }
+
 
 
 
