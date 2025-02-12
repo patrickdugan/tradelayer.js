@@ -777,7 +777,7 @@ class MarginMap {
 
     // Persist changes to the database
     await this.saveMarginMap(true);
-
+    return position
     console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
 }
 
@@ -823,7 +823,7 @@ class MarginMap {
         return liquidationOrder;
     }
 
-   async saveLiquidationOrders(contractId, position, order, blockHeight) {
+   async saveLiquidationOrders(contractId, position, order,reason,blockHeight,liquidationLoss,contractsDeleveraged, realizedLiquidation) {
     try {
         // Access the liquidations database
         const liquidationsDB = await db.getDatabase('liquidations');
@@ -834,7 +834,11 @@ class MarginMap {
             _id: key, // Ensure uniqueness by setting the _id field
             order: order,
             position: position,
-            blockHeight: blockHeight
+            reason: reason,
+            blockHeight: blockHeight,
+            liquidationLoss: liquidationLoss,
+            contractsDeleveraged: contractsDeleveraged,
+            realizedLiquidation: realizedLiquidation
         };
 
         // Use updateAsync with upsert to insert or update the document

@@ -676,7 +676,7 @@ class Orderbook {
         }
 
 async estimateLiquidation(liquidationOrder) {
-    const { contractId, size, side, price: liquidationPrice } = liquidationOrder; // Adding liqPrice from order
+    const { contractId, size, side, price: liqPrice } = liquidationOrder;
 
     // Load the order book for the given contract
     const orderBookKey = `${contractId}`;
@@ -690,9 +690,12 @@ async estimateLiquidation(liquidationOrder) {
             filledSize: 0,
             partialFillPercent: 0,
             filled: false,
-            trueLiqPrice: null,
-            liquidationLoss: null,
-            bookEmpty: true // No orders available in the book
+            filledBelowLiqPrice: false,
+            partiallyFilledBelowLiqPrice: false,
+            trueBookEmpty: true,
+            remainder: size, // Everything remains unfilled
+            liquidationLoss: 0,
+            trueLiqPrice: null // No price available in book
         };
     }
 
@@ -704,9 +707,10 @@ async estimateLiquidation(liquidationOrder) {
     let remainingSize = new BigNumber(size);
     let totalCost = new BigNumber(0);
     let filledSize = new BigNumber(0);
-    let trueLiqPrice = new BigNumber(liquidationPrice);
-    let foundLiqPrice = false;
-    let bookEmpty = true; // Assume book is empty until proven otherwise
+    let filledBelowLiqPrice = false;
+    let partiallyFilledBelowLiqPrice = false;
+    let liquidationLoss = new BigNumber(0);
+    let trueLiqPrice = null; // Track price where full liquidation would happen
 
     for (let order of orders) {
         let fillAmount = BigNumber.min(remainingSize, order.amount);
@@ -714,43 +718,38 @@ async estimateLiquidation(liquidationOrder) {
         filledSize = filledSize.plus(fillAmount);
         remainingSize = remainingSize.minus(fillAmount);
 
-        // Mark that the book has liquidity
-        bookEmpty = false;
-
-        if (!foundLiqPrice && remainingSize.isGreaterThan(0)) {
-            // The first price beyond the filled orders
-            trueLiqPrice = new BigNumber(order.price);
-            foundLiqPrice = true;
+        // If we go below liquidation price, flag it
+        if (order.price < liqPrice) {
+            filledBelowLiqPrice = true;
+            partiallyFilledBelowLiqPrice = filledSize.gt(0) && filledSize.lt(size);
+            liquidationLoss = liquidationLoss.plus(fillAmount.times(liqPrice - order.price));
         }
 
-        if (remainingSize.isZero()) break;
+        // Store the last order price where we stopped (for trueLiqPrice)
+        trueLiqPrice = order.price;
+
+        if (remainingSize.lte(0)) break;
     }
 
-    let estimatedFillPrice = filledSize.isGreaterThan(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
+    let estimatedFillPrice = filledSize.gt(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
     let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
-    let filled = filledSize.isGreaterThanOrEqualTo(size);
-
-    // If there is still remaining size, determine the book is empty
-    if (remainingSize.isGreaterThan(0)) {
-        bookEmpty = true;
-        trueLiqPrice = null;
-    }
-
-    // Calculate liquidation loss if order is unfilled
-    let liquidationLoss = remainingSize.isGreaterThan(0)
-        ? remainingSize.times(trueLiqPrice ? trueLiqPrice.minus(estimatedFillPrice) : 0).toNumber()
-        : 0;
+    let trueBookEmpty = remainingSize.gt(0) && orders.length === 0;
+    let remainder = remainingSize.toNumber(); // Contracts still unfilled
 
     return {
         estimatedFillPrice,
         filledSize: filledSize.toNumber(),
         partialFillPercent,
-        filled,
-        trueLiqPrice: trueLiqPrice ? trueLiqPrice.toNumber() : null,
-        liquidationLoss,
-        bookEmpty
+        filled: filledSize.gte(size),
+        filledBelowLiqPrice,
+        partiallyFilledBelowLiqPrice,
+        trueBookEmpty,
+        remainder,
+        liquidationLoss: liquidationLoss.toNumber(),
+        trueLiqPrice // This is the price where remaining contracts could be filled if the book had enough liquidity
     };
 }
+
 
 
 
