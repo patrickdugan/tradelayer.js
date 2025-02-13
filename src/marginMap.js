@@ -854,75 +854,74 @@ class MarginMap {
         throw error;
     }
 }
+
 async simpleDeleverage(contractId, unfilledContracts,side, liqPrice) {
-    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice} with ${unfilledContracts}`);
+    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
 
     let remainingSize = new BigNumber(unfilledContracts);
-    console.log(`Initial remaining size: ${remainingSize.toString()}`);
+    console.log('unfilledContracts '+unfilledContracts+' '+remainingSize)
+    if (remainingSize.isNaN()) {
+        throw console.error("🔥 Error: unfilledContracts is NaN, cannot proceed.");
+        return;
+    }
 
     // Fetch all positions from marginMap
     const allPositions = await this.getAllPositions();
     console.log(`Fetched ${allPositions.length} total positions.`);
 
     // Filter positions for the correct side (side=false -> sell longs, side=true -> buy shorts)
-    let relevantPositions = allPositions.filter(position => {
-        const isRelevant = (side && position.contracts < 0) || (!side && position.contracts > 0);
-        console.log(`Position ${position.address}: contracts=${position.contracts}, isRelevant=${isRelevant}`);
-        return isRelevant;
-    });
+    let relevantPositions = allPositions.filter(position =>
+        (side && position.contracts < 0) || (!side && position.contracts > 0)
+    );
+
+    console.log(`Identified ${relevantPositions.length} candidates for deleveraging.`);
+
+    if (relevantPositions.length === 0) {
+        console.log("No suitable counterparties found for deleveraging.");
+        return;
+    }
 
     // Sort by unrealized PNL in descending order (biggest winners first)
     relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
 
-    if (relevantPositions.length === 0) {
-        console.log(`No suitable counterparties found for deleveraging.`);
-        return;
-    }
+    for (let i = 0; i < relevantPositions.length; i++) {
+        let currentPosition = relevantPositions[i];
+        let positionContracts = new BigNumber(Math.abs(currentPosition.contracts));
 
-    console.log(`Identified ${relevantPositions.length} candidates for deleveraging.`);
-
-    for (let i = 0; i < relevantPositions.length - 1 && !remainingSize.isZero(); i++) {
-        let topPosition = relevantPositions[i];
-        let secondPosition = relevantPositions[i + 1];
-
-        let topContracts = new BigNumber(Math.abs(topPosition.contracts));
-        let secondContracts = new BigNumber(Math.abs(secondPosition.contracts));
-
-        console.log(`Top Position: ${topPosition.address}, Contracts: ${topContracts.toString()}`);
-        console.log(`Second Position: ${secondPosition.address}, Contracts: ${secondContracts.toString()}`);
-
-        // Find the difference to even out #1 and #2
-        let difference = topContracts.minus(secondContracts);
-        console.log(`Difference between top and second: ${difference.toString()}`);
-
-        let amountToRemove = BigNumber.min(difference, remainingSize);
-        console.log(`Amount to remove: ${amountToRemove.toString()}`);
-
-        if (amountToRemove.isNaN()) {
-            throw console.error(`NaN detected in amountToRemove. Debug info: topContracts=${topContracts.toString()}, secondContracts=${secondContracts.toString()}, remainingSize=${remainingSize.toString()}`);
-            return;
+        if (positionContracts.isNaN()) {
+            console.error(`🔥 Error: Position contracts are NaN for address ${currentPosition.address}`);
+            continue;
         }
 
-        console.log(`Balancing ${topPosition.address} and ${secondPosition.address} by removing ${amountToRemove.toString()} contracts.`);
+        let amountToRemove = BigNumber.min(positionContracts, remainingSize);
 
-        await this.adjustDeleveraging(topPosition.address, contractId, amountToRemove, side);
+        console.log(`Deleveraging ${currentPosition.address} by removing ${amountToRemove.toString()} contracts.`);
+
+        await this.adjustDeleveraging(currentPosition.address, contractId, amountToRemove, side);
         remainingSize = remainingSize.minus(amountToRemove);
 
         console.log(`Remaining size after adjustment: ${remainingSize.toString()}`);
 
+        // If remaining contracts to deleverage are zero, exit early
         if (remainingSize.isZero()) break;
-
-        // Resort after modification
-        relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
     }
 
-    console.log(`Remaining size after simple deleveraging: ${remainingSize.toString()}`);
+    // If there’s still unmatched size and only one position remains, fully close it out
+    if (!remainingSize.isZero() && relevantPositions.length === 1) {
+        let unmatchedPosition = relevantPositions[0];
+        console.log(`Forcing full deleveraging of ${unmatchedPosition.address} due to unmatched contracts.`);
+        
+        await this.adjustDeleveraging(unmatchedPosition.address, contractId, remainingSize, side);
+        remainingSize = new BigNumber(0); // Ensure it's fully zeroed out
+    }
+
+    console.log(`Final remaining size after simple deleveraging: ${remainingSize.toString()}`);
 
     if (!remainingSize.isZero()) {
-        console.log(`WARNING: Unable to fully deleverage. ${remainingSize} contracts remain.`);
+       throw  console.error(`⚠️ WARNING: Unable to fully deleverage. ${remainingSize.toString()} contracts remain.`);
     }
 
-    console.log(`Simple deleveraging complete.`);
+    console.log("✅ Simple deleveraging complete.");
 }
 
 

@@ -413,6 +413,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
             await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
+            console.log('about to call simple deleverage in case 5 '+contractId+' '+remainder+' '+liq.side+' '+liq.price)
             await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price);
         }
     } else {
