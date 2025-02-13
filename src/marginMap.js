@@ -853,7 +853,6 @@ class MarginMap {
         throw error;
     }
 }
-
 async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatingAddress, isInverse) {
   console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${side}, unfilled=${unfilledContracts}`);
 
@@ -875,58 +874,60 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
   console.log(`  Found ${allPositions.length} total positions in marginMap.`);
 
   // Filter out all longs vs. shorts
-  let longs = allPositions.filter(p => p.contracts > 0);
-  let shorts = allPositions.filter(p => p.contracts < 0);
-
+  let longs = allPositions.filter(p => p.contracts > 0 && p.address !== liquidatingAddress);
+  let shorts = allPositions.filter(p => p.contracts < 0 && p.address !== liquidatingAddress);
 
   // Sort each side by largest PNL first
   longs.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
   shorts.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
-  console.log('showing longs and shorts '+JSON.stringify(longs)+' '+JSON.stringify(shorts))
-  // We'll do a for-loop up to the length of whichever side is smaller, or until we zero out remainingSize
-  let counterparties = []
-  if(side==false){counterparties=longs}else if(side==true){counterparties=shorts}
-  for(let i =0; i<counterparties.length; i++){
-     var bigger = counterparties[i]
-     var next = counterparties[i+1]
-     if(!next){next= {contracts:0}}
-     var difference = bigger.contracts-next.contracts
-     counterparties[i].difference = difference 
+
+  console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
+
+  // Select counterparties based on side
+  let counterparties = side ? shorts : longs;
+
+  // Calculate contract differences for more even distribution
+  for (let i = 0; i < counterparties.length; i++) {
+    let bigger = counterparties[i];
+    let next = counterparties[i + 1] || { contracts: 0 };
+    counterparties[i].difference = bigger.contracts - next.contracts;
   }
 
-  for(let pos of counterparties){
+  // Iterate through counterparties for deleveraging
+  for (let pos of counterparties) {
     let sizeBN = new BigNumber(pos.contracts);
-    // The max we can remove from these two
     let matchSize = Math.min(pos.difference, Math.abs(remainingSize.toNumber()));
 
-    console.log(`• Matching: ${pos.address} ${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
-    // Actually do the removal
-    await this.adjustDeleveraging(pos.address, contractId, matchSize, !side); // reduce from the long
-    await this.adjustDeleveraging(liquidatingAddress, contractId, matchSize, side); // reduce from the short
+    console.log(`• Matching: ${pos.address} (${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
 
-    const matchBN = new BigNumber(matchSize)
-    const notional = new BigNumber(liqPrice).multipliedBy(matchBN).decimalPlaces(2).toNumber()
+    // Ensure matchSize is positive before proceeding
+    if (matchSize > 0) {
+      await this.adjustDeleveraging(pos.address, contractId, matchSize, !side);
+      await this.adjustDeleveraging(liquidatingAddress, contractId, matchSize, side);
+
       await this.realizePnl(
-                    pos.address,
-                    matchSize,
-                    liqPrice,
-                    pos.avgPrice,
-                    isInverse,
-                    notional, 
-                    pos,
-                    !side,
-                    contractId
-                );
+        pos.address,
+        matchSize,
+        liqPrice,
+        pos.avgPrice,
+        isInverse,
+        matchSize.multipliedBy(liqPrice).toNumber(),
+        matchSize,
+        !side,
+        contractId
+      );
 
-    deleveragingData.totalDeleveraged += matchSize;
-    deleveragingData.counterparties.push({
-      deleveragedAddress: pos.address,
-      liqAddress: liquidatingAddress,
-      matchedContracts: matchSize
-    });
+      deleveragingData.totalDeleveraged += matchSize;
+      deleveragingData.counterparties.push({
+        deleveragedAddress: pos.address,
+        matchedContracts: matchSize
+      });
 
-    remainingSize = remainingSize.minus(matchSize);
- }
+      remainingSize = remainingSize.minus(matchSize);
+
+      if (remainingSize.isZero()) break;
+    }
+  }
 
   if (remainingSize.gt(0)) {
     console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
@@ -936,6 +937,7 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
 
   return deleveragingData;
 }
+
 
 // Adjust deleveraging position
 async adjustDeleveraging(address, contractId, size, side) {
