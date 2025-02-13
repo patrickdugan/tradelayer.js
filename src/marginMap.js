@@ -912,16 +912,16 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
                     liqPrice,
                     pos.avgPrice,
                     isInverse,
-                    notional  
+                    notional, 
                     pos,
                     !side,
                     contractId
                 );
-      
+
     deleveragingData.totalDeleveraged += matchSize;
     deleveragingData.counterparties.push({
       deleveragedAddress: pos.address,
-      liqAddress: ,
+      liqAddress: liquidatingAddress,
       matchedContracts: matchSize
     });
 
