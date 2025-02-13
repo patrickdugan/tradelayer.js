@@ -854,14 +854,12 @@ class MarginMap {
         throw error;
     }
 }
-
-async simpleDeleverage(contractId, unfilledContracts,side, liqPrice) {
+async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
     console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
 
     let remainingSize = new BigNumber(unfilledContracts);
-    console.log('unfilledContracts '+unfilledContracts+' '+remainingSize)
-    if (remainingSize.isNaN()) {
-        throw console.error("🔥 Error: unfilledContracts is NaN, cannot proceed.");
+    if (remainingSize.isNaN() || remainingSize.isNegative()) {
+        console.error("🔥 Error: Invalid unfilledContracts value, cannot proceed.");
         return;
     }
 
@@ -888,8 +886,8 @@ async simpleDeleverage(contractId, unfilledContracts,side, liqPrice) {
         let currentPosition = relevantPositions[i];
         let positionContracts = new BigNumber(Math.abs(currentPosition.contracts));
 
-        if (positionContracts.isNaN()) {
-            console.error(`🔥 Error: Position contracts are NaN for address ${currentPosition.address}`);
+        if (positionContracts.isNaN() || positionContracts.isZero()) {
+            console.error(`🔥 Error: Invalid or zero contracts for ${currentPosition.address}`);
             continue;
         }
 
@@ -902,27 +900,29 @@ async simpleDeleverage(contractId, unfilledContracts,side, liqPrice) {
 
         console.log(`Remaining size after adjustment: ${remainingSize.toString()}`);
 
-        // If remaining contracts to deleverage are zero, exit early
         if (remainingSize.isZero()) break;
     }
 
-    // If there’s still unmatched size and only one position remains, fully close it out
+    // Final Neutralization: If only one position remains, fully close it
     if (!remainingSize.isZero() && relevantPositions.length === 1) {
         let unmatchedPosition = relevantPositions[0];
-        console.log(`Forcing full deleveraging of ${unmatchedPosition.address} due to unmatched contracts.`);
-        
-        await this.adjustDeleveraging(unmatchedPosition.address, contractId, remainingSize, side);
-        remainingSize = new BigNumber(0); // Ensure it's fully zeroed out
+        let unmatchedContracts = new BigNumber(Math.abs(unmatchedPosition.contracts));
+
+        console.log(`⚠️ One position remains. Force-closing ${unmatchedPosition.address} with ${unmatchedContracts.toString()} contracts.`);
+
+        await this.adjustDeleveraging(unmatchedPosition.address, contractId, unmatchedContracts, side);
+        remainingSize = new BigNumber(0); // Force full neutralization
     }
 
-    console.log(`Final remaining size after simple deleveraging: ${remainingSize.toString()}`);
+    console.log(`✅ Final remaining size after simple deleveraging: ${remainingSize.toString()}`);
 
     if (!remainingSize.isZero()) {
-       throw  console.error(`⚠️ WARNING: Unable to fully deleverage. ${remainingSize.toString()} contracts remain.`);
+        console.log(`⚠️ WARNING: Unable to fully deleverage. ${remainingSize.toString()} contracts remain.`);
     }
 
     console.log("✅ Simple deleveraging complete.");
 }
+
 
 
 // Adjust deleveraging position
