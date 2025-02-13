@@ -398,6 +398,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
     let caseLabel = "";
 
     // Step 4: Handle different liquidation scenarios
+    let result = ''
     if (!splat.filled) {
         const remainder = splat.remainder;
         const lossBN = new BigNumber(splat.liquidationLoss);
@@ -405,16 +406,16 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.trueBookEmpty) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
-            await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 '+contractId+' '+remainder+' '+liq.side+' '+liq.price)
-            await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
         }
     } else {
         caseLabel = "CASE 1: Order fully filled at liquidation price or better.";
@@ -422,7 +423,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
     }
 
     // Step 5: Save liquidation results
-    await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice);
+    await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice,result);
 
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber() };
 }

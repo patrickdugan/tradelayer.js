@@ -160,8 +160,6 @@ class MarginMap {
         }
     }
 
-
-
     async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
         console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         console.log('with match '+JSON.stringify(match))
@@ -823,7 +821,7 @@ class MarginMap {
         return liquidationOrder;
     }
 
-   async saveLiquidationOrders(contractId, position, order,reason,blockHeight,liquidationLoss,contractsDeleveraged, realizedLiquidation) {
+   async saveLiquidationOrders(contractId, position, order,reason,blockHeight,liquidationLoss,contractsDeleveraged, realizedLiquidation, delverageResults) {
     try {
         // Access the liquidations database
         const liquidationsDB = await db.getDatabase('liquidations');
@@ -838,7 +836,8 @@ class MarginMap {
             blockHeight: blockHeight,
             liquidationLoss: liquidationLoss,
             contractsDeleveraged: contractsDeleveraged,
-            realizedLiquidation: realizedLiquidation
+            realizedLiquidation: realizedLiquidation,
+            deleverage: delverageResults
         };
 
         // Use updateAsync with upsert to insert or update the document
@@ -854,14 +853,23 @@ class MarginMap {
         throw error;
     }
 }
-async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
+
+async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatingAddress, isInverse) {
     console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
 
     let remainingSize = new BigNumber(unfilledContracts);
     if (remainingSize.isNaN() || remainingSize.isNegative()) {
-        console.error("🔥 Error: Invalid unfilledContracts value, cannot proceed.");
-        return;
+        throw console.error(`🔥 Error: Invalid unfilledContracts value, cannot proceed. ${unfilledContracts} ${remainingSize}`);
     }
+
+    // Tracking object for logging the deleveraging process
+    let deleveragingData = {
+        liquidatingAddress: liquidatingAddress,
+        contractId: contractId,
+        attemptedDeleverage: unfilledContracts,
+        totalDeleveraged: 0,
+        counterparties: []
+    };
 
     // Fetch all positions from marginMap
     const allPositions = await this.getAllPositions();
@@ -876,7 +884,7 @@ async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
 
     if (relevantPositions.length === 0) {
         console.log("No suitable counterparties found for deleveraging.");
-        return;
+        return deleveragingData;
     }
 
     // Sort by unrealized PNL in descending order (biggest winners first)
@@ -896,22 +904,98 @@ async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
         console.log(`Deleveraging ${currentPosition.address} by removing ${amountToRemove.toString()} contracts.`);
 
         await this.adjustDeleveraging(currentPosition.address, contractId, amountToRemove, side);
+
+        // 🔹 **Realizing PNL** after adjustment
+        await this.realizePnl(
+            currentPosition.address,
+            amountToRemove,
+            liqPrice, // The liquidation price used for PNL calc
+            currentPosition.avgPrice, // Average price of the position
+            isInverse, // Assuming inverse contracts
+            amountToRemove.multipliedBy(liqPrice).toNumber(), // Notional value of trade
+            currentPosition.contracts, // Current position size before reduction
+            !side, // isBuy should be opposite of side
+            contractId
+        );
+
         remainingSize = remainingSize.minus(amountToRemove);
+        deleveragingData.totalDeleveraged += amountToRemove.toNumber();
+        deleveragingData.counterparties.push({
+            address: currentPosition.address,
+            contractsDeleveraged: amountToRemove.toNumber()
+        });
 
         console.log(`Remaining size after adjustment: ${remainingSize.toString()}`);
 
         if (remainingSize.isZero()) break;
     }
 
-    // Final Neutralization: If only one position remains, fully close it
-    if (!remainingSize.isZero() && relevantPositions.length === 1) {
-        let unmatchedPosition = relevantPositions[0];
-        let unmatchedContracts = new BigNumber(Math.abs(unmatchedPosition.contracts));
+    // 🔹 **Final Double Tap: Ensure Zero Contracts on BOTH Counterparties**
+    if (!remainingSize.isZero()) {
+        let lastPosition = relevantPositions[relevantPositions.length - 1];
+        if (lastPosition) {
+            let lastContracts = new BigNumber(Math.abs(lastPosition.contracts));
 
-        console.log(`⚠️ One position remains. Force-closing ${unmatchedPosition.address} with ${unmatchedContracts.toString()} contracts.`);
+            console.log(`⚠️ Last remaining position found: ${lastPosition.address} with ${lastContracts.toString()} contracts.`);
 
-        await this.adjustDeleveraging(unmatchedPosition.address, contractId, unmatchedContracts, side);
-        remainingSize = new BigNumber(0); // Force full neutralization
+            // Fetch opposing side to force zeroing out
+            let opposingPositions = allPositions.filter(position =>
+                (side && position.contracts > 0) || (!side && position.contracts < 0)
+            );
+
+            if (opposingPositions.length > 0) {
+                let opposingPosition = opposingPositions[0]; // Pick the first available opposing position
+                let opposingContracts = new BigNumber(Math.abs(opposingPosition.contracts));
+
+                console.log(`⚠️ Opposing position found: ${opposingPosition.address} with ${opposingContracts.toString()} contracts.`);
+
+                let doubleTapSize = BigNumber.min(lastContracts, opposingContracts);
+
+                console.log(`🔄 Double-tapping final adjustment to ensure full neutralization.`);
+
+                await this.adjustDeleveraging(lastPosition.address, contractId, doubleTapSize, side);
+                await this.adjustDeleveraging(opposingPosition.address, contractId, doubleTapSize, !side);
+
+                // 🔹 **Realizing PNL for both sides**
+                await this.realizePnl(
+                    lastPosition.address,
+                    doubleTapSize,
+                    liqPrice,
+                    lastPosition.avgPrice,
+                    true,
+                    doubleTapSize.multipliedBy(liqPrice).toNumber(),
+                    lastPosition.contracts,
+                    !side,
+                    contractId
+                );
+
+                await this.realizePnl(
+                    opposingPosition.address,
+                    doubleTapSize,
+                    liqPrice,
+                    opposingPosition.avgPrice,
+                    true,
+                    doubleTapSize.multipliedBy(liqPrice).toNumber(),
+                    opposingPosition.contracts,
+                    side,
+                    contractId
+                );
+
+                remainingSize = new BigNumber(0); // Force full neutralization
+
+                deleveragingData.totalDeleveraged += doubleTapSize.toNumber();
+                deleveragingData.counterparties.push({
+                    address: lastPosition.address,
+                    contractsDeleveraged: doubleTapSize.toNumber()
+                });
+                deleveragingData.counterparties.push({
+                    address: opposingPosition.address,
+                    contractsDeleveraged: doubleTapSize.toNumber()
+                });
+            } else {
+                console.log("🚨 No opposing counterparty available for final neutralization.");
+            }
+        }
     }
 
     console.log(`✅ Final remaining size after simple deleveraging: ${remainingSize.toString()}`);
@@ -921,6 +1005,8 @@ async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
     }
 
     console.log("✅ Simple deleveraging complete.");
+
+    return deleveragingData;
 }
 
 
