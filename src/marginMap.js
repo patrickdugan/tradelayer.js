@@ -884,7 +884,7 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
   console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
 
   // Select counterparties based on side
-  let counterparties = side ? shorts : longs;
+  let counterparties = side ? longs : shorts;
 
   // Calculate contract differences for more even distribution
   for (let i = 0; i < counterparties.length; i++) {
@@ -892,7 +892,7 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
     let next = counterparties[i + 1] || { contracts: 0 };
     counterparties[i].difference = bigger.contracts - next.contracts;
   }
-
+  console.log(JSON.stringify(counterparties))
   // Iterate through counterparties for deleveraging
   for (let pos of counterparties) {
     let sizeBN = new BigNumber(pos.contracts);
@@ -905,14 +905,18 @@ async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatin
       await this.adjustDeleveraging(pos.address, contractId, matchSize, !side);
       await this.adjustDeleveraging(liquidatingAddress, contractId, matchSize, side);
 
+        const matchBN = new BigNumber(matchSize)
+        const notional = new BigNumber(liqPrice).multipliedBy(matchBN).decimalPlaces(2).toNumber()
+  
+
       await this.realizePnl(
         pos.address,
         matchSize,
         liqPrice,
         pos.avgPrice,
         isInverse,
-        matchSize.multipliedBy(liqPrice).toNumber(),
-        matchSize,
+        notional,
+        pos,
         !side,
         contractId
       );
