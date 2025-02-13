@@ -326,7 +326,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
                     await marginMap.updateMargin(position.address, contractId, -marginDent);
                     if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                         let orderbook = await Orderbooks.getOrderbookInstance(contractId);
-                        let liquidationResult = await handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                        let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
                         if (liquidationResult) {
                             isLiq.push(liquidationResult.liquidation);
                             systemicLoss += liquidationResult.systemicLoss;
@@ -346,7 +346,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
                         if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
                             await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                             if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                let liquidationResult = await handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
                                 if (liquidationResult) {
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
@@ -354,7 +354,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
                             }
                             continue;
                         } else {
-                            let liquidationResult = await handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total");
+                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total");
                             if (liquidationResult) {
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;
@@ -372,7 +372,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
 }
 
 
-    async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType) {
+    static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType) {
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
 

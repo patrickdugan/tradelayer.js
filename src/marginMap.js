@@ -854,18 +854,22 @@ class MarginMap {
         throw error;
     }
 }
-
-async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
-    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
+async simpleDeleverage(contractId, unfilledContracts,side, liqPrice) {
+    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice} with ${unfilledContracts}`);
 
     let remainingSize = new BigNumber(unfilledContracts);
+    console.log(`Initial remaining size: ${remainingSize.toString()}`);
+
     // Fetch all positions from marginMap
     const allPositions = await this.getAllPositions();
+    console.log(`Fetched ${allPositions.length} total positions.`);
 
     // Filter positions for the correct side (side=false -> sell longs, side=true -> buy shorts)
-    let relevantPositions = allPositions.filter(position =>
-        (side && position.contracts < 0) || (!side && position.contracts > 0)
-    );
+    let relevantPositions = allPositions.filter(position => {
+        const isRelevant = (side && position.contracts < 0) || (!side && position.contracts > 0);
+        console.log(`Position ${position.address}: contracts=${position.contracts}, isRelevant=${isRelevant}`);
+        return isRelevant;
+    });
 
     // Sort by unrealized PNL in descending order (biggest winners first)
     relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
@@ -877,21 +881,34 @@ async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
 
     console.log(`Identified ${relevantPositions.length} candidates for deleveraging.`);
 
-    while (!remainingSize.isZero() && relevantPositions.length > 1) {
-        let topPosition = relevantPositions[0];
-        let secondPosition = relevantPositions[1];
+    for (let i = 0; i < relevantPositions.length - 1 && !remainingSize.isZero(); i++) {
+        let topPosition = relevantPositions[i];
+        let secondPosition = relevantPositions[i + 1];
 
         let topContracts = new BigNumber(Math.abs(topPosition.contracts));
         let secondContracts = new BigNumber(Math.abs(secondPosition.contracts));
 
+        console.log(`Top Position: ${topPosition.address}, Contracts: ${topContracts.toString()}`);
+        console.log(`Second Position: ${secondPosition.address}, Contracts: ${secondContracts.toString()}`);
+
         // Find the difference to even out #1 and #2
         let difference = topContracts.minus(secondContracts);
-        let amountToRemove = BigNumber.min(difference, remainingSize);
+        console.log(`Difference between top and second: ${difference.toString()}`);
 
-        console.log(`Balancing ${topPosition.address} and ${secondPosition.address} by removing ${amountToRemove} contracts.`);
+        let amountToRemove = BigNumber.min(difference, remainingSize);
+        console.log(`Amount to remove: ${amountToRemove.toString()}`);
+
+        if (amountToRemove.isNaN()) {
+            throw console.error(`NaN detected in amountToRemove. Debug info: topContracts=${topContracts.toString()}, secondContracts=${secondContracts.toString()}, remainingSize=${remainingSize.toString()}`);
+            return;
+        }
+
+        console.log(`Balancing ${topPosition.address} and ${secondPosition.address} by removing ${amountToRemove.toString()} contracts.`);
 
         await this.adjustDeleveraging(topPosition.address, contractId, amountToRemove, side);
         remainingSize = remainingSize.minus(amountToRemove);
+
+        console.log(`Remaining size after adjustment: ${remainingSize.toString()}`);
 
         if (remainingSize.isZero()) break;
 
@@ -902,11 +919,12 @@ async simpleDeleverage(contractId, side, unfilledContracts, liqPrice) {
     console.log(`Remaining size after simple deleveraging: ${remainingSize.toString()}`);
 
     if (!remainingSize.isZero()) {
-        console.log(`WARNING: Unable to fully deleverage. ${remainingSize} contracts remain.`)
+        console.log(`WARNING: Unable to fully deleverage. ${remainingSize} contracts remain.`);
     }
 
     console.log(`Simple deleveraging complete.`);
 }
+
 
 // Adjust deleveraging position
 async adjustDeleveraging(address, contractId, size, side) {
