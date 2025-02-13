@@ -855,161 +855,87 @@ class MarginMap {
 }
 
 async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatingAddress, isInverse) {
-    console.log(`Starting simple deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
+  console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${side}, unfilled=${unfilledContracts}`);
 
-    let remainingSize = new BigNumber(unfilledContracts);
-    if (remainingSize.isNaN() || remainingSize.isNegative()) {
-        throw console.error(`🔥 Error: Invalid unfilledContracts value, cannot proceed. ${unfilledContracts} ${remainingSize}`);
-    }
+  let remainingSize = new BigNumber(unfilledContracts);
+  if (remainingSize.isNaN() || remainingSize.isNegative()) {
+    throw new Error(`🔥 Invalid unfilledContracts. Value: ${unfilledContracts}`);
+  }
 
-    // Tracking object for logging the deleveraging process
-    let deleveragingData = {
-        liquidatingAddress: liquidatingAddress,
-        contractId: contractId,
-        attemptedDeleverage: unfilledContracts,
-        totalDeleveraged: 0,
-        counterparties: []
-    };
+  // Blob for final report
+  let deleveragingData = {
+    liquidatingAddress: liquidatingAddress || null,
+    contractId: contractId,
+    attemptedDeleverage: remainingSize.toNumber(),
+    totalDeleveraged: 0,
+    counterparties: []
+  };
 
-    // Fetch all positions from marginMap
-    const allPositions = await this.getAllPositions();
-    console.log(`Fetched ${allPositions.length} total positions.`);
+  const allPositions = await this.getAllPositions();
+  console.log(`  Found ${allPositions.length} total positions in marginMap.`);
 
-    // Filter positions for the correct side (side=false -> sell longs, side=true -> buy shorts)
-    let relevantPositions = allPositions.filter(position =>
-        (side && position.contracts < 0) || (!side && position.contracts > 0)
-    );
+  // Filter out all longs vs. shorts
+  let longs = allPositions.filter(p => p.contracts > 0);
+  let shorts = allPositions.filter(p => p.contracts < 0);
 
-    console.log(`Identified ${relevantPositions.length} candidates for deleveraging.`);
 
-    if (relevantPositions.length === 0) {
-        console.log("No suitable counterparties found for deleveraging.");
-        return deleveragingData;
-    }
+  // Sort each side by largest PNL first
+  longs.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+  shorts.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+  console.log('showing longs and shorts '+JSON.stringify(longs)+' '+JSON.stringify(shorts))
+  // We'll do a for-loop up to the length of whichever side is smaller, or until we zero out remainingSize
+  let counterparties = []
+  if(side==false){counterparties=longs}else if(side==true){counterparties=shorts}
+  for(let i =0; i<counterparties.length; i++){
+     var bigger = counterparties[i]
+     var next = counterparties[i+1]
+     if(!next){next= {contracts:0}}
+     var difference = bigger.contracts-next.contracts
+     counterparties[i].difference = difference 
+  }
 
-    // Sort by unrealized PNL in descending order (biggest winners first)
-    relevantPositions.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+  for(let pos of counterparties){
+    let sizeBN = new BigNumber(pos.contracts);
+    // The max we can remove from these two
+    let matchSize = Math.min(pos.difference, Math.abs(remainingSize.toNumber()));
 
-    for (let i = 0; i < relevantPositions.length; i++) {
-        let currentPosition = relevantPositions[i];
-        let positionContracts = new BigNumber(Math.abs(currentPosition.contracts));
+    console.log(`• Matching: ${pos.address} ${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
+    // Actually do the removal
+    await this.adjustDeleveraging(pos.address, contractId, matchSize, !side); // reduce from the long
+    await this.adjustDeleveraging(liquidatingAddress, contractId, matchSize, side); // reduce from the short
 
-        if (positionContracts.isNaN() || positionContracts.isZero()) {
-            console.error(`🔥 Error: Invalid or zero contracts for ${currentPosition.address}`);
-            continue;
-        }
-
-        let amountToRemove = BigNumber.min(positionContracts, remainingSize);
-
-        console.log(`Deleveraging ${currentPosition.address} by removing ${amountToRemove.toString()} contracts.`);
-
-        await this.adjustDeleveraging(currentPosition.address, contractId, amountToRemove, side);
-
-        // 🔹 **Realizing PNL** after adjustment
-        await this.realizePnl(
-            currentPosition.address,
-            amountToRemove,
-            liqPrice, // The liquidation price used for PNL calc
-            currentPosition.avgPrice, // Average price of the position
-            isInverse, // Assuming inverse contracts
-            amountToRemove.multipliedBy(liqPrice).toNumber(), // Notional value of trade
-            currentPosition.contracts, // Current position size before reduction
-            !side, // isBuy should be opposite of side
-            contractId
-        );
-
-        remainingSize = remainingSize.minus(amountToRemove);
-        deleveragingData.totalDeleveraged += amountToRemove.toNumber();
-        deleveragingData.counterparties.push({
-            address: currentPosition.address,
-            contractsDeleveraged: amountToRemove.toNumber()
-        });
-
-        console.log(`Remaining size after adjustment: ${remainingSize.toString()}`);
-
-        if (remainingSize.isZero()) break;
-    }
-
-    // 🔹 **Final Double Tap: Ensure Zero Contracts on BOTH Counterparties**
-    if (!remainingSize.isZero()) {
-        let lastPosition = relevantPositions[relevantPositions.length - 1];
-        if (lastPosition) {
-            let lastContracts = new BigNumber(Math.abs(lastPosition.contracts));
-
-            console.log(`⚠️ Last remaining position found: ${lastPosition.address} with ${lastContracts.toString()} contracts.`);
-
-            // Fetch opposing side to force zeroing out
-            let opposingPositions = allPositions.filter(position =>
-                (side && position.contracts > 0) || (!side && position.contracts < 0)
-            );
-
-            if (opposingPositions.length > 0) {
-                let opposingPosition = opposingPositions[0]; // Pick the first available opposing position
-                let opposingContracts = new BigNumber(Math.abs(opposingPosition.contracts));
-
-                console.log(`⚠️ Opposing position found: ${opposingPosition.address} with ${opposingContracts.toString()} contracts.`);
-
-                let doubleTapSize = BigNumber.min(lastContracts, opposingContracts);
-
-                console.log(`🔄 Double-tapping final adjustment to ensure full neutralization.`);
-
-                await this.adjustDeleveraging(lastPosition.address, contractId, doubleTapSize, side);
-                await this.adjustDeleveraging(opposingPosition.address, contractId, doubleTapSize, !side);
-
-                // 🔹 **Realizing PNL for both sides**
-                await this.realizePnl(
-                    lastPosition.address,
-                    doubleTapSize,
+    const matchBN = new BigNumber(matchSize)
+    const notional = new BigNumber(liqPrice).multipliedBy(matchBN).decimalPlaces(2).toNumber()
+      await this.realizePnl(
+                    pos.address,
+                    matchSize,
                     liqPrice,
-                    lastPosition.avgPrice,
-                    true,
-                    doubleTapSize.multipliedBy(liqPrice).toNumber(),
-                    lastPosition.contracts,
+                    pos.avgPrice,
+                    isInverse,
+                    notional  
+                    pos,
                     !side,
                     contractId
                 );
+      
+    deleveragingData.totalDeleveraged += matchSize;
+    deleveragingData.counterparties.push({
+      deleveragedAddress: pos.address,
+      liqAddress: ,
+      matchedContracts: matchSize
+    });
 
-                await this.realizePnl(
-                    opposingPosition.address,
-                    doubleTapSize,
-                    liqPrice,
-                    opposingPosition.avgPrice,
-                    true,
-                    doubleTapSize.multipliedBy(liqPrice).toNumber(),
-                    opposingPosition.contracts,
-                    side,
-                    contractId
-                );
+    remainingSize = remainingSize.minus(matchSize);
+ }
 
-                remainingSize = new BigNumber(0); // Force full neutralization
+  if (remainingSize.gt(0)) {
+    console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
+  }
 
-                deleveragingData.totalDeleveraged += doubleTapSize.toNumber();
-                deleveragingData.counterparties.push({
-                    address: lastPosition.address,
-                    contractsDeleveraged: doubleTapSize.toNumber()
-                });
-                deleveragingData.counterparties.push({
-                    address: opposingPosition.address,
-                    contractsDeleveraged: doubleTapSize.toNumber()
-                });
-            } else {
-                console.log("🚨 No opposing counterparty available for final neutralization.");
-            }
-        }
-    }
+  console.log(`✅ Deleverage done. totalDeleveraged=${deleveragingData.totalDeleveraged}`);
 
-    console.log(`✅ Final remaining size after simple deleveraging: ${remainingSize.toString()}`);
-
-    if (!remainingSize.isZero()) {
-        console.log(`⚠️ WARNING: Unable to fully deleverage. ${remainingSize.toString()} contracts remain.`);
-    }
-
-    console.log("✅ Simple deleveraging complete.");
-
-    return deleveragingData;
+  return deleveragingData;
 }
-
-
 
 // Adjust deleveraging position
 async adjustDeleveraging(address, contractId, size, side) {
@@ -1029,7 +955,6 @@ async adjustDeleveraging(address, contractId, size, side) {
     this.margins.set(address, position);
     await this.saveMarginMap(true);
 }
-
 
 async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
     console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
