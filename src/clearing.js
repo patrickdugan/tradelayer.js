@@ -298,6 +298,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
     let systemicLoss = 0;
 
     for (let position of positions) {
+        if(position.contracts==0){continue}
         if (!blob.lastPrice) {
             console.log('last price was null, using avg price:', position.avgPrice);
             blob.lastPrice = position.avgPrice;
