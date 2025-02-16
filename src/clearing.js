@@ -335,11 +335,11 @@ static async feeCacheBuy(block) {
                     let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
 
                     if (totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
-                        await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent, 0, 'clearingLoss', blockHeight);
+                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
                         if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                             let orderbook = await Orderbooks.getOrderbookInstance(contractId);
-                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
                             if (liquidationResult) {
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;
@@ -348,18 +348,18 @@ static async feeCacheBuy(block) {
                     } else {
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
                         let orderbook = await Orderbooks.getOrderbookInstance(contractId);
-                        let cancelledOrders = await orderbook.cancelAllContractOrders(position.address, contractId, blockHeight);
+                        let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                         let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent);
 
                         if (postCancelBalance.hasSufficient) {
-                            await TallyMap.updateBalance(position.address, collateralId, marginDent, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
+                            await TallyMap.updateBalance(position.address, collateralId, -marginDent, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
                             continue;
                         } else {
                             let postCancelTally = await TallyMap.getTally(position.address, collateralId);
                             if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
                                     if (liquidationResult) {
                                         isLiq.push(liquidationResult.liquidation);
                                         systemicLoss += liquidationResult.systemicLoss;
@@ -367,7 +367,7 @@ static async feeCacheBuy(block) {
                                 }
                                 continue;
                             } else {
-                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total");
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null);
                                 if (liquidationResult) {
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
@@ -385,7 +385,7 @@ static async feeCacheBuy(block) {
     }
 
 
-static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType) {
+static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType,marginDent){
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
 
@@ -404,8 +404,11 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
     // Step 3: Adjust margin & balances
     position = await marginMap.updateContractBalances(position.address, liq.size, liq.price, !liq.sell, position, inverse, true, false, contractId);
-    await tallyMap.updateBalance(position.address, collateralId, 0, 0, -position.margin, 0, "clearingLoss", blockHeight);
-    position = await marginMap.updateMargin(position.address, contractId, -position.margin);
+    let marginReduce = position.margin
+    if(marginDent!==undefined||marginDent!==null){marginReduce=marginDent}
+      
+    await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);
+    position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
 
     let systemicLoss = new BigNumber(0);
     let caseLabel = "";
@@ -420,17 +423,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
-        } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
+        }else if (splat.filledBelowLiqPrice && splat.remainder === 0){
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
-        } else if (splat.filledBelowLiqPrice && splat.trueBookEmpty) {
+        }else if (splat.filledBelowLiqPrice && splat.trueBookEmpty) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
-        } else if (splat.trueBookEmpty) {
+        }else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 '+contractId+' '+remainder+' '+liq.sell+' '+liq.price)
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         }
-    } else {
+    } else{
         caseLabel = "CASE 1: Order fully filled at liquidation price or better.";
         orderbook.addContractOrder(contractId, liq.price, liq.size, liq.sell, false, blockHeight, "liq", position.address, true);
     }

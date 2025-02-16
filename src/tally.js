@@ -570,6 +570,10 @@ class TallyMap {
         const db = await dbInstance.getDatabase('tallyMapDelta');
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
+        const tally = TallyMap.getTally(address, propertyId)
+        if(total==null||total==undefined){
+            total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
+        }
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type };
         
         console.log('saving delta ' + JSON.stringify(delta));
