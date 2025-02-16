@@ -19,15 +19,15 @@ const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
 const dumpPrivKeyAsync = util.promisify(client.cmd.bind(client, 'dumpprivkey'));
 const sendrawtransactionAsync = util.promisify(client.cmd.bind(client, 'sendrawtransaction'));
 
-const BTC_PRICE_API_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd';
+const LTC_PRICE_API_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd';
 
 //'https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd';
 
 // Fetch the BTC price
 async function fetchBTCPrice() {
     try {
-        const response = await axios.get(BTC_PRICE_API_URL);
-        const price = response.data.bitcoin.usd;
+        const response = await axios.get(LTC_PRICE_API_URL);
+        const price = response.data.litecoin.usd;
         console.log('Fetched BTC Price:', price);
         return price;
     } catch (error) {

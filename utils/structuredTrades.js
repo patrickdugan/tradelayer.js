@@ -86,17 +86,17 @@ async function structuredTestTrades() {
   const aliceBuy = {
     contractId: contractId,
     amount: 3,
-    price: 103.5,
+    price: 155.5,
     sell: true // buy
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
-  //await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
+  await createAndSendContractTrade(bobAddress,/*aliceAddress*/, aliceBuy, 100);
 
   // ============ 2) Bob places a SELL at price 5000, amount=5 ============
   const bobSell = {
     contractId: contractId,
     amount: 4,
-    price: 108,
+    price: 131,
     sell: false 
   };
   await createAndSendContractTrade(bobAddress, bobSell, 100);

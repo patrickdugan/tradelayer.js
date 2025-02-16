@@ -750,10 +750,6 @@ async estimateLiquidation(liquidationOrder) {
     };
 }
 
-
-
-
-
 async matchContractOrders(orderBook) {
     if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
         return { orderBook, matches: [] }; // Return empty matches if no orders
@@ -884,8 +880,7 @@ async matchContractOrders(orderBook) {
     return { orderBook, matches };
 }
 
-
-    async getAddressOrders(address, side) {
+    async getAddressOrders(address, sell) {
         // Load the order book for the current instance's contractId
         const orderBookKey = `${this.orderBookKey}`;
         const orderbookData = await this.loadOrderBook(orderBookKey, false);
@@ -896,13 +891,13 @@ async matchContractOrders(orderBook) {
         }
 
         // Determine whether to check buy or sell orders
-        let orders = side ? orderbookData.buy : orderbookData.sell;
+        let orders = sell ? orderbookData.sell : orderbookData.buy;
 
         // Filter orders by matching the given address
         return orders.filter(order => order.sender === address);
     }
 
-     async cancelContractOrdersForSize(address, contractId, blockHeight, side, size) {
+     async cancelContractOrdersForSize(address, contractId, blockHeight, sell, size) {
         // Load the order book for the current instance's contractId
         const orderBookKey = `${this.orderBookKey}`;
         const orderbookData = await this.loadOrderBook(orderBookKey, false);
@@ -913,12 +908,12 @@ async matchContractOrders(orderBook) {
         }
 
         // Determine the order side (buy or sell)
-        let orders = side ? orderbookData.buy : orderbookData.sell;
+        let orders = sell ? orderbookData.sell : orderbookData.buy;
 
         // Sort orders based on distance from market:
         // - Buy orders: Sort ascending (lowest price first)
         // - Sell orders: Sort descending (highest price first)
-        orders = side
+        orders = sell
             ? orders.sort((a, b) => a.price - b.price)  // Buy side (cancel lowest first)
             : orders.sort((a, b) => b.price - a.price); // Sell side (cancel highest first)
 
@@ -997,14 +992,12 @@ async matchContractOrders(orderBook) {
                 }
 
             }
-            
             for (const address of issuerAddresses) {
                 const isWhitelisted = await ClearList.isAddressInClearlist(1, address);
                 if (isWhitelisted) {
                     accepted=true
                 }
             }
-            
             return accepted;
         }
 
@@ -1105,8 +1098,8 @@ async matchContractOrders(orderBook) {
                     let buyerFee = this.calculateFee(match.buyOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
                     let sellerFee = this.calculateFee(match.sellOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
 
-                    await TallyMap.updateFeeCache(collateralPropertyId,buyerFee)
-                    await TallyMap.updateFeeCache(collateralPropertyId,sellerFee)
+                    await TallyMap.updateFeeCache(match.buyOrder.contractId,collateralPropertyId,buyerFee)
+                    await TallyMap.updateFeeCache(match.buyOrder.contractId, collateralPropertyId,sellerFee)
 
                     //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                    

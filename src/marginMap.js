@@ -305,8 +305,7 @@ class MarginMap {
                                         avgPriceBN.times(positionNotional).minus(contractsBN.times(avgPriceBN).times(2))
                                             .minus(bankruptcyPriceBN.times(contractsBN).times(1.000025).times(avgPriceBN))
                                     ).dividedBy(contractsBN.plus(positionNotional).minus(contractsBN.times(2))).negated();
-
-                                                    }
+                }
           }
         }
         let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber())
@@ -674,7 +673,9 @@ class MarginMap {
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode) {
             const newUuid = uuid.v4();
             const dbInstance = await db.getDatabase('marginMapDelta');
-            const deltaKey = `${address}-${contractId}-${newUuid}`;
+            const deltaKey = `${address}-${contractId}-${newUuid}`;if (typeof contracts === 'object' && contracts.toNumber) {
+                contracts = contracts.toNumber();
+            }
             const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode };
 
             console.log('saving marginMap delta ' + JSON.stringify(delta));
@@ -779,7 +780,6 @@ class MarginMap {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-
     async clear(position, address, pnlChange, avgPrice,contractId) {
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
@@ -793,11 +793,11 @@ class MarginMap {
 
     generateLiquidationOrder(position, contractId,total) {
                 // Liquidate 50% of the position if below maintenance margin
-                let side 
+                let sell 
                 if(position.contracts>0){
-                    side = false
+                    sell = true
                 }else if(position.contracts<0){
-                    side = true
+                    sell = false
                 }else if(position.contracts==0){
                     return "err:0 contracts"
                 }
@@ -817,7 +817,7 @@ class MarginMap {
                     contractId: contractId,
                     size: Math.abs(liquidationSize),
                     price: position.liqPrice,
-                    side: side,
+                    sell: sell,
                     bankruptcyPrice: position.bankruptcyPrice
 
                 }
@@ -861,8 +861,8 @@ class MarginMap {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, side, liqPrice, liquidatingAddress, isInverse) {
-      console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${side}, unfilled=${unfilledContracts}`);
+    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse) {
+      console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
 
       let remainingSize = new BigNumber(unfilledContracts);
       
@@ -893,7 +893,7 @@ class MarginMap {
       console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
 
       // Select counterparties based on side
-      let counterparties = side ? longs: shorts;
+      let counterparties = sell ? shorts:longs;
 
       // Calculate contract differences for more even distribution
       for (let i = 0; i < counterparties.length; i++) {
@@ -920,7 +920,7 @@ console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No
 
         // Ensure matchSize is positive before proceeding
         if (matchSize > 0) {
-          await this.adjustDeleveraging(pos.address, contractId, matchSize, !side);
+          await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell);
             const matchBN = new BigNumber(matchSize)
             const notional = new BigNumber(liqPrice).multipliedBy(matchBN).decimalPlaces(2).toNumber()
 
@@ -932,7 +932,7 @@ console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No
             isInverse,
             notional,
             pos,
-            !side,
+            !sell,
             contractId
           );
 
@@ -958,13 +958,13 @@ console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No
     }
 
 // Adjust deleveraging position
-async adjustDeleveraging(address, contractId, size, side) {
-    console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${side}`);
+async adjustDeleveraging(address, contractId, size, sell) {
+    console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
 
     let position = await this.getPositionForAddress(address, contractId);
 
     if (!position) return;
-    const contractChange = side ? size : -size
+    const contractChange = sell ? -size : size
     console.log('⚠️ '+contractChange+' '+position.contracts) 
     const contractChangeBN = new BigNumber(contractChange)
     position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();

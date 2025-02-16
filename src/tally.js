@@ -418,7 +418,7 @@ class TallyMap {
         }
     }
 
-   static async saveFeeCacheToDB(propertyId, feeAmount) {
+   static async saveFeeCacheToDB(propertyId, feeAmount, contractid) {
         if (propertyId === undefined || feeAmount === undefined) {
             console.error('Property ID or fee amount is undefined.');
             return;
@@ -435,7 +435,7 @@ class TallyMap {
 
             await db.updateAsync(
                 { _id: cacheId }, // Query to find the document
-                { $set: { value: serializedFeeAmount } }, // Update the value field
+                { $set: { value: serializedFeeAmount, contract: contractid } }, // Update the value field
                 { upsert: true } // Insert a new document if it doesn't exist
             );
             console.log('FeeCache for property ' + propertyId + ' saved successfully.');
@@ -497,7 +497,7 @@ class TallyMap {
     }
 
     // Method to update fee cache for a property
-    static async updateFeeCache(propertyId, feeAmount) {
+    static async updateFeeCache(contractid, propertyId, feeAmount) {
         // Load current fee from the fee cache
         let currentFee = await this.loadFeeCacheForProperty(propertyId);
 
@@ -507,16 +507,21 @@ class TallyMap {
         if (currentFee === undefined||currentFee==0||isNaN(currentFee)) {
             currentFee = 0; // Set currentFee to 0 if it's undefined
         }
+
+        if(contractid==undefined){
+            contractid = null1
+        }
+
         let currentFeeBN = new BigNumber(currentFee)
         let feeAmountBN = new BigNumber(feeAmount)
         // Update the fee cache by adding the new fee amount
         let updatedFee = currentFeeBN.plus(feeAmountBN).decimalPlaces(8).toNumber();
-        this.feeCache.set(propertyId, updatedFee);
+        this.feeCache.set(propertyId, updatedFee, contractid);
 
         console.log('Updated fee cache for property ' + propertyId + ': ' + updatedFee);
 
         // Optionally, persist fee cache changes to the database if necessary
-        await this.saveFeeCacheToDB(propertyId, updatedFee);
+        await this.saveFeeCacheToDB(propertyId, updatedFee, contractid);
     }
 
     static async drawOnFeeCache(propertyId) {

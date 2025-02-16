@@ -40,79 +40,92 @@ class Clearing {
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...
+static async feeCacheBuy(block) {
 
-    static async feeCacheBuy(block) {
-        //console.log('Processing fee cache buy');
+    // Load fees from database (includes contract IDs now)
+    let fees = await TallyMap.loadFeeCacheFromDB();
 
-        // Fetch fees from your data source (e.g., database or in-memory store)
-        let fees = await TallyMap.loadFeeCacheFromDB();
-        //console.log('fee cache size '+fees.size)
-            // If the fees array is empty, return early
-            if (fees.size === 0) {
+    if (!fees || fees.size === 0) {
+        return;
+    }
 
-                //console.log('Fee cache is empty');
-                return;
-            }else{ 
-                 /*   console.log('Checking fee cache:');
-                // Iterate over the map entries
-                for (let [id, feeAmount] of fees.entries()) {
-                    console.log('ID:' +JSON.stringify(id)+' Fee Amount:'+feeAmount);
-                }*/
-            }
-       // Process each fee category
-        for (let fee of fees) {
-            //console.log('fee'+JSON.stringify(fee))
-             let propertyData = null;
-             let threshold = 1;
-            if(fee[0]==null){continue}else{
-                propertyData = await PropertyManager.getPropertyData(fee[0].id);
-                //console.log('propertyData' + Boolean(propertyData !== null)+JSON.stringify(propertyData))
-                
-            }
-            
-            if(propertyData !== null) {
-                if (propertyData.totalInCirculation > 10000000000) {
-                    threshold = new BigNumber(1).times(new BigNumber(10000000000).dividedBy(propertyData.totalInCirculation)).toNumber();
-                }
+    for (let [property, feeData] of fees.entries()) {
+        if (!property || !feeData || !feeData.contract || feeData.value <= 0) continue;
 
-                if (fee[1] >= threshold) {
-                    console.log('above fee threshold '+fee[1]+' '+fee[0].id)
-                    let orderBookKey = '1-' + fee[0].id;
-                    let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
-                    const order = {
-                        offeredPropertyId: fee[0].id,
-                        desiredPropertyId: 1,
-                        amountOffered: fee[1],
-                        amountExpected: 0.00000001,
-                        blockTime: block,
-                        sender: 'feeCache'
-                    };
-            
-                    const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
-            
-                    order.price = calculatedPrice;
+        let contractId = feeData.contract;
+        let feeAmount = new BigNumber(feeData.value);
+        if (feeAmount.isZero()) continue;
 
-                    let reply = await orderbook.insertOrder(order, orderBookKey, false,false);
-                    console.log(reply)
-                    await TallyMap.updateFeeCache(fee[0].id, -fee.value);
-                    const matchResult = await orderbook.matchTokenOrders(orderBookKey);
-                    if (matchResult.matches && matchResult.matches.length > 0) {
-                        console.log('Fee Match Result:', matchResult);
-                        await orderbook.processTokenMatches(matchResult.matches, blockHeight, null, false);
-                    } else {
-                        console.log('No Matches for fee' +JSON.stringify(order));
-                    }
-                    await orderbook.saveOrderBook(orderBookKey);
-                }
-             }else{
-                  // Handle the case where propertyData is null
-                console.log(`Property data for fee id ${fee[0].id} is null.`);
-             }
+        console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
+
+        let isNativeAsset = property.toString().startsWith("s") || property === "1";
+        
+        // Lookup contract details to check if it's oracle-based
+        let isNative = await ContractRegistry.isNativeContract(contractId);
+
+        let buyAmount = new BigNumber(0);
+        let insuranceAmount = new BigNumber(0);
+        let globalInsuranceAmount = new BigNumber(0);
+
+        if (isNative==false) {
+            // Oracle-based contracts: 50% insurance fund, 50% to buy property 1 for fund 1
+            insuranceAmount = feeAmount.dividedBy(2);
+            globalInsuranceAmount = feeAmount.dividedBy(2);
+        } else {
+            // Non-native, non-oracle: 100% goes to buy property 1 (insurance backing)
+            buyAmount = feeAmount;
         }
 
-        // Save any changes back to your data source
-        //await TallyMap.saveFeeCacheToDB();
+        console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
+
+        // If there's an amount allocated for buying property 1
+        if (buyAmount.gt(0) || globalInsuranceAmount.gt(0)) {
+            let orderBookKey = `1-${property}`;
+            let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+
+            const totalBuy = buyAmount.plus(globalInsuranceAmount);
+
+            const order = {
+                offeredPropertyId: property,
+                desiredPropertyId: 1,
+                amountOffered: totalBuy.toNumber(),
+                amountExpected: 0.00000001,
+                blockTime: block,
+                sender: "feeCache"
+            };
+
+            const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
+            order.price = calculatedPrice;
+
+            let reply = await orderbook.insertOrder(order, orderBookKey, false, false);
+            console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
+
+            await TallyMap.updateFeeCache(property, -totalBuy.toNumber());
+            const matchResult = await orderbook.matchTokenOrders(orderBookKey);
+            if (matchResult.matches && matchResult.matches.length > 0) {
+                console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
+                await orderbook.processTokenMatches(matchResult.matches, block, null, false);
+            } else {
+                console.log(`⚠️ No matching orders found for ${property}.`);
+            }
+            await orderbook.saveOrderBook(orderBookKey);
+        }
+
+        // If there's an amount allocated for the contract's insurance fund, send it
+            console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
+            await InsuranceFund.deposit(contractId, insuranceAmount.toNumber());
+            await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber());
+
+        // If there's an amount allocated for the global insurance fund (for oracle contracts), send it
+        if (globalInsuranceAmount.gt(0)) {
+            console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
+            await InsuranceFund.deposit(1, globalInsuranceAmount.toNumber()); // Global insurance fund for oracle-based contracts
+            await TallyMap.updateFeeCache(property, -globalInsuranceAmount.toNumber());
+        }
     }
+}
+
+
 
    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
@@ -130,7 +143,6 @@ class Clearing {
         // Save the updated channel information
         await this.saveChannels(channels);
     }
-
 
     static async fetchLiquidationVolume(contractId, blockHeight) {
         // Assuming you have a database method to fetch liquidation data
@@ -287,93 +299,93 @@ class Clearing {
         return
     }
     
-static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notionalValue) {
-    let liquidationData = [];
-    let marginMap = await MarginMap.getInstance(contractId);
-    let positions = await marginMap.getAllPositions();
-    let blob = await Clearing.getPriceChange(blockHeight, contractId);
+    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notionalValue) {
+        let liquidationData = [];
+        let marginMap = await MarginMap.getInstance(contractId);
+        let positions = await marginMap.getAllPositions();
+        let blob = await Clearing.getPriceChange(blockHeight, contractId);
 
-    console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
-    let isLiq = [];
-    let systemicLoss = 0;
+        console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
+        let isLiq = [];
+        let systemicLoss = 0;
 
-    for (let position of positions) {
-        if(position.contracts==0){continue}
-        if (!blob.lastPrice) {
-            console.log('last price was null, using avg price:', position.avgPrice);
-            blob.lastPrice = position.avgPrice;
-        }
+        for (let position of positions) {
+            if(position.contracts==0){continue}
+            if (!blob.lastPrice) {
+                console.log('last price was null, using avg price:', position.avgPrice);
+                blob.lastPrice = position.avgPrice;
+            }
 
-        let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notionalValue);
-        console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
+            let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notionalValue);
+            console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
-        let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId);
+            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId);
 
-        if (pnlChange > 0) {
-            await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
-        } else {
-            let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
-            console.log(`Checking balance for ${position.address}:`, balance);
-
-            if (balance.hasSufficient) {
+            if (pnlChange > 0) {
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             } else {
-                let tally = await TallyMap.getTally(position.address, collateralId);
-                let totalCollateral = tally.available + tally.margin;
-                let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
+                let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                console.log(`Checking balance for ${position.address}:`, balance);
 
-                if (totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
-                    await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent, 0, 'clearingLoss', blockHeight);
-                    await marginMap.updateMargin(position.address, contractId, -marginDent);
-                    if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                        let orderbook = await Orderbooks.getOrderbookInstance(contractId);
-                        let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
-                        if (liquidationResult) {
-                            isLiq.push(liquidationResult.liquidation);
-                            systemicLoss += liquidationResult.systemicLoss;
-                        }
-                    }
+                if (balance.hasSufficient) {
+                    await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 } else {
-                    console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
-                    let orderbook = await Orderbooks.getOrderbookInstance(contractId);
-                    let cancelledOrders = await orderbook.cancelAllContractOrders(position.address, contractId, blockHeight);
-                    let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent);
+                    let tally = await TallyMap.getTally(position.address, collateralId);
+                    let totalCollateral = tally.available + tally.margin;
+                    let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
 
-                    if (postCancelBalance.hasSufficient) {
-                        await TallyMap.updateBalance(position.address, collateralId, marginDent, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
-                        continue;
+                    if (totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
+                        await TallyMap.updateBalance(position.address, collateralId, 0, 0, -marginDent, 0, 'clearingLoss', blockHeight);
+                        await marginMap.updateMargin(position.address, contractId, -marginDent);
+                        if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
+                            let orderbook = await Orderbooks.getOrderbookInstance(contractId);
+                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                            if (liquidationResult) {
+                                isLiq.push(liquidationResult.liquidation);
+                                systemicLoss += liquidationResult.systemicLoss;
+                            }
+                        }
                     } else {
-                        let postCancelTally = await TallyMap.getTally(position.address, collateralId);
-                        if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
-                            await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
-                            if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                        console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
+                        let orderbook = await Orderbooks.getOrderbookInstance(contractId);
+                        let cancelledOrders = await orderbook.cancelAllContractOrders(position.address, contractId, blockHeight);
+                        let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent);
+
+                        if (postCancelBalance.hasSufficient) {
+                            await TallyMap.updateBalance(position.address, collateralId, marginDent, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
+                            continue;
+                        } else {
+                            let postCancelTally = await TallyMap.getTally(position.address, collateralId);
+                            if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
+                                await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
+                                if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
+                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial");
+                                    if (liquidationResult) {
+                                        isLiq.push(liquidationResult.liquidation);
+                                        systemicLoss += liquidationResult.systemicLoss;
+                                    }
+                                }
+                                continue;
+                            } else {
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total");
                                 if (liquidationResult) {
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
                                 }
-                            }
-                            continue;
-                        } else {
-                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total");
-                            if (liquidationResult) {
-                                isLiq.push(liquidationResult.liquidation);
-                                systemicLoss += liquidationResult.systemicLoss;
                             }
                         }
                     }
                 }
             }
         }
+
+        positions.lastMark = blob.lastPrice;
+        await marginMap.saveMarginMap(false);
+        return { positions, isLiq, systemicLoss };
     }
 
-    positions.lastMark = blob.lastPrice;
-    await marginMap.saveMarginMap(false);
-    return { positions, isLiq, systemicLoss };
-}
 
-
-    static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType) {
+static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType) {
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
 
@@ -391,7 +403,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
     console.log(`Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
 
     // Step 3: Adjust margin & balances
-    position = await marginMap.updateContractBalances(position.address, liq.size, liq.price, liq.side, position, inverse, true, false, contractId);
+    position = await marginMap.updateContractBalances(position.address, liq.size, liq.price, !liq.sell, position, inverse, true, false, contractId);
     await tallyMap.updateBalance(position.address, collateralId, 0, 0, -position.margin, 0, "clearingLoss", blockHeight);
     position = await marginMap.updateMargin(position.address, contractId, -position.margin);
 
@@ -407,20 +419,20 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.trueBookEmpty) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
-            console.log('about to call simple deleverage in case 5 '+contractId+' '+remainder+' '+liq.side+' '+liq.price)
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.side, liq.price,position.address, inverse);
+            console.log('about to call simple deleverage in case 5 '+contractId+' '+remainder+' '+liq.sell+' '+liq.price)
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         }
     } else {
         caseLabel = "CASE 1: Order fully filled at liquidation price or better.";
-        orderbook.addContractOrder(contractId, liq.price, liq.size, liq.side, false, blockHeight, "liq", position.address, true);
+        orderbook.addContractOrder(contractId, liq.price, liq.size, liq.sell, false, blockHeight, "liq", position.address, true);
     }
 
     // Step 5: Save liquidation results
@@ -536,7 +548,7 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
                 if (remainingLoss > 0) {
-                    await Clearing.socializeLoss(remainingLoss, positions);
+                    await Clearing.socializeLoss(contractId, remainingLoss);
                 }
             }
         } catch (error) {
@@ -680,93 +692,65 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
         return JSON.stringify(auditData);
     }
 
-    static async getTotalLoss(positions, contractId) {
-            let vwap = 0;
-            let volume = 0;
-            let bankruptcyVWAP = 0;
-            let oracleTwap = 0;
-            const ContractRegistry = require('./contractRegistry.js')
-            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
-            let notionalSize = await ContractRegistry.getNotionalValue(contractId)
-            let marginMap = await MarginMap.getInstance(contractId)
-            if (isOracleContract) {
-                let liquidationData = await marginMap.fetchLiquidationVolume(positions, contractId);
-                if (!liquidationData) {
-                    console.log('No liquidation volume data found for oracle-based contract.');
-                    return 0;
-                }
-                ({ volume, vwap, bankruptcyVWAP } = liquidationData);
+static async socializeLoss(contractId, totalLoss) {
+    try {
+        console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
 
-                // Fetch TWAP data from oracle
-                oracleTwap = await Oracles.getTwap(contractId); // Assuming Oracles module provides TWAP data
-            } /*else{
-                // Fetch VWAP data for native contracts
-                let vwapData = VolumeIndex.getVwapData(contractId); // Assuming VolumeIndex module provides VWAP data
-                if (!vwapData) {
-                    console.log('No VWAP data found for native contract.');
-                    return 0;
-                }
-                ({ volume, vwap, bankruptcyVWAP } = vwapData);
-                oracleTwap = vwap;
-            }*/
+        // Get all positions
+        const openPositions = await this.getAllPositions();
 
-            return ((bankruptcyVWAP * notionalSize) * (volume * vwap * oracleTwap));
-    }
+        // Filter only positions with positive uPNL
+        const positiveUPNLPositions = openPositions.filter(pos => new BigNumber(pos.unrealizedPNL).gt(0));
 
-    static async socializeLoss(contractId, totalLoss, positions, lastPrice) {
-        try {
-            // Get all open positions for the given contract
-            const openPositions = await this.getAllPositions();
-
-            // Calculate the volume weighted price for every open position
-            const vwaps = await Promise.all(openPositions.map(async (position) => {
-                // Get the market price for the contract (assuming you have a method to retrieve it)
-                const marketPrice = await this.getMarketPrice(contractId);
-
-                // Calculate the volume weighted price for the position
-                const vwap = (position.avgPrice * position.contracts + lastPrice * position.unrealizedPNL) / (position.contracts + position.unrealizedPNL);
-
-                return vwap;
-            }));
-
-            // Calculate the total volume weighted price and total open position uPNL
-            const totalVWAP = vwaps.reduce((sum, vwap) => sum.plus(vwap), new BigNumber(0));
-            const totalOpenUPNL = openPositions.reduce((sum, position) => sum.plus(position.unrealizedPNL), new BigNumber(0));
-
-            // Calculate the percentage of total loss compared to total PNL
-            const lossPercentage = totalLoss.dividedBy(totalOpenUPNL);
-
-            // Reduce positive uPNL for all open positions by the calculated percentage
-            const updatedPositions = openPositions.map((position, index) => {
-                const vwap = new BigNumber(vwaps[index]);
-                const adjustedUPNL = vwap.times(lossPercentage).times(position.contracts);
-
-                // Ensure the adjusted uPNL doesn't exceed the total open position uPNL
-                const newUPNL = BigNumber.minimum(adjustedUPNL, position.unrealizedPNL);
-
-                // Update the position with the adjusted uPNL
-                return {
-                    ...position,
-                    unrealizedPNL: newUPNL.toNumber(),
-                };
-            });
-
-            // Update the positions in the margin map
-            for (const updatedPosition of updatedPositions) {
-                this.margins.set(updatedPosition.address, updatedPosition);
-                await this.recordMarginMapDelta(updatedPosition.address, contractId, 0, 0, 0, -updatedPosition.unrealizedPNL, 0, 'socializeLoss');
-            }
-
-            // Save the updated margin map
-            await this.saveMarginMap(true);
-
-            console.log('Socialized loss successfully.');
-
-        } catch (error) {
-            console.error('Error socializing loss:', error);
-            throw error;
+        if (positiveUPNLPositions.length === 0) {
+            console.log("⚠️ No positive uPNL positions found. No loss to socialize.");
+            return;
         }
+
+        // Calculate total positive uPNL
+        const totalUPNL = positiveUPNLPositions.reduce((sum, pos) => sum.plus(pos.unrealizedPNL), new BigNumber(0));
+
+        if (totalUPNL.isZero()) {
+            console.log("⚠️ Total positive uPNL is zero. No loss to socialize.");
+            return;
+        }
+
+        // Calculate loss percentage
+        const lossPercentage = new BigNumber(totalLoss).dividedBy(totalUPNL);
+
+        console.log(`📊 Total uPNL: ${totalUPNL.toFixed(4)}, Loss Percentage: ${(lossPercentage.times(100)).toFixed(2)}%`);
+
+        // Apply proportional loss to positive uPNL positions
+        for (let pos of positiveUPNLPositions) {
+            const lossForPosition = new BigNumber(pos.unrealizedPNL).times(lossPercentage).decimalPlaces(8);
+
+            console.log(`📉 Reducing ${pos.address} uPNL by ${lossForPosition.toFixed(8)} (original: ${pos.unrealizedPNL})`);
+
+            // Adjust uPNL
+            pos.unrealizedPNL = new BigNumber(pos.unrealizedPNL).minus(lossForPosition).toNumber();
+
+            // Update margin map
+            this.margins.set(pos.address, pos);
+            await this.recordMarginMapDelta(
+                pos.address,
+                contractId,
+                0, 0, 0,
+                -lossForPosition.toNumber(), // Deducted uPNL
+                0,
+                'socializeLoss'
+            );
+        }
+
+        // Save updated margin map
+        await this.saveMarginMap(true);
+
+        console.log("✅ Socialized loss successfully applied.");
+
+    } catch (error) {
+        console.error("❌ Error socializing loss:", error);
+        throw error;
     }
+}
 
 
     static async fetchAuditData(auditDataKey) {
