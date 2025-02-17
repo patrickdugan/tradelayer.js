@@ -1305,7 +1305,7 @@ async matchContractOrders(orderBook) {
                         const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+accountingPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition))
-                        const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.sellerAddress, false, feeInfo.buyFeeFromMargin, buyerFee)
+                        const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.sellerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){
                             //console.log('reduction about to pass to TallyMap' +reduction)
