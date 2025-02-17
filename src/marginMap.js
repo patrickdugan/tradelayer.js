@@ -557,70 +557,51 @@ class MarginMap {
         }
     }
 
-async reduceMargin(pos, contracts, initPerContract, contractId, address, side, feeDebit, fee) {
-    if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
+    async reduceMargin(pos, contracts, initPerContract, contractId, address, side, feeDebit, fee) {
+        if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
 
-    let posMargin = new BigNumber(pos.margin);
-    let feeBN = new BigNumber(fee || 0);
-    let contractAmount = new BigNumber(contracts);
+        let posMargin = new BigNumber(pos.margin);
+        let feeBN = new BigNumber(fee || 0);
+        let contractAmount = new BigNumber(contracts);
+        let posContracts = new BigNumber(pos.contracts);
 
-    // 🔄 **Reconstruct Pre-Trade Position**
-    let preTradePosition = side ? pos.contracts.minus(contractAmount) : pos.contracts.plus(contractAmount);
+        // ✅ **Calculate Required Margin for Current Position**
+        let requiredMargin = posContracts.abs().times(initPerContract);
 
-    console.log(`🔎 Pre-Trade Position: ${preTradePosition}, Contracts: ${pos.contracts}, Side: ${side}`);
+        console.log(`🔎 Position: ${posContracts}, Contracts: ${contracts}, Required Margin: ${requiredMargin}`);
 
-    // ✅ **Calculate Required Margin for New Position**
-    let requiredMargin = new BigNumber(pos.contracts).times(initPerContract);
+        // 🚀 **Calculate Excess Margin**
+        let excessMargin = posMargin.minus(requiredMargin);
+        
+        if (excessMargin.isNegative()) {
+            console.log(`⚠️ No excess margin to return.`);
+            return { netMargin: 0, mode: 'maint' };
+        }
 
-    // 🚨 **Prevent Reducing More Than Available Across Positions**
-    let totalMarginForAddress = await this.getTotalMarginForAddress(address);
-    let maxReducibleMargin = BigNumber.min(posMargin, totalMarginForAddress);
+        // 💸 **Deduct Fee If Needed**
+        if (feeDebit) {
+            excessMargin = excessMargin.minus(feeBN);
+            posMargin = posMargin.minus(feeBN);
+        }
 
-    console.log(`💰 Required: ${requiredMargin.toFixed(8)}, Available: ${posMargin.toFixed(8)}, Address Total: ${totalMarginForAddress.toFixed(8)}`);
+        // 🚨 **Ensure Margin Never Goes Below Required**
+        let reduction = BigNumber.max(excessMargin, 0);
 
-    // 📉 **Excess Margin That Can Be Freed**
-    let excessMargin = BigNumber.max(posMargin.minus(requiredMargin), 0);
+        // 🛠 **Apply Reduction**
+        posMargin = posMargin.minus(reduction);
 
-    // 🛠 **Adjust for Fees**
-    if (feeDebit) {
-        console.log(`💸 Deducting Fee: ${feeBN.toFixed(8)}`);
-        excessMargin = excessMargin.minus(feeBN);
-        posMargin = posMargin.minus(feeBN);
+        // ✅ **Update Position & Save**
+        pos.margin = posMargin.decimalPlaces(8).toNumber();
+        reduction = reduction.decimalPlaces(8).toNumber();
+
+        console.log(`✅ Final Margin: ${pos.margin} (Reduced by ${reduction}), Required Margin: ${requiredMargin.toFixed(8)}`);
+
+        this.margins.set(address, pos);
+        await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction, 0, 0, 'marginReduction');
+        await this.saveMarginMap(true);
+
+        return reduction
     }
-
-    // 🚨 **Ensure Reduction Never Goes Below Total Address Margin**
-    let reduction = BigNumber.min(excessMargin, maxReducibleMargin);
-
-    // 🔒 **Enforce Minimum Margin Rule**
-    let minSafeMargin = requiredMargin.times(1.1); // Keep 10% above needed margin
-    if (posMargin.minus(reduction).isLessThan(minSafeMargin)) {
-        console.warn(`⚠️ Adjusting to keep margin above safety threshold!`);
-        reduction = posMargin.minus(minSafeMargin);
-    }
-
-    // 🔄 **Apply Final Reduction**
-    posMargin = posMargin.minus(reduction);
-
-    // 🚫 **Avoid Negative Margin**
-    if (posMargin.isNegative()) {
-        console.warn(`🚨 Margin would go negative! Adjusting to zero.`);
-        reduction = posMargin.plus(reduction);
-        posMargin = new BigNumber(0);
-    }
-
-    // ✅ **Update Position and Save**
-    pos.margin = posMargin.decimalPlaces(8).toNumber();
-    reduction = reduction.decimalPlaces(8).toNumber();
-
-    console.log(`✅ Final Margin: ${pos.margin} (Reduced by ${reduction}), Min Required: ${minSafeMargin.toFixed(8)}`);
-
-    this.margins.set(address, pos);
-    await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction, 0, 0, 'marginReduction');
-    await this.saveMarginMap(true);
-
-    return reduction;
-}
-
 
     async feeMarginReduce(address,pos, reduction,contractId){
              // Now you can use the minus method
