@@ -426,14 +426,17 @@ const Logic = {
             //So we debit there and then credit them to the token delivery address, which we took in the parsing
             //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
             await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
+            const feeRateBN = new BigNumber(0.0005)
+            const fee = new BigNumber(tokenAmount).times(feeRateBN).decimalPlaces(8).toNumber()
+            const netDelivery = new BigNumber(tokensToDeliver).minus(fee).decimalPlaces(8).toNumber()
             if(tagWithdraw!=null&&typeof tagWithdraw==string ){
-                 await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,'UTXOTokenTradeCredit',block)
-                 await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block)
+                await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,netDelivery,'UTXOTokenTradeCredit',block)
+                await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block)
             }else{
-                  await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,tokensToDeliver,0,0,0,'UTXOTokenTradeCredit',block)
-         
+                await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,netDelivery,0,0,0,'UTXOTokenTradeCredit',block)
             }
-             const key = '0-'+propertyId
+            await TallyMap.updateFeeCache(propertyId,fee,1)
+            const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
             const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
             console.log(' price in UTXO '+price)
@@ -452,7 +455,7 @@ const Logic = {
                 };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
-
+            TallyMap.updateFeeCache(propertyId,fee,1)
             const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
             const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
             let isTokenListed = false

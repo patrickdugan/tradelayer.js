@@ -12,16 +12,12 @@ class InsuranceFund {
         // Additional properties for hedging strategy
     }
 
-    async deposit(propertyId, amount, vesting) {
+    async deposit(propertyId, amount, contractId){
         let propertyFound = false;
 
-        for (const balance of this.balances) {
+        for(const balance of this.balances){
             if (balance.propertyId === propertyId) {
-                if (vesting) {
-                    balance.amountVesting += amount;
-                } else {
-                    balance.amountAvailable += amount;
-                }
+                balance.amountAvailable += amount;
                 propertyFound = true;
                 break; // Exit loop after updating the existing propertyId
             }
@@ -31,12 +27,12 @@ class InsuranceFund {
         if (!propertyFound) {
             const newBalance = {
                 propertyId: propertyId,
-                amountAvailable: vesting ? 0 : amount,
-                amountVesting: vesting ? amount : 0
+                amountAvailable: amount,
             };
             this.balances.push(newBalance);
         }
 
+        await this.recordEvent({contractId: contractId, propertyId: propertyId,amount:amount,type:"deposit"})
         await this.saveSnapshot();
         // Additional logic for hedging strategy (if any)
     }

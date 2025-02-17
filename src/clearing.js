@@ -39,92 +39,92 @@ class Clearing {
     }
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
-    // ...
-static async feeCacheBuy(block) {
+    // ...static async feeCacheBuy(block) {
+    static async feeCacheBuy(block) {
+        // Load fees from database (includes contract IDs now)
+        let fees = await TallyMap.loadFeeCacheFromDB();
 
-    // Load fees from database (includes contract IDs now)
-    let fees = await TallyMap.loadFeeCacheFromDB();
-
-    if (!fees || fees.size === 0) {
-        return;
-    }
-
-    for (let [property, feeData] of fees.entries()) {
-        if (!property || !feeData || !feeData.contract || feeData.value <= 0) continue;
-
-        let contractId = feeData.contract;
-        let feeAmount = new BigNumber(feeData.value);
-        if (feeAmount.isZero()) continue;
-
-        console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
-
-        let isNativeAsset = property.toString().startsWith("s") || property === "1";
-        
-        // Lookup contract details to check if it's oracle-based
-        let isNative = await ContractRegistry.isNativeContract(contractId);
-
-        let buyAmount = new BigNumber(0);
-        let insuranceAmount = new BigNumber(0);
-        let globalInsuranceAmount = new BigNumber(0);
-
-        if (isNative==false) {
-            // Oracle-based contracts: 50% insurance fund, 50% to buy property 1 for fund 1
-            insuranceAmount = feeAmount.dividedBy(2);
-            globalInsuranceAmount = feeAmount.dividedBy(2);
-        } else {
-            // Non-native, non-oracle: 100% goes to buy property 1 (insurance backing)
-            buyAmount = feeAmount;
+        if (!fees || fees.size === 0) {
+            return;
         }
 
-        console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
+        for (let [key, feeData] of fees.entries()) {
+            if (!feeData || !feeData.contract || feeData.value <= 0) continue;
 
-        // If there's an amount allocated for buying property 1
-        if (buyAmount.gt(0) || globalInsuranceAmount.gt(0)) {
-            let orderBookKey = `1-${property}`;
-            let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+            let [property, contractId] = key.split("-");
+            let feeAmount = new BigNumber(feeData.value);
+            if (feeAmount.isZero()) continue;
 
-            const totalBuy = buyAmount.plus(globalInsuranceAmount);
+            console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
 
-            const order = {
-                offeredPropertyId: property,
-                desiredPropertyId: 1,
-                amountOffered: totalBuy.toNumber(),
-                amountExpected: 0.00000001,
-                blockTime: block,
-                sender: "feeCache"
-            };
+            let isNativeAsset = property.toString().startsWith("s") || property === "1";
+            
+            // Lookup contract details to check if it's oracle-based
+            let isOracle = !(await ContractRegistry.isNativeContract(contractId));
 
-            const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
-            order.price = calculatedPrice;
+            let buyAmount = new BigNumber(0);
+            let insuranceAmount = new BigNumber(0);
+            let globalInsuranceAmount = new BigNumber(0);
 
-            let reply = await orderbook.insertOrder(order, orderBookKey, false, false);
-            console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
-
-            await TallyMap.updateFeeCache(property, -totalBuy.toNumber());
-            const matchResult = await orderbook.matchTokenOrders(orderBookKey);
-            if (matchResult.matches && matchResult.matches.length > 0) {
-                console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
-                await orderbook.processTokenMatches(matchResult.matches, block, null, false);
+            if (isOracle) {
+                // Oracle-based contracts: 50% to contract's insurance fund, 50% to buy property 1 for fund 1
+                insuranceAmount = feeAmount.dividedBy(2);
+                globalInsuranceAmount = feeAmount.dividedBy(2);
             } else {
-                console.log(`⚠️ No matching orders found for ${property}.`);
+                // Native contracts: 100% goes to buying property 1
+                buyAmount = feeAmount;
             }
-            await orderbook.saveOrderBook(orderBookKey);
-        }
 
-        // If there's an amount allocated for the contract's insurance fund, send it
-            console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
-            await InsuranceFund.deposit(contractId, insuranceAmount.toNumber());
-            await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber());
+            console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
 
-        // If there's an amount allocated for the global insurance fund (for oracle contracts), send it
-        if (globalInsuranceAmount.gt(0)) {
-            console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
-            await InsuranceFund.deposit(1, globalInsuranceAmount.toNumber()); // Global insurance fund for oracle-based contracts
-            await TallyMap.updateFeeCache(property, -globalInsuranceAmount.toNumber());
+            // **If there's an amount allocated for buying property 1**
+            if (buyAmount.gt(0) || globalInsuranceAmount.gt(0)) {
+                let orderBookKey = `1-${property}`;
+                let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+
+                const totalBuy = buyAmount.plus(globalInsuranceAmount);
+
+                const order = {
+                    offeredPropertyId: property,
+                    desiredPropertyId: 1,
+                    amountOffered: totalBuy.toNumber(),
+                    amountExpected: 0.00000001,
+                    blockTime: block,
+                    sender: "feeCache"
+                };
+
+                const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
+                order.price = calculatedPrice;
+
+                let reply = await orderbook.insertOrder(order, orderBookKey, false, false);
+                console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
+
+                await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId);
+                const matchResult = await orderbook.matchTokenOrders(orderBookKey);
+                if (matchResult.matches && matchResult.matches.length > 0) {
+                    console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
+                    await orderbook.processTokenMatches(matchResult.matches, block, null, false);
+                } else {
+                    console.log(`⚠️ No matching orders found for ${property}.`);
+                }
+                await orderbook.saveOrderBook(orderBookKey);
+            }
+
+            // **If there's an amount allocated for the contract's insurance fund, send it**
+            if (insuranceAmount.gt(0)) {
+                console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
+                await InsuranceFund.deposit(contractId, insuranceAmount.toNumber());
+                await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
+            }
+
+            // **If there's an amount allocated for the global insurance fund (for oracle contracts), send it**
+            if (globalInsuranceAmount.gt(0)) {
+                console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
+                await InsuranceFund.deposit(1, globalInsuranceAmount.toNumber());
+                await TallyMap.updateFeeCache(property, -globalInsuranceAmount.toNumber(), contractId);
+            }
         }
     }
-}
-
 
 
    static async updateLastExchangeBlock(blockHeight) {

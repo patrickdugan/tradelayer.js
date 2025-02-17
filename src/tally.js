@@ -431,7 +431,7 @@ class TallyMap {
             const serializedFeeAmount = JSON.stringify(feeAmount);
             
             // Convert propertyId to a string if it's not already a string
-            const cacheId = String(propertyId);
+            const cacheId = String(propertyId)+String(contractid);
 
             await db.updateAsync(
                 { _id: cacheId }, // Query to find the document
@@ -451,14 +451,13 @@ class TallyMap {
             const db = await dbInstance.getDatabase('feeCache');
             this.feeCache = new Map();
 
-            // Assuming you have a list of property IDs, iterate through them
             for (let id of propertyIndex) {
-                const query = { _id: id.id.toString() }; // Corrected typo here
+                const query = { _id: id.id.toString() };
                 const result = await db.findOneAsync(query);
-                //console.log(result, id.id)
                 if (result && result.value) {
                     const feeAmount = JSON.parse(result.value);
-                    this.feeCache.set(id, feeAmount); // Using `id` instead of `propertyIndex.id`
+                    const contractId = result.contract || null;
+                    this.feeCache.set(`${id}-${contractId}`, { value: feeAmount, contract: contractId });
                 }
             }
             
@@ -497,31 +496,22 @@ class TallyMap {
     }
 
     // Method to update fee cache for a property
-    static async updateFeeCache(contractid, propertyId, feeAmount) {
-        // Load current fee from the fee cache
-        let currentFee = await this.loadFeeCacheForProperty(propertyId);
+      static async updateFeeCache(propertyId, amount, contractId) {
+        try {
+            const db = await dbInstance.getDatabase('feeCache');
 
-        console.log('current fee: ' + currentFee + ', propertyId: ' + propertyId+'fee to update '+feeAmount);
+            const cacheId = `${propertyId}-${contractId}`;
 
-        // Check if currentFee is undefined (no existing fee)
-        if (currentFee === undefined||currentFee==0||isNaN(currentFee)) {
-            currentFee = 0; // Set currentFee to 0 if it's undefined
+            await db.updateAsync(
+                { _id: cacheId },
+                { $inc: { value: amount }, $set: { contract: contractId } },
+                { upsert: true }
+            );
+
+            console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} by ${amount}.`);
+        } catch (error) {
+            console.error('Error updating FeeCache:', error);
         }
-
-        if(contractid==undefined){
-            contractid = null1
-        }
-
-        let currentFeeBN = new BigNumber(currentFee)
-        let feeAmountBN = new BigNumber(feeAmount)
-        // Update the fee cache by adding the new fee amount
-        let updatedFee = currentFeeBN.plus(feeAmountBN).decimalPlaces(8).toNumber();
-        this.feeCache.set(propertyId, updatedFee, contractid);
-
-        console.log('Updated fee cache for property ' + propertyId + ': ' + updatedFee);
-
-        // Optionally, persist fee cache changes to the database if necessary
-        await this.saveFeeCacheToDB(propertyId, updatedFee, contractid);
     }
 
     static async drawOnFeeCache(propertyId) {
@@ -571,9 +561,7 @@ class TallyMap {
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
         const tally = TallyMap.getTally(address, propertyId)
-        if(total==null||total==undefined){
             total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
-        }
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type };
         
         console.log('saving delta ' + JSON.stringify(delta));
