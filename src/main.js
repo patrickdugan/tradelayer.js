@@ -531,7 +531,7 @@ class Main {
     }
 
     //updates max consensus block in real-time mode
-    async checkBlockLag() {
+    async checkBlockLag(){
         const chaintip = await this.getBlockCountAsync()
         let track = await this.loadTrackHeight()
         if(track==null){

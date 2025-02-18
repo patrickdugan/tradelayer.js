@@ -26,13 +26,13 @@ class Clearing {
         //console.log(`Starting clearing operations for block ${blockHeight}`);
 
         // 1. Fee Cache Buy
-        await this.feeCacheBuy(blockHeight);
+        await Clearing.feeCacheBuy(blockHeight);
 
         // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels(blockHeight);
 
         // 3. Settle trades at block level
-        await this.makeSettlement(blockHeight);
+        await Clearing.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return
@@ -48,11 +48,14 @@ class Clearing {
             return;
         }
 
-        for (let [key, feeData] of fees.entries()) {
+        for(let [key, feeData] of fees.entries()){
+               console.log('🔎  Fee cache '+key+feeData.value)
             if (!feeData || !feeData.contract || feeData.value <= 0) continue;
 
             let [property, contractId] = key.split("-");
             let feeAmount = new BigNumber(feeData.value);
+
+     
             if (feeAmount.isZero()) continue;
 
             console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
@@ -310,8 +313,12 @@ class Clearing {
         let systemicLoss = 0;
 
         for (let position of positions) {
+            const tally = await TallyMap.getTally(position.address)
+            const {liquidationPrice,bankruptcyPrice} = await MarginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notionalValue,inverse,Boolean(position.contracts>0),position.avgPrice)
+            position.liquidationPrice = liquidationPrice
+            position.bankruptcyPrice = bankruptcyPrice
             if(position.contracts==0){continue}
-            if (!blob.lastPrice) {
+            if(!blob.lastPrice){
                 console.log('last price was null, using avg price:', position.avgPrice);
                 blob.lastPrice = position.avgPrice;
             }
@@ -321,23 +328,23 @@ class Clearing {
 
             let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId);
 
-            if (pnlChange > 0) {
+            if(pnlChange>0){
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
-            } else {
+            }else{
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                 console.log(`Checking balance for ${position.address}:`, balance);
 
-                if (balance.hasSufficient) {
+                if(balance.hasSufficient){
                     await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
-                } else {
+                }else{
                     let tally = await TallyMap.getTally(position.address, collateralId);
                     let totalCollateral = tally.available + tally.margin;
                     let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
 
-                    if (totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
+                    if(totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
                         await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
-                        if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
+                        if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                             let orderbook = await Orderbooks.getOrderbookInstance(contractId);
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
                             if (liquidationResult) {

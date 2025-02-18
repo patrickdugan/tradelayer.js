@@ -232,7 +232,7 @@ class TallyMap {
             const instance = await this.getInstance();
 
             // Check if the instance has been loaded
-            if (!instance) {
+            if(!instance){
                 console.log('TallyMap instance is not loaded. Attempting to load from DB...');
                 await instance.loadFromDB();
             } else {
@@ -257,7 +257,8 @@ class TallyMap {
                 console.log(JSON.stringify(info))
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
                     const balanceObj = addressObj[propertyId];
-                    if(info==null){info.ticker=''}
+                    let ticker = ''
+                    if(info!=null&&info.ticker){ticker=info.ticker}
                     console.log(propertyId, JSON.stringify(balanceObj),JSON.stringify(info))
                     balances.push({
                         propertyId: propertyId,
@@ -423,13 +424,11 @@ class TallyMap {
             console.error('Property ID or fee amount is undefined.');
             return;
         }
-
         console.log('Inside save fee cache ' + propertyId + ' ' + feeAmount);
-
         const db = await dbInstance.getDatabase('feeCache');
         try {
-            const serializedFeeAmount = JSON.stringify(feeAmount);
-            
+           const roundedFee = Number(new BigNumber(feeAmount).toFixed(8));  // ✅ Ensures max 8 decimal places
+            const serializedFeeAmount = roundedFee
             // Convert propertyId to a string if it's not already a string
             const cacheId = String(propertyId)+String(contractid);
 
@@ -444,27 +443,30 @@ class TallyMap {
         }
     }
 
-
     static async loadFeeCacheFromDB() {
-        let propertyIndex = await PropertyList.getPropertyIndex();    
+        let fees = new Map();
+
         try {
             const db = await dbInstance.getDatabase('feeCache');
-            this.feeCache = new Map();
+            const results = await db.findAsync({});
+            
+            if (!results || results.length === 0) {
+                return fees;
+            }
 
-            for (let id of propertyIndex) {
-                const query = { _id: id.id.toString() };
-                const result = await db.findOneAsync(query);
-                if (result && result.value) {
-                    const feeAmount = JSON.parse(result.value);
-                    const contractId = result.contract || null;
-                    this.feeCache.set(`${id}-${contractId}`, { value: feeAmount, contract: contractId });
+            console.log(`✅ Loaded ${results.length} fee cache entries.`);
+            for (let result of results) {
+            
+                if (result._id && result.value) {
+                    let feeData = JSON.parse(result.value);
+                    fees.set(result._id, feeData);
                 }
             }
-            
-            return this.feeCache;
         } catch (error) {
-            console.error('Error loading fee cache from dbInstance:', error);
+            console.error(`🚨 Error loading fee cache:`, error);
         }
+
+        return fees;
     }
 
     static async loadFeeCacheForProperty(id) {    
@@ -497,11 +499,13 @@ class TallyMap {
 
     // Method to update fee cache for a property
       static async updateFeeCache(propertyId, amount, contractId) {
+        
         try {
             const db = await dbInstance.getDatabase('feeCache');
 
             const cacheId = `${propertyId}-${contractId}`;
-
+            const rounded = new BigNumber(amount).decimalPlaces(8).toNumber()
+            
             await db.updateAsync(
                 { _id: cacheId },
                 { $inc: { value: amount }, $set: { contract: contractId } },

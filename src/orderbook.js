@@ -1031,6 +1031,7 @@ async matchContractOrders(orderBook) {
                 console.error('Matches is not an array:', matches);
                 matches = []; // Initialize as an empty array if that's appropriate
             }
+            
             const MarginMap = require('./marginMap.js')
             const tradeHistoryManager = new TradeHistory()
 

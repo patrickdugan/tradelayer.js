@@ -529,8 +529,10 @@ class MarginMap {
      * @param {string} address - The address of the position holder.
      * @param {string} contractId - The ID of the contract.
      */
-    async checkMarginMaintainance(address, contractId){
-        let position = this.margins.get(address);
+    async checkMarginMaintainance(address, contractId,position){
+        if(!position){
+            position = this.margins.get(address);
+        }
 
         if (!position) {
             console.error(`No position found for address ${address}`);
