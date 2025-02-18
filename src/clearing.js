@@ -66,7 +66,7 @@ class Clearing {
             
             // Lookup contract details to check if it's oracle-based
             let isOracle = !(await ContractRegistry.isNativeContract(contractId));
-
+            let insurance = await Insurance.getInstance(contractId, isOracle)
             let buyAmount = new BigNumber(0);
             let insuranceAmount = new BigNumber(0);
             let globalInsuranceAmount = new BigNumber(0);
@@ -105,7 +105,7 @@ class Clearing {
                 console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
 
                 await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId);
-                const matchResult = await orderbook.matchTokenOrders(orderbook);
+                const matchResult = await orderbook.matchTokenOrders(reply);
                 if (matchResult.matches && matchResult.matches.length > 0) {
                     console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
                     await orderbook.processTokenMatches(matchResult.matches, block, null, false);
@@ -118,14 +118,14 @@ class Clearing {
             // **If there's an amount allocated for the contract's insurance fund, send it**
             if (insuranceAmount.gt(0)) {
                 console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
-                await InsuranceFund.deposit(contractId, insuranceAmount.toNumber());
+                await insurance.deposit(contractId, insuranceAmount.toNumber());
                 await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
             }
 
             // **If there's an amount allocated for the global insurance fund (for oracle contracts), send it**
             if (globalInsuranceAmount.gt(0)) {
                 console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
-                await InsuranceFund.deposit(1, globalInsuranceAmount.toNumber());
+                await insurance.deposit(1, globalInsuranceAmount.toNumber());
                 await TallyMap.updateFeeCache(property, -globalInsuranceAmount.toNumber(), contractId);
             }
         }
@@ -579,7 +579,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             }
 
             // Verify insurance fund balance is not negative
-            if (this.insuranceFund.getBalance() < 0) {
+            if (Insurance.getBalance() < 0) {
                 throw new Error("Negative balance in the insurance fund");
             }
 

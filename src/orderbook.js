@@ -317,21 +317,20 @@ class Orderbook {
             //console.log('price ratio '+priceRatio)
             return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
         }
-
-        async matchTokenOrders(orderbookData) {
+    
+        async matchTokenOrders(orderbookData, orderBookKey) {
             if (!orderbookData || typeof orderbookData !== 'object') {
                 console.error("⚠️ Invalid orderbookData received:", orderbookData);
-                return { orderBook: { buy: [], sell: [] }, matches: [] }; // Ensure no crash
+                return { orderBook: { buy: [], sell: [] }, matches: [] };
             }
 
             // Extract the correct orderbook object
             let extractedOrderbook = orderbookData.orderBooks && orderbookData.orderBooks[orderBookKey];
             if (!extractedOrderbook) {
                 console.warn(`⚠️ No orderbook found for key ${orderBookKey}, initializing empty.`);
-                extractedOrderbook = { buy: [], sell: [] }; // Default structure
+                extractedOrderbook = { buy: [], sell: [] };
             }
 
-            // Ensure `buy` and `sell` exist
             let orderBookCopy = {
                 buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
                 sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
@@ -345,303 +344,272 @@ class Orderbook {
             if (orderBookCopy.buy.length > 0) {
                 orderBookCopy.buy.sort((a, b) => new BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime);
             }
-
             if (orderBookCopy.sell.length > 0) {
                 orderBookCopy.sell.sort((a, b) => new BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime);
             }
-            //console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
 
-            let counter = 0
+            console.log(`📈 Orders sorted, beginning matching process...`);
 
-            // Match orders
-            while (orderBookCopy.sell.length > 0 && orderBookCopy.buy.length > 0) {
-                counter+=1
-                //console.log(counter, JSON.stringify(orderBookCopy))
+            let iterationLimit = 1000; // Safety limit to prevent infinite loops
+            let iterationCount = 0;
+
+            for (; orderBookCopy.buy.length > 0 && orderBookCopy.sell.length > 0; iterationCount++) {
+                if (iterationCount >= iterationLimit) {
+                    console.warn(`⚠️ Match execution limit reached! Exiting.`);
+                    break;
+                }
+
                 let sellOrder = orderBookCopy.sell[0];
                 let buyOrder = orderBookCopy.buy[0];
 
-
-
                 // Ensure matching distinct property IDs
-                if (sellOrder.offeredPropertyId === buyOrder.desiredPropertyId && sellOrder.desiredPropertyId === buyOrder.offeredPropertyId) {
-                    let tradePrice;
-                    let bumpTrade = false;
-                    let post = false;
-                    sellOrder.maker = false
-                    buyOrder.maker = false
+                if (sellOrder.offeredPropertyId !== buyOrder.desiredPropertyId || sellOrder.desiredPropertyId !== buyOrder.offeredPropertyId) {
+                    console.warn(`⚠️ Mismatched property IDs, skipping orders.`);
+                    break;
+                }
 
-                    // Handle trades in the same block
-                    if (sellOrder.blockTime === buyOrder.blockTime) {
-                        console.log('trades in the same block, defaulting to buy order');
+                let tradePrice;
+                let bumpTrade = false;
+                let post = false;
+                sellOrder.maker = false;
+                buyOrder.maker = false;
+
+                // Handle trades in the same block
+                if (sellOrder.blockTime === buyOrder.blockTime) {
+                    tradePrice = buyOrder.price;
+                    if (sellOrder.post) {
+                        tradePrice = sellOrder.price;
+                        post = true;
+                        sellOrder.maker = true;
+                    } else if (buyOrder.post) {
                         tradePrice = buyOrder.price;
-                        if (sellOrder.post) {
-                            tradePrice = sellOrder.price;
-                            post = true;
-                            sellOrder.maker=true
-                        } else if (buyOrder.post) {
-                            tradePrice = buyOrder.price;
-                            post = true;
-                            buyOrder.maker=true
-                        }
-                        sellOrder.flat=true
-                    } else {
-                        tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
-                        if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
-                            (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
-                            bumpTrade = true;
-                        }
-                        if((sellOrder.blockTime < buyOrder.blockTime&&bumpTrade==false)){
-                            sellOrder.maker=true
-                        }else if(sellOrder.blockTime > buyOrder.blockTime&&bumpTrade==false){
-                            buyOrder.maker=true
-                        }
+                        post = true;
+                        buyOrder.maker = true;
                     }
+                    sellOrder.flat = true;
+                } else {
+                    tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                    if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
+                        (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
+                        bumpTrade = true;
+                    }
+                    if (sellOrder.blockTime < buyOrder.blockTime && !bumpTrade) {
+                        sellOrder.maker = true;
+                    } else if (sellOrder.blockTime > buyOrder.blockTime && !bumpTrade) {
+                        buyOrder.maker = true;
+                    }
+                }
 
-                     if (sellOrder.sender === buyOrder.sender) {
-                            // Remove the maker order from the book
-                            if (sellOrder.maker) {
-                                orderBookCopy.sell.shift();
-                                console.log('bumping sell order as a self-trade maker'+JSON.stringify(sellOrder))
-                                console.log(JSON.stringify(orderBookCopy))
-                            } else if (buyOrder.maker) {
-                                orderBookCopy.buy.shift();
-                                console.log('bumping buy order as a self-trade maker'+JSON.stringify(buyOrder) )
+                if (sellOrder.sender === buyOrder.sender) {
+                    console.log(`🔄 Self-trade detected, removing maker order.`);
+                    if (sellOrder.maker) {
+                        orderBookCopy.sell.shift();
+                    } else if (buyOrder.maker) {
+                        orderBookCopy.buy.shift();
+                    }
+                    continue;
+                }
 
-                            }
-                            continue
+                // Check for price match
+                if (new BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                    let sellAmountOffered = new BigNumber(sellOrder.amountOffered);
+                    let sellAmountExpected = new BigNumber(sellOrder.amountExpected);
+                    let buyAmountOffered = new BigNumber(buyOrder.amountOffered);
+                    let buyAmountExpected = new BigNumber(buyOrder.amountExpected);
+
+                    let tradeAmountA = BigNumber.min(sellAmountOffered, buyAmountExpected);
+                    let tradeAmountB = tradeAmountA.times(tradePrice);
+
+                    console.log(`🔄 Processing trade - Amount A: ${tradeAmountA}, Amount B: ${tradeAmountB}`);
+
+                    if (!bumpTrade) {
+                        sellOrder.amountOffered = sellAmountOffered.minus(tradeAmountA).toNumber();
+                        buyOrder.amountOffered = buyAmountOffered.minus(tradeAmountB).toNumber();
+                        sellOrder.amountExpected = sellAmountExpected.minus(tradeAmountB).toNumber();
+                        buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
+
+                        matches.push({
+                            sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
+                            buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
+                            amountOfTokenA: tradeAmountA.toNumber(),
+                            amountOfTokenB: tradeAmountB.toNumber(),
+                            tradePrice,
+                            post,
+                            bumpTrade
+                        });
+
+                        if (sellOrder.amountOffered === 0) {
+                            orderBookCopy.sell.shift();
+                        } else {
+                            orderBookCopy.sell[0] = sellOrder;
                         }
 
-                    // Check for price match
-                    if (BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
-                        let sellAmountOffered = new BigNumber(sellOrder.amountOffered);
-                        let sellAmountExpected = new BigNumber(sellOrder.amountExpected);
-                        let buyAmountOffered = new BigNumber(buyOrder.amountOffered);
-                        let buyAmountExpected = new BigNumber(buyOrder.amountExpected);
-
-                        let tradeAmountA = BigNumber.min(sellAmountOffered, buyAmountExpected);
-                        let tradeAmountB = tradeAmountA.times(tradePrice);
-
-                        console.log('checking values for order amounts ', sellOrder.amountOffered, buyOrder.amountExpected, sellAmountOffered, buyAmountExpected);
-                        console.log('trade amounts ', tradeAmountA, tradeAmountB);
-
-                        if (!bumpTrade) {
-                            sellOrder.amountOffered = sellAmountOffered.minus(tradeAmountA).toNumber();
-                            buyOrder.amountOffered = buyAmountOffered.minus(tradeAmountB).toNumber();
-                            sellOrder.amountExpected = sellAmountExpected.minus(tradeAmountB).toNumber();
-                            buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
-
-                            matches.push({
-                                sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
-                                buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
-                                amountOfTokenA: tradeAmountA.toNumber(),
-                                amountOfTokenB: tradeAmountB.toNumber(),
-                                tradePrice,
-                                post,
-                                bumpTrade
-                            });
-
-                            if (sellOrder.amountOffered === 0) {
-                                orderBookCopy.sell.shift();
-                            } else {
-                                orderBookCopy.sell[0] = sellOrder;
-                            }
-
-                            if (buyOrder.amountExpected === 0) {
-                                orderBookCopy.buy.shift();
-                            } else {
-                                orderBookCopy.buy[0] = buyOrder;
-                            }
+                        if (buyOrder.amountExpected === 0) {
+                            orderBookCopy.buy.shift();
                         } else {
-                            if (buyOrder.post) {
-                                buyOrder.price = sellOrder.price - this.tickSize;
-                            }
-                            if (sellOrder.post) {
-                                sellOrder.price = buyOrder.price + this.tickSize;
-                            }
+                            orderBookCopy.buy[0] = buyOrder;
                         }
                     } else {
-                        break; // No more matches possible
+                        if (buyOrder.post) {
+                            buyOrder.price = sellOrder.price - this.tickSize;
+                        }
+                        if (sellOrder.post) {
+                            sellOrder.price = buyOrder.price + this.tickSize;
+                        }
                     }
                 } else {
-                    // Orders do not have matching property IDs, break the loop
+                    console.log(`❌ No price match, stopping execution.`);
                     break;
                 }
             }
 
-            //console.log('Final orderBookCopy before returning: ' + JSON.stringify(orderBookCopy));
+            console.log(`✅ Matching complete. Trades executed: ${matches.length}`);
             return { orderBook: orderBookCopy, matches: matches };
         }
 
-        async processTokenMatches(matches, blockHeight, txid, channel) {
-            const TallyMap = require('./tally.js');
-            if (!Array.isArray(matches) || matches.length === 0) {
-                //console.log('No valid matches to process');
-                return;
+
+          async matchTokenOrders(orderbookData) {
+        if (!orderbookData || typeof orderbookData !== 'object') {
+            console.error("⚠️ Invalid orderbookData received:", orderbookData);
+            return { orderBook: { buy: [], sell: [] }, matches: [] };
+        }
+
+        let orderBookCopy = {
+            buy: Array.isArray(orderbookData.buy) ? [...orderbookData.buy] : [],
+            sell: Array.isArray(orderbookData.sell) ? [...orderbookData.sell] : []
+        };
+
+        console.log(`📊 Matching orders... Buy: ${orderBookCopy.buy.length}, Sell: ${orderBookCopy.sell.length}`);
+
+        let matches = [];
+
+        // Sort buy and sell orders
+        if (orderBookCopy.buy.length > 0) {
+            orderBookCopy.buy.sort((a, b) => new BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime);
+        }
+        if (orderBookCopy.sell.length > 0) {
+            orderBookCopy.sell.sort((a, b) => new BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime);
+        }
+
+        console.log(`📈 Orders sorted, beginning matching process...`);
+
+        let iterationLimit = 1000;
+        let iterationCount = 0;
+
+        for (; orderBookCopy.buy.length > 0 && orderBookCopy.sell.length > 0; iterationCount++) {
+            if (iterationCount >= iterationLimit) {
+                console.warn(`⚠️ Match execution limit reached! Exiting.`);
+                break;
             }
-             //see if the trade qualifies for increased Liquidity Reward          
 
-            for (const match of matches) {
-                if (!match.sellOrder || !match.buyOrder) {
-                    //console.error('Invalid match object:', match);
-                    continue;
+            let sellOrder = orderBookCopy.sell[0];
+            let buyOrder = orderBookCopy.buy[0];
+
+            // Ensure matching distinct property IDs
+            if (sellOrder.offeredPropertyId !== buyOrder.desiredPropertyId || sellOrder.desiredPropertyId !== buyOrder.offeredPropertyId) {
+                console.warn(`⚠️ Mismatched property IDs, skipping orders.`);
+                break;
+            }
+
+            let tradePrice;
+            let bumpTrade = false;
+            let post = false;
+            sellOrder.maker = false;
+            buyOrder.maker = false;
+
+            // Handle trades in the same block
+            if (sellOrder.blockTime === buyOrder.blockTime) {
+                tradePrice = buyOrder.price;
+                if (sellOrder.post) {
+                    tradePrice = sellOrder.price;
+                    post = true;
+                    sellOrder.maker = true;
+                } else if (buyOrder.post) {
+                    tradePrice = buyOrder.price;
+                    post = true;
+                    buyOrder.maker = true;
                 }
-
-                const sellOrderAddress = match.sellOrder.sender;
-                const buyOrderAddress = match.buyOrder.sender;
-                const sellOrderPropertyId = match.sellOrder.desiredPropertyId;
-                const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
-                console.log('checking params in process token match '+buyOrderPropertyId+' '+sellOrderPropertyId)
-                if(match.sellOrder.blockTime<blockHeight){
-                    match.sellOrder.isNew = false
-                    match.buyOrder.isNew = true
-                }else if(match.sellOrder.blockTime==match.buyOrder.blockTime){
-                    match.sellOrder.isNew = true
-                    match.buyOrder.isNew = true
-                }else{
-                    match.buyOrder.isNew = false
-                    match.sellOrder.isNew= true
+                sellOrder.flat = true;
+            } else {
+                tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+                if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
+                    (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
+                    bumpTrade = true;
                 }
-
-                let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange = 0
-                let amountToTradeA = new BigNumber(match.amountOfTokenA)
-                let amountToTradeB = new BigNumber(match.amountOfTokenB)
-                if(channel==true){
-                    amountToTradeA = new BigNumber(match.sellOrder.amountOffered)
-                    amountToTradeB = new BigNumber(match.buyOrder.amountExpected)
+                if (sellOrder.blockTime < buyOrder.blockTime && !bumpTrade) {
+                    sellOrder.maker = true;
+                } else if (sellOrder.blockTime > buyOrder.blockTime && !bumpTrade) {
+                    buyOrder.maker = true;
                 }
-                console.log('amountTo Trade A and B '+ amountToTradeA + ' '+ amountToTradeB + ' '+ 'match values '+ match.amountOfTokenA + ' '+ match.amountOfTokenB)
-                // Determine order roles and calculate fees
-                if ((match.sellOrder.blockTime < match.buyOrder.blockTime)&&channel==false) {
-                    match.sellOrder.orderRole = 'maker';
-                    match.buyOrder.orderRole = 'taker';
-                    takerFee = amountToTradeB.times(0.0002);
-                    //console.log('taker fee '+takerFee)
-                    makerRebate = takerFee.div(2);
-                    //console.log('maker fee '+makerRebate)
-                    takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                    //console.log(' actual taker fee '+takerFee)
-                    await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
-                    //console.log('about to calculate this supposed NaN '+match.amountOfTokenA+' '+new BigNumber(match.amountOfTokenA) + ' '+new BigNumber(match.amountOfTokenA).plus(makerRebate)+ ' '+ new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
-                    //console.log('sell order amount change ' +sellOrderAmountChange)
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
+            }
 
-                } else if((match.buyOrder.blockTime < match.sellOrder.blockTime)&&channel==false){
-                    match.buyOrder.orderRole = 'maker';
-                    match.sellOrder.orderRole = 'taker';
-                    takerFee = amountToTradeA.times(0.0002);
-                    makerRebate = takerFee.div(2); 
-                    takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                    await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
-                } else if (((match.buyOrder.blockTime == match.sellOrder.blockTime)&&(match.sellOrder.post==false&&match.sellOrder.post==false))||channel==true){
-                    match.buyOrder.orderRole = 'split';
-                    match.sellOrder.orderRole = 'split';
-                    var takerFeeA = amountToTradeA.times(0.0001);
-                    var takerFeeB = amountToTradeB.times(0.0001);
-                    await TallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber());
-                    await TallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber());
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber();
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
+            if (sellOrder.sender === buyOrder.sender) {
+                console.log(`🔄 Self-trade detected, removing maker order.`);
+                if (sellOrder.maker) {
+                    orderBookCopy.sell.shift();
+                } else if (buyOrder.maker) {
+                    orderBookCopy.buy.shift();
                 }
-                console.log('about to update tallymap in process token trade '+match.sellOrder.sender +' '+match.buyOrder.sender +' '+match.channel)
-                await TallyMap.updateBalance(
-                        match.sellOrder.sender,
-                        match.sellOrder.desiredPropertyId,
-                        match.amountOfTokenB,  // Credit traded amount of Token B to available
-                        0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight 
-                );
+                continue;
+            }
 
+            // Check for price match
+            if (new BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
+                let sellAmountOffered = new BigNumber(sellOrder.amountOffered);
+                let sellAmountExpected = new BigNumber(sellOrder.amountExpected);
+                let buyAmountOffered = new BigNumber(buyOrder.amountOffered);
+                let buyAmountExpected = new BigNumber(buyOrder.amountExpected);
 
-                await TallyMap.updateBalance(
-                        match.buyOrder.sender,
-                        match.buyOrder.desiredPropertyId,
-                        match.amountOfTokenA,  // Credit traded amount of Token B to available
-                        0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight);
+                let tradeAmountA = BigNumber.min(sellAmountOffered, buyAmountExpected);
+                let tradeAmountB = tradeAmountA.times(tradePrice);
 
-                if(channel==true){
-                    await TallyMap.updateChannelBalance(
-                        match.channel,
-                        match.sellOrder.offeredPropertyId,
-                        -match.amountOfTokenA,
-                        'tokenTrade',
-                        blockHeight
-                    );
+                console.log(`🔄 Processing trade - Amount A: ${tradeAmountA}, Amount B: ${tradeAmountB}`);
 
-                    await TallyMap.updateChannelBalance(
-                        match.channel,
-                        match.buyOrder.offeredPropertyId,
-                        -match.amountOfTokenB,
-                        'tokenTrade',
-                        blockHeight);
+                if (!bumpTrade) {
+                    sellOrder.amountOffered = sellAmountOffered.minus(tradeAmountA).toNumber();
+                    buyOrder.amountOffered = buyAmountOffered.minus(tradeAmountB).toNumber();
+                    sellOrder.amountExpected = sellAmountExpected.minus(tradeAmountB).toNumber();
+                    buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
 
-                }else{
-                    // Debit the traded amount from the seller's reserve 
-                    await TallyMap.updateBalance(
-                        match.sellOrder.sender,
-                        match.sellOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -match.amountOfTokenA, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight
-                    );
-                    //and credit the opposite consideration to available
+                    matches.push({
+                        sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
+                        buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
+                        amountOfTokenA: tradeAmountA.toNumber(),
+                        amountOfTokenB: tradeAmountB.toNumber(),
+                        tradePrice,
+                        post,
+                        bumpTrade
+                    });
 
-                    // Update balance for the buyer
-                    // Debit the traded amount from the buyer's reserve and credit it to available
-                    await TallyMap.updateBalance(
-                        match.buyOrder.sender,
-                        match.buyOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -match.amountOfTokenB, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight );
+                    if (sellOrder.amountOffered === 0) {
+                        orderBookCopy.sell.shift();
+                    } else {
+                        orderBookCopy.sell[0] = sellOrder;
+                    }
 
+                    if (buyOrder.amountExpected === 0) {
+                        orderBookCopy.buy.shift();
+                    } else {
+                        orderBookCopy.buy[0] = buyOrder;
+                    }
+                } else {
+                    if (buyOrder.post) {
+                        buyOrder.price = sellOrder.price - this.tickSize;
+                    }
+                    if (sellOrder.post) {
+                        sellOrder.price = buyOrder.price + this.tickSize;
+                    }
                 }
+            } else {
+                console.log(`❌ No price match, stopping execution.`);
+                break;
+            }
+        }
 
-                  // Construct a trade object for recording
-                const trade = {
-                    offeredPropertyId: match.sellOrder.offeredPropertyId,
-                    desiredPropertyId: match.buyOrder.offeredPropertyId,
-                    amountOffered: match.amountOfTokenA, // or appropriate amount
-                    amountExpected: match.amountOfTokenB, // or appropriate amount
-                    // other relevant trade details...
-                };
-                if(channel==false){
-                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-
-                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'onChainToken')
-                }else{
-                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-
-                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'channelToken') 
-                }
-
-                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
-                var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
-                
-                if(qualifiesBasicLiqReward){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(match.amountOfTokenA,0.000025,match.sellOrder.offeredPropertyId)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(match.amountOfTokenB,0.000025,match.buyOrder.desiredPropertyId)
-                        TallyMap.updateBalance(sellerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(buyerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
-                }
-
-                if(qualifiesEnhancedLiqReward){
-                        const liqReward1= await VolumeIndex.calculateLiquidityReward(match.amountOfTokenA,match.sellOrder.offeredPropertyId)
-                        const liqReward2= await VolumeIndex.calculateLiquidityReward(match.amountOfTokenB,match.buyOrder.offeredPropertyId)
-                        TallyMap.updateBalance(sellerAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                        TallyMap.updateBalance(buyerAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
-                }
-
-                // Record the token trade
-                await this.recordTokenTrade(trade, blockHeight, txid);
-
-                }
-        }    
+        console.log(`✅ Matching complete. Trades executed: ${matches.length}`);
+        return { orderBook: orderBookCopy, matches: matches };
+    }
+  
 
         async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
             const ContractRegistry = require('./contractRegistry.js')
