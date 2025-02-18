@@ -318,157 +318,7 @@ class Orderbook {
             return priceRatio.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
         }
     
-        async matchTokenOrders(orderbookData, orderBookKey) {
-            if (!orderbookData || typeof orderbookData !== 'object') {
-                console.error("⚠️ Invalid orderbookData received:", orderbookData);
-                return { orderBook: { buy: [], sell: [] }, matches: [] };
-            }
-
-            // Extract the correct orderbook object
-            let extractedOrderbook = orderbookData.orderBooks && orderbookData.orderBooks[orderBookKey];
-            if (!extractedOrderbook) {
-                console.warn(`⚠️ No orderbook found for key ${orderBookKey}, initializing empty.`);
-                extractedOrderbook = { buy: [], sell: [] };
-            }
-
-            let orderBookCopy = {
-                buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
-                sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
-            };
-
-            console.log(`📊 Matching orders... Buy: ${orderBookCopy.buy.length}, Sell: ${orderBookCopy.sell.length}`);
-
-            let matches = [];
-
-            // Sort buy and sell orders safely
-            if (orderBookCopy.buy.length > 0) {
-                orderBookCopy.buy.sort((a, b) => new BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime);
-            }
-            if (orderBookCopy.sell.length > 0) {
-                orderBookCopy.sell.sort((a, b) => new BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime);
-            }
-
-            console.log(`📈 Orders sorted, beginning matching process...`);
-
-            let iterationLimit = 1000; // Safety limit to prevent infinite loops
-            let iterationCount = 0;
-
-            for (; orderBookCopy.buy.length > 0 && orderBookCopy.sell.length > 0; iterationCount++) {
-                if (iterationCount >= iterationLimit) {
-                    console.warn(`⚠️ Match execution limit reached! Exiting.`);
-                    break;
-                }
-
-                let sellOrder = orderBookCopy.sell[0];
-                let buyOrder = orderBookCopy.buy[0];
-
-                // Ensure matching distinct property IDs
-                if (sellOrder.offeredPropertyId !== buyOrder.desiredPropertyId || sellOrder.desiredPropertyId !== buyOrder.offeredPropertyId) {
-                    console.warn(`⚠️ Mismatched property IDs, skipping orders.`);
-                    break;
-                }
-
-                let tradePrice;
-                let bumpTrade = false;
-                let post = false;
-                sellOrder.maker = false;
-                buyOrder.maker = false;
-
-                // Handle trades in the same block
-                if (sellOrder.blockTime === buyOrder.blockTime) {
-                    tradePrice = buyOrder.price;
-                    if (sellOrder.post) {
-                        tradePrice = sellOrder.price;
-                        post = true;
-                        sellOrder.maker = true;
-                    } else if (buyOrder.post) {
-                        tradePrice = buyOrder.price;
-                        post = true;
-                        buyOrder.maker = true;
-                    }
-                    sellOrder.flat = true;
-                } else {
-                    tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
-                    if ((sellOrder.blockTime < buyOrder.blockTime && buyOrder.post) || 
-                        (buyOrder.blockTime < sellOrder.blockTime && sellOrder.post)) {
-                        bumpTrade = true;
-                    }
-                    if (sellOrder.blockTime < buyOrder.blockTime && !bumpTrade) {
-                        sellOrder.maker = true;
-                    } else if (sellOrder.blockTime > buyOrder.blockTime && !bumpTrade) {
-                        buyOrder.maker = true;
-                    }
-                }
-
-                if (sellOrder.sender === buyOrder.sender) {
-                    console.log(`🔄 Self-trade detected, removing maker order.`);
-                    if (sellOrder.maker) {
-                        orderBookCopy.sell.shift();
-                    } else if (buyOrder.maker) {
-                        orderBookCopy.buy.shift();
-                    }
-                    continue;
-                }
-
-                // Check for price match
-                if (new BigNumber(buyOrder.price).isGreaterThanOrEqualTo(sellOrder.price)) {
-                    let sellAmountOffered = new BigNumber(sellOrder.amountOffered);
-                    let sellAmountExpected = new BigNumber(sellOrder.amountExpected);
-                    let buyAmountOffered = new BigNumber(buyOrder.amountOffered);
-                    let buyAmountExpected = new BigNumber(buyOrder.amountExpected);
-
-                    let tradeAmountA = BigNumber.min(sellAmountOffered, buyAmountExpected);
-                    let tradeAmountB = tradeAmountA.times(tradePrice);
-
-                    console.log(`🔄 Processing trade - Amount A: ${tradeAmountA}, Amount B: ${tradeAmountB}`);
-
-                    if (!bumpTrade) {
-                        sellOrder.amountOffered = sellAmountOffered.minus(tradeAmountA).toNumber();
-                        buyOrder.amountOffered = buyAmountOffered.minus(tradeAmountB).toNumber();
-                        sellOrder.amountExpected = sellAmountExpected.minus(tradeAmountB).toNumber();
-                        buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
-
-                        matches.push({
-                            sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
-                            buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
-                            amountOfTokenA: tradeAmountA.toNumber(),
-                            amountOfTokenB: tradeAmountB.toNumber(),
-                            tradePrice,
-                            post,
-                            bumpTrade
-                        });
-
-                        if (sellOrder.amountOffered === 0) {
-                            orderBookCopy.sell.shift();
-                        } else {
-                            orderBookCopy.sell[0] = sellOrder;
-                        }
-
-                        if (buyOrder.amountExpected === 0) {
-                            orderBookCopy.buy.shift();
-                        } else {
-                            orderBookCopy.buy[0] = buyOrder;
-                        }
-                    } else {
-                        if (buyOrder.post) {
-                            buyOrder.price = sellOrder.price - this.tickSize;
-                        }
-                        if (sellOrder.post) {
-                            sellOrder.price = buyOrder.price + this.tickSize;
-                        }
-                    }
-                } else {
-                    console.log(`❌ No price match, stopping execution.`);
-                    break;
-                }
-            }
-
-            console.log(`✅ Matching complete. Trades executed: ${matches.length}`);
-            return { orderBook: orderBookCopy, matches: matches };
-        }
-
-
-          async matchTokenOrders(orderbookData) {
+    async matchTokenOrders(orderbookData) {
         if (!orderbookData || typeof orderbookData !== 'object') {
             console.error("⚠️ Invalid orderbookData received:", orderbookData);
             return { orderBook: { buy: [], sell: [] }, matches: [] };
@@ -572,8 +422,8 @@ class Orderbook {
                     buyOrder.amountExpected = buyAmountExpected.minus(tradeAmountA).toNumber();
 
                     matches.push({
-                        sellOrder: { ...sellOrder, amountOffered: tradeAmountA.toNumber() },
-                        buyOrder: { ...buyOrder, amountExpected: tradeAmountB.toNumber() },
+                        sellOrder: {...sellOrder, amountOffered: tradeAmountA.toNumber()},
+                        buyOrder: {...buyOrder, amountExpected: tradeAmountB.toNumber()},
                         amountOfTokenA: tradeAmountA.toNumber(),
                         amountOfTokenB: tradeAmountB.toNumber(),
                         tradePrice,

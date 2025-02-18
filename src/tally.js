@@ -513,7 +513,7 @@ class TallyMap {
     }
 
     // Method to update fee cache for a property
-    static async updateFeeCache(propertyId, amount, contractId) {
+    static async updateFeeCache(propertyId, amount, contractId,stash) {
         try {
             const db = await dbInstance.getDatabase('feeCache');
 
@@ -523,18 +523,29 @@ class TallyMap {
             let existingEntry = await db.findOneAsync({ _id: cacheId });
 
             let currentValue = new BigNumber(existingEntry ? existingEntry.value : 0);
-            let updatedValue = currentValue.plus(amount).toFixed(8); // Ensure strict 8 decimal places
-
-            await db.updateAsync(
+             // Ensure strict 8 decimal places
+            if(!stash){
+                let updatedValue = currentValue.plus(amount).toFixed(8);
+                await db.updateAsync(
                 { _id: cacheId },
                 { $set: { value: updatedValue, contract: contractId } }, // Store `value` as a STRING
                 { upsert: true }
-            );
-
-            console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
-        } catch (error) {
+                );
+                  console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
+            }else if(stash){
+                let updatedValue = currentValue.toFixed(8)
+                let stashBN = new BigNumber(amount).toFixed(8)
+                await db.updateAsync(
+                { _id: cacheId },
+                { $set: { value: updatedValue, contract: contractId, stash: stashBN } }, // Store `value` as a STRING
+                { upsert: true }
+                );
+                  console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);  
+            }
+            
+            } catch (error) {
             console.error('🚨 Error updating FeeCache:', error);
-        }
+            }
     }
 
     static async drawOnFeeCache(propertyId) {
