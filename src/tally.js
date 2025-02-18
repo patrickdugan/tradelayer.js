@@ -449,18 +449,35 @@ class TallyMap {
         try {
             const db = await dbInstance.getDatabase('feeCache');
             const results = await db.findAsync({});
-            
+
             if (!results || results.length === 0) {
+                //console.log("⚠️ No fee cache entries found.");
                 return fees;
             }
 
             console.log(`✅ Loaded ${results.length} fee cache entries.`);
+
             for (let result of results) {
-            
-                if (result._id && result.value) {
-                    let feeData = JSON.parse(result.value);
-                    fees.set(result._id, feeData);
+                console.log(`📝 DB Entry: ${JSON.stringify(result)}`);
+
+                if (!result._id) {
+                    console.warn(`⚠️ Skipping malformed entry (missing _id): ${JSON.stringify(result)}`);
+                    continue;
                 }
+
+                if (typeof result.value === "undefined") {
+                    console.warn(`⚠️ Skipping entry with undefined value: ${JSON.stringify(result)}`);
+                    continue;
+                }
+
+                let feeData = {
+                    value: parseFloat(result.value), // ✅ Ensure value is a number
+                    contract: result.contract || null
+                };
+
+                console.log(`🔹 Fee Cache Parsed - Key: ${result._id}, Value: ${feeData.value}, Contract: ${feeData.contract}`);
+
+                fees.set(result._id, feeData);
             }
         } catch (error) {
             console.error(`🚨 Error loading fee cache:`, error);
@@ -472,13 +489,11 @@ class TallyMap {
     static async loadFeeCacheForProperty(id) {    
         try {
             const db = await dbInstance.getDatabase('feeCache');
-
             const result = await db.findAsync({});
             console.log('Database contents:', JSON.stringify(result, null, 2));
 
             let value = 0;
             for (const doc of result) {
-                console.log(JSON.stringify(doc))
                 if (doc._id == id) {
                     value = parseFloat(doc.value);
                     console.log('FeeCache loaded for property ' + id + ': ' + value);
@@ -498,23 +513,27 @@ class TallyMap {
     }
 
     // Method to update fee cache for a property
-      static async updateFeeCache(propertyId, amount, contractId) {
-        
+    static async updateFeeCache(propertyId, amount, contractId) {
         try {
             const db = await dbInstance.getDatabase('feeCache');
 
             const cacheId = `${propertyId}-${contractId}`;
-            const rounded = new BigNumber(amount).decimalPlaces(8).toNumber()
-            
+
+            // ✅ Fetch the existing fee cache entry
+            let existingEntry = await db.findOneAsync({ _id: cacheId });
+
+            let currentValue = new BigNumber(existingEntry ? existingEntry.value : 0);
+            let updatedValue = currentValue.plus(amount).toFixed(8); // Ensure strict 8 decimal places
+
             await db.updateAsync(
                 { _id: cacheId },
-                { $inc: { value: amount }, $set: { contract: contractId } },
+                { $set: { value: updatedValue, contract: contractId } }, // Store `value` as a STRING
                 { upsert: true }
             );
 
-            console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} by ${amount}.`);
+            console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
         } catch (error) {
-            console.error('Error updating FeeCache:', error);
+            console.error('🚨 Error updating FeeCache:', error);
         }
     }
 

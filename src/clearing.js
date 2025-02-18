@@ -41,6 +41,8 @@ class Clearing {
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...static async feeCacheBuy(block) {
     static async feeCacheBuy(block) {
+
+    const ContractRegistry = require('./contractRegistry.js');
         // Load fees from database (includes contract IDs now)
         let fees = await TallyMap.loadFeeCacheFromDB();
 
@@ -49,7 +51,7 @@ class Clearing {
         }
 
         for(let [key, feeData] of fees.entries()){
-               console.log('🔎  Fee cache '+key+feeData.value)
+            console.log('🔎  Fee cache '+key+feeData.value)
             if (!feeData || !feeData.contract || feeData.value <= 0) continue;
 
             let [property, contractId] = key.split("-");
@@ -103,7 +105,7 @@ class Clearing {
                 console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
 
                 await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId);
-                const matchResult = await orderbook.matchTokenOrders(orderBookKey);
+                const matchResult = await orderbook.matchTokenOrders(orderbook);
                 if (matchResult.matches && matchResult.matches.length > 0) {
                     console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
                     await orderbook.processTokenMatches(matchResult.matches, block, null, false);
@@ -314,7 +316,7 @@ class Clearing {
 
         for (let position of positions) {
             const tally = await TallyMap.getTally(position.address)
-            const {liquidationPrice,bankruptcyPrice} = await MarginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notionalValue,inverse,Boolean(position.contracts>0),position.avgPrice)
+            const {liquidationPrice,bankruptcyPrice} = await marginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notionalValue,inverse,Boolean(position.contracts>0),position.avgPrice)
             position.liquidationPrice = liquidationPrice
             position.bankruptcyPrice = bankruptcyPrice
             if(position.contracts==0){continue}

@@ -319,19 +319,36 @@ class Orderbook {
         }
 
         async matchTokenOrders(orderbookData) {
-            if (!orderbookData) {
-                return { orderBook: { buy: [], sell: [] }, matches: [] }; // Return empty matches
+            if (!orderbookData || typeof orderbookData !== 'object') {
+                console.error("⚠️ Invalid orderbookData received:", orderbookData);
+                return { orderBook: { buy: [], sell: [] }, matches: [] }; // Ensure no crash
             }
 
-            // Make a deep copy of the orderbookData to avoid unintended mutations
-            let orderBookCopy = JSON.parse(JSON.stringify(orderbookData));
+            // Extract the correct orderbook object
+            let extractedOrderbook = orderbookData.orderBooks && orderbookData.orderBooks[orderBookKey];
+            if (!extractedOrderbook) {
+                console.warn(`⚠️ No orderbook found for key ${orderBookKey}, initializing empty.`);
+                extractedOrderbook = { buy: [], sell: [] }; // Default structure
+            }
+
+            // Ensure `buy` and `sell` exist
+            let orderBookCopy = {
+                buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
+                sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
+            };
+
+            console.log(`📊 Matching orders... Buy: ${orderBookCopy.buy.length}, Sell: ${orderBookCopy.sell.length}`);
 
             let matches = [];
 
-            // Sort buy and sell orders
-            orderBookCopy.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime); // Highest price first
-            orderBookCopy.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime); // Lowest price first
+            // Sort buy and sell orders safely
+            if (orderBookCopy.buy.length > 0) {
+                orderBookCopy.buy.sort((a, b) => new BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime);
+            }
 
+            if (orderBookCopy.sell.length > 0) {
+                orderBookCopy.sell.sort((a, b) => new BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime);
+            }
             //console.log('orderbook inside match orders ' + JSON.stringify(orderBookCopy));
 
             let counter = 0
@@ -1031,7 +1048,7 @@ async matchContractOrders(orderBook) {
                 console.error('Matches is not an array:', matches);
                 matches = []; // Initialize as an empty array if that's appropriate
             }
-            
+
             const MarginMap = require('./marginMap.js')
             const tradeHistoryManager = new TradeHistory()
 

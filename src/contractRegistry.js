@@ -309,7 +309,7 @@ class ContractRegistry {
         return contractInfo.native ? 'native' : 'oracle';
     }
 
-    static async isNativeContract(contractId) {
+    static async isNativeContract(contractId){
         console.log('inside isNative')
         const contractInfo = await this.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
