@@ -533,7 +533,7 @@ class TallyMap {
                 );
                   console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
             }else if(stash){
-                let updatedValue = currentValue.toFixed(8)
+                let updatedValue = currentValue.minus(amount).toFixed(8)
                 let stashBN = new BigNumber(amount).toFixed(8)
                 await db.updateAsync(
                 { _id: cacheId },

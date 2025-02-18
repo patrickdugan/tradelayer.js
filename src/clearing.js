@@ -56,6 +56,7 @@ static async feeCacheBuy(block) {
 
         let [property, contractId] = key.split("-");
         let feeAmount = new BigNumber(feeData.value);
+        let stash = feeData.stash ||0
         if (feeAmount.isZero()) continue;
 
         console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
@@ -72,8 +73,8 @@ static async feeCacheBuy(block) {
 
         if (isOracle) {
             // Oracle-based contracts: 50% to contract's insurance fund, 50% to insurance fund 1
-            insuranceAmount = feeAmount.dividedBy(2);
-            globalInsuranceAmount = feeAmount.dividedBy(2);
+            insuranceAmount = feeAmount.dividedBy(2).decimalPlaces(8, BigNumber.ROUND_DOWN);
+            globalInsuranceAmount = feeAmount.dividedBy(2).decimalPlaces(8, BigNumber.ROUND_UP);
         } else {
             // Native contracts: 100% goes to buying property 1
             buyAmount = feeAmount;
@@ -86,24 +87,15 @@ static async feeCacheBuy(block) {
             let orderBookKey = `1-${property}`;
             let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
 
-             let extractedOrderbook = orderbook.orderBooks[orderBookKey]
+            let extractedOrderbook = orderbook.orderBooks[orderBookKey] || { buy: [], sell: [] };
 
-        if (!extractedOrderbook) {
-            console.warn(`⚠️ No orderbook found for key ${orderBookKey}, initializing empty.`);
-            extractedOrderbook = { buy: [], sell: [] };
-        }
-
-        let orderbookCopy = {
-            buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
-            sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
-        };
-
-
+            let orderbookCopy = {
+                buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
+                sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
+            };
 
             // Check if there are any sell orders available before placing a buy order
-           
             if (orderbookCopy.sell.length > 0) {
-                throw  console.log('📝 orderbookCopy' +JSON.stringify(orderbookCopy))
                 const totalBuy = buyAmount.plus(globalInsuranceAmount);
 
                 const order = {
@@ -126,31 +118,41 @@ static async feeCacheBuy(block) {
                 if (matchResult.matches && matchResult.matches.length > 0) {
                     console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
                     await orderbook.processTokenMatches(matchResult.matches, block, null, false);
-                    // **Ensure global insurance deposit goes to contract 1 fund**
-                        
-                        console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
-                        await globalInsurance.deposit(1, match.amountOfTokenA);
-                        await TallyMap.updateFeeCache(property, match.amountofTokenB, contractId);
+
+                    console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
+                    await globalInsurance.deposit(1, matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0)));
+                    await TallyMap.updateFeeCache(property, matchResult.matches.reduce((acc, match) => acc.plus(match.amountofTokenB), new BigNumber(0)).toNumber(), contractId);
                 } else {
                     console.log(`⚠️ No matching orders found for ${property}.`);
                 }
                 await orderbook.saveOrderBook(orderBookKey);
             } else {
-                console.log(`⚠️ No sell liquidity for ${property}, skipping order placement. Stashing fee for future order`);
-                await TallyMap.updateFeeCache(property, globalInsuranceAmount.toNumber(), contractId, true)
+                console.log(`⚠️ No sell liquidity for ${property}, checking stash handling.`);
+                let newStash = new BigNumber(stash).plus(globalInsuranceAmount);
+
+                // Prevent dust accumulation by setting a minimum threshold
+                if (newStash.isLessThan(1e-8)) {
+                    console.log(`🚨 Preventing dust accumulation: Stash is too small (${newStash}), discarding.`);
+                    newStash = new BigNumber(0);
+                }
+
+                // Update the fee cache with the adjusted stash
+                await TallyMap.updateFeeCache(property, newStash.toNumber(), contractId, true);
             }
         }
 
         // **Ensure contract insurance deposit is stored correctly**
         if (insuranceAmount.gt(0)) {
             console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
-            await insurance.deposit(property, insuranceAmount.toNumber());
-            await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
+            try {
+                await insurance.deposit(property, insuranceAmount.toNumber());
+                await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
+            } catch (error) {
+                console.error(`❌ Error processing insurance deposit for ${contractId}:`, error);
+            }
         }
     }
 }
-
-
 
    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
