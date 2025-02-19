@@ -457,7 +457,7 @@ class ContractRegistry {
     }
 
         // In the contract order addition process
-    static async moveCollateralToReserve(sender, contractId, amount,price, block) {
+    static async moveCollateralToReserve(sender, contractId, amount,price, block,txid,inProcess) {
         const TallyMap = require('./tally.js')
         const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
         console.log('initialMarginPerContract '+initialMarginPerContract)
@@ -471,7 +471,9 @@ class ContractRegistry {
         const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender,collateralPropertyId,totalInitialMargin)
         console.log(hasSufficientBalance.hasSufficient)
         if(hasSufficientBalance.hasSufficient){
-            await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, 'contractReserveInitMargin',block); 
+            let reason ='contractReserveInitMargin'
+            if(inProcess){reason = 'contractReserveFromMatchProcess'}
+            await TallyMap.updateBalance(sender, collateralPropertyId, -totalInitialMargin, totalInitialMargin, 0, 0, reason,block,txid); 
             return totalInitialMargin
         }else{
             return null

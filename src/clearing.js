@@ -51,7 +51,7 @@ static async feeCacheBuy(block) {
     }
 
     for (let [key, feeData] of fees.entries()) {
-        console.log('🔎 Fee cache ' + key + feeData.value);
+        //console.log('🔎 Fee cache ' + key + feeData.value);
         if (!feeData || !feeData.contract || feeData.value <= 0) continue;
 
         let [property, contractId] = key.split("-");
@@ -59,7 +59,7 @@ static async feeCacheBuy(block) {
         let stash = feeData.stash ||0
         if (feeAmount.isZero()) continue;
 
-        console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
+        //console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
 
         let isNativeAsset = property.toString().startsWith("s") || property === "1";
 
@@ -80,7 +80,7 @@ static async feeCacheBuy(block) {
             buyAmount = feeAmount;
         }
 
-        console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
+        //console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
 
         // **Ensure buy orders are only placed if there's liquidity**
         if (buyAmount.gt(0) || globalInsuranceAmount.gt(0)) {
@@ -116,10 +116,10 @@ static async feeCacheBuy(block) {
                 await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId);
                 const matchResult = await orderbook.matchTokenOrders(reply);
                 if (matchResult.matches && matchResult.matches.length > 0) {
-                    console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
+                    //console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
                     await orderbook.processTokenMatches(matchResult.matches, block, null, false);
 
-                    console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
+                    //console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
                     await globalInsurance.deposit(1, matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0)));
                     await TallyMap.updateFeeCache(property, matchResult.matches.reduce((acc, match) => acc.plus(match.amountofTokenB), new BigNumber(0)).toNumber(), contractId);
                 } else {
@@ -127,12 +127,12 @@ static async feeCacheBuy(block) {
                 }
                 await orderbook.saveOrderBook(orderBookKey);
             } else {
-                console.log(`⚠️ No sell liquidity for ${property}, checking stash handling.`);
+                //console.log(`⚠️ No sell liquidity for ${property}, checking stash handling.`);
                 let newStash = new BigNumber(stash).plus(globalInsuranceAmount);
 
                 // Prevent dust accumulation by setting a minimum threshold
                 if (newStash.isLessThan(1e-8)) {
-                    console.log(`🚨 Preventing dust accumulation: Stash is too small (${newStash}), discarding.`);
+                    //console.log(`🚨 Preventing dust accumulation: Stash is too small (${newStash}), discarding.`);
                     newStash = new BigNumber(0);
                 }
 

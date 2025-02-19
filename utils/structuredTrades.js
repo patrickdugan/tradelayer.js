@@ -85,21 +85,22 @@ async function structuredTestTrades() {
   // ============ 1) Alice places a BUY at price 5000, amount=5 ============
   const aliceBuy = {
     contractId: contractId,
-    amount: 550,
-    price: 126.5,
+    amount: 50,
+    price: 142.5,
     sell: true 
   };
   // blockTime param is handled in your code, so you just pass in e.g. block=100
-  await createAndSendContractTrade(bobAddress,/*aliceAddress,*/ aliceBuy, 100);
+  //await createAndSendContractTrade(bobAddress,/*aliceAddress,*/ aliceBuy, 100);
 
   // ============ 2) Bob places a SELL at price 5000, amount=5 ============
   const bobSell = {
     contractId: contractId,
-    amount: 500,
-    price: 126,
+    amount: 350,
+    price: 106,
     sell: false 
   };
-  await createAndSendContractTrade(aliceAddress, bobSell, 100);
+
+  await createAndSendContractTrade(aliceAddress, aliceBuy, 100);
 
   // We'll assume these both appear in block #100 or so. 
   // In your real setup, you might need to manually confirm the block is mined

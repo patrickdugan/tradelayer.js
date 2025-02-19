@@ -42,7 +42,7 @@ class TallyMap {
         }
     }
 
-    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block) {
+    static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block,txid) {
             console.log('inside updateBalance for '+address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block)
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
@@ -143,7 +143,7 @@ class TallyMap {
             if(availableChange==0&&reservedChange==0&&marginChange==0&&vestingChange==0){
 
             }else{
-                await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, 0, type) 
+                await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, 0, type,txid) 
             }
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
@@ -455,10 +455,10 @@ class TallyMap {
                 return fees;
             }
 
-            console.log(`✅ Loaded ${results.length} fee cache entries.`);
+            //console.log(`✅ Loaded ${results.length} fee cache entries.`);
 
             for (let result of results) {
-                console.log(`📝 DB Entry: ${JSON.stringify(result)}`);
+                //console.log(`📝 DB Entry: ${JSON.stringify(result)}`);
 
                 if (!result._id) {
                     console.warn(`⚠️ Skipping malformed entry (missing _id): ${JSON.stringify(result)}`);
@@ -475,7 +475,7 @@ class TallyMap {
                     contract: result.contract || null
                 };
 
-                console.log(`🔹 Fee Cache Parsed - Key: ${result._id}, Value: ${feeData.value}, Contract: ${feeData.contract}`);
+                //console.log(`🔹 Fee Cache Parsed - Key: ${result._id}, Value: ${feeData.value}, Contract: ${feeData.contract}`);
 
                 fees.set(result._id, feeData);
             }
@@ -531,7 +531,7 @@ class TallyMap {
                 { $set: { value: updatedValue, contract: contractId } }, // Store `value` as a STRING
                 { upsert: true }
                 );
-                  console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
+                  //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
             }else if(stash){
                 let updatedValue = currentValue.minus(amount).toFixed(8)
                 let stashBN = new BigNumber(amount).toFixed(8)
@@ -540,7 +540,7 @@ class TallyMap {
                 { $set: { value: updatedValue, contract: contractId, stash: stashBN } }, // Store `value` as a STRING
                 { upsert: true }
                 );
-                  console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);  
+                  //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);  
             }
             
             } catch (error) {
@@ -589,14 +589,15 @@ class TallyMap {
     }
 
     // Function to record a delta
-    static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, type){
+    static async recordTallyMapDelta(address, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, type,txid){
         const newUuid = uuid.v4();
         const db = await dbInstance.getDatabase('tallyMapDelta');
         let deltaKey = `${address}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
         const tally = TallyMap.getTally(address, propertyId)
-            total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
-        const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type };
+        if(!txid){txid=''}
+        total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
+        const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type, tx: txid };
         
         console.log('saving delta ' + JSON.stringify(delta));
 

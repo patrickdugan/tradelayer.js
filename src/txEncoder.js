@@ -4,6 +4,15 @@ const base256 = require('./base256.js');
 const marker = 'tl';
 
 const Encode = {
+
+    encodeAmount: (amt) => {
+        const scaledAmt = new BigNumber(amt).times(1e8);
+        const isWholeNumber = amt % 1 === 0;
+
+        return isWholeNumber
+            ? amt.toString(36)  // Base36 encoding for whole numbers
+            : scaledAmt.integerValue().toString(36) + '~';  // Base36 with `~` flag for decimals
+    },
     // Encode Simple Token Issue Transaction
     encodeActivateTradeLayer(params) {
         const txTypeEncoded = Array.isArray(params.txTypeToActivate)
@@ -334,10 +343,11 @@ const Encode = {
     },
 
     // Encode Trade Contract On-chain Transaction
+    // **✅ Encode Trade Contract Onchain**
     encodeTradeContractOnchain: (params) => {
         const payload = [
             params.contractId.toString(36),
-            params.price.toString(36),
+            Encode.encodeAmount(params.price), // 🛠 Correctly encodes decimal prices
             params.amount.toString(36),
             params.sell ? '1' : '0',
             params.insurance ? '1' : '0',
@@ -354,7 +364,7 @@ const Encode = {
     encodeTradeContractChannel: (params) => {
         const payload = [
             params.contractId.toString(36),
-            params.price.toString(36),
+            Encode.encodeAmount(params.price),
             params.amount.toString(36),
             params.columnAIsSeller ? '1' : '0',
             params.expiryBlock.toString(36),
@@ -439,7 +449,7 @@ const Encode = {
     },
 
     // Encode Redeem Synthetic Transaction
-    encodeRedeemSynthetic: (params) => {
+    encodeRedeemSynthetic: (params) =>{
         const payload = [
             params.propertyIdUsed.toString(36),
             params.contractIdUsed.toString(36),
@@ -451,7 +461,7 @@ const Encode = {
     },
 
     // Encode Pay to Tokens Transaction
-    encodePayToTokens: (params) => {
+    encodePayToTokens: (params) =>{
         const payload = [
             params.propertyIdTarget.toString(36),
             params.propertyIdUsed.toString(36),
