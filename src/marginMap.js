@@ -636,6 +636,7 @@ class MarginMap {
         if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
             console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
         }
+
         const priceBN = new BigNumber(price);
         const avgPriceBN = new BigNumber(avgPrice);
         const contractsBN = new BigNumber(contracts);
@@ -861,7 +862,7 @@ class MarginMap {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse) {
+    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
 
       let remainingSize = new BigNumber(unfilledContracts);
@@ -922,7 +923,6 @@ class MarginMap {
         if (matchSize > 0) {
           await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell);
             const matchBN = new BigNumber(matchSize)
-            const notional = new BigNumber(liqPrice).multipliedBy(matchBN).decimalPlaces(2).toNumber()
 
           await this.realizePnl(
             pos.address,

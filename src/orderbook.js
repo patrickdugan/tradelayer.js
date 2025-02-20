@@ -1154,7 +1154,8 @@ async matchContractOrders(orderBook) {
                         let avgEntry = match.buyerPosition.avgPrice 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        const accountingPNL = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.buyerPosition, true,match.buyOrder.contractId);
+                
+                        const accountingPNL = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         console.log('about to call settlePNL '+closedContracts+' '+match.tradePrice+' '+lastMark)
@@ -1212,8 +1213,8 @@ async matchContractOrders(orderBook) {
                         //console.log('LIFO '+JSON.stringify(LIFO))
 
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
-                        const accountingPNL = await marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.sellerPosition, false,match.sellOrder.contractId);
-                       //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
+                        const accountingPNL = await marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.sellerPosition, false,match.sellOrder.contractId);
+                        //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
