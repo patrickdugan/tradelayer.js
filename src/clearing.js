@@ -333,7 +333,8 @@ static async feeCacheBuy(block) {
         let isLiq = [];
         let systemicLoss = 0;
 
-        for(let position of positions){
+        for (let i = 0; i < positions.length; i++) {
+            let position = positions[i];
             console.log('position before '+JSON.stringify(positions))
             const tally = await TallyMap.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
@@ -375,6 +376,7 @@ static async feeCacheBuy(block) {
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;
                             }
+                            positions = await marginMap.getAllPositions();
                         }
                     } else {
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
@@ -395,6 +397,7 @@ static async feeCacheBuy(block) {
                                         isLiq.push(liquidationResult.liquidation);
                                         systemicLoss += liquidationResult.systemicLoss;
                                     }
+                                    positions = await marginMap.getAllPositions()
                                 }
                                 continue;
                             } else {
@@ -403,6 +406,7 @@ static async feeCacheBuy(block) {
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
                                 }
+                                positions = await marginMap.getAllPositions()
                             }
                         }
                     }
