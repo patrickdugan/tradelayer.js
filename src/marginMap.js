@@ -133,11 +133,11 @@ class MarginMap {
         .toNumber();
         console.log('aftermargin  '+position.margin)
         // Update the MarginMap with the modified position
+        if(sender==null){throw new Error()}
         this.margins.set(sender, position);
         //console.log('margin should be topped up '+JSON.stringify(position))
         await this.recordMarginMapDelta(sender, contractId, position.contracts, 0, totalInitialMargin, 0, 0, 'initialMargin', block)
-        if(block==3617631&&sender=="tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr"){throw new Error()}
-        // Save changes to the database or your storage solution
+         // Save changes to the database or your storage solution
         await this.saveMarginMap(true);
         return position
     }
@@ -245,6 +245,7 @@ class MarginMap {
             position.liqPrice = liquidationInfo.liquidationPrice || null
             position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice   
         }
+        if(address==null){throw new Error()}
         this.margins.set(address, position);  
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
       
@@ -409,6 +410,7 @@ class MarginMap {
         }
         
         // Save the updated position
+        if(address==null){throw new Error()}
         this.margins.set(address, position);
         this.margins.set(synthId,vaultPosition)
         await this.recordMarginMapDelta(synthId, contractId, vaultPosition.contracts, contracts, margin, 0, avgDelta, 'mintMarginAndContractsToVault');
@@ -501,6 +503,7 @@ class MarginMap {
             }
 
             console.log('updating margin map in redeem '+address+' '+JSON.stringify(position))
+            if(address==null){throw new Error()}
             this.margins.set(address, position);
             await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -accountingPNL, 0, 'redeemMarginAndContractsFromVault');
             await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, accountingPNL,0,'moveMarginAndContractsForRedeem')
@@ -605,7 +608,7 @@ class MarginMap {
 
         console.log(`✅ Final Margin: ${pos.margin} (Reduced by ${reduction}), Required Margin: ${requiredMargin.toFixed(8)}`);
 
-        this.margins.set(address, pos);
+        this.margins.set(pos.address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction, 0, 0, 'marginReduction');
         await this.saveMarginMap(true);
 
@@ -617,7 +620,7 @@ class MarginMap {
         pos.margin = new BigNumber(pos.margin).minus(reduction).decimalPlaces(8)
         .toNumber(); // Update the margin for the existing or new position
         console.log('updating margin in fee'+pos.margin)           
-        this.margins.set(address, pos);
+        this.margins.set(pos.address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginFeeReduction')
         //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
         await this.saveMarginMap(true);
@@ -740,7 +743,7 @@ class MarginMap {
                 //pos.margin -= Math.abs(pnl);
                 const uPNLBN = new BigNumber(pos.unrealizedPNL)
                 pos.unrealizedPNL -= uPNLBN.minus(pnl).decimalPlaces(8).toNumber();
-                this.margins.set(address, pos)
+                this.margins.set(pos.address, pos)
                 await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL', currentBlockHeight)
       
                 return pnl.decimalPlaces(8).toNumber();
@@ -767,7 +770,7 @@ class MarginMap {
         position.margin = marginChange
 
         // Save the updated position
-        this.margins.set(address, position);
+        this.margins.set(position.address, position);
 
         // Record the change in margin map deltas
         await this.recordMarginMapDelta(address, contractId, position.contracts, 0, marginChange, 0, 0, 'updateMargin',block);
@@ -784,7 +787,8 @@ class MarginMap {
             }
             const uPNLBN = new BigNumber(position.unrealizedPNL)
             position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
-            this.margins.set(address, position)
+            if(address==null){throw new Error()}
+            this.margins.set(position.address, position)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block)
             return position
     }
@@ -973,7 +977,7 @@ async adjustDeleveraging(address, contractId, size, sell) {
         position.bankruptcyPrice = null;
     }
     console.log('⚠️ '+position.contracts)
-    this.margins.set(address, position);
+    this.margins.set(position.address, position);
     this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging')  
     await this.saveMarginMap(true);
 }
@@ -1088,7 +1092,7 @@ async executeDeleveraging(address, contractId, size, side, liqPrice) {
         position.bankruptcyPrice = null;
     }
 
-    marginMap.margins.set(address, position);
+    marginMap.margins.set(position.address, position);
     await marginMap.saveMarginMap(true);
 }
 
