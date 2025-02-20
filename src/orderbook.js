@@ -511,15 +511,17 @@ class Orderbook {
         }
 
 async estimateLiquidation(liquidationOrder) {
-    const { contractId, size, side, price: liqPrice } = liquidationOrder;
+   
+    const { contractId, size, sell, price: liqPrice, address } = liquidationOrder;
+     console.log('est liq '+sell)
 
     // Load the order book for the given contract
     const orderBookKey = `${contractId}`;
     const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
-    let orders = side === 'sell' ? orderbookData.buy : orderbookData.sell; // Match against the opposite side
+    let orders = sell ? orderbookData.buy : orderbookData.sell; // Match against the opposite side
 
-    if (!orders || orders.length === 0) {
+    if(!orders || orders.length === 0){
         return {
             estimatedFillPrice: null,
             filledSize: 0,
@@ -535,7 +537,7 @@ async estimateLiquidation(liquidationOrder) {
     }
 
     // Sort orders by price (ascending for buy orders, descending for sell orders)
-    orders = side === 'sell'
+    orders = sell
         ? orders.sort((a, b) => b.price - a.price) // Sell side: match highest bids first
         : orders.sort((a, b) => a.price - b.price); // Buy side: match lowest asks first
 
@@ -546,18 +548,26 @@ async estimateLiquidation(liquidationOrder) {
     let partiallyFilledBelowLiqPrice = false;
     let liquidationLoss = new BigNumber(0);
     let trueLiqPrice = null; // Track price where full liquidation would happen
+    let liqPriceBN = new BigNumber(liqPrice)
+    
 
     for (let order of orders) {
+        //console.log('checking for self skip '+JSON.stringify(order)+' '+address+' '+Boolean(order.address==address))
+        if(order.sender==address){continue}
+        console.log('no skip')
+        let orderPriceBN = new BigNumber(order.price)
+        let priceDiff = liqPriceBN.minus(orderPriceBN)
         let fillAmount = BigNumber.min(remainingSize, order.amount);
         totalCost = totalCost.plus(fillAmount.times(order.price));
         filledSize = filledSize.plus(fillAmount);
         remainingSize = remainingSize.minus(fillAmount);
 
         // If we go below liquidation price, flag it
-        if (order.price < liqPrice) {
+        console.log('about to check for systemic loss '+order.price+' '+liqPrice+' '+sell)
+        if ((order.price < liqPrice)&&sell||(order.price>liqPrice)&&!sell) {
             filledBelowLiqPrice = true;
-            partiallyFilledBelowLiqPrice = filledSize.gt(0) && filledSize.lt(size);
-            liquidationLoss = liquidationLoss.plus(fillAmount.times(liqPrice - order.price));
+            partiallyFilledBelowLiqPrice = filledSize.gt(0) && filledSize.lt(sell);
+            liquidationLoss = liquidationLoss.plus(fillAmount.times(priceDiff));
         }
 
         // Store the last order price where we stopped (for trueLiqPrice)
@@ -568,19 +578,19 @@ async estimateLiquidation(liquidationOrder) {
 
     let estimatedFillPrice = filledSize.gt(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
     let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
-    let trueBookEmpty = remainingSize.gt(0) && orders.length === 0;
+    let trueBookEmpty = remainingSize.gt(0)
     let remainder = remainingSize.toNumber(); // Contracts still unfilled
 
     return {
         estimatedFillPrice,
         filledSize: filledSize.toNumber(),
         partialFillPercent,
-        filled: filledSize.gte(size),
+        filled: filledSize.gte(sell),
         filledBelowLiqPrice,
         partiallyFilledBelowLiqPrice,
         trueBookEmpty,
         remainder,
-        liquidationLoss: liquidationLoss.toNumber(),
+        liquidationLoss: liquidationLoss.decimalPlaces(8).toNumber(),
         trueLiqPrice // This is the price where remaining contracts could be filled if the book had enough liquidity
     };
 }
@@ -1144,7 +1154,7 @@ async matchContractOrders(orderBook) {
                         let avgEntry = match.buyerPosition.avgPrice 
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        const accountingPNL = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
+                        const accountingPNL = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, notionalValue, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         console.log('about to call settlePNL '+closedContracts+' '+match.tradePrice+' '+lastMark)

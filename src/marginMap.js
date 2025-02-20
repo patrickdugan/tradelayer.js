@@ -811,9 +811,7 @@ class MarginMap {
                     liquidationSize = new BigNumber(position.contracts).dividedBy(2)
                     .decimalPlaces(0, BigNumber.ROUND_UP).toNumber();
                 }
-                
-
-
+            
                 let liquidationOrder={
                     address: position.address,
                     contractId: contractId,
@@ -821,7 +819,6 @@ class MarginMap {
                     price: position.liqPrice,
                     sell: sell,
                     bankruptcyPrice: position.bankruptcyPrice
-
                 }
 
                 if(total){

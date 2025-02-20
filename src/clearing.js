@@ -434,7 +434,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
     // Step 2: Estimate liquidation impact on the orderbook
     let splat = await orderbook.estimateLiquidation(liq);
-    console.log(`Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
+    console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
     let marginReduce = position.margin
 
     if(liquidationType=="partial"){marginReduce=marginDent}
@@ -462,8 +462,9 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         }else if (splat.filledBelowLiqPrice && splat.remainder === 0){
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
-        }else if (splat.filledBelowLiqPrice && splat.trueBookEmpty) {
+        }else if (splat.filledBelowLiqPrice && splat.remainder>0) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
+            console.log(caseLabel)
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price,position.address, inverse);
         }else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
