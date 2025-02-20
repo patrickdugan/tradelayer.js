@@ -336,8 +336,10 @@ static async feeCacheBuy(block) {
         let isLiq = [];
         let systemicLoss = 0;
 
-        for (let position of positions) {
-            const tally = await TallyMap.getTally(position.address)
+        for(let position of positions){
+            console.log('position before '+JSON.stringify(positions))
+            const tally = await TallyMap.getTally(position.address,collateralId)
+            console.log('just checking '+position.address)
             const {liquidationPrice,bankruptcyPrice} = await marginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notionalValue,inverse,Boolean(position.contracts>0),position.avgPrice)
             position.liquidationPrice = liquidationPrice
             position.bankruptcyPrice = bankruptcyPrice
@@ -346,12 +348,13 @@ static async feeCacheBuy(block) {
                 console.log('last price was null, using avg price:', position.avgPrice);
                 blob.lastPrice = position.avgPrice;
             }
+            console.log('🔄 position '+JSON.stringify(position))
 
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notionalValue);
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
-            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId);
-
+            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight);
+            if(blockHeight==3617631&&position.address==null){throw new Error()}
             if(pnlChange>0){
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
@@ -432,11 +435,14 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     // Step 2: Estimate liquidation impact on the orderbook
     let splat = await orderbook.estimateLiquidation(liq);
     console.log(`Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
+    let marginReduce = position.margin
 
+    if(liquidationType=="partial"){marginReduce=marginDent}
+
+    console.log('🏦 margin reduce '+position.margin +' '+marginReduce+' '+JSON.stringify(position))
+    const infoBlob = {posMargin: position.margin,reduce: marginReduce,dent: marginDent}
     // Step 3: Adjust margin & balances
     position = await marginMap.updateContractBalances(position.address, liq.size, liq.price, !liq.sell, position, inverse, true, false, contractId);
-    let marginReduce = position.margin
-    if(marginDent!==undefined||marginDent!==null){marginReduce=marginDent}
       
     await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);
     position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
@@ -470,7 +476,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     }
 
     // Step 5: Save liquidation results
-    await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice,result);
+    await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice,result,infoBlob);
 
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber() };
 }

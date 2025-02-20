@@ -675,7 +675,7 @@ class TallyMap {
             vesting:addressObj[propertyId].vesting,
             channel: addressObj[propertyId].channelBalance}
 
-            console.log('return obj '+JSON.stringify(returnObj))
+            console.log('return obj '+address+' '+JSON.stringify(returnObj))
 
         return returnObj
     }

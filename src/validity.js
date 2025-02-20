@@ -1238,6 +1238,11 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            if(sender==null){
+                params.valid=false
+                params.reason += "Sender is null"
+            }
+
             const is = await Validity.isActivated(params.block,txid,18)
             console.log(is)
             if (!is) {
@@ -1366,6 +1371,11 @@ const Validity = {
                 params.valid=false
                 params.reason = "Tx confirmed in block later than expiration block"
                 return params
+            }
+
+            if(sender==null){
+                params.valid=false
+                params.reason += "Sender is null"
             }
 
             const channel = await Channels.getChannel(sender)

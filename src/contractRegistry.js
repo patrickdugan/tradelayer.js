@@ -572,7 +572,7 @@ class ContractRegistry {
             }
         } 
         console.log('about to setInitialMargin '+sender+contractId+' '+totalInitialMargin) 
-        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin);
+        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin,block);
         return position
     }           
 
