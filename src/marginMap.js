@@ -627,6 +627,7 @@ class MarginMap {
         return pos;
     }
 
+    
     async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
         if (!pos) return new BigNumber(0);
 
@@ -661,15 +662,17 @@ class MarginMap {
         // Adjust the sign based on the isBuy flag
         pnl = isBuy ? pnl.times(-1) : pnl;
         pnl = pnl.decimalPlaces(8).toNumber()
-
+        const absRPNL = Math.abs(pnl)
+        const sign = pos.unrealizedPNL>0 ? 1: -1
+        const signBN = new BigNumber(sign)
         // Modify the position object
-        // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
-        // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
-
+        const uPNLBig = new BigNumber(Math.abs(pos.unrealizedPNL))
+        pos.unrealizedPNL = uPNLBig.minus(absRPNL).times(sign).decimalPlaces(8).toNumber();
+        pos.realizedPNL = pnl
         console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
         await this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
       
-        return pnl;
+        return pos
     }
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block){
