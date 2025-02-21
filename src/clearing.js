@@ -333,6 +333,7 @@ static async feeCacheBuy(block) {
         let isLiq = [];
         let systemicLoss = 0;
 
+            
         for (let i = 0; i < positions.length; i++) {
             let position = positions[i];
             console.log('position before '+JSON.stringify(positions))
@@ -352,7 +353,6 @@ static async feeCacheBuy(block) {
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
             let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight);
-            if(blockHeight==3617631&&position.address==null){throw new Error()}
             if(pnlChange>0){
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
@@ -375,8 +375,9 @@ static async feeCacheBuy(block) {
                             if (liquidationResult) {
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;
+                                positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
                             }
-                            positions = await marginMap.getAllPositions();
+                            continue
                         }
                     } else {
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
@@ -396,8 +397,8 @@ static async feeCacheBuy(block) {
                                     if (liquidationResult) {
                                         isLiq.push(liquidationResult.liquidation);
                                         systemicLoss += liquidationResult.systemicLoss;
+                                        positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
                                     }
-                                    positions = await marginMap.getAllPositions()
                                 }
                                 continue;
                             } else {
@@ -405,8 +406,8 @@ static async feeCacheBuy(block) {
                                 if (liquidationResult) {
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
+                                    positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
                                 }
-                                positions = await marginMap.getAllPositions()
                             }
                         }
                     }
@@ -418,7 +419,6 @@ static async feeCacheBuy(block) {
         await marginMap.saveMarginMap(false);
         return { positions, isLiq, systemicLoss };
     }
-
 
 static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType,marginDent,notional){
     let isFullLiquidation = liquidationType === "total";
@@ -480,7 +480,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     // Step 5: Save liquidation results
     await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice,result,infoBlob);
 
-    return { liquidation: liq, systemicLoss: systemicLoss.toNumber() };
+    return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: result.counterparties };
 }
 
 

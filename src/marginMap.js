@@ -375,6 +375,7 @@ class MarginMap {
         if (!position) {
             return console.log('error: no position found for mint with '+propertyId+' collateral and contract '+contractId)
         }
+        
         let excess = 0
         //we're assuming contracts is a negative number reflecting funky math in the validity function
         console.log('inside moveMarginAndContractsForMint '+contracts, margin, position.margin)
@@ -661,15 +662,17 @@ class MarginMap {
         // Adjust the sign based on the isBuy flag
         pnl = isBuy ? pnl.times(-1) : pnl;
         pnl = pnl.decimalPlaces(8).toNumber()
-
+        const absRPNL = Math.abs(pnl)
+        const sign = pos.unrealizedPNL>0 ? 1: -1
+        const signBN = new BigNumber(sign)
         // Modify the position object
-        // pos.margin = pos.margin.minus(Math.abs(pnl)); // adjust as needed
-        // pos.unrealizedPl = pos.unrealizedPl.plus(pnl);
-
+        const uPNLBig = new BigNumber(Math.abs(pos.unrealizedPNL))
+        pos.unrealizedPNL = uPNLBig.minus(absPNL).times(sign).decimalPlaces(8).toNumber();
+        pos.realizedPNL = pnl
         console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
         await this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
       
-        return pnl;
+        return position
     }
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block){
@@ -921,10 +924,10 @@ class MarginMap {
 
         // Ensure matchSize is positive before proceeding
         if (matchSize > 0) {
-          await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell);
+          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell);
             const matchBN = new BigNumber(matchSize)
 
-          await this.realizePnl(
+          pos = await this.realizePnl(
             pos.address,
             matchSize,
             liqPrice,
@@ -937,10 +940,7 @@ class MarginMap {
           );
 
           deleveragingData.totalDeleveraged += matchSize;
-          deleveragingData.counterparties.push({
-            deleveragedAddress: pos.address,
-            matchedContracts: matchSize
-          });
+          deleveragingData.counterparties.push(pos);
 
           remainingSize = remainingSize.minus(matchSize);
 
@@ -977,6 +977,7 @@ async adjustDeleveraging(address, contractId, size, sell) {
     this.margins.set(position.address, position);
     this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging')  
     await this.saveMarginMap(true);
+    return position
 }
 
 async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
