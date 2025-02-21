@@ -329,7 +329,7 @@ static async feeCacheBuy(block) {
         let positions = await marginMap.getAllPositions();
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
         
-        positions = Clearing.sortPositionsForPNL(positions,blob.diff)
+        positions = Clearing.sortPositionsForPNL(positions,Boolean(blob.lastPrice>blob.previousPrice))
         console.log('🔄 clearing price difference:', blob.diff +' sorted positions '+JSON.stringify(positions));
    
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
@@ -483,6 +483,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber() };
 }
 
+static sortPositionsForPNL(positions, priceDiff) {
+    return positions.sort((a, b) => {
+        if (priceDiff) {
+            // Price is increasing -> Shorts should go first
+            return a.contracts - b.contracts;
+        } else {
+            // Price is decreasing -> Longs should go first
+            return b.contracts - a.contracts;
+        }
+    });
+}
 
     static async getPriceChange(blockHeight, contractId) {
         const ContractRegistry = require('./contractRegistry.js');
