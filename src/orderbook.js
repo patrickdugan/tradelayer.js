@@ -1159,10 +1159,8 @@ async matchContractOrders(orderBook) {
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        console.log('about to call settlePNL '+closedContracts+' '+match.tradePrice+' '+lastMark)
                         const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
-                        console.log('position before going into reduce Margin '+match.buyerPosition.realizedPNL+' '+settlementPNL+' '+JSON.stringify(match.buyerPosition)+' '+initialMarginPerContract)
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}   
                         if(reduction !=0&&channel==false){
