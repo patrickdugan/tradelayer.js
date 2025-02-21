@@ -329,7 +329,8 @@ static async feeCacheBuy(block) {
         let positions = await marginMap.getAllPositions();
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
 
-        console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
+        positions = Clearing.sortPositionsForPNL(positions,blob.diff)
+        console.log('🔄 clearing price difference:', blob.diff +' sorted positions '+JSON.stringify(positions));
         let isLiq = [];
         let systemicLoss = 0;
 
@@ -347,7 +348,6 @@ static async feeCacheBuy(block) {
                 console.log('last price was null, using avg price:', position.avgPrice);
                 blob.lastPrice = position.avgPrice;
             }
-            console.log('🔄 position '+JSON.stringify(position))
 
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
@@ -373,9 +373,12 @@ static async feeCacheBuy(block) {
                             let orderbook = await Orderbooks.getOrderbookInstance(contractId);
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
                             if (liquidationResult) {
+                                console.log('check liq result '+JSON.stringify(liquidationResult))
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;
-                                positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                if(liquidationResult.counterparties){
+                                    positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                }
                             }
                             continue
                         }
@@ -394,19 +397,26 @@ static async feeCacheBuy(block) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                                     let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional);
+                                    
                                     if (liquidationResult) {
+                                     console.log('check liq result '+JSON.stringify(liquidationResult))
                                         isLiq.push(liquidationResult.liquidation);
                                         systemicLoss += liquidationResult.systemicLoss;
-                                        positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                        if(liquidationResult.counterparties){
+                                          positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                        }
                                     }
                                 }
                                 continue;
                             } else {
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional);
                                 if (liquidationResult) {
+                                    console.log('check liq result '+JSON.stringify(liquidationResult))
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
-                                    positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                    if(liquidationResult.counterparties){
+                                          positions = Clearing.splicePositions(positions,liquidationResult.counterparties,i)
+                                    }
                                 }
                             }
                         }
@@ -419,6 +429,34 @@ static async feeCacheBuy(block) {
         await marginMap.saveMarginMap(false);
         return { positions, isLiq, systemicLoss };
     }
+
+    // Sorting Longs and Shorts based on Price Movement
+static sortPositionsForPNL(positions, priceDiff) {
+    return positions.sort((a, b) => {
+        if (priceDiff > 0) {
+            // Price is increasing -> Shorts should go first
+            return a.contracts - b.contracts;
+        } else {
+            // Price is decreasing -> Longs should go first
+            return b.contracts - a.contracts;
+        }
+    });
+}
+
+// Overwriting counterparties in positions list
+static splicePositions(positions, counterparties) {
+    let newPositions = [...positions];
+
+    for (let counterparty of counterparties) {
+        let posIndex = newPositions.findIndex(p => p.address === counterparty.address);
+        if (posIndex !== -1) {
+            console.log('📊 replacing position in set '+JSON.stringify(newPositions[posIndex])+' '+JSON.stringify(counterparty))
+            newPositions[posIndex] = counterparty;
+        }
+    }
+
+    return newPositions;
+}
 
 static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType,marginDent,notional){
     let isFullLiquidation = liquidationType === "total";
@@ -522,10 +560,12 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     const latestBlockData = sortedData[0]; // Most recent entry
     const currentMarkPrice = latestBlockData?.data?.price || null;
     const previousMarkPrice = sortedData.length > 1 ? sortedData[1]?.data?.price : null;
-
+    const lastBN = new BigNumber(currentMarkPrice)
+    const prevBN = new BigNumber(previousMarkPrice)
+    const priceDiff = lastBN.minus(prevBN).decimalPlaces(4).toNumber()
     console.log(`Checking mark price: Current=${currentMarkPrice}, Previous=${previousMarkPrice}`);
     
-    return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
+    return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice, diff: priceDiff };
 }
 
 
