@@ -333,7 +333,8 @@ static async feeCacheBuy(block) {
         let isLiq = [];
         let systemicLoss = 0;
 
-        for(let position of positions){
+        for (let i = 0; i < positions.length; i++) {
+            let position = positions[i];
             console.log('position before '+JSON.stringify(positions))
             const tally = await TallyMap.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
