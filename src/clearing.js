@@ -329,8 +329,8 @@ static async feeCacheBuy(block) {
         let positions = await marginMap.getAllPositions();
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
         
-        positions = Clearing.sortPositionsForPNL(positions,Boolean(blob.lastPrice>blob.previousPrice))
-        console.log('🔄 clearing price difference:', blob.diff +' sorted positions '+JSON.stringify(positions));
+        //positions = Clearing.sortPositionsForPNL(positions,Boolean(blob.lastPrice>blob.previousPrice))
+        console.log('🔄 clearing sorted positions '+JSON.stringify(positions));
    
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
         let isLiq = [];
