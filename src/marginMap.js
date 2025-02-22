@@ -951,10 +951,8 @@ class MarginMap {
       if (remainingSize.gt(0)) {
         console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
       }
-
-      console.log(`✅ Deleverage done. totalDeleveraged=${deleveragingData.totalDeleveraged}`);
-
-      return deleveragingData;
+    
+    return deleveragingData;
     }
 
 // Adjust deleveraging position
