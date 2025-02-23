@@ -247,31 +247,6 @@ const Logic = {
         return console.log('sent')
     },
 
-    async vestingSend(senderAddress, recipientAddresses, propertyIdNumbers, amounts,block){
-        // Get TLVEST and TL balances for the sender
-        
-        const BigNumber = require('bignumber.js');
-
-            // Ensuring amount is a whole number
-            const roundedAmount = new BigNumber(amounts).integerValue(BigNumber.ROUND_DOWN);
-
-            if (roundedAmount.isLessThanOrEqualTo(0)) {
-                throw new Error("Amount must be greater than zero");
-            }
-
-        const tlVestTally = await TallyMap.getTally(senderAddress, propertyIdNumbers);
-
-        // Calculate the amount of TL to move from vesting to available
-        const tlVestingMovement = this.calculateVestingMovement(amounts, tlVestTally)
-
-        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, -amounts, 0, 0, 0,'vestingSend',block);
-        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, amounts, 0, 0, 0,'vestingSend',block);
-
-        await TallyMap.updateBalance(senderAddress, propertyIdNumbers, 0, 0, 0, -tlVestingMovement,'vestingDrag',block);
-        await TallyMap.updateBalance(recipientAddresses, propertyIdNumbers, 0, 0, 0, tlVestingMovement,'vestingFollow',block);
-        return
-    },
-
     calculateVestingMovement(amount, tlVestTally) {
     // Convert all values to BigNumber for accurate calculation
         const amountBN = new BigNumber(amount);
@@ -304,7 +279,7 @@ async vestingSend(senderAddress, recipientAddress, propertyId, amount, block) {
     const tlVestTally = await TallyMap.getTally(senderAddress, propertyId);
     const tlVestingMovement = this.calculateVestingMovement(amount, tlVestTally);
 
-    await this.updateBalanceDbl(
+    await TallyMap.updateBalanceDbl(
         senderAddress, recipientAddress, propertyId,
         -amount, 0, 0, -tlVestingMovement, 0, // Sender changes
         amount, 0, 0, tlVestingMovement, 0,   // Recipient credits
@@ -319,7 +294,7 @@ async sendSingle(senderAddress, receiverAddress, propertyId, amount, block) {
         return;
     }
 
-    await this.updateBalanceDbl(
+    await TallyMap.updateBalanceDbl(
         senderAddress, receiverAddress, propertyId,
         -amount, 0, 0, 0, 0, // Sender changes
         amount, 0, 0, 0, 0,  // Receiver credits
@@ -337,7 +312,7 @@ async sendAll(senderAddress, receiverAddress, block) {
     for (const balance of senderBalances) {
         const { propertyId, amount } = balance;
         if (amount > 0) {
-            await this.updateBalanceDbl(
+            await TallyMap.updateBalanceDbl(
                 senderAddress, receiverAddress, propertyId,
                 -amount, 0, 0, 0, 0, // Sender changes
                 amount, 0, 0, 0, 0,  // Receiver credits
@@ -354,7 +329,7 @@ async processSend(senderAddress, recipientAddress, propertyId, amount, block) {
         throw new Error('Insufficient available balance for transaction.');
     }
 
-    await this.updateBalanceDbl(
+    await TallyMap.updateBalanceDbl(
         senderAddress, recipientAddress, propertyId,
         -amount, 0, 0, 0, 0, // Sender changes
         amount, 0, 0, 0, 0,  // Receiver credits
@@ -496,20 +471,21 @@ async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount,
 },
 
 	// commitToken: Commits tokens for a specific purpose
-async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
+async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
     console.log('Committing tokens ' + tokenAmount + ' ' + block);
 
-    await this.updateBalanceDbl(
+    await TallyMap.updateChannelBalance(
         senderAddress, channelAddress, propertyId,
-        -tokenAmount, 0, 0, 0, 0, // Sender changes
-        tokenAmount, 0, 0, 0, 0,  // Channel credits
-        'commit', block, null
+        -tokenAmount, tokenAmount, 0, 0, 0,
+        'commit', block, txid
     );
 
     await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block);
+
     console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
     return;
 }
+
 
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post) {
