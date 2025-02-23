@@ -150,56 +150,144 @@ class TallyMap {
             await instance.saveToDB(); // Save changes to the database
         }
 
-        static async updateChannelBalance(address, propertyId, channelChange, type,block) {
-            const instance = await this.getInstance();
-            
-            // Initialize the address if it doesn't exist
-            if (!instance.addresses.has(address)) {
-                instance.addresses.set(address, {});
-            }
-            const addressObj = instance.addresses.get(address);
-            
-            // Initialize the propertyId if it doesn't exist
-            if (!addressObj[propertyId]) {
-                addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0, channelBalance: 0 };
-            }
-            
-            // Handle undefined channel balance and set it to 0 if necessary
-            if (typeof addressObj[propertyId].channelBalance === 'undefined') {
-                addressObj[propertyId].channelBalance = 0;
-            }
-            
-            // Update channel balance
-            const originalChannelBalance = new BigNumber(addressObj[propertyId].channelBalance);
-            const newChannelBalance = originalChannelBalance.plus(channelChange);
-            
-            if (newChannelBalance.isLessThan(0)) {
-                throw new Error(`Channel balance cannot go negative for property ${propertyId}`);
-            }
+static async updateBalanceDbl(
+    addressA, addressB, propertyId,
+    availableChange, reservedChange, marginChange, vestingChange,
+    availableCredit, reservedCredit, marginCredit, vestingCredit,
+    type, block, txid
+) {
+    console.log(`Inside updateBalance double-entry for ${addressA}, ${propertyId}, changes:`, 
+        availableChange, reservedChange, marginChange, vestingChange, 
+        addressB, availableCredit, reservedCredit, marginCredit, vestingCredit, type, block
+    );
 
-            // Update the channel balance
-            addressObj[propertyId].channelBalance = newChannelBalance.toNumber();
-            addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
-            // Record the channel balance change
-            if (channelChange !== 0) {
-                await TallyMap.recordTallyMapDelta(
-                    address, 
-                    block, 
-                    propertyId, 
-                    addressObj[propertyId].amount, 
-                    0, // No change in available
-                    0, // No change in reserved
-                    0, // No change in margin
-                    0, // No change in vesting
-                    channelChange, 
-                    type
-                );
-            }
-
-            // Save the updated object back to the map
-            instance.addresses.set(address, addressObj);
-            await instance.saveToDB(); // Save the updated balance to the database
+    // Ensure debits are negative and credits are positive
+    const enforceSign = (change, credit, name) => {
+        if (change > 0 || credit < 0) {
+            throw new Error(`Invalid sign for ${name}: change must be negative, credit must be positive`);
         }
+        if (Math.abs(change) !== Math.abs(credit)) {
+            throw new Error(`Mismatch in ${name}: |change| must equal |credit|`);
+        }
+    };
+
+    enforceSign(availableChange, availableCredit, "available balance");
+    enforceSign(reservedChange, reservedCredit, "reserved balance");
+    enforceSign(marginChange, marginCredit, "margin balance");
+    enforceSign(vestingChange, vestingCredit, "vesting balance");
+
+    // Fetch instance
+    const instance = await this.getInstance();
+
+    const updateBalanceForAddress = (address, avail, res, marg, vest) => {
+        if (!instance.addresses.has(address)) {
+            instance.addresses.set(address, {});
+        }
+        const addressObj = instance.addresses.get(address);
+
+        if (!addressObj[propertyId]) {
+            addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
+        }
+
+        // Update balances ensuring they do not go negative
+        const updateField = (field, change, name) => {
+            const newValue = new BigNumber(addressObj[propertyId][field]).plus(change);
+            if (newValue.isLessThan(0)) {
+                throw new Error(`${name} balance cannot go negative for ${address}: ${newValue.toString()}`);
+            }
+            addressObj[propertyId][field] = newValue.toNumber();
+        };
+
+        updateField("available", avail, "Available");
+        updateField("reserved", res, "Reserved");
+        updateField("margin", marg, "Margin");
+        updateField("vesting", vest, "Vesting");
+
+        // Update total balance
+        addressObj[propertyId].amount = this.calculateTotal(addressObj[propertyId]);
+
+        // Ensure channelBalance is defined
+        if (typeof addressObj[propertyId].channelBalance === 'undefined') {
+            addressObj[propertyId].channelBalance = 0;
+        }
+
+        instance.addresses.set(address, addressObj);
+    };
+
+    // Apply updates to both addresses atomically
+    updateBalanceForAddress(addressA, availableChange, reservedChange, marginChange, vestingChange);
+    updateBalanceForAddress(addressB, availableCredit, reservedCredit, marginCredit, vestingCredit);
+
+    // Record changes if non-zero
+    if (availableChange !== 0 || reservedChange !== 0 || marginChange !== 0 || vestingChange !== 0) {
+        await TallyMap.recordTallyMapDeltaDbl(
+            addressA, addressB, block, propertyId, 
+            instance.addresses.get(addressA)[propertyId].amount, 
+            availableChange, reservedChange, marginChange, vestingChange, 0, 
+            availableCredit, reservedCredit, marginCredit, vestingCredit, 0, 
+            type, txid
+        );
+    }
+
+    // Save changes
+    await instance.saveToDB();
+}
+
+
+static async updateChannelBalance(addressA, addressB, propertyId, channelChange, type, block, txid) {
+    const instance = await this.getInstance();
+
+    // Initialize addresses if they don't exist
+    if (!instance.addresses.has(addressA)) {
+        instance.addresses.set(addressA, {});
+    }
+    if (!instance.addresses.has(addressB)) {
+        instance.addresses.set(addressB, {});
+    }
+
+    const addressAObj = instance.addresses.get(addressA);
+    const addressBObj = instance.addresses.get(addressB);
+
+    // Initialize propertyId if it doesn't exist
+    if (!addressAObj[propertyId]) {
+        addressAObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0, channelBalance: 0 };
+    }
+    if (!addressBObj[propertyId]) {
+        addressBObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0, channelBalance: 0 };
+    }
+
+    // Ensure channel change does not cause negative available balance
+    const availableBalanceA = new BigNumber(addressAObj[propertyId].available);
+    if (availableBalanceA.isLessThan(channelChange)) {
+        throw new Error(`Available balance cannot go negative for ${addressA}`);
+    }
+
+    // Debit available balance from addressA and credit channel balance to addressB
+    const availableDebit = -Math.abs(channelChange);
+    const channelCredit = Math.abs(channelChange);
+
+    // Apply updates to both addresses
+    addressAObj[propertyId].available = availableBalanceA.plus(availableDebit).toNumber();
+    addressBObj[propertyId].channelBalance = new BigNumber(addressBObj[propertyId].channelBalance).plus(channelCredit).toNumber();
+
+    // Update total amounts
+    addressAObj[propertyId].amount = this.calculateTotal(addressAObj[propertyId]);
+    addressBObj[propertyId].amount = this.calculateTotal(addressBObj[propertyId]);
+
+    // Save updates
+    instance.addresses.set(addressA, addressAObj);
+    instance.addresses.set(addressB, addressBObj);
+
+    // Record the transaction
+    await TallyMap.recordTallyMapDeltaDbl(
+        addressA, addressB, block, propertyId, 
+        addressAObj[propertyId].amount, availableDebit, 0, 0, 0, 0, 
+        0, 0, 0, 0, channelCredit, type, txid
+    );
+
+    await instance.saveToDB();
+}
+
 
 
         static calculateTotal(balanceObj) {
@@ -620,7 +708,41 @@ class TallyMap {
         }
     }
 
+     // Function to record a delta
+    static async recordTallyMapDeltaDbl(addressA, addressB, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, availableCredit,reservedCredit,marginCredit,vestingCredit,channelCredit, type,txid){
+        const newUuid = uuid.v4();
+        const db = await dbInstance.getDatabase('tallyMapDelta');
+        let deltaKey = `${address}-${propertyId}-${newUuid}`;
+        deltaKey+='-'+block
+        const tally = TallyMap.getTally(address, propertyId)
+        if(!txid){txid=''}
+        total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
+        const delta = { addressA, addressB block, property: propertyId, total: total, 
+            availDebit: availableChange, resDebit: reservedChange, 
+            marDebit: marginChange, vestDebit: vestingChange, channelDebit: channelChange, 
+            availCredit:availableCredit,resCredit: reservedCredit,marginCredit:marginCredit,
+            vestCredit:vestingCredit,channelCredit:channelCredit type, tx: txid };
+        
+        console.log('saving delta ' + JSON.stringify(delta));
 
+        try {
+            // Try to find an existing document based on the key
+            const existingDocument = await db.findOneAsync({ _id: deltaKey });
+
+            if (existingDocument) {
+                // If the document exists, update it
+                await db.updateAsync({ _id: deltaKey }, { $set: { data: delta } });
+            } else {
+                // If the document doesn't exist, insert a new one
+                await db.insertAsync({ _id: deltaKey, data: delta });
+            }
+
+            return; // Return success or handle as needed
+        } catch (error) {
+            console.error('Error saving delta:', error);
+            throw error; // Rethrow the error or handle as needed
+        }
+    }
 
 // Function to apply a delta to the TallyMap
     applyDeltaToTallyMap(delta) {
