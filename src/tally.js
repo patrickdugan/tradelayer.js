@@ -288,8 +288,6 @@ static async updateChannelBalance(addressA, addressB, propertyId, channelChange,
     await instance.saveToDB();
 }
 
-
-
         static calculateTotal(balanceObj) {
             return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();
         }

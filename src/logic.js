@@ -1,4 +1,3 @@
-
 const TradeChannels = require('./channels.js')
 const Activation = require('./activation.js')
 const activation = Activation.getInstance();
@@ -295,74 +294,77 @@ const Logic = {
         return Math.floor(number * 1e8) / 1e8;
     },
 
+async vestingSend(senderAddress, recipientAddress, propertyId, amount, block) {
+    const BigNumber = require('bignumber.js');
+    const roundedAmount = new BigNumber(amount).integerValue(BigNumber.ROUND_DOWN);
+    if (roundedAmount.isLessThanOrEqualTo(0)) {
+        throw new Error("Amount must be greater than zero");
+    }
 
-    async sendSingle(senderAddress, receiverAddress, propertyId, amount,block) {
-        const tallyMapInstance = await TallyMap.getInstance();
+    const tlVestTally = await TallyMap.getTally(senderAddress, propertyId);
+    const tlVestingMovement = this.calculateVestingMovement(amount, tlVestTally);
 
-        // Check if sender has enough balance
-        const senderBalance = TallyMap.getTally(senderAddress, propertyId);
-        console.log('checking balance before sending ' +JSON.stringify(senderBalance))
-        if (senderBalance < amount) {
-            /*throw new Error*/console.log("Insufficient balance");
+    await this.updateBalanceDbl(
+        senderAddress, recipientAddress, propertyId,
+        -amount, 0, 0, -tlVestingMovement, 0, // Sender changes
+        amount, 0, 0, tlVestingMovement, 0,   // Recipient credits
+        'vestingSend', block, null
+    );
+},
+
+async sendSingle(senderAddress, receiverAddress, propertyId, amount, block) {
+    const senderBalance = await TallyMap.getTally(senderAddress, propertyId);
+    if (senderBalance < amount) {
+        console.log("Insufficient balance");
+        return;
+    }
+
+    await this.updateBalanceDbl(
+        senderAddress, receiverAddress, propertyId,
+        -amount, 0, 0, 0, 0, // Sender changes
+        amount, 0, 0, 0, 0,  // Receiver credits
+        'send', block, null
+    );
+    return "Send operation successful";
+},
+
+async sendAll(senderAddress, receiverAddress, block) {
+    const senderBalances = await TallyMap.getAddressBalances(senderAddress);
+    if (senderBalances.length === 0) {
+        throw new Error("No balances to send");
+    }
+
+    for (const balance of senderBalances) {
+        const { propertyId, amount } = balance;
+        if (amount > 0) {
+            await this.updateBalanceDbl(
+                senderAddress, receiverAddress, propertyId,
+                -amount, 0, 0, 0, 0, // Sender changes
+                amount, 0, 0, 0, 0,  // Receiver credits
+                'sendAll', block, null
+            );
         }
+    }
+    return "All balances sent successfully";
+},
 
-        // Perform the send operation
-        await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0,'send', block);
-        await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receive', block);
+async processSend(senderAddress, recipientAddress, propertyId, amount, block) {
+    const availableBalance = await TallyMap.getAvailableBalance(senderAddress, propertyId);
+    if (availableBalance < amount) {
+        throw new Error('Insufficient available balance for transaction.');
+    }
 
-        // Handle special case for TLVEST
-        if (propertyId === 2) {
-            // Update the vesting column of TL accordingly
-            // Logic for updating TL vesting...
-        }
+    await this.updateBalanceDbl(
+        senderAddress, recipientAddress, propertyId,
+        -amount, 0, 0, 0, 0, // Sender changes
+        amount, 0, 0, 0, 0,  // Receiver credits
+        'multi-send', block, null
+    );
+    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
+    return;
+},
 
-        return "Send operation successful";
-    },
-
-    async sendAll(senderAddress, receiverAddress) {
-        const tallyMapInstance = await TallyMap.getInstance();
-
-        // Get all balances for the sender
-        const senderBalances = tallyMapInstance.getAddressBalances(senderAddress);
-
-        if (senderBalances.length === 0) {
-            throw new Error("No balances to send");
-        }
-
-        // Iterate through each token balance and send it to the receiver
-        for (const balance of senderBalances) {
-            const { propertyId, amount } = balance;
-            if (amount > 0) {
-                await TallyMap.updateBalance(senderAddress, propertyId, -amount, 0, 0, 0, 'sendAll');
-                await TallyMap.updateBalance(receiverAddress, propertyId, amount, 0, 0, 0,'receiveAll');
-
-                // Handle special case for TLVEST
-                if (propertyId === 'TLVEST') {
-                    // Update the vesting column of TL accordingly
-                    // Logic for updating TL vesting...
-                }
-            }
-        }
-
-        return "All balances sent successfully";
-    },
-
-    // Helper function to process a single send operation
-	async processSend(senderAddress, recipientAddress, propertyId, amount,block) {
-
-	    const availableBalance = tallyMap.getAvailableBalance(senderAddress, propertyId);
-	    if (availableBalance < amount) {
-	        throw new Error('Insufficient available balance for transaction.');
-	    }
-
-	    await TallyMap.updateBalance(senderAddress, propertyId, -amount,0,0,0,'multi-send',block);
-	    await TallyMap.updateBalance(recipientAddress, propertyId, amount,0,0,0,'multi-send',block);
-	    console.log(`Transferred ${amount} of property ${propertyId} from ${senderAddress} to ${recipientAddress}`);
-        return
-	},
-
-
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {
+async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {
 	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -487,20 +489,22 @@ const Logic = {
                 return
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
-       console.log('commiting tokens '+tokenAmount+' '+block)
-        // Deduct tokens from sender's available balance
-        await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 
-        // Add tokens to the channel's balance
-        await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
+async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
+    console.log('Committing tokens ' + tokenAmount + ' ' + block);
 
-        // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block);
+    await this.updateBalanceDbl(
+        senderAddress, channelAddress, propertyId,
+        -tokenAmount, 0, 0, 0, 0, // Sender changes
+        tokenAmount, 0, 0, 0, 0,  // Channel credits
+        'commit', block, null
+    );
 
-        console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
-        return;
-    },
+    await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block);
+    console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
+    return;
+}
+
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post) {
         // Construct the pair key for the Orderbook instance
