@@ -261,7 +261,7 @@ const Logic = {
         // Ensure result is rounded down to avoid fractional vesting movement
         const tlVestingMovementBN = tlVestingBN.multipliedBy(proportionBN).integerValue(BigNumber.ROUND_DOWN);
         console.log('inside calc vesting mov '+tlVestingMovementBN+' '+tlVestingBN+' '+proportionBN+' '+amountBN+' '+tlVestAvailableBN+' '+amount+' '+tlVestTally.available+' '+tlVestTally.vesting)
-        return tlVestingMovementBN.toString(); // Convert back to string for further processing
+        return tlVestingMovementBN.decimalPlaces(8).toNumber(); // Convert back to string for further processing
     },
 
 
@@ -278,10 +278,10 @@ async vestingSend(senderAddress, recipientAddress, propertyId, amount, block) {
 
     const tlVestTally = await TallyMap.getTally(senderAddress, propertyId);
     const tlVestingMovement = this.calculateVestingMovement(amount, tlVestTally);
-
+    console.log('tl vest type '+typeof tlVestingMovement)
     await TallyMap.updateBalanceDbl(
         senderAddress, recipientAddress, propertyId,
-        -amount, 0, 0, -tlVestingMovement, 0, // Sender changes
+        -amount, 0, 0, -tlVestingMovement, // Sender changes
         amount, 0, 0, tlVestingMovement, 0,   // Recipient credits
         'vestingSend', block, null
     );
@@ -484,9 +484,7 @@ async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEna
 
     console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
     return;
-}
-
-
+},
 
     async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post) {
         // Construct the pair key for the Orderbook instance

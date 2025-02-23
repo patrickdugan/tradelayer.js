@@ -253,6 +253,114 @@ class MarginMap {
         //await this.saveMarginMap();
     }
 
+/*async updateContractBalancesWithMatch(match, channelTrade, close, flip) {
+    console.log('updating contract balances, buyer ' + JSON.stringify(match.buyerPosition) + ' and seller ' + JSON.stringify(match.sellerPosition));
+    console.log('with match ' + JSON.stringify(match));
+
+    return await this.updateContractBalancesDbl(
+        match.buyOrder.buyerAddress, match.sellOrder.sellerAddress,
+        match.buyOrder.amount, match.tradePrice,
+        match.buyerPosition, match.sellerPosition,
+        match.inverse, close, flip,
+        match.buyOrder.contractId
+    );
+}*/
+
+async updateContractBalancesDbl(addressA, addressB, amount, price, positionA, positionB, inverse, close, flip, contractId) {
+    console.log('inside updateContractBalancesDbl ' + close + ' ' + flip + ' positions ' + positionA.contracts + ' / ' + positionB.contracts);
+
+    if (close == false && flip == false) {
+        if (positionA.contracts == 0) {
+            positionA.avgPrice = price;
+            console.log('setting avg. price as trade price for new positionA ' + positionA.avgPrice);
+        } else {
+            console.log('updating avg price for positionA');
+            positionA.avgPrice = await this.updateAveragePrice(positionA, amount, price, contractId, true);
+        }
+
+        if (positionB.contracts == 0) {
+            positionB.avgPrice = price;
+            console.log('setting avg. price as trade price for new positionB ' + positionB.avgPrice);
+        } else {
+            console.log('updating avg price for positionB');
+            positionB.avgPrice = await this.updateAveragePrice(positionB, amount, price, contractId, false);
+        }
+    } else if (flip == true && close == false) {
+        positionA.avgPrice = price;
+        positionB.avgPrice = price;
+    }
+
+    console.log('position sizes before update ' + positionA.contracts + ' / ' + positionB.contracts);
+    const amountBN = new BigNumber(amount);
+
+    let newPositionSizeA = new BigNumber(positionA.contracts).plus(amountBN).toNumber();
+    let newPositionSizeB = new BigNumber(positionB.contracts).minus(amountBN).toNumber();
+
+    console.log('new position sizes ' + newPositionSizeA + ' / ' + newPositionSizeB);
+
+    // Ensure positions remain net-zero
+    if (newPositionSizeA + newPositionSizeB !== 0) {
+        throw new Error("Net-zero enforcement failed: " + newPositionSizeA + ' / ' + newPositionSizeB);
+    }
+
+    positionA.contracts = newPositionSizeA;
+    positionB.contracts = newPositionSizeB;
+
+    const ContractList = require('./contractRegistry.js');
+    const TallyMap = require('./tally.js');
+    const contractInfo = await ContractList.getContractInfo(contractId);
+    console.log('contract Info in updateContractBalances ' + JSON.stringify(contractInfo));
+
+    const notionalValue = contractInfo.notionalValue;
+    const collateralId = contractInfo.collateralPropertyId;
+
+    console.log('about to call getTally for ' + addressA + ' and ' + addressB + ' collateralId ' + collateralId);
+    const balancesA = await TallyMap.getTally(addressA, collateralId);
+    const balancesB = await TallyMap.getTally(addressB, collateralId);
+
+    console.log('available balances ' + balancesA.available + ' / ' + balancesB.available);
+
+    const isLongA = positionA.contracts > 0;
+    const isLongB = positionB.contracts > 0;
+
+    console.log('isLong ' + isLongA + ' / ' + isLongB);
+
+    const liquidationInfoA = this.calculateLiquidationPrice(balancesA.available, positionA.margin, positionA.contracts, notionalValue, inverse, isLongA, positionA.avgPrice);
+    const liquidationInfoB = this.calculateLiquidationPrice(balancesB.available, positionB.margin, positionB.contracts, notionalValue, inverse, isLongB, positionB.avgPrice);
+
+    console.log('liquidation info A ' + JSON.stringify(liquidationInfoA));
+    console.log('liquidation info B ' + JSON.stringify(liquidationInfoB));
+
+    if (!liquidationInfoA || positionA.contracts == 0) {
+        positionA.liqPrice = 0;
+        positionA.bankruptcyPrice = 0;
+    } else {
+        positionA.liqPrice = liquidationInfoA.liquidationPrice || null;
+        positionA.bankruptcyPrice = liquidationInfoA.totalLiquidationPrice;
+    }
+
+    if (!liquidationInfoB || positionB.contracts == 0) {
+        positionB.liqPrice = 0;
+        positionB.bankruptcyPrice = 0;
+    } else {
+        positionB.liqPrice = liquidationInfoB.liquidationPrice || null;
+        positionB.bankruptcyPrice = liquidationInfoB.totalLiquidationPrice;
+    }
+
+    if (addressA == null || addressB == null) {
+        throw new Error();
+    }
+
+    this.margins.set(addressA, positionA);
+    this.margins.set(addressB, positionB);
+
+    await this.recordMarginMapDelta(addressA, contractId, newPositionSizeA, amount, 0, 0, 0, 'updateContractBalances');
+    await this.recordMarginMapDelta(addressB, contractId, newPositionSizeB, -amount, 0, 0, 0, 'updateContractBalances');
+
+    return { positionA, positionB };
+}
+
+
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
         const balanceBN = new BigNumber(available);
         const marginBN = new BigNumber(margin);

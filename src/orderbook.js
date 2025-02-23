@@ -460,182 +460,139 @@ class Orderbook {
         return { orderBook: orderBookCopy, matches: matches };
     }
 
+async processTokenMatches(matches, blockHeight, txid, channel) {
+    const TallyMap = require('./tally.js');
+    if (!Array.isArray(matches) || matches.length === 0) {
+        return;
+    }
 
+    for (const match of matches) {
+        if (!match.sellOrder || !match.buyOrder) {
+            continue;
+        }
 
-        async processTokenMatches(matches, blockHeight, txid, channel) {
-            const TallyMap = require('./tally.js');
-            if (!Array.isArray(matches) || matches.length === 0) {
-                //console.log('No valid matches to process');
-                return;
-            }
+        const sellOrderAddress = match.sellOrder.sender;
+        const buyOrderAddress = match.buyOrder.sender;
+        const sellOrderPropertyId = match.sellOrder.desiredPropertyId;
+        const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
+        console.log('checking params in process token match ' + buyOrderPropertyId + ' ' + sellOrderPropertyId);
 
-             //see if the trade qualifies for increased Liquidity Reward
-          
+        if (match.sellOrder.blockTime < blockHeight) {
+            match.sellOrder.isNew = false;
+            match.buyOrder.isNew = true;
+        } else if (match.sellOrder.blockTime == match.buyOrder.blockTime) {
+            match.sellOrder.isNew = true;
+            match.buyOrder.isNew = true;
+        } else {
+            match.buyOrder.isNew = false;
+            match.sellOrder.isNew = true;
+        }
 
-            for (const match of matches) {
-                if (!match.sellOrder || !match.buyOrder) {
-                    //console.error('Invalid match object:', match);
-                    continue;
-                }
+        let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange = 0;
+        let amountToTradeA = new BigNumber(match.amountOfTokenA);
+        let amountToTradeB = new BigNumber(match.amountOfTokenB);
+        if (channel == true) {
+            amountToTradeA = new BigNumber(match.sellOrder.amountOffered);
+            amountToTradeB = new BigNumber(match.buyOrder.amountExpected);
+        }
+        console.log('amountTo Trade A and B ' + amountToTradeA + ' ' + amountToTradeB);
 
-                const sellOrderAddress = match.sellOrder.sender;
-                const buyOrderAddress = match.buyOrder.sender;
-                const sellOrderPropertyId = match.sellOrder.desiredPropertyId;
-                const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
-                console.log('checking params in process token match '+buyOrderPropertyId+' '+sellOrderPropertyId)
-                if(match.sellOrder.blockTime<blockHeight){
-                    match.sellOrder.isNew = false
-                    match.buyOrder.isNew = true
-                }else if(match.sellOrder.blockTime==match.buyOrder.blockTime){
-                    match.sellOrder.isNew = true
-                    match.buyOrder.isNew = true
-                }else{
-                    match.buyOrder.isNew = false
-                    match.sellOrder.isNew= true
-                }
+        if ((match.sellOrder.blockTime < match.buyOrder.blockTime) && channel == false) {
+            match.sellOrder.orderRole = 'maker';
+            match.buyOrder.orderRole = 'taker';
+            takerFee = amountToTradeB.times(0.0002);
+            makerRebate = takerFee.div(2);
+            takerFee = takerFee.div(2);
+            await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
+            sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
+            buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
+        } else if ((match.buyOrder.blockTime < match.sellOrder.blockTime) && channel == false) {
+            match.buyOrder.orderRole = 'maker';
+            match.sellOrder.orderRole = 'taker';
+            takerFee = amountToTradeA.times(0.0002);
+            makerRebate = takerFee.div(2);
+            takerFee = takerFee.div(2);
+            await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
+            buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
+            sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
+        } else if (((match.buyOrder.blockTime == match.sellOrder.blockTime) && (match.sellOrder.post == false && match.buyOrder.post == false)) || channel == true) {
+            match.buyOrder.orderRole = 'split';
+            match.sellOrder.orderRole = 'split';
+            var takerFeeA = amountToTradeA.times(0.0001);
+            var takerFeeB = amountToTradeB.times(0.0001);
+            await TallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber());
+            await TallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber());
+            sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber();
+            buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
+        }
 
-                let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange = 0
-                let amountToTradeA = new BigNumber(match.amountOfTokenA)
-                let amountToTradeB = new BigNumber(match.amountOfTokenB)
-                if(channel==true){
-                    amountToTradeA = new BigNumber(match.sellOrder.amountOffered)
-                    amountToTradeB = new BigNumber(match.buyOrder.amountExpected)
-                }
-                console.log('amountTo Trade A and B '+ amountToTradeA + ' '+ amountToTradeB + ' '+ 'match values '+ match.amountOfTokenA + ' '+ match.amountOfTokenB)
-                // Determine order roles and calculate fees
-                if ((match.sellOrder.blockTime < match.buyOrder.blockTime)&&channel==false) {
-                    match.sellOrder.orderRole = 'maker';
-                    match.buyOrder.orderRole = 'taker';
-                    takerFee = amountToTradeB.times(0.0002);
-                    //console.log('taker fee '+takerFee)
-                    makerRebate = takerFee.div(2);
-                    //console.log('maker fee '+makerRebate)
-                    takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                    //console.log(' actual taker fee '+takerFee)
-                    await TallyMap.updateFeeCache(buyOrderPropertyId, takerFee.toNumber());
-                    //console.log('about to calculate this supposed NaN '+match.amountOfTokenA+' '+new BigNumber(match.amountOfTokenA) + ' '+new BigNumber(match.amountOfTokenA).plus(makerRebate)+ ' '+ new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
-                    //console.log('sell order amount change ' +sellOrderAmountChange)
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
+        console.log('about to update tallymap in process token trade ' + match.sellOrder.sender + ' ' + match.buyOrder.sender + ' ' + match.channel);
 
-                } else if((match.buyOrder.blockTime < match.sellOrder.blockTime)&&channel==false){
-                    match.buyOrder.orderRole = 'maker';
-                    match.sellOrder.orderRole = 'taker';
-                    takerFee = amountToTradeA.times(0.0002);
-                    makerRebate = takerFee.div(2); 
-                    takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                    await TallyMap.updateFeeCache(sellOrderPropertyId, takerFee.toNumber());
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber();
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber();
-                } else if (((match.buyOrder.blockTime == match.sellOrder.blockTime)&&(match.sellOrder.post==false&&match.sellOrder.post==false))||channel==true){
-                    match.buyOrder.orderRole = 'split';
-                    match.sellOrder.orderRole = 'split';
-                    var takerFeeA = amountToTradeA.times(0.0001);
-                    var takerFeeB = amountToTradeB.times(0.0001);
-                    await TallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber());
-                    await TallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber());
-                    sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber();
-                    buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber();
-                }
-                console.log('about to update tallymap in process token trade '+match.sellOrder.sender +' '+match.buyOrder.sender +' '+match.channel)
-                await TallyMap.updateBalance(
-                        match.sellOrder.sender,
-                        match.sellOrder.desiredPropertyId,
-                        buyOrderAmountChange,  // Credit traded amount of Token B to available
-                        0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight 
-                );
+        await TallyMap.updateBalanceDbl(
+            match.sellOrder.sender, match.buyOrder.sender, 
+            match.sellOrder.desiredPropertyId,
+            buyOrderAmountChange, 0, 0, 0, 0,  // Credit Buyer's tokens
+            sellOrderAmountChange, 0, 0, 0, 0, // Debit Seller's tokens
+            'tokenTrade', blockHeight, txid
+        );
 
+        if (channel == true) {
+            await TallyMap.updateChannelBalance(
+                match.channel, match.sellOrder.sender, 
+                match.sellOrder.offeredPropertyId, 
+                -sellOrderAmountChange, sellOrderAmountChange, 
+                0, 0, 0, 
+                'tokenTrade', blockHeight, txid
+            );
 
-                await TallyMap.updateBalance(
-                        match.buyOrder.sender,
-                        match.buyOrder.desiredPropertyId,
-                        sellOrderAmountChange,  // Credit traded amount of Token B to available
-                        0, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight);
+            await TallyMap.updateChannelBalance(
+                match.channel, match.buyOrder.sender, 
+                match.buyOrder.offeredPropertyId, 
+                -buyOrderAmountChange, buyOrderAmountChange, 
+                0, 0, 0, 
+                'tokenTrade', blockHeight, txid
+            );
+        } else {
+            await TallyMap.updateBalanceDbl(
+                match.sellOrder.sender, match.buyOrder.sender, 
+                match.sellOrder.offeredPropertyId,
+                0, -sellOrderAmountChange, 0, 0, 0,  // Debit Seller's reserve
+                0, buyOrderAmountChange, 0, 0, 0,    // Credit Buyer's available
+                'tokenTrade', blockHeight, txid
+            );
+        }
 
-                if(channel==true){
-                    await TallyMap.updateChannelBalance(
-                        match.channel,
-                        match.sellOrder.offeredPropertyId,
-                        -sellOrderAmountChange,
-                        'tokenTrade',
-                        blockHeight
-                    );
+        const trade = {
+            offeredPropertyId: match.sellOrder.offeredPropertyId,
+            desiredPropertyId: match.buyOrder.offeredPropertyId,
+            amountOffered: match.amountOfTokenA,
+            amountExpected: match.amountOfTokenB,
+        };
 
-                    await TallyMap.updateChannelBalance(
-                        match.channel,
-                        match.buyOrder.offeredPropertyId,
-                        -buyOrderAmountChange,
-                        'tokenTrade',
-                        blockHeight);
+        const key = this.normalizeOrderBookKey(sellOrderPropertyId, buyOrderPropertyId);
+        const volumeType = channel ? 'channelToken' : 'onChainToken';
+        await VolumeIndex.saveVolumeDataById(key, [match.amountOfTokenA, match.amountOfTokenB], match.tradePrice, blockHeight, volumeType);
 
-                }else{
-                    // Debit the traded amount from the seller's reserve 
-                    await TallyMap.updateBalance(
-                        match.sellOrder.sender,
-                        match.sellOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -sellOrderAmountChange, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight
-                    );
-                    //and credit the opposite consideration to available
+        var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match, channel, false);
+        var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match, channel);
 
-                    // Update balance for the buyer
-                    // Debit the traded amount from the buyer's reserve and credit it to available
-                    await TallyMap.updateBalance(
-                        match.buyOrder.sender,
-                        match.buyOrder.offeredPropertyId,
-                        0,  // Credit traded amount of Token B to available
-                        -match.amountOfTokenB, // Debit the same amount from reserve
-                        0, 0,'tokenTrade',blockHeight );
+        if (qualifiesBasicLiqReward) {
+            const liqRewardBaseline1 = await VolumeIndex.baselineLiquidityReward(match.amountOfTokenA, 0.000025, match.sellOrder.offeredPropertyId);
+            const liqRewardBaseline2 = await VolumeIndex.baselineLiquidityReward(match.amountOfTokenB, 0.000025, match.buyOrder.desiredPropertyId);
+            await TallyMap.updateBalance(3, match.sellOrder.sender, liqRewardBaseline1, 0, 0, 0, 'baselineLiquidityReward', blockHeight);
+            await TallyMap.updateBalance(3, match.buyOrder.sender, liqRewardBaseline2, 0, 0, 0, 'baselineLiquidityReward', blockHeight);
+        }
 
-                }
+        if (qualifiesEnhancedLiqReward) {
+            const liqReward1 = await VolumeIndex.calculateLiquidityReward(match.amountOfTokenA, match.sellOrder.offeredPropertyId);
+            const liqReward2 = await VolumeIndex.calculateLiquidityReward(match.amountOfTokenB, match.buyOrder.offeredPropertyId);
+            await TallyMap.updateBalance(3, match.sellOrder.sender, liqReward1, 0, 0, 0, 'enhancedLiquidityReward', blockHeight);
+            await TallyMap.updateBalance(3, match.buyOrder.sender, liqReward2, 0, 0, 0, 'enhancedLiquidityReward', blockHeight);
+        }
 
-                  // Construct a trade object for recording
-                const trade = {
-                    offeredPropertyId: match.sellOrder.offeredPropertyId,
-                    desiredPropertyId: match.buyOrder.offeredPropertyId,
-                    amountOffered: match.amountOfTokenA, // or appropriate amount
-                    amountExpected: match.amountOfTokenB, // or appropriate amount
-                    // other relevant trade details...
-                };
-                if(channel==false){
-                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-
-                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'onChainToken')
-                }else{
-                    const key = this.normalizeOrderBookKey(sellOrderPropertyId,buyOrderPropertyId)
-
-                    console.log('checking match before volume index save ' +JSON.stringify(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight))
-                    VolumeIndex.saveVolumeDataById(key,[match.amountOfTokenA,match.amountOfTokenB],match.tradePrice,blockHeight,'channelToken') 
-                }
-
-                var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,false)
-                var qualifiesEnhancedLiqReward = await this.evaluateEnhancedLiquidityReward(match,channel)
-                
-                if(qualifiesBasicLiqReward){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(match.amountOfTokenA,0.000025,match.sellOrder.offeredPropertyId)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(match.amountOfTokenB,0.000025,match.buyOrder.desiredPropertyId)
-                        TallyMap.updateBalance(sellerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(buyerAddress,3,liqRewardBaseline,0,0,0,'baselineLiquidityReward')
-                }
-
-                if(qualifiesEnhancedLiqReward){
-                        const liqReward1= await VolumeIndex.calculateLiquidityReward(match.amountOfTokenA,match.sellOrder.offeredPropertyId)
-                        const liqReward2= await VolumeIndex.calculateLiquidityReward(match.amountOfTokenB,match.buyOrder.offeredPropertyId)
-                        TallyMap.updateBalance(sellerAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                        TallyMap.updateBalance(buyerAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
-                }
-
-                // Record the token trade
-                await this.recordTokenTrade(trade, blockHeight, txid);
-
-                }
-        }    
-
-  
+        await this.recordTokenTrade(trade, blockHeight, txid);
+    }
+}  
 
         async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
             const ContractRegistry = require('./contractRegistry.js')

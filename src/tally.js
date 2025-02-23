@@ -149,7 +149,6 @@ class TallyMap {
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
             await instance.saveToDB(); // Save changes to the database
         }
-
 static async updateBalanceDbl(
     addressA, addressB, propertyId,
     availableChange, reservedChange, marginChange, vestingChange,
@@ -161,13 +160,34 @@ static async updateBalanceDbl(
         addressB, availableCredit, reservedCredit, marginCredit, vestingCredit, type, block
     );
 
+    // Convert all values to BigNumber to avoid floating point inconsistencies
+    availableChange = new BigNumber(availableChange);
+    reservedChange = new BigNumber(reservedChange);
+    marginChange = new BigNumber(marginChange);
+    vestingChange = new BigNumber(vestingChange);
+
+    availableCredit = new BigNumber(availableCredit);
+    reservedCredit = new BigNumber(reservedCredit);
+    marginCredit = new BigNumber(marginCredit);
+    console.log('checking vesting numbers '+vestingCredit)
+    vestingCredit = new BigNumber(vestingCredit);
+    console.log('checking vesting numbers '+vestingCredit)
     // Ensure debits are negative and credits are positive
     const enforceSign = (change, credit, name) => {
-        if (change > 0 || credit < 0) {
+        if (change.gt(0) || credit.lt(0)) {
             throw new Error(`Invalid sign for ${name}: change must be negative, credit must be positive`);
         }
-        if (Math.abs(change) !== Math.abs(credit)) {
-            throw new Error(`Mismatch in ${name}: |change| must equal |credit|`);
+    };
+
+    // Ensure total net change is zero
+    const enforceTotalEquality = (changes, credits, name) => {
+        const totalChange = changes.reduce((sum, value) => sum.plus(value.abs()), new BigNumber(0));
+        const totalCredit = credits.reduce((sum, value) => sum.plus(value.abs()), new BigNumber(0));
+
+        console.log(`Total change: ${totalChange}, Total credit: ${totalCredit}, Components:`, changes, credits);
+
+        if (!totalChange.eq(totalCredit)) {
+            throw new Error(`Mismatch in ${name}: total |change| (${totalChange}) must equal total |credit| (${totalCredit})`);
         }
     };
 
@@ -175,6 +195,12 @@ static async updateBalanceDbl(
     enforceSign(reservedChange, reservedCredit, "reserved balance");
     enforceSign(marginChange, marginCredit, "margin balance");
     enforceSign(vestingChange, vestingCredit, "vesting balance");
+
+    enforceTotalEquality(
+        [availableChange, reservedChange, marginChange, vestingChange],
+        [availableCredit, reservedCredit, marginCredit, vestingCredit],
+        "total balance changes"
+    );
 
     // Fetch instance
     const instance = await this.getInstance();
@@ -219,12 +245,12 @@ static async updateBalanceDbl(
     updateBalanceForAddress(addressB, availableCredit, reservedCredit, marginCredit, vestingCredit);
 
     // Record changes if non-zero
-    if (availableChange !== 0 || reservedChange !== 0 || marginChange !== 0 || vestingChange !== 0) {
+    if (!availableChange.isZero() || !reservedChange.isZero() || !marginChange.isZero() || !vestingChange.isZero()) {
         await TallyMap.recordTallyMapDeltaDbl(
             addressA, addressB, block, propertyId, 
             instance.addresses.get(addressA)[propertyId].amount, 
-            availableChange, reservedChange, marginChange, vestingChange, 0, 
-            availableCredit, reservedCredit, marginCredit, vestingCredit, 0, 
+            availableChange.toNumber(), reservedChange.toNumber(), marginChange.toNumber(), vestingChange.toNumber(), 0, 
+            availableCredit.toNumber(), reservedCredit.toNumber(), marginCredit.toNumber(), vestingCredit.toNumber(), 0, 
             type, txid
         );
     }
@@ -232,6 +258,7 @@ static async updateBalanceDbl(
     // Save changes
     await instance.saveToDB();
 }
+
 
 static async updateChannelBalance(addressA, addressB, propertyId, availChange, channelChange, availCredit, marginCredit, channelCredit, type, block, txid) {
     const instance = await this.getInstance();
@@ -709,16 +736,19 @@ static async updateChannelBalance(addressA, addressB, propertyId, availChange, c
     static async recordTallyMapDeltaDbl(addressA, addressB, block, propertyId, total, availableChange, reservedChange, marginChange, vestingChange, channelChange, availableCredit,reservedCredit,marginCredit,vestingCredit,channelCredit, type,txid){
         const newUuid = uuid.v4();
         const db = await dbInstance.getDatabase('tallyMapDelta');
-        let deltaKey = `${address}-${propertyId}-${newUuid}`;
+        let deltaKey = `${addressA}-${addressB}-${propertyId}-${newUuid}`;
         deltaKey+='-'+block
-        const tally = TallyMap.getTally(address, propertyId)
+        const tallyA = TallyMap.getTally(addressA, propertyId)
+        const tallyB = TallyMap.getTally(addressB, propertyId) 
         if(!txid){txid=''}
-        total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
-        const delta = { addressA, addressB block, property: propertyId, total: total, 
-            availDebit: availableChange, resDebit: reservedChange, 
+        let totalA = tallyA.available+tallyA.reserved+tallyA.margin+tallyA.channel+tallyA.vesting
+        let totalB = tallyB.available+tallyB.reserved+tallyB.margin+tallyB.channel+tallyB.vesting
+     
+        const delta = { addressA, addressB, block, property: propertyId, totalA: totalA, 
+            totalB: totalB, availDebit: availableChange, resDebit: reservedChange, 
             marDebit: marginChange, vestDebit: vestingChange, channelDebit: channelChange, 
             availCredit:availableCredit,resCredit: reservedCredit,marginCredit:marginCredit,
-            vestCredit:vestingCredit,channelCredit:channelCredit type, tx: txid };
+            vestCredit:vestingCredit,channelCredit:channelCredit, type, tx: txid };
         
         console.log('saving delta ' + JSON.stringify(delta));
 
