@@ -365,131 +365,137 @@ async processSend(senderAddress, recipientAddress, propertyId, amount, block) {
 },
 
 async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {
-	   
-        // Calculate the number of tokens to deliver based on the LTC received
-        const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
-        const satsExpectedBigNumber = new BigNumber(satsExpected);
-        const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
-        const tradeHistoryManager = new TradeHistory()
 
-        const tokensToDeliver = tokenAmount
-            //console.log('values in utxo logic '+tokenAmount+' '+decodedTokenAmountBigNumber+' '+satsExpected+' '+satsExpectedBigNumber+' '+satsReceived+' '+receiverLTCReceivedBigNumber)
-               //look at the channel balance where the commited tokens we're selling for LTC exist
-        
-        console.log('inside logic for UTXO trade '+tokensToDeliver+' '+price, columnA)
-           let channel = await Channels.getChannel(senderAddress);
-           if(!channel){
-                console.log('failed UTXO trade no commited tokens ')
-                return
-           }
-            let channelBalance;
+    const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
+    const satsExpectedBigNumber = new BigNumber(satsExpected);
+    const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
+    const tradeHistoryManager = new TradeHistory();
 
-            // Default to column with balance if specified column has none
-            if (columnA === true) {
-                channelBalance = channel["A"]?.[propertyId] || 0;
-                if (channelBalance === 0) {
-                    console.log(`No balance in column A. Defaulting to column B.`);
-                    columnA = false; // Switch to column B
-                    channelBalance = channel["B"]?.[propertyId] || 0;
-                }
-            } else if (columnA === false) {
-                channelBalance = channel["B"]?.[propertyId] || 0;
-                if (channelBalance === 0) {
-                    console.log(`No balance in column B. Defaulting to column A.`);
-                    columnA = true; // Switch to column A
-                    channelBalance = channel["A"]?.[propertyId] || 0;
-                }
-            }
+    const tokensToDeliver = tokenAmount;
+    
+    console.log('inside logic for UTXO trade ' + tokensToDeliver + ' ' + price, columnA);
+    let channel = await Channels.getChannel(senderAddress);
 
-            // If both columns are empty, handle the failure
-            if (channelBalance === 0) {
-                console.log(`No balance available in either column for property ID ${propertyId}`);
-                return; // Exit early, or set tokensToDeliver to 0 as appropriate
-            }
+    if (!channel) {
+        console.log('failed UTXO trade no committed tokens');
+        return;
+    }
 
-            // Ensure tokensToDeliver does not exceed available balance
-            if (tokensToDeliver > channelBalance) {
-                tokensToDeliver = channelBalance;
-            }
-            console.log(`${tokensToDeliver} tokens to deliver out of ${channelBalance} available`);
+    let channelBalance;
 
-            // Debit tokens from the correct column
-            if (columnA === true) {
-                channel["A"][propertyId] -= tokensToDeliver;
-            } else if (columnA === false) {
-                channel["B"][propertyId] -= tokensToDeliver;
-            }
+    if (columnA === true) {
+        channelBalance = channel["A"]?.[propertyId] || 0;
+        if (channelBalance === 0) {
+            console.log(`No balance in column A. Defaulting to column B.`);
+            columnA = false; // Switch to column B
+            channelBalance = channel["B"]?.[propertyId] || 0;
+        }
+    } else if (columnA === false) {
+        channelBalance = channel["B"]?.[propertyId] || 0;
+        if (channelBalance === 0) {
+            console.log(`No balance in column B. Defaulting to column A.`);
+            columnA = true; // Switch to column A
+            channelBalance = channel["A"]?.[propertyId] || 0;
+        }
+    }
 
-            // Save updated channel state
-            await Channels.setChannel(senderAddress, channel);
+    if (channelBalance === 0) {
+        console.log(`No balance available in either column for property ID ${propertyId}`);
+        return;
+    }
 
-            console.log('channel adjusted for token sale '+JSON.stringify(channel["A"])+' '+JSON.stringify(channel["B"]))
-            //the tokens exist both as channel object balances and reserve balance on the channel address, which is the sender
-            //So we debit there and then credit them to the token delivery address, which we took in the parsing
-            //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
-            await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
-            const feeRateBN = new BigNumber(0.0005)
-            const fee = new BigNumber(tokenAmount).times(feeRateBN).decimalPlaces(8).toNumber()
-            const netDelivery = new BigNumber(tokensToDeliver).minus(fee).decimalPlaces(8).toNumber()
-            if(tagWithdraw!=null&&typeof tagWithdraw==string ){
-                await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,netDelivery,'UTXOTokenTradeCredit',block)
-                await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block)
-            }else{
-                await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,netDelivery,0,0,0,'UTXOTokenTradeCredit',block)
-            }
-            await TallyMap.updateFeeCache(propertyId,fee,1)
-            const key = '0-'+propertyId
-            console.log('saving volume in volume Index '+key+' '+satsReceived)
-            const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
-            console.log(' price in UTXO '+price)
-            if(isNaN(price)){
-                price = coinAdj.div(tokenAmount).decimalPlaces(8).toNumber()
-                console.log('price 2nd hit '+price+' '+coinAdj+' '+tokenAmount)
-            }
-            await VolumeIndex.saveVolumeDataById(key,coinAdj.toNumber(),price,block,'UTXO')
+    if (tokensToDeliver > channelBalance) {
+        tokensToDeliver = channelBalance;
+    }
+    console.log(`${tokensToDeliver} tokens to deliver out of ${channelBalance} available`);
 
-             const trade = {
-                    offeredPropertyId: propertyId,
-                    desiredPropertyId: 0,
-                    amountOffered: tokensToDeliver, // or appropriate amount
-                    amountExpected: satsReceived, // or appropriate amount
-                    // other relevant trade details...
-                };
-            const orderbook = await Orderbook.getOrderbookInstance(key)
-            await orderbook.recordTokenTrade(trade,block,txid)
-            TallyMap.updateFeeCache(propertyId,fee,1)
-            const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
-            const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
-            let isTokenListed = false
-            if (String(propertyId).startsWith('s-')) {
-                isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
-                                    // and then look up if those tokens are listed
-            }else{
-                let propertyInfo = PropertyManager.getPropertyData(propertyId)
-                if(propertyInfo.issuer){
-                    isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
-                }
-            }
-            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
-                if(isTokenListed){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
-                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline1,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline2,0,0,0,'baselineLiquidityReward')
-                }
-                if(isListedA){
-                    const liqReward1= await VolumeIndex.calculateLiquidityReward(satsReceived,0)    
-                    TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                }
-                if(isListedB){
-                    const liqReward2= await VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
-                    TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
+    if (columnA === true) {
+        channel["A"][propertyId] -= tokensToDeliver;
+    } else {
+        channel["B"][propertyId] -= tokensToDeliver;
+    }
 
-                }
-                return
-	},
+    await Channels.setChannel(senderAddress, channel);
+
+    console.log('channel adjusted for token sale ' + JSON.stringify(channel["A"]) + ' ' + JSON.stringify(channel["B"]));
+
+    const feeRateBN = new BigNumber(0.0005);
+    const fee = new BigNumber(tokenAmount).times(feeRateBN).decimalPlaces(8).toNumber();
+    const netDelivery = new BigNumber(tokensToDeliver).minus(fee).decimalPlaces(8).toNumber();
+
+    // Updated function call for atomic balance adjustment
+    await TallyMap.updateChannelBalance(
+        senderAddress, tokenDeliveryAddress, propertyId, 
+        -tokensToDeliver, 0, 0, 0, netDelivery, 
+        'UTXOTokenTrade', block, txid
+    );
+
+    if (tagWithdraw != null && typeof tagWithdraw === 'string') {
+        await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block);
+    }
+
+    await TallyMap.updateFeeCache(propertyId, fee, 1);
+
+    const key = '0-' + propertyId;
+    console.log('saving volume in volume Index ' + key + ' ' + satsReceived);
+    const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN);
+
+    console.log(' price in UTXO ' + price);
+    if (isNaN(price)) {
+        price = coinAdj.div(tokenAmount).decimalPlaces(8).toNumber();
+        console.log('price 2nd hit ' + price + ' ' + coinAdj + ' ' + tokenAmount);
+    }
+
+    await VolumeIndex.saveVolumeDataById(key, coinAdj.toNumber(), price, block, 'UTXO');
+
+    const trade = {
+        offeredPropertyId: propertyId,
+        desiredPropertyId: 0,
+        amountOffered: tokensToDeliver,
+        amountExpected: satsReceived,
+    };
+
+    const orderbook = await Orderbook.getOrderbookInstance(key);
+    await orderbook.recordTokenTrade(trade, block, txid);
+
+    TallyMap.updateFeeCache(propertyId, fee, 1);
+
+    const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
+    const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress);
+    let isTokenListed = false;
+
+    if (String(propertyId).startsWith('s-')) {
+        isTokenListed = true;
+    } else {
+        let propertyInfo = PropertyManager.getPropertyData(propertyId);
+        if (propertyInfo.issuer) {
+            isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
+        }
+    }
+
+    console.log('is token/address listed for liquidity reward ' + isListedA + ' ' + isListedB + ' ' + isTokenListed);
+
+    if (isTokenListed) {
+        const liqRewardBaseline1 = await VolumeIndex.baselineLiquidityReward(satsReceived, 0.000025, 0);
+        const liqRewardBaseline2 = await VolumeIndex.baselineLiquidityReward(tokenAmount, 0.000025, propertyId);
+        TallyMap.updateBalance(senderAddress, 3, liqRewardBaseline1, 0, 0, 0, 'baselineLiquidityReward');
+        TallyMap.updateBalance(receiverAddress, 3, liqRewardBaseline2, 0, 0, 0, 'baselineLiquidityReward');
+    }
+
+    if (isListedA) {
+        const liqReward1 = await VolumeIndex.calculateLiquidityReward(satsReceived, 0);
+        TallyMap.updateBalance(senderAddress, 3, liqReward1, 0, 0, 0, 'enhancedLiquidityReward');
+    }
+
+    if (isListedB) {
+        const liqReward2 = await VolumeIndex.calculateLiquidityReward(tokenAmount, propertyId);
+        TallyMap.updateBalance(receiverAddress, 3, liqReward2, 0, 0, 0, 'enhancedLiquidityReward');
+    }
+
+    return;
+},
+
 	// commitToken: Commits tokens for a specific purpose
-
 async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
     console.log('Committing tokens ' + tokenAmount + ' ' + block);
 

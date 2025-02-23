@@ -233,8 +233,7 @@ static async updateBalanceDbl(
     await instance.saveToDB();
 }
 
-
-static async updateChannelBalance(addressA, addressB, propertyId, channelChange, type, block, txid) {
+static async updateChannelBalance(addressA, addressB, propertyId, availChange, channelChange, availCredit, marginCredit, channelCredit, type, block, txid) {
     const instance = await this.getInstance();
 
     // Initialize addresses if they don't exist
@@ -259,16 +258,16 @@ static async updateChannelBalance(addressA, addressB, propertyId, channelChange,
     // Ensure channel change does not cause negative available balance
     const availableBalanceA = new BigNumber(addressAObj[propertyId].available);
     if (availableBalanceA.isLessThan(channelChange)) {
-        throw new Error(`Available balance cannot go negative for ${addressA}`);
+        throw new Error(`Available balance insufficient for ${addressA}: ${availableBalanceA.toNumber()} < ${channelChange}`);
     }
 
     // Debit available balance from addressA and credit channel balance to addressB
     const availableDebit = -Math.abs(channelChange);
-    const channelCredit = Math.abs(channelChange);
+    const finalChannelCredit = Math.abs(channelChange); // Ensuring positive credit value
 
     // Apply updates to both addresses
     addressAObj[propertyId].available = availableBalanceA.plus(availableDebit).toNumber();
-    addressBObj[propertyId].channelBalance = new BigNumber(addressBObj[propertyId].channelBalance).plus(channelCredit).toNumber();
+    addressBObj[propertyId].channelBalance = new BigNumber(addressBObj[propertyId].channelBalance).plus(finalChannelCredit).toNumber();
 
     // Update total amounts
     addressAObj[propertyId].amount = this.calculateTotal(addressAObj[propertyId]);
@@ -282,7 +281,7 @@ static async updateChannelBalance(addressA, addressB, propertyId, channelChange,
     await TallyMap.recordTallyMapDeltaDbl(
         addressA, addressB, block, propertyId, 
         addressAObj[propertyId].amount, availableDebit, 0, 0, 0, 0, 
-        0, 0, 0, 0, channelCredit, type, txid
+        availCredit, marginCredit, 0, 0, finalChannelCredit, type, txid
     );
 
     await instance.saveToDB();
