@@ -511,9 +511,8 @@ class Orderbook {
         }
 
 async estimateLiquidation(liquidationOrder) {
-   
     const { contractId, size, sell, price: liqPrice, address } = liquidationOrder;
-     console.log('est liq '+sell)
+    console.log('est liq ' + sell);
 
     // Load the order book for the given contract
     const orderBookKey = `${contractId}`;
@@ -521,7 +520,7 @@ async estimateLiquidation(liquidationOrder) {
 
     let orders = sell ? orderbookData.buy : orderbookData.sell; // Match against the opposite side
 
-    if(!orders || orders.length === 0){
+    if (!orders || orders.length === 0) {
         return {
             estimatedFillPrice: null,
             filledSize: 0,
@@ -532,7 +531,8 @@ async estimateLiquidation(liquidationOrder) {
             trueBookEmpty: true,
             remainder: size, // Everything remains unfilled
             liquidationLoss: 0,
-            trueLiqPrice: null // No price available in book
+            trueLiqPrice: null, // No price available in book
+            counterpartyOrders: [] // No matches
         };
     }
 
@@ -548,23 +548,27 @@ async estimateLiquidation(liquidationOrder) {
     let partiallyFilledBelowLiqPrice = false;
     let liquidationLoss = new BigNumber(0);
     let trueLiqPrice = null; // Track price where full liquidation would happen
-    let liqPriceBN = new BigNumber(liqPrice)
-    
+    let liqPriceBN = new BigNumber(liqPrice);
+    let counterpartyOrders = []; // Store actual matched orders
 
     for (let order of orders) {
-        //console.log('checking for self skip '+JSON.stringify(order)+' '+address+' '+Boolean(order.address==address))
-        if(order.sender==address){continue}
-        console.log('no skip')
-        let orderPriceBN = new BigNumber(order.price)
-        let priceDiff = liqPriceBN.minus(orderPriceBN)
+        if (order.sender == address) continue; // Skip self-trades
+        console.log('no skip');
+
+        let orderPriceBN = new BigNumber(order.price);
+        let priceDiff = liqPriceBN.minus(orderPriceBN);
         let fillAmount = BigNumber.min(remainingSize, order.amount);
+
         totalCost = totalCost.plus(fillAmount.times(order.price));
         filledSize = filledSize.plus(fillAmount);
         remainingSize = remainingSize.minus(fillAmount);
+        order.sized = fillAmount.decimalPlaces(8).toNumber()
+        // Track matched counterparty orders
+        counterpartyOrders.push(order);
 
         // If we go below liquidation price, flag it
-        console.log('about to check for systemic loss '+order.price+' '+liqPrice+' '+sell)
-        if ((order.price < liqPrice)&&sell||(order.price>liqPrice)&&!sell) {
+        console.log('about to check for systemic loss ' + order.price + ' ' + liqPrice + ' ' + sell);
+        if ((order.price < liqPrice && sell) || (order.price > liqPrice && !sell)) {
             filledBelowLiqPrice = true;
             partiallyFilledBelowLiqPrice = filledSize.gt(0) && filledSize.lt(sell);
             liquidationLoss = liquidationLoss.plus(fillAmount.times(priceDiff));
@@ -578,7 +582,7 @@ async estimateLiquidation(liquidationOrder) {
 
     let estimatedFillPrice = filledSize.gt(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
     let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
-    let trueBookEmpty = remainingSize.gt(0)
+    let trueBookEmpty = remainingSize.gt(0);
     let remainder = remainingSize.toNumber(); // Contracts still unfilled
 
     return {
@@ -591,9 +595,11 @@ async estimateLiquidation(liquidationOrder) {
         trueBookEmpty,
         remainder,
         liquidationLoss: liquidationLoss.decimalPlaces(8).toNumber(),
-        trueLiqPrice // This is the price where remaining contracts could be filled if the book had enough liquidity
+        trueLiqPrice, // This is the price where remaining contracts could be filled if the book had enough liquidity
+        counterpartyOrders // List of actual matched counterparties
     };
 }
+
 
 async matchContractOrders(orderBook) {
     if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
