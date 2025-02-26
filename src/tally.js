@@ -296,7 +296,7 @@ class TallyMap {
 
             if(senderTally.available < requiredAmount){
                 const availBN = new BigNumber(senderTally.available)
-                const shortfall = new BigNumber(requiredAmount).minus(availBN).decimalPlaces(8).toNumber
+                const shortfall = new BigNumber(requiredAmount).minus(availBN).decimalPlaces(8).toNumber()
                 return { hasSufficient: false, reason: 'Insufficient available balance', shortfall:shortfall, available:senderTally.available };
             }
 

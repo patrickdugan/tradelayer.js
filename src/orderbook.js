@@ -640,7 +640,7 @@ async matchContractOrders(orderBook) {
         // Prevent self-trading
         const sellSender = sellOrder.sender || sellOrder.address;
         const buySender = buyOrder.sender || buyOrder.address;
-        
+
         if (sellSender === buySender) {
             console.log("Self-trade detected, removing the maker (resting) order.");
             if (sellOrder.maker) {
@@ -981,10 +981,12 @@ async matchContractOrders(orderBook) {
 
                         // Ensure there is enough margin for the new contracts beyond closing
                         let newMarginRequired = BigNumber(initialMarginPerContract).times(flipLong).decimalPlaces(8).toNumber();
+                        console.log('newMargin flip '+newMarginRequired+' '+initialMarginPerContract+' '+flipLong)
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId, newMarginRequired);
                         
                         if (!hasSufficientBalance.hasSufficient) {
                             console.log(`Shortfall detected: ${JSON.stringify(hasSufficientBalance)}`);
+                            console.log('hasSuf '+hasSufficientBalance.shortfall+' '+initialMarginPerContract )
                             let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                 .dividedBy(initialMarginPerContract)
                                 .decimalPlaces(0, BigNumber.ROUND_CEIL)
@@ -992,6 +994,10 @@ async matchContractOrders(orderBook) {
 
                             flipLong -= contractUndo;
                             newMarginRequired = BigNumber(initialMarginPerContract).times(new BigNumber(flipLong)).decimalPlaces(8).toNumber();
+                            console.log('contract undo investigate '+newMarginRequired+' '+flipLong+' '+contractUndo+' '+BigNumber(hasSufficientBalance.shortfall)
+                                .dividedBy(initialMarginPerContract)+' '+BigNumber(hasSufficientBalance.shortfall)
+                                .dividedBy(initialMarginPerContract)
+                                .decimalPlaces(0, BigNumber.ROUND_CEIL))                            
                         }
 
                         await TallyMap.updateBalance(
