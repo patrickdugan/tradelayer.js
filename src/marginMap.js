@@ -175,7 +175,8 @@ class MarginMap {
             match.inverse,
             close,
             flip,
-            match.buyOrder.contractId
+            match.buyOrder.contractId,
+            match.buyOrder.isLiq
         );
 
         let sellerPosition = await this.updateContractBalances(
@@ -187,12 +188,16 @@ class MarginMap {
             match.inverse,
             close,
             flip,
-            match.sellOrder.contractId
+            match.sellOrder.contractId,
+            match.sellOrder.isLiq
         );
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,liq,inClearing) {
+        console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
+        if(position.contracts==null){position.contracts=0}
+        if(liq){return position}
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
@@ -221,6 +226,7 @@ class MarginMap {
         const amountBN = new BigNumber(amount)
         let newPositionSize = isBuyOrder ? BigNumber(position.contracts).plus(amountBN).toNumber() : BigNumber(position.contracts).minus(amountBN).toNumber();
         console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
+        //if(newPositionSize==null){newPositionSize=amount}
         position.contracts=newPositionSize
         
         const ContractList = require('./contractRegistry.js')
@@ -247,7 +253,11 @@ class MarginMap {
         }
         if(address==null){throw new Error()}
         this.margins.set(address, position);  
-        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,'updateContractBalances')
+        let tag = 'updateContractBalances'
+        if(inClearing){
+            tag = 'liquidatingContract'
+        }
+        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag)
       
         return position
         //await this.saveMarginMap();
@@ -753,11 +763,11 @@ class MarginMap {
                 return pnl.decimalPlaces(8).toNumber();
         }
 
-    async updateMargin(address, contractId, newMargin, block) {
+    async updateMargin(address, contractId, newMargin, block,position) {
         console.log(`Updating margin for ${address} on contract ${contractId} to ${newMargin}`);
 
         // Ensure the position exists
-        let position = this.margins.get(address);
+        if(!position){ position = this.margins.get(address)};
 
         if (!position) {
             console.warn(`No position found for ${address} on contract ${contractId}, initializing a new one.`);
@@ -819,10 +829,11 @@ class MarginMap {
                 let liquidationOrder={
                     address: position.address,
                     contractId: contractId,
-                    size: Math.abs(liquidationSize),
+                    amount: Math.abs(liquidationSize),
                     price: position.liqPrice,
                     sell: sell,
-                    bankruptcyPrice: position.bankruptcyPrice
+                    bankruptcyPrice: position.bankruptcyPrice,
+                    isLiq: true
                 }
 
                 if(total){
@@ -963,7 +974,11 @@ async adjustDeleveraging(address, contractId, size, sell) {
 
     if (!position) return;
     const contractChange = sell ? -size : size
-    console.log('⚠️ '+contractChange+' '+position.contracts) 
+    console.log('⚠️ '+contractChange+' '+position.contracts)
+    if(!contractChange||!position.contracts){
+        console.log('issue in deleveraging '+contractChange+' '+position.contracts)
+        throw new Error()
+    } 
     const contractChangeBN = new BigNumber(contractChange)
     position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
 

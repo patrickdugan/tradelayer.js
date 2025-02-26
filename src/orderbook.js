@@ -13,6 +13,7 @@ class Orderbook {
             this.tickSize = tickSize;
             this.orderBookKey = orderBookKey; // Unique identifier for each orderbook (contractId or propertyId pair)
             this.orderBooks = {};
+            this.block = 1
             //this.loadOrderBook(); // Load or create an order book based on the orderBookKey
         }
          // Static async method to get an instance of Orderbook
@@ -26,7 +27,7 @@ class Orderbook {
 
 
 
-         async loadOrderBook(key,contract) {
+         async loadOrderBook(key,addr) {
                 const stringKey = typeof key === 'string' ? key : String(key);
                 const orderBooksDB = await dbInstance.getDatabase('orderBooks');
 
@@ -35,9 +36,7 @@ class Orderbook {
                     if (orderBookData && orderBookData.value) {
                         const parsedOrderBook = JSON.parse(orderBookData.value);
                         this.orderBooks[key] = parsedOrderBook;
-                        if(contract){
-                            console.log('loading the orderbook for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
-                        }
+                        console.log('loading the orderbook in check from addr '+addr+' for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
                         return parsedOrderBook; // Return the parsed order book
                     } else {
                         console.log('new orderbook for ' + key);
@@ -511,7 +510,7 @@ class Orderbook {
         }
 
 async estimateLiquidation(liquidationOrder) {
-    const { contractId, size, sell, price: liqPrice, address } = liquidationOrder;
+    const { contractId, amount, sell, price: liqPrice, address } = liquidationOrder;
     console.log('est liq ' + sell);
 
     // Load the order book for the given contract
@@ -529,7 +528,7 @@ async estimateLiquidation(liquidationOrder) {
             filledBelowLiqPrice: false,
             partiallyFilledBelowLiqPrice: false,
             trueBookEmpty: true,
-            remainder: size, // Everything remains unfilled
+            remainder: amount, // Everything remains unfilled
             liquidationLoss: 0,
             trueLiqPrice: null, // No price available in book
             counterpartyOrders: [] // No matches
@@ -541,7 +540,7 @@ async estimateLiquidation(liquidationOrder) {
         ? orders.sort((a, b) => b.price - a.price) // Sell side: match highest bids first
         : orders.sort((a, b) => a.price - b.price); // Buy side: match lowest asks first
 
-    let remainingSize = new BigNumber(size);
+    let remainingSize = new BigNumber(amount);
     let totalCost = new BigNumber(0);
     let filledSize = new BigNumber(0);
     let filledBelowLiqPrice = false;
@@ -581,7 +580,7 @@ async estimateLiquidation(liquidationOrder) {
     }
 
     let estimatedFillPrice = filledSize.gt(0) ? totalCost.dividedBy(filledSize).toNumber() : null;
-    let partialFillPercent = filledSize.dividedBy(size).times(100).toNumber();
+    let partialFillPercent = filledSize.dividedBy(amount).times(100).toNumber();
     let trueBookEmpty = remainingSize.gt(0);
     let remainder = remainingSize.toNumber(); // Contracts still unfilled
 
@@ -692,9 +691,9 @@ async matchContractOrders(orderBook) {
                 ...sellOrder,
                 contractId: sellOrder.contractId,
                 amount: tradeAmount.toNumber(),
-                sellerAddress: sellOrder.sender,
+                sellerAddress: sellOrder.sender || sellOrder.address,
                 sellerTx: sellOrder.txid,
-                liq: sellOrder.isLiq,
+                liq: sellOrder.isLiq || false,
                 maker: sellOrder.maker,
                 marginUsed: marginUsed, // ✅ Fixed
                 initialReduce: sellOrder.initialReduce
@@ -703,9 +702,9 @@ async matchContractOrders(orderBook) {
                 ...buyOrder,
                 contractId: buyOrder.contractId,
                 amount: tradeAmount.toNumber(),
-                buyerAddress: buyOrder.sender,
+                buyerAddress: buyOrder.sender || buyOrder.address,
                 buyerTx: buyOrder.txid,
-                liq: buyOrder.isLiq,
+                liq: buyOrder.isLiq || false,
                 maker: buyOrder.maker,
                 marginUsed: marginUsed, // ✅ Fixed
                 initialReduce: buyOrder.initialReduce
@@ -897,6 +896,7 @@ async matchContractOrders(orderBook) {
             let counter = 0 
             for (const match of matches) {
                     counter+=1
+
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)
                         continue
@@ -1055,7 +1055,7 @@ async matchContractOrders(orderBook) {
                     console.log('about to go into logic brackets for init margin '+isBuyerReducingPosition + ' seller reduce? '+ isSellerReducingPosition+ ' channel? '+channel)
                 
                     console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
-                    if(!isBuyerReducingPosition){
+                    if(!isBuyerReducingPosition&&!match.buyOrder.liq){
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin buyer not channel not reducing '+counter+' '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount+' '+match.buyOrder.marginUsed)
@@ -1068,7 +1068,8 @@ async matchContractOrders(orderBook) {
                         //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
                     // Update MarginMap for the contract series
-                    if(!isSellerReducingPosition){
+                    console.log(' addresses in match '+match.buyOrder.buyerAddress+' '+match.sellOrder.sellerAddress)
+                    if(!isSellerReducingPosition&&!match.sellOrder.liq){
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin seller not channel not reducing '+counter+' '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount+' '+match.sellOrder.initMargin)
@@ -1094,6 +1095,7 @@ async matchContractOrders(orderBook) {
                     if(channel==true){
                         console.log('checking match obj before calling update contract balances '+JSON.stringify(match))
                     }
+
                     console.log('close? flip? '+close+' '+flip)
                     let positions = await marginMap.updateContractBalancesWithMatch(match, channel, close,flip)
                     let sellerClosed = 0
@@ -1115,6 +1117,8 @@ async matchContractOrders(orderBook) {
                         sellerFullyClosed=true
                     }
 
+                    const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
+
                     const trade = {
                         contractId: match.sellOrder.contractId,
                         amount: match.sellOrder.amount,
@@ -1130,7 +1134,8 @@ async matchContractOrders(orderBook) {
                         sellerFullClose: sellerFullyClosed,
                         flipLong: flipLong,
                         flipShort: flipShort,
-                        channel: channel
+                        channel: channel,
+                        liquidation: isLiq
                         // other relevant trade details...
                     };
 
@@ -1147,7 +1152,7 @@ async matchContractOrders(orderBook) {
                     if(lastMark==null){lastMark=trade.price}
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
-                    if (isBuyerReducingPosition||isBuyerFlippingPosition) {
+                    if ((isBuyerReducingPosition||isBuyerFlippingPosition)&&!match.buyOrder.liq){
                         let closedContracts = match.buyOrder.amount
 
                         if(isBuyerFlippingPosition){
@@ -1200,7 +1205,7 @@ async matchContractOrders(orderBook) {
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
 
-                    if (isSellerReducingPosition||isSellerFlippingPosition){
+                    if ((isSellerReducingPosition||isSellerFlippingPosition)&&!match.sellOrder.liq){
                         let closedContracts = match.sellOrder.amount
 
                         if(isSellerFlippingPosition){
@@ -1685,12 +1690,17 @@ async matchContractOrders(orderBook) {
         async cancelAllOrdersForAddress(fromAddress, key, block,collateralPropertyId) {
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js');
-
-            console.log(`\n🛑 Cancelling all ${key} orders for ${fromAddress}`);
+            let counter=0
+            console.log(`\n🛑 Cancelling all contract ${key} orders for ${fromAddress}`);
 
             // Load the correct order book
-            let orderBook = await this.loadOrderBook(key);
-            console.log('orderbook in cancel all '+JSON.stringify(orderBook))
+
+            let orderBook = this.orderbooks
+            if(!orderBook){
+                console.log('cant find locally loading book from db')
+                orderBook = await this.loadOrderBook(key, fromAddress);
+            }
+            console.log('orderbook in cancel all '+orderBook.buy.length+' '+JSON.stringify(orderBook))
             if (!orderBook) {
                 console.log(`⚠️ No order book instance found. Nothing to cancel.`);
                 return [];
@@ -1706,6 +1716,7 @@ async matchContractOrders(orderBook) {
             // Cancel Buy Orders
             orderBook.buy = orderBook.buy.filter(order => {
                     if (order.sender === fromAddress) {
+                        counter+=1
                         cancelledOrders.push(order);
                         returnFromReserve += order.initMargin || 0;
                         return false; // Remove this order
@@ -1723,10 +1734,11 @@ async matchContractOrders(orderBook) {
                 });
 
             console.log(`✅ Cancelled ${cancelledOrders.length} orders for ${fromAddress}. Returning ${returnFromReserve} to reserve.`);
-
+            console.log('orders for '+fromAddress+' '+JSON.stringify(orderBook.buy))
             // Save updated order book
-            await this.saveOrderBook(orderBook);
-
+            await this.saveOrderBook(orderBook,key);
+            this.orderbooks[key]= orderBook
+            this.block = block
             // Process reserve refunds
             if (returnFromReserve > 0) {
                 await TallyMap.updateBalance(fromAddress, collateralPropertyId, returnFromReserve, -returnFromReserve, 0, 0, 'contractCancel', block);
