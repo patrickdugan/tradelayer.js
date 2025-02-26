@@ -597,7 +597,7 @@ class MarginMap {
         
         if (excessMargin.isNegative()) {
             console.log(`⚠️ No excess margin to return.`);
-            return { netMargin: 0, mode: 'maint' };
+            return 0;
         }
 
         // 💸 **Deduct Fee If Needed**

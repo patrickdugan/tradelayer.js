@@ -1185,7 +1185,7 @@ async matchContractOrders(orderBook) {
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}   
-                        if(reduction !=0&&channel==false){
+                        if(reduction!==0){
                             //console.log('reduction about to pass to TallyMap' +reduction)
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         }
@@ -1244,7 +1244,7 @@ async matchContractOrders(orderBook) {
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, initialMarginPerContract, match.sellOrder.contractId, match.sellOrder.sellerAddress, false, feeInfo.sellFeeFromMargin, sellerFee)
                         //{netMargin,mode} 
-                        if(reduction !=0){
+                        if(reduction !==0){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
