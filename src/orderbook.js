@@ -599,7 +599,6 @@ async estimateLiquidation(liquidationOrder) {
     };
 }
 
-
 async matchContractOrders(orderBook) {
     if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
         return { orderBook, matches: [] }; // Return empty matches if no orders
@@ -617,7 +616,8 @@ async matchContractOrders(orderBook) {
 
         let sellOrder = orderBook.sell[0];
         let buyOrder = orderBook.buy[0];
-
+        console.log('remaining sells '+JSON.stringify(orderBook.sell))
+        console.log('sell order '+JSON.stringify(sellOrder))
         // Remove orders with zero amounts
         if (BigNumber(sellOrder.amount).isZero()) {
             orderBook.sell.splice(0, 1);
@@ -630,24 +630,28 @@ async matchContractOrders(orderBook) {
 
         let txid = '';
 
-        // Prevent self-trading
-        if (sellOrder.sender === buyOrder.sender) {
-            console.log("Self-trade detected, removing the maker order.");
-            if (sellOrder.maker) {
-                orderBook.sell.splice(0, 1);
-            } else {
-                orderBook.buy.splice(0, 1);
-            }
-            continue;
-        }
-
-        // Check for price match
+         // Check for price match
         if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break;
 
         // Determine trade price
         let tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
         sellOrder.maker = sellOrder.blockTime < buyOrder.blockTime;
         buyOrder.maker = buyOrder.blockTime < sellOrder.blockTime;
+        // Prevent self-trading
+        const sellSender = sellOrder.sender || sellOrder.address;
+        const buySender = buyOrder.sender || buyOrder.address;
+        
+        if (sellSender === buySender) {
+            console.log("Self-trade detected, removing the maker (resting) order.");
+            if (sellOrder.maker) {
+                console.log('before self-cancel '+JSON.stringify(orderBook.sell))
+                orderBook.sell.splice(0, 1);
+                console.log('after self-cancel '+JSON.stringify(orderBook.buy))
+            } else {
+                orderBook.buy.splice(0, 1);
+            }
+            continue;
+        }
 
         // Prioritize post-only orders for trade price
         if (sellOrder.blockTime === buyOrder.blockTime) {
@@ -693,8 +697,8 @@ async matchContractOrders(orderBook) {
                 amount: tradeAmount.toNumber(),
                 sellerAddress: sellOrder.sender || sellOrder.address,
                 sellerTx: sellOrder.txid,
+                maker:sellOrder.maker, 
                 liq: sellOrder.isLiq || false,
-                maker: sellOrder.maker,
                 marginUsed: marginUsed, // ✅ Fixed
                 initialReduce: sellOrder.initialReduce
             },
@@ -732,7 +736,7 @@ async matchContractOrders(orderBook) {
             orderBook.buy[0] = buyOrder;
         }
     }
-
+    //this.saveOrderBook(orderBook, buyOrder.contractId.toString())
     return { orderBook, matches };
 }
 
@@ -895,6 +899,7 @@ async matchContractOrders(orderBook) {
             //console.log('processing contract mathces '+JSON.stringify(matches))
             let counter = 0 
             for (const match of matches) {
+                  console.log('bleh 🛑'+JSON.stringify(match))
                     counter+=1
 
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
@@ -1278,6 +1283,7 @@ async matchContractOrders(orderBook) {
                     }
                     // Save the updated margin map
                     await marginMap.saveMarginMap(false);  
+                      return trade
             }
         }
 
@@ -1695,12 +1701,12 @@ async matchContractOrders(orderBook) {
 
             // Load the correct order book
 
-            let orderBook = this.orderbooks
+            let orderBook = this.orderBooks
             if(!orderBook){
                 console.log('cant find locally loading book from db')
                 orderBook = await this.loadOrderBook(key, fromAddress);
             }
-            console.log('orderbook in cancel all '+orderBook.buy.length+' '+JSON.stringify(orderBook))
+            console.log('orderbook in cancel all '+JSON.stringify(orderBook))
             if (!orderBook) {
                 console.log(`⚠️ No order book instance found. Nothing to cancel.`);
                 return [];
@@ -1737,7 +1743,7 @@ async matchContractOrders(orderBook) {
             console.log('orders for '+fromAddress+' '+JSON.stringify(orderBook.buy))
             // Save updated order book
             await this.saveOrderBook(orderBook,key);
-            this.orderbooks[key]= orderBook
+            this.orderBooks[key]= orderBook
             this.block = block
             // Process reserve refunds
             if (returnFromReserve > 0) {

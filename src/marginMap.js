@@ -807,7 +807,7 @@ class MarginMap {
             return position
     }
 
-    generateLiquidationOrder(position, contractId,total) {
+    generateLiquidationOrder(position, contractId,total,block) {
                 // Liquidate 50% of the position if below maintenance margin
                 let sell 
                 if(position.contracts>0){
@@ -833,7 +833,8 @@ class MarginMap {
                     price: position.liqPrice,
                     sell: sell,
                     bankruptcyPrice: position.bankruptcyPrice,
-                    isLiq: true
+                    isLiq: true,
+                    blockTime: block
                 }
 
                 if(total){
@@ -876,7 +877,7 @@ class MarginMap {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional) {
+    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
 
       let remainingSize = new BigNumber(unfilledContracts);
@@ -935,7 +936,7 @@ class MarginMap {
 
         // Ensure matchSize is positive before proceeding
         if (matchSize > 0) {
-          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell);
+          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block);
             const matchBN = new BigNumber(matchSize)
 
           pos = await this.realizePnl(
@@ -967,7 +968,7 @@ class MarginMap {
     }
 
 // Adjust deleveraging position
-async adjustDeleveraging(address, contractId, size, sell) {
+async adjustDeleveraging(address, contractId, size, sell, block) {
     console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
 
     let position = await this.getPositionForAddress(address, contractId);
@@ -988,7 +989,7 @@ async adjustDeleveraging(address, contractId, size, sell) {
     }
     console.log('⚠️ '+position.contracts)
     this.margins.set(position.address, position);
-    this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging')  
+    this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
     await this.saveMarginMap(true);
     return position
 }
@@ -1107,8 +1108,6 @@ async executeDeleveraging(address, contractId, size, side, liqPrice) {
     await marginMap.saveMarginMap(true);
 }
 
-
-
 async fetchLiquidationVolume(blockHeight, contractId, mark) {
         const liquidationsDB = await db.getDatabase('liquidations');
         // Fetch liquidations from the database for the given contract and blockHeight
@@ -1200,7 +1199,7 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
 
 
      // Get the position for a specific address
-      async getPositionForAddress(address, contractId) {
+    async getPositionForAddress(address, contractId) {
         let position = this.margins.get(address);
         //console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
         // If the position is not found or margins map is empty, try loading from the database

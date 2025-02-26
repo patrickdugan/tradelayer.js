@@ -329,9 +329,6 @@ static async feeCacheBuy(block) {
         let positions = await marginMap.getAllPositions();
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
                           
-        //positions = Clearing.sortPositionsForPNL(positions,Boolean(blob.lastPrice>blob.previousPrice))
-        console.log('🔄 clearing sorted positions '+JSON.stringify(positions));
-   
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
         let isLiq = [];
         let systemicLoss = 0;
@@ -417,9 +414,9 @@ static async feeCacheBuy(block) {
                                 if (liquidationResult) {
                                     if(liquidationResult.counterparties.length>0&&contractId==3){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
-                                            console.log("Before update:", JSON.stringify(positions, null, 2));
+                                            console.log("🔄 Before update:", JSON.stringify(positions, null, 2));
                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
-                                            console.log("After update:", JSON.stringify(positions, null, 2));
+                                            console.log("🔄 After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
@@ -453,7 +450,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
 
     // Step 1: Generate the liquidation order
-    let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation);
+    let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
     if (liq === "err:0 contracts") {
         console.log("No contracts to liquidate.");
         return null;
@@ -465,6 +462,9 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
+    if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
+        liq.price=splat.estimatedFillPrice
+    }
 
     let marginReduce = position.margin;
     if (liquidationType === "partial") {
@@ -474,15 +474,27 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
      const infoBlob = { posMargin: position.margin, reduce: marginReduce, dent: marginDent };
 
     // Step 3: Adjust margin & balances
-     console.log('🏦 about to update contracts for liq' + position.mar + ' ' + marginReduce + ' ' + JSON.stringify(position));
+     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position));
  
     position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
     await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);
     position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
 
+    const orderbookKey= contractId.toString()
+        let orderbookData = orderbook.orderBooks[orderbookKey] || { buy: [], sell: [] };
+        console.log('🛑 liq JSON '+JSON.stringify(liq))    
+        orderbookData = await orderbook.insertOrder(liq, orderbookData, liq.sell, true);
+        let matchResult = await orderbook.matchContractOrders(orderbookData);
+        console.log('match Result '+matchResult.matches.length+' '+JSON.stringify(matchResult))
+        if (matchResult.matches.length > 0) {
+            console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
+            const trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+            console.log('trade result '+JSON.stringify(trade))
+        }
+
     let systemicLoss = new BigNumber(0);
     let caseLabel = "";
-    let result = "";
+    let result = {counterparties:[]};
 
     // Step 4: Handle different liquidation scenarios
     if (!splat.filled) {
@@ -492,48 +504,64 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight);
         }
     } 
-        const orderbookKey= contractId.toString()
-        let orderbookData = orderbook.orderBooks[orderbookKey] || { buy: [], sell: [] };
-        console.log('🛑 liq JSON '+JSON.stringify(liq))    
-        orderbookData = await orderbook.insertOrder(liq, orderbookData, liq.sell, true);
-        let matchResult = await orderbook.matchContractOrders(orderbookData);
-        if (matchResult.matches.length > 0) {
-            console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
-            await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
-            result = { counterparties: matchResult.matches };
-        }
-
-        const counterparties = Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties)
-
+        console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
+        const counterparties = Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId)
+        console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(result.counterparties))
+       
     // Step 5: Save liquidation results
     await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
 
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: counterparties || [] };
 }
 
-static extractCounterpartyPositions(matches, counterparties) {
-    for (const match of matches) {
-        if (match.sellerPosition) {
-            counterparties.push(match.sellerPosition);
-        }
-        if (match.buyerPosition) {
-            counterparties.push(match.buyerPosition);
-        }
+static async extractCounterpartyPositions(matches, counterparties, marginMap,contractId) {
+  // Extract contractId from the first match's sellOrder (assuming they are all the same)
+  
+  // Collect addresses from matches and counterparties
+  const addresses = new Set();
+  
+  // From matches
+  for (const match of matches) {
+    if (match.sellerPosition && match.sellerPosition.address) {
+      addresses.add(match.sellerPosition.address);
     }
+    if (match.buyerPosition && match.buyerPosition.address) {
+      addresses.add(match.buyerPosition.address);
+    }
+  }
+  
+  // From the counterparties parameter
+  for (const cp of counterparties) {
+    if (cp.address) {
+      addresses.add(cp.address);
+    }
+  }
+  
+  // Fetch the latest position state for each address using the extracted contractId
+  const updatedCounterparties = [];
+  for (const address of addresses) {
+    const updatedPos = await marginMap.getPositionForAddress(address, contractId);
+    if (updatedPos) {
+      updatedCounterparties.push(updatedPos);
+    }
+  }
+  
+  return updatedCounterparties;
 }
+
 
 static sortPositionsForPNL(positions, priceDiff) {
     return positions.sort((a, b) => {
