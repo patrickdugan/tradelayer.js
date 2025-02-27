@@ -954,8 +954,9 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
             //console.log('processing contract mathces '+JSON.stringify(matches))
             let counter = 0 
             for (const match of matches) {
-                  console.log('bleh 🛑'+JSON.stringify(match))
-                    counter+=1
+                counter+=1
+                  console.log('bleh 🛑 '+counter+' '+JSON.stringify(matches))
+                    
 
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)

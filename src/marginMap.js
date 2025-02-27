@@ -249,7 +249,7 @@ class MarginMap {
             position.avgPrice=price
         }else{
             position.liqPrice = liquidationInfo.liquidationPrice || null
-            position.bankruptcyPrice = liquidationInfo.totalLiquidationPrice   
+            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice   
         }
         if(address==null){throw new Error()}
         this.margins.set(address, position);  
@@ -257,10 +257,10 @@ class MarginMap {
         if(inClearing){
             tag = 'liquidatingContract'
         }
+        await this.saveMarginMap()
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag)
       
         return position
-        //await this.saveMarginMap();
     }
 
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
