@@ -405,7 +405,7 @@ static async updateAllPositions(blockHeight) {
     static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
         let liquidationData = [];
         let marginMap = await MarginMap.getInstance(contractId);
-        let positions = await marginMap.getAllPositions();
+        let positions = await marginMap.getAllPositions(contractId);
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
                           
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
@@ -544,7 +544,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
-        liq.price=splat.estimatedFillPrice
+        liq.price=splat.trueLiqPrice
         if(isPartialLiquidation&&((splat.estimatedFillPrice<bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>bankruptcyPrice&&liq.sell==false))){
             isFullLiquidation==true
             isPartialLiquidation==false

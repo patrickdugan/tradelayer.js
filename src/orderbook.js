@@ -950,13 +950,13 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
 
             const MarginMap = require('./marginMap.js')
             const tradeHistoryManager = new TradeHistory()
-
+            const trades= []
             //console.log('processing contract mathces '+JSON.stringify(matches))
             let counter = 0 
             for (const match of matches) {
                 counter+=1
                   console.log('bleh 🛑 '+counter+' '+JSON.stringify(matches))
-                    
+                  console.log('🛑 JSON.stringify match '+JSON.stringify(match))
 
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)
@@ -1347,8 +1347,9 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
                     }
                     // Save the updated margin map
                     await marginMap.saveMarginMap(false);  
-                      return trade
+                    trades.push(trade)                     
             }
+             return trades
         }
 
         calculateFee(amount, sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue, channel){

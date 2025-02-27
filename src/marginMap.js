@@ -88,11 +88,11 @@ class MarginMap {
         return margin;
     }*/
 
-    async getAllPositions() {
+    async getAllPositions(contractId) {
        
         const allPositions = [];
-
-        for(const [address, position] of this.margins.entries()){
+        const map = await MarginMap.loadMarginMap(contractId)
+        for(const [address, position] of map.margins.entries()){
             if(!address){continue}
             allPositions.push({
                 address: address,
@@ -895,7 +895,7 @@ class MarginMap {
         counterparties: []
       };
 
-      const allPositions = await this.getAllPositions();
+      const allPositions = await this.getAllPositions(contractId);
       console.log(` Found ${allPositions.length} total positions in marginMap.`);
 
       // Filter out all longs vs. shorts
@@ -1200,15 +1200,9 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
 
      // Get the position for a specific address
     async getPositionForAddress(address, contractId) {
-        let position = this.margins.get(address);
-        //console.log('loading position for address '+address +' contract '+contractId + ' ' +JSON.stringify(position) )
-        // If the position is not found or margins map is empty, try loading from the database
-        if (!position || this.margins.length === 0) {
-            //console.log('going into exception for getting Position ')
-            await MarginMap.loadMarginMap(contractId);
-            position = this.margins.get(address);
-        }
 
+            const map = await MarginMap.loadMarginMap(contractId);
+            let position = map.margins.get(address);
         // If still not found, return a default position
         if (!position) {
             return {
