@@ -452,7 +452,7 @@ static async updateAllPositions(blockHeight) {
                         if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
                             if (liquidationResult) {
-                                if(liquidationResult.counterparties.length>0&&contractId==3){
+                                if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
                                             console.log("Before update:", JSON.stringify(positions, null, 2));
                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
@@ -476,10 +476,11 @@ static async updateAllPositions(blockHeight) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                                     let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional);
-                                    if (liquidationResult) {
-                                        if(liquidationResult.counterparties.length>0&&contractId==3){
-                                            console.log(JSON.stringify(liquidationResult.counterparties))
+                                    
                                             console.log("Before update:", JSON.stringify(positions, null, 2));
+                                    if (liquidationResult) {
+                                        if(liquidationResult.counterparties.length>0){
+                                            console.log(JSON.stringify(liquidationResult.counterparties))
                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
                                             console.log("After update:", JSON.stringify(positions, null, 2));
                                         }
@@ -490,11 +491,11 @@ static async updateAllPositions(blockHeight) {
                                 continue;
                             } else {
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional);
+                                console.log("Before update:", JSON.stringify(liquidationResult));
                                 if (liquidationResult) {
-                                    if(liquidationResult.counterparties.length>0&&contractId==3){
+                                    if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
-                                            console.log("🔄 Before update:", JSON.stringify(positions, null, 2));
-                                            positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
                                             console.log("🔄 After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
@@ -609,8 +610,8 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         position = await marginMap.updateContractBalances(position.address, deleverageAmount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
    
         console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
-        const counterparties = Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId)
-        console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(result.counterparties))
+        const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId)
+        console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
        
     // Step 5: Save liquidation results
     await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
@@ -618,41 +619,44 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: counterparties || [] };
 }
 
-static async extractCounterpartyPositions(matches, counterparties, marginMap,contractId) {
-  // Extract contractId from the first match's sellOrder (assuming they are all the same)
-  
-  // Collect addresses from matches and counterparties
+static async extractCounterpartyPositions(matches, deleveragedPositions, marginMap, contractId) {
+  // Create a set to store unique addresses
   const addresses = new Set();
-  
-  // From matches
+
+  // Collect addresses from the matches array (which come from liq order matching)
   for (const match of matches) {
-    if (match.sellerPosition && match.sellerPosition.address) {
-      addresses.add(match.sellerPosition.address);
-    }
     if (match.buyerPosition && match.buyerPosition.address) {
       addresses.add(match.buyerPosition.address);
     }
-  }
-  
-  // From the counterparties parameter
-  for (const cp of counterparties) {
-    if (cp.address) {
-      addresses.add(cp.address);
+    if (match.sellerPosition && match.sellerPosition.address) {
+      addresses.add(match.sellerPosition.address);
     }
   }
-  
-  // Fetch the latest position state for each address using the extracted contractId
-  const updatedCounterparties = [];
-  for (const address of addresses) {
-    const updatedPos = await marginMap.getPositionForAddress(address, contractId);
-    if (updatedPos) {
-      updatedCounterparties.push(updatedPos);
-    }
-  }
-  
-  return updatedCounterparties;
-}
 
+     if (Array.isArray(deleveragedPositions)) {
+      for (const pos of deleveragedPositions) {
+        if (addresses.has(pos.address)) {
+          addresses.delete(pos.address);
+        }
+      }
+    }
+
+
+  // Now build the merged array using the latest DB entry for each address.
+
+  for (const address of addresses) {
+    let updatedPos = await marginMap.getPositionForAddress(address, contractId);
+    // If not found, optionally fallback to the in-memory map:
+    if (!updatedPos && marginMap.margins && typeof marginMap.margins.get === 'function') {
+      updatedPos = marginMap.margins.get(address);
+    }
+    if (updatedPos) {
+      deleveragedPositions.push(updatedPos);
+    }
+  }
+
+  return deleveragedPositions;
+}
 
 static sortPositionsForPNL(positions, priceDiff) {
     return positions.sort((a, b) => {
