@@ -1358,7 +1358,6 @@ const Validity = {
                 }
             }
             console.log('finished contract trade params '+params.valid+' '+params.reason)
-            if(txid=="5638ecab4410a32de380c17a8dfb976c228a3db5a521a1ea25c5de88867ae0b7"){throw new Error()}
             return params;
         },
 
