@@ -155,6 +155,7 @@ static async feeCacheBuy(block) {
         }
     }
 }
+
 static async updateAllPositions(blockHeight) {
   // Fetch all valid contract IDs (adjust this function to your environment)
   const contractIds = await ContractRegistry.getAllContractIds();
@@ -600,6 +601,10 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight);
         }
     } 
+
+        const deleverageAmount = result.totalDeleverage || 0
+        position = await marginMap.updateContractBalances(position.address, deleverageAmount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
+   
         console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
         const counterparties = Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId)
         console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(result.counterparties))

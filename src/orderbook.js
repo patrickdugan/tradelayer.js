@@ -1070,7 +1070,7 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
                         console.log(`Flip logic updated: closed=${closedContracts}, flipped=${flipLong}`);
                     }
                     
-                    if (isSellerFlippingPosition) {
+                    if(isSellerFlippingPosition){
                         let closedContracts = Math.abs(match.sellerPosition.contracts); // The contracts being closed
                         flipShort = match.sellOrder.amount - closedContracts; // New contracts beyond closing
 
