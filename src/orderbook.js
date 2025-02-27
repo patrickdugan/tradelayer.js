@@ -817,7 +817,7 @@ async matchContractOrders(orderBook) {
         }
 
         // Save the updated order book
-        await this.saveOrderBook(orderBookKey, orderbookData);
+        //await this.saveOrderBook(orderBookKey, orderbookData);
 
         return cancelledOrders;
     }

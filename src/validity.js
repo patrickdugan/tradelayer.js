@@ -1279,28 +1279,21 @@ const Validity = {
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(amountBN).toNumber();
 
             const existingPosition = await marginMap.getPositionForAddress(sender, params.contractId);
+            console.log('existing position to see if we reduce '+JSON.stringify(existingPosition))
             // Determine if the trade reduces the position size for buyer or seller
-            const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&params.side==false);
-            const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && params.side==true);
-
-            if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
-
-                // Check if the sender has enough balance for the initial margin
-                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+sender, contractDetails.collateralPropertyId, totalInitialMargin)
-                const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, contractDetails.collateralPropertyId, totalInitialMargin);
-                if (hasSufficientBalance.hasSufficient==false) {
-                    console.log('Insufficient balance for initial margin');
-                    params.valid=false
-                    params.reason+= "Insufficient balance for initial margin"
-                }
-            }
-
-             const isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPosition.contracts)&&existingPosition.contracts<0&&params.side==true)
-             const isSellerFlippingPosition = Boolean(params.amount>existingPosition.contracts&&existingPosition.contracts>0&&params.side==false)           
+            console.log('flag values '+existingPosition.contracts+' '+params.sell)
+            const isBuyerReducingPosition = Boolean(existingPosition.contracts < 0 &&params.sell==false);
+            const isSellerReducingPosition = Boolean(existingPosition.contracts > 0 && params.sell==true);
+            console.log(' reduce flags buyer/seller '+isBuyerReducingPosition+' '+isSellerReducingPosition)
+            
+             const isBuyerFlippingPosition =  Boolean(params.amount>Math.abs(existingPosition.contracts)&&existingPosition.contracts<0&&params.sell==false)
+             const isSellerFlippingPosition = Boolean(params.amount>existingPosition.contracts&&existingPosition.contracts>0&&params.sell==true)           
 
              let flipLong = 0 
              let flipShort = 0
 
+             console.log('flips? buy/sell'+isBuyerFlippingPosition+' '+isSellerFlippingPosition)
+             console.log('params for flip flags '+params.amount+' '+existingPosition.contracts+' '+Math.abs(existingPosition.contracts))
              if(isBuyerFlippingPosition){
                 flipLong=params.amount-Math.abs(existingPosition.contracts)
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipLong).toNumber();
@@ -1308,14 +1301,33 @@ const Validity = {
                 flipShort=params.amount-existingPosition.contracts
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
              }
-             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.collateralPropertyId, totalInitialMargin)
-             if(hasSufficientBalance.hasSufficient==false){
+
+             if((isBuyerReducingPosition==false&&isSellerReducingPosition==false)||isBuyerFlippingPosition||isSellerFlippingPosition){
+
+                // Check if the sender has enough balance for the initial margin
+                console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+sender, contractDetails.collateralPropertyId, totalInitialMargin)
+                const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, contractDetails.collateralPropertyId, totalInitialMargin);
+                
+                if (hasSufficientBalance.hasSufficient==false) {
                  let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                     .dividedBy(initialMarginPerContract)
                                     .decimalPlaces(0, BigNumber.ROUND_CEIL)
                                     .toNumber();
 
-                params.amount -= contractUndo;
+                    params.amount -= contractUndo;
+
+                    if(params.amount==0){
+                        console.log('Insufficient balance for initial margin');
+                        params.valid=false
+                        params.reason+= "Insufficient balance for initial margin"    
+                    }
+                }
+            }
+
+             hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, contractDetails.collateralPropertyId, totalInitialMargin)
+             console.log('dbl tap has sufficient '+JSON.stringify(hasSufficientBalance))
+             if(hasSufficientBalance.hasSufficient==false){
+                
              }
 
             const collateralPropertyId = contractDetails.collateralPropertyId;
@@ -1346,6 +1358,7 @@ const Validity = {
                 }
             }
             console.log('finished contract trade params '+params.valid+' '+params.reason)
+            if(txid=="5638ecab4410a32de380c17a8dfb976c228a3db5a521a1ea25c5de88867ae0b7"){throw new Error()}
             return params;
         },
 
