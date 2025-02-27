@@ -464,6 +464,11 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
         liq.price=splat.estimatedFillPrice
+        if(isPartialLiquidation&&((splat.estimatedFillPrice<bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>bankruptcyPrice&&liq.sell==false))){
+            isFullLiquidation==true
+            isPartialLiquidation==false
+            liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
+        }
     }
 
     let marginReduce = position.margin;
