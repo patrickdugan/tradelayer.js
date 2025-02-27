@@ -32,8 +32,8 @@ class Clearing {
         await Channels.removeEmptyChannels(blockHeight);
 
         // 3. Ensure correct margins, init margin and liq prices for new conditions
-        await Clearing.updatePositions(blockHeight)
-        // 3. Settle trades at block level
+        //await Clearing.updateAllPositions(blockHeight)
+        // 4. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
@@ -513,6 +513,8 @@ static async updateAllPositions(blockHeight) {
     }
 
 static updatePositions(positions, updatedCounterparties) {
+    //console.log('updated counterparties '+JSON.stringify(updatedCounterparties))
+    if(!updatedCounterparties){return positions}
     const counterpartyMap = new Map(updatedCounterparties.map(pos => [pos.address, pos]));
 
     return positions.map(pos => 
@@ -602,7 +604,8 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         }
     } 
 
-        const deleverageAmount = result.totalDeleverage || 0
+        const deleverageAmount = result.totalDeleveraged || 0
+        console.log('about to remove deleveraged contracts from liq addr '+position.address+' '+deleverageAmount+' '+JSON.stringify(result))
         position = await marginMap.updateContractBalances(position.address, deleverageAmount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
    
         console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
