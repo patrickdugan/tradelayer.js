@@ -31,6 +31,8 @@ class Clearing {
         // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels(blockHeight);
 
+        // 3. Ensure correct margins, init margin and liq prices for new conditions
+        await Clearing.updatePositions(blockHeight)
         // 3. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
@@ -153,6 +155,82 @@ static async feeCacheBuy(block) {
         }
     }
 }
+static async updateAllPositions(blockHeight) {
+  // Fetch all valid contract IDs (adjust this function to your environment)
+  const contractIds = await ContractRegistry.getAllContractIds();
+
+  for (const contractId of contractIds) {
+    console.log(`Updating positions for contract ${contractId} at block ${blockHeight}`);
+
+    // Load the margin map for this contract.
+    const marginMap = await MarginMap.loadMarginMap(contractId);
+    // Get the current positions stored in the margin map.
+    const positions = await marginMap.getAllPositions();
+
+    // Get contract details used in calculations.
+    const contractInfo = await ContractRegistry.getContractInfo(contractId);
+    const collateralPropertyId = contractInfo.collateralPropertyId;
+    const notionalValue = contractInfo.notionalValue;
+    const isInverse = contractInfo.inverse;
+
+    // Loop through each position.
+    for (const pos of positions) {
+      // 1. Recalculate bankruptcy/liquidation prices.
+      // Get the latest available balance and reserve from the tally.
+      const tally = await TallyMap.getTally(pos.address, collateralPropertyId);
+      const liqInfo = marginMap.calculateLiquidationPrice(
+        tally.available,
+        tally.margin,
+        pos.contracts,
+        notionalValue,
+        isInverse,
+        pos.contracts > 0, // isLong: positive means long, negative means short.
+        pos.avgPrice
+      );
+      pos.liquidationPrice = liqInfo.liquidationPrice;
+      pos.bankruptcyPrice = liqInfo.bankruptcyPrice;
+      console.log(`For ${pos.address}: recalculated liqPrice = ${pos.liquidationPrice}, bankruptcyPrice = ${pos.bankruptcyPrice}`);
+
+      // 2. Recalculate margin requirements.
+      const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
+      const requiredMargin = new BigNumber(initialMarginPerContract)
+        .times(Math.abs(pos.contracts))
+        .toNumber();
+      if (pos.margin < requiredMargin) {
+        const marginDeficit = requiredMargin - pos.margin;
+        console.log(`Adjusting margin for ${pos.address}: current margin ${pos.margin} is less than required ${requiredMargin}. Deficit: ${marginDeficit}`);
+        // Force the margin up to the required level.
+        pos.margin = requiredMargin;
+        // Reflect this change in the tally (reserve vs. available).
+        await TallyMap.updateBalance(
+          pos.address,
+          collateralPropertyId,
+          marginDeficit,      // Increase margin (or move from reserve as needed)
+          0,
+          -marginDeficit,     // Deduct from reserve (example logic)
+          0,
+          'marginRequirementAdjustment',
+          blockHeight
+        );
+      }
+
+      // 3. Adjust orderbook orders for this address.
+      // For example, if a position no longer qualifies for the "initialReduce" flag,
+      // cancel or modify the orders. (Assumes Orderbooks.adjustOrdersForAddress exists.)
+      await Orderbooks.adjustOrdersForAddress(pos.address, contractId, tally, pos);
+
+      // Update the position in the margin map.
+      marginMap.margins.set(pos.address, pos);
+      console.log(`Final state for ${pos.address} on contract ${contractId}: contracts=${pos.contracts}, margin=${pos.margin}, liqPrice=${pos.liquidationPrice}`);
+    }
+
+    // Save the updated margin map for this contract.
+    await marginMap.saveMarginMap(false);
+  }
+  console.log(`Finished updating positions for all contracts at block ${blockHeight}`);
+}
+
+
 
    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');

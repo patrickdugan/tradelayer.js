@@ -883,8 +883,63 @@ async matchContractOrders(orderBook) {
             return accepted;
         }
 
+        // In Orderbooks.js
+// In Orderbooks.js// In Orderbooks.js
+static async adjustOrdersForAddress(address, contractId, tally, pos) {
+  // Load the orderbook instance for the given contractId.
+  const orderbook = await Orderbooks.getOrderbookInstance(contractId);
+  // Assume orderbook.orderBooks is keyed by contractId (as a string) with separate buy and sell arrays.
+  const obForContract = orderbook.orderBooks[contractId] || { buy: [], sell: [] };
+
+  console.log(`Adjusting orders for ${address} on contract ${contractId} with current position: ${JSON.stringify(pos)}`);
+
+  // Loop through both buy and sell sides
+  for (const side of ['buy', 'sell']) {
+    // Iterate backwards so that splicing out orders doesn’t affect the loop index.
+    for (let i = obForContract[side].length - 1; i >= 0; i--) {
+      const order = obForContract[side][i];
+      // Use a unified sender property.
+      const orderAddress = order.sender || order.address;
+      if (orderAddress !== address) continue;
+
+      // Determine order side:
+      // Use order.side if available; otherwise, infer from the boolean 'sell' property.
+      const orderSide = order.side || (order.sell ? 'sell' : 'buy');
+
+      // Determine if this order should be a reduce order:
+      // - A buy order should be reducing a short position (negative contracts).
+      // - A sell order should be reducing a long position (positive contracts).
+      const shouldBeReduce = (orderSide === 'buy' && pos.contracts < 0) ||
+                             (orderSide === 'sell' && pos.contracts > 0);
+
+      if (order.initialReduce !== shouldBeReduce) {
+        console.log(`Order ${order.txid}: initialReduce flag (${order.initialReduce}) does not match expected (${shouldBeReduce}). Updating.`);
+        order.initialReduce = shouldBeReduce;
+      }
+
+      // Recalculate the expected margin usage for this order.
+      // Retrieve the current initial margin per contract for the updated average price.
+      const newInitialMargin = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
+      const expectedMarginUsed = new BigNumber(newInitialMargin)
+                                  .times(order.amount)
+                                  .decimalPlaces(8)
+                                  .toNumber();
+
+      if (order.marginUsed !== expectedMarginUsed) {
+        console.log(`Order ${order.txid}: marginUsed is ${order.marginUsed}, expected ${expectedMarginUsed}. Updating.`);
+        order.marginUsed = expectedMarginUsed;
+      }
+    }
+  }
+
+  // Save the updated orderbook back to storage.
+  orderbook.orderBooks[contractId] = obForContract;
+  await Orderbooks.saveOrderbook(orderbook);
+  console.log(`Finished adjusting orders for ${address} on contract ${contractId}.`);
+  return orderbook;
+}
      
-        async processContractMatches(matches, currentBlockHeight, channel){
+    async processContractMatches(matches, currentBlockHeight, channel){
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js')
             if (!Array.isArray(matches)) {
@@ -1157,7 +1212,7 @@ async matchContractOrders(orderBook) {
                     console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
 
                     console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
-                    
+
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
@@ -1413,6 +1468,371 @@ async matchContractOrders(orderBook) {
 
                     return feeInfo
         }
+
+async processContractMatchesShort(matches, currentBlockHeight, channel) {
+  const TallyMap = require('./tally.js');
+  const ContractRegistry = require('./contractRegistry.js');
+  const MarginMap = require('./marginMap.js');
+  const tradeHistoryManager = new TradeHistory();
+
+  if (!Array.isArray(matches)) {
+      console.error('Matches is not an array:', matches);
+      matches = [];
+  }
+
+  let counter = 0;
+  for (const match of matches) {
+    counter++;
+    console.log(`Processing match ${counter}: ${JSON.stringify(match)}`);
+
+    // 1. Validate match and load up-to-date state.
+    if (match.buyOrder.buyerAddress === match.sellOrder.sellerAddress) {
+      console.log(`Self-trade nullified for ${match.buyOrder.buyerAddress}`);
+      continue;
+    }
+    await validateMatch(match);
+
+    // 2. Calculate fees & update fee caches.
+    const feeInfo = await calculateFees(match, channel);
+    // 3. Determine if flip logic applies and update collateral.
+    const flipData = await handleFlipLogic(match, feeInfo, currentBlockHeight);
+    
+    // 4. Adjust collateral for non-reducing orders.
+    await moveCollateral(match, feeInfo, channel, currentBlockHeight);
+    
+    // 5. Update contract balances (positions) using the match.
+    const updatedPositions = await updateContractBalances(match, channel, flipData);
+    match.buyerPosition = updatedPositions.bp;
+    match.sellerPosition = updatedPositions.sp;
+
+    // 6. Settle PnL if the trade reduces the position.
+    await realizePnLAndSettle(match, currentBlockHeight);
+
+    // 7. Record the trade.
+    const trade = buildTradeObject(match, currentBlockHeight, flipData);
+    await recordTrade(trade, currentBlockHeight);
+
+    // 8. Update volume data and liquidity rewards.
+    await updateVolumeAndRewards(match, currentBlockHeight);
+
+    // Save the updated margin map after processing the match.
+    await MarginMap.saveMarginMap(false);
+  }
+  // Return something if needed.
+  return;
+}
+
+// 1. Validate the match and load up-to-date state (positions, collateral, etc.)
+async validateMatch(match) {
+  // Check for self-trade
+  if (match.buyOrder.buyerAddress === match.sellOrder.sellerAddress) {
+    throw new Error(`Self-trade detected for ${match.buyOrder.buyerAddress}`);
+  }
+  // Load the margin map for this contract
+  const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
+  match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+  match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+  if (!match.buyerPosition.address) match.buyerPosition.address = match.buyOrder.buyerAddress;
+  if (!match.sellerPosition.address) match.sellerPosition.address = match.sellOrder.sellerAddress;
+  
+  // Attach collateral and notional info
+  match.collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId);
+  const blob = await ContractRegistry.getNotionalValue(match.sellOrder.contractId, match.tradePrice);
+  match.notionalValue = blob.notionalValue;
+  match.perContractNotional = blob.notionalPerContract;
+  // Also fetch tally (reserve/available) for each side if needed later.
+  match.reserveA = await TallyMap.getTally(match.sellOrder.sellerAddress, match.collateralPropertyId);
+  match.reserveB = await TallyMap.getTally(match.buyOrder.buyerAddress, match.collateralPropertyId);
+  
+  // Determine if contract is inverse
+  match.inverse = await ContractRegistry.isInverse(match.sellOrder.contractId);
+  
+  return match;
+}
+
+// 2. Calculate fees for the match and update fee caches
+async calculateFees(match, channel) {
+  // (Assume you have a calculateFee function available.)
+  const buyerFee = calculateFee(
+    match.buyOrder.amount,
+    match.sellOrder.maker,
+    match.buyOrder.maker,
+    match.inverse,
+    true,
+    match.tradePrice,
+    match.notionalValue,
+    channel
+  );
+  const sellerFee = calculateFee(
+    match.sellOrder.amount,
+    match.sellOrder.maker,
+    match.buyOrder.maker,
+    match.inverse,
+    false,
+    match.tradePrice,
+    match.notionalValue,
+    channel
+  );
+  await TallyMap.updateFeeCache(match.collateralPropertyId, buyerFee, match.buyOrder.contractId);
+  await TallyMap.updateFeeCache(match.collateralPropertyId, sellerFee, match.buyOrder.contractId);
+  
+  // Return fee info object. (You can add more properties as needed.)
+  return { buyerFee, sellerFee, buyFeeFromMargin: false, sellFeeFromMargin: false };
+}
+
+// 3. Handle flip logic: check if buyer/seller are “flipping” their positions and adjust margin accordingly.
+async handleFlipLogic(match, feeInfo, currentBlockHeight) {
+  const flipData = { flipLong: 0, flipShort: 0, buyerFullyClosed: false, sellerFullyClosed: false };
+  const initialMarginPerContract = await ContractRegistry.getInitialMargin(match.buyOrder.contractId, match.tradePrice);
+  
+  // Buyer flip: if buyer's order amount exceeds the absolute value of a negative (short) position.
+  const isBuyerFlipping = (match.buyOrder.amount > Math.abs(match.buyerPosition.contracts)) && (match.buyerPosition.contracts < 0);
+  // Seller flip: if seller's order amount exceeds a positive (long) position.
+  const isSellerFlipping = (match.sellOrder.amount > match.sellerPosition.contracts) && (match.sellerPosition.contracts > 0);
+  
+  if (isBuyerFlipping) {
+    const closedContracts = Math.abs(match.buyerPosition.contracts);
+    flipData.flipLong = match.buyOrder.amount - closedContracts;
+    // Release margin for closed contracts.
+    const marginToRelease = new BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
+    await TallyMap.updateBalance(
+      match.buyOrder.buyerAddress,
+      match.collateralPropertyId,
+      marginToRelease,
+      -marginToRelease,
+      0,
+      0,
+      'contractMarginRelease',
+      currentBlockHeight
+    );
+    flipData.buyerFullyClosed = true;
+  }
+  
+  if (isSellerFlipping) {
+    const closedContracts = Math.abs(match.sellerPosition.contracts);
+    flipData.flipShort = match.sellOrder.amount - closedContracts;
+    const marginToRelease = new BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
+    await TallyMap.updateBalance(
+      match.sellOrder.sellerAddress,
+      match.collateralPropertyId,
+      marginToRelease,
+      -marginToRelease,
+      0,
+      0,
+      'contractMarginRelease',
+      currentBlockHeight
+    );
+    flipData.sellerFullyClosed = true;
+  }
+  
+  return flipData;
+}
+
+// 4. Move collateral for non-reducing orders (for buyer and seller).
+async moveCollateral(match, feeInfo, channel, currentBlockHeight) {
+  // Only move collateral if the order is not marked as liquidation and not reducing.
+  if (!match.buyOrder.liq && !match.buyerReducing) {
+    match.buyerPosition = await ContractRegistry.moveCollateralToMargin(
+      match.buyOrder.buyerAddress,
+      match.buyOrder.contractId,
+      match.buyOrder.amount,
+      match.tradePrice,
+      match.buyOrder.price,
+      false,
+      match.buyOrder.marginUsed,
+      channel,
+      channel ? match.channelAddress : null,
+      currentBlockHeight,
+      feeInfo,
+      match.buyOrder.maker
+    );
+  }
+  if (!match.sellOrder.liq && !match.sellerReducing) {
+    match.sellerPosition = await ContractRegistry.moveCollateralToMargin(
+      match.sellOrder.sellerAddress,
+      match.sellOrder.contractId,
+      match.sellOrder.amount,
+      match.tradePrice,
+      match.sellOrder.price,
+      true,
+      match.sellOrder.marginUsed,
+      channel,
+      channel ? match.channelAddress : null,
+      currentBlockHeight,
+      feeInfo,
+      match.buyOrder.maker
+    );
+  }
+  return match;
+}
+
+// 5. Update contract balances using the match.
+async updateContractBalances(match, channel, flipData) {
+  const marginMap = await MarginMap.loadMarginMap(match.buyOrder.contractId);
+  // Assume updateContractBalancesWithMatch is defined on marginMap.
+  const positions = await marginMap.updateContractBalancesWithMatch(match, channel, 
+    (match.buyerReducing || match.sellerReducing), 
+    (flipData.flipLong > 0 || flipData.flipShort > 0)
+  );
+  return positions; // e.g., { bp: updated buyerPosition, sp: updated sellerPosition }
+}
+
+// 6. Realize PnL and settle for reducing trades.
+async realizePnLAndSettle(match, currentBlockHeight, flipData) {
+  const marginMap = await MarginMap.loadMarginMap(match.buyOrder.contractId);
+  const lastMark = await ContractRegistry.getPriceAtBlock(match.buyOrder.contractId, currentBlockHeight) || match.tradePrice;
+  // For buyer
+  if ((match.buyerReducing || match.buyerFlipping) && !match.buyOrder.liq) {
+    let closedContracts = match.buyOrder.amount;
+    if (match.buyerFlipping) {
+      closedContracts -= flipData.flipLong;
+    }
+    const avgEntry = match.buyerPosition.avgPrice;
+    match.buyerPosition = await marginMap.realizePnl(
+      match.buyOrder.buyerAddress,
+      closedContracts,
+      match.tradePrice,
+      avgEntry,
+      match.inverse,
+      match.perContractNotional,
+      match.buyerPosition,
+      true,
+      match.buyOrder.contractId
+    );
+    const settlementPNL = await marginMap.settlePNL(
+      match.buyOrder.buyerAddress,
+      closedContracts,
+      match.tradePrice,
+      lastMark,
+      match.buyOrder.contractId,
+      currentBlockHeight
+    );
+    await TallyMap.updateBalance(
+      match.buyOrder.buyerAddress,
+      match.collateralPropertyId,
+      settlementPNL,
+      0,
+      0,
+      0,
+      'contractTradeSettlement',
+      currentBlockHeight
+    );
+  }
+  // For seller
+  if ((match.sellerReducing || match.sellerFlipping) && !match.sellOrder.liq) {
+    let closedContracts = match.sellOrder.amount;
+    if (match.sellerFlipping) {
+      closedContracts -= flipData.flipShort;
+    }
+    const avgEntry = match.sellerPosition.avgPrice;
+    match.sellerPosition = await marginMap.realizePnl(
+      match.sellOrder.sellerAddress,
+      closedContracts,
+      match.tradePrice,
+      avgEntry,
+      match.inverse,
+      match.perContractNotional,
+      match.sellerPosition,
+      false,
+      match.sellOrder.contractId
+    );
+    const settlementPNL = await marginMap.settlePNL(
+      match.sellOrder.sellerAddress,
+      closedContracts,
+      match.tradePrice,
+      lastMark,
+      match.sellOrder.contractId,
+      currentBlockHeight
+    );
+    await TallyMap.updateBalance(
+      match.sellOrder.sellerAddress,
+      match.collateralPropertyId,
+      settlementPNL,
+      0,
+      0,
+      0,
+      'contractTradeSettlement',
+      currentBlockHeight
+    );
+  }
+  return match;
+}
+
+// 7. Build a trade object from the match data.
+buildTradeObject(match, currentBlockHeight, flipData) {
+  return {
+    contractId: match.sellOrder.contractId,
+    amount: match.sellOrder.amount,
+    price: match.tradePrice,
+    buyerAddress: match.buyOrder.buyerAddress,
+    sellerAddress: match.sellOrder.sellerAddress,
+    sellerTx: match.sellOrder.sellerTx,
+    buyerTx: match.buyOrder.buyerTx,
+    buyerClose: match.buyOrder.amount - (flipData.flipLong || 0),
+    sellerClose: match.sellOrder.amount - (flipData.flipShort || 0),
+    block: currentBlockHeight,
+    buyerFullClose: (match.buyerPosition.contracts === match.buyOrder.amount),
+    sellerFullClose: (match.sellerPosition.contracts === match.sellOrder.amount),
+    flipLong: flipData.flipLong,
+    flipShort: flipData.flipShort,
+    channel: match.channel,
+    liquidation: Boolean(match.sellOrder.liq || match.buyOrder.liq)
+  };
+}
+
+// 8. Record the trade in trade history.
+async recordTrade(trade, currentBlockHeight) {
+  const tradeHistoryManager = new TradeHistory();
+  await tradeHistoryManager.recordContractTrade(trade, currentBlockHeight);
+}
+
+// 9. Update volume data and liquidity rewards.
+async updateVolumeAndRewards(match, currentBlockHeight) {
+  // Calculate volume (UTXOEquivalentVolume) and update volume data.
+  const UTXOEquivalentVolume = await VolumeIndex.getUTXOEquivalentVolume(
+    match.sellOrder.contractId,
+    match.sellOrder.amount,
+    'contract',
+    match.collateralPropertyId,
+    match.perContractNotional,
+    match.inverse,
+    match.tradePrice
+  );
+  if (match.channel === false) {
+    await VolumeIndex.saveVolumeDataById(
+      match.sellOrder.contractId,
+      match.sellOrder.amount,
+      UTXOEquivalentVolume,
+      match.tradePrice,
+      currentBlockHeight,
+      'onChainContract'
+    );
+  } else {
+    await VolumeIndex.saveVolumeDataById(
+      match.sellOrder.contractId,
+      match.sellOrder.amount,
+      UTXOEquivalentVolume,
+      match.tradePrice,
+      currentBlockHeight,
+      'channelContract'
+    );
+  }
+  // Evaluate and update liquidity rewards if applicable.
+  const qualifiesBasicLiqReward = await evaluateBasicLiquidityReward(match, match.channel, true);
+  const qualifiesEnhancedLiqReward = await evaluateEnhancedLiquidityReward(match, match.channel);
+  if (qualifiesBasicLiqReward) {
+    const notionalTokens = match.notionalValue * match.sellOrder.amount;
+    const liqRewardBaseline = await VolumeIndex.baselineLiquidityReward(notionalTokens, 0.000025, match.collateralPropertyId);
+    await TallyMap.updateBalance(match.sellOrder.sellerAddress, 3, liqRewardBaseline, 0, 0, 0, 'baselineLiquidityReward');
+    await TallyMap.updateBalance(match.buyOrder.buyerAddress, 3, liqRewardBaseline, 0, 0, 0, 'baselineLiquidityReward');
+  }
+  if (qualifiesEnhancedLiqReward) {
+    const notionalTokens = match.notionalValue * match.sellOrder.amount;
+    const liqRewardBaseline = await VolumeIndex.calculateLiquidityReward(notionalTokens);
+    await TallyMap.updateBalance(match.sellOrder.sellerAddress, 3, liqRewardBaseline, 0, 0, 0, 'enhancedLiquidityReward');
+    await TallyMap.updateBalance(match.buyOrder.buyerAddress, 3, liqRewardBaseline, 0, 0, 0, 'enhancedLiquidityReward');
+  }
+}
 
         async cancelOrdersByCriteria(fromAddress, orderBookKey, criteria, token, amm) {
             
