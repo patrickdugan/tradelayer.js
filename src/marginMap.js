@@ -121,7 +121,8 @@ class MarginMap {
             // If no existing position, initialize a new one
             position = {
                 contracts: 0,  // Number of contracts the sender has
-                margin: 0      // Total margin amount the sender has posted
+                margin: 0,
+                unrealizedPNL:0      // Total margin amount the sender has posted
             };
         }
 
@@ -589,7 +590,7 @@ class MarginMap {
 
         // ✅ **Calculate Required Margin for Current Position**
         let requiredMargin = posContracts.abs().times(initPerContract);
-
+        console.log('inputs to calc req margin '+initPerContract+' '+pos.contracts+' '+posContracts)
         console.log(`🔎 Position: ${posContracts}, Contracts: ${contracts}, Required Margin: ${requiredMargin}`);
 
         // 🚀 **Calculate Excess Margin**
@@ -936,7 +937,7 @@ class MarginMap {
 
         // Ensure matchSize is positive before proceeding
         if (matchSize > 0) {
-          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block);
+          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice);
             const matchBN = new BigNumber(matchSize)
 
           pos = await this.realizePnl(
@@ -968,11 +969,12 @@ class MarginMap {
     }
 
 // Adjust deleveraging position
-async adjustDeleveraging(address, contractId, size, sell, block) {
+async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
     console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
-
+    const ContractRegistry= require('./contractRegistry.js')
+    const TallyMap= require('./tally.js')
     let position = await this.getPositionForAddress(address, contractId);
-
+    const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
     if (!position) return;
     const contractChange = sell ? -size : size
     console.log('⚠️ '+contractChange+' '+position.contracts)
@@ -980,9 +982,14 @@ async adjustDeleveraging(address, contractId, size, sell, block) {
         console.log('issue in deleveraging '+contractChange+' '+position.contracts)
         throw new Error()
     } 
+
     const contractChangeBN = new BigNumber(contractChange)
     position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
-
+    const reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
+    console.log('reduction '+reduction)
+    if(reduction !==0){
+         await TallyMap.updateBalance(address, contractId, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
+    }
     if (position.contracts === 0) {
         position.liqPrice = null;
         position.bankruptcyPrice = null;
