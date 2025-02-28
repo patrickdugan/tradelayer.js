@@ -80,7 +80,7 @@ class TallyMap {
             }
             const addressObj = instance.addresses.get(address);
             
-            //console.log('addressObj being changed '+propertyId + ' for addr '+Boolean(addressObj[propertyId]))
+            console.log('addressObj being changed '+propertyId + ' for addr '+addressObj[propertyId])
 
             if (!addressObj[propertyId]) {
                 addressObj[propertyId] = { amount: 0, available: 0, reserved: 0, margin: 0, vesting: 0 };
@@ -313,7 +313,7 @@ class TallyMap {
             console.log('Checking senderTally in has hasSufficientReserve', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.reserved === undefined) {
-                return { hasSufficient: false, reason: 'undefined' };
+                return { hasSufficient: false, reason: 'undefined', shortfall: requiredAmount };
             }
 
             console.log('Reserve tokens:', senderTally.reserved, 'Required amount:', requiredAmount);
@@ -339,7 +339,7 @@ class TallyMap {
             console.log('Checking senderTally in has hasSufficientMargin', senderAddress, propertyId, requiredAmount, JSON.stringify(senderTally));
 
             if (!senderTally || senderTally.margin === undefined) {
-                return { hasSufficient: false, reason: 'undefined' };
+                return { hasSufficient: false, reason: 'undefined', shortfall: requiredAmount };
             }
 
             console.log('Margin tokens:', senderTally.margin, 'Required amount:', requiredAmount);

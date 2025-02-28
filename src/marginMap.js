@@ -975,6 +975,7 @@ async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
     const TallyMap= require('./tally.js')
     let position = await this.getPositionForAddress(address, contractId);
     const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
+    const collateral = await ContractRegistry.getCollateralId(contractId)    
     if (!position) return;
     const contractChange = sell ? -size : size
     console.log('⚠️ '+contractChange+' '+position.contracts)
@@ -985,15 +986,21 @@ async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
 
     const contractChangeBN = new BigNumber(contractChange)
     position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
-    const reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
+    let reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
     console.log('reduction '+reduction)
+    const hasSufficient = await TallyMap.hasSufficientMargin(address,collateral,reduction)
+    console.log(JSON.stringify(hasSufficient))
+    if(!hasSufficient.hasSufficient){
+        reduction = new BigNumber(reduction).minus(hasSufficient.shortfall).decimalPlaces(8).toNumber()
+    }
     if(reduction !==0){
-         await TallyMap.updateBalance(address, contractId, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
+         await TallyMap.updateBalance(address, collateral, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
     }
     if (position.contracts === 0) {
         position.liqPrice = null;
         position.bankruptcyPrice = null;
     }
+
     console.log('⚠️ '+position.contracts)
     this.margins.set(position.address, position);
     this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
