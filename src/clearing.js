@@ -577,6 +577,8 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
             const trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
             console.log('trade result '+JSON.stringify(trade))
+            await orderbook.saveOrderBook(matchResult.orderBook,orderbookKey);
+
         }
 
     let systemicLoss = new BigNumber(0);
