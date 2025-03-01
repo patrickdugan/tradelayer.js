@@ -2,6 +2,7 @@ const db = require('./db.js');
 const path = require('path');
 const TxUtils = require('./txUtils.js');
 const TallyMap = require('./tally.js');
+const BigNumber = require('bignumber.js');
 
 class InsuranceFund {
     static instances = new Map(); // Store instances for each contract
@@ -69,12 +70,6 @@ class InsuranceFund {
         await this.saveSnapshot();
     }
 
-    /** 🚨 Handle deficits (e.g., unexpected losses) */
-    async handleDeficit(deficitAmount) {
-        await this.recordEvent("deficit", { contractId: this.contractSeriesId, amount: deficitAmount });
-        // Adjust hedging strategy if needed (Future expansion)
-    }
-
     /** 💾 Save the insurance fund state */
     async saveSnapshot() {
         let key = `${this.contractSeriesId}${this.oracle ? "-oracle" : ""}`;
@@ -140,14 +135,102 @@ class InsuranceFund {
         }
     }
 
-    /** 📊 Calculate payouts for a range of blocks */
-    async getPayouts(contractId, startBlock, endBlock) {
-        // Placeholder for payout calculations
-    }
+/** 📊 Calculate payouts for a range of blocks */
+async getPayouts(contractId, startBlock, endBlock) {
+  // Get the insurance database instance
+  const dbInstance = await db.getDatabase("insurance");
 
-    /** 🏦 Calculate required payout from the insurance fund */
-    async calcPayout(totalLoss) {
-        // Placeholder for future implementation
+  // Query for all payout events for this contract in the given block range.
+  // Assumes events are stored with keys of the form "payout-<contractId>-<block>"
+  const query = {
+    key: { $regex: `^payout-${contractId}-` },
+    "value.block": { $gte: startBlock, $lte: endBlock }
+  };
+
+  // Using findAsync which returns an array of documents.
+  const docs = await dbInstance.findAsync(query);
+  // Map to just the payout event values
+  const payouts = docs.map(doc => doc.value);
+  return payouts;
+}
+
+
+/** 
+ * Calculate required payout from the insurance fund and update the fund accordingly.
+ * Debits the fund by the actual payout (which may be less than totalLoss if funds are insufficient),
+ * records the payout event under a dedicated key, and saves the updated snapshot.
+ *
+ * @param {number|string} totalLoss - The total loss amount (negative for losses).
+ * @param {number} block - The block number at which the payout is computed.
+ */
+     async calcPayout(totalLoss, block) {
+      // Convert totalLoss to a BigNumber.
+      const lossBN = new BigNumber(totalLoss);
+
+      // Calculate the total available funds in the insurance fund.
+      let totalAvailable = new BigNumber(0);
+      for (const balance of this.balances) {
+        totalAvailable = totalAvailable.plus(new BigNumber(balance.amountAvailable));
+      }
+
+      // Determine the actual payout amount:
+      // If the absolute loss exceeds available funds, pay out only what's available (preserving the sign)
+      let payoutAmount;
+      if (lossBN.abs().isGreaterThan(totalAvailable)) {
+        payoutAmount = lossBN.isNegative() ? totalAvailable.negated() : totalAvailable;
+      } else {
+        payoutAmount = lossBN;
+      }
+
+      // Debit funds from available balances until the payout is covered.
+      let remaining = payoutAmount.abs();
+      for (const balance of this.balances) {
+        if (remaining.isLessThanOrEqualTo(0)) break;
+        const availableBN = new BigNumber(balance.amountAvailable);
+        if (availableBN.gt(0)) {
+          const debit = BigNumber.minimum(availableBN, remaining);
+          // Update the balance with strict 8-decimal precision.
+          balance.amountAvailable = availableBN.minus(debit).decimalPlaces(8).toNumber();
+          remaining = remaining.minus(debit);
+        }
+      }
+
+      if (remaining.gt(0)) {
+        // Not enough funds available—this is a deficit.
+        console.error(`Insurance fund insufficient: deficit of ${remaining.decimalPlaces(8).toNumber()} tokens`);
+        await this.handleDeficit(remaining.decimalPlaces(8).toNumber());
+      }
+
+      // Build the payout event record. Note that we include the block and enforce 8‑decimal precision.
+      const payoutEvent = {
+        type: "payout",
+        contractId: this.contractSeriesId,
+        block,
+        totalLoss: lossBN.decimalPlaces(8).toNumber(),
+        payoutAmount: payoutAmount.decimalPlaces(8).toNumber(),
+        timestamp: new Date().toISOString()
+      };
+
+      // Get the insurance DB instance.
+      const dbInstance = await db.getDatabase("insurance");
+
+      // Save the payout event under a dedicated key.
+      const payoutKey = `payout-${this.contractSeriesId}-${block}`;
+      await dbInstance.insertAsync({ key: payoutKey, value: payoutEvent });
+
+      // Also record the event with the standard recordEvent method.
+      await this.recordEvent("payout", {
+        contractId: this.contractSeriesId,
+        block,
+        totalLoss: lossBN.decimalPlaces(8).toNumber(),
+        payoutAmount: payoutAmount.decimalPlaces(8).toNumber()
+      });
+
+      // Save the updated snapshot to reflect the debited funds.
+      await this.saveSnapshot();
+
+      return payoutAmount.decimalPlaces(8).toNumber()
+
     }
 }
 

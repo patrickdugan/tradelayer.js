@@ -388,7 +388,8 @@ static async updateAllPositions(blockHeight) {
                 console.log('notional obj '+JSON.stringify(notionalValue))
                 // Update margin maps based on mark prices and current contract positions
                 let {positions, isLiq, systemicLoss} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue.notionalPerContract); //problem child
-
+                console.log('is liq '+JSON.stringify(isLiq))
+                console.log('length '+isLiq.length+' '+Boolean(isLiq.length>0))
                  // Perform additional tasks like loss socialization if needed
                 if(isLiq.length>0){
                     await Clearing.performAdditionalSettlementTasks(blockHeight,positions,id,newPrice,systemicLoss,collateralId,systemicLoss);
@@ -509,6 +510,7 @@ static async updateAllPositions(blockHeight) {
         }
 
         positions.lastMark = blob.lastPrice;
+        console.log('systemic loss '+systemicLoss)
         await marginMap.saveMarginMap(false);
         return { positions, isLiq, systemicLoss };
     }
@@ -765,26 +767,28 @@ static sortPositionsForPNL(positions, priceDiff) {
         }
     }
 
-    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss){
-        try {
+    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss,collateralId){
+        console.log('herro '+blockHeight+' '+JSON.stringify(positions)+' '+contractId+' '+mark+' '+totalLoss+' '+collateralId)
+        //try {
             // Step 2: Check if insurance fund payout is needed
-            if (totalLoss > 0) {
+            if (Math.abs(totalLoss) > 0) {
                 // Step 3: Apply insurance fund payout
-                const insurance = await Insurance.getFund(contractId)
-                const payout = insurance.calcPayout(totalLoss);
-                //insert function to pro-rate payout to all positions
-                //const map = await MarginMap.getInstance(contractId)
-                //map.applyInsurancePayout(payout,blockHeight)
+                const ContractRegistry = require('./contractRegistry.js');
+                let isOracleContract = await ContractRegistry.isOracleContract(contractId);
+                const insurance = await Insurance.getInstance(contractId,isOracleContract)
+                const payout = await insurance.calcPayout(totalLoss, blockHeight);
+                console.log('🏦 insurance payout '+payout)
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
+                console.log('remaining loss '+remainingLoss)
                 if (remainingLoss > 0) {
                     await Clearing.socializeLoss(contractId, remainingLoss);
                 }
             }
-        } catch (error) {
-            console.error('Error performing additional settlement tasks:', error);
-            throw error;
-        }
+        //} catch (error) {
+        //    console.error('Error performing additional settlement tasks:', error);
+        //    throw error;
+        //}
     }
 
 
@@ -923,7 +927,7 @@ static sortPositionsForPNL(positions, priceDiff) {
     }
 
 static async socializeLoss(contractId, totalLoss) {
-    try {
+    //try {
         console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
 
         // Get all positions
@@ -976,10 +980,10 @@ static async socializeLoss(contractId, totalLoss) {
 
         console.log("✅ Socialized loss successfully applied.");
 
-    } catch (error) {
-        console.error("❌ Error socializing loss:", error);
-        throw error;
-    }
+    //} catch (error) {
+    //    console.error("❌ Error socializing loss:", error);
+    //    throw error;
+    //}
 }
 
 
