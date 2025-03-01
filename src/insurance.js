@@ -177,7 +177,7 @@ async getPayouts(contractId, startBlock, endBlock) {
       // If the absolute loss exceeds available funds, pay out only what's available (preserving the sign)
       let payoutAmount;
       if (lossBN.abs().isGreaterThan(totalAvailable)) {
-        payoutAmount = lossBN.isNegative() ? totalAvailable.negated() : totalAvailable;
+        payoutAmount = totalAvailable;
       } else {
         payoutAmount = lossBN;
       }
@@ -194,7 +194,7 @@ async getPayouts(contractId, startBlock, endBlock) {
           remaining = remaining.minus(debit);
         }
       }
-
+      console.log('payout: '+payoutAmount+' '+payoutAmount.decimalPlaces(8).toNumber())
       if (remaining.gt(0)) {
         // Not enough funds available—this is a deficit.
         console.error(`Insurance fund insufficient: deficit of ${remaining.decimalPlaces(8).toNumber()} tokens`);
