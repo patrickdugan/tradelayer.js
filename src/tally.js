@@ -469,10 +469,11 @@ class TallyMap {
                     console.warn(`⚠️ Skipping entry with undefined value: ${JSON.stringify(result)}`);
                     continue;
                 }
-
+                if(!result.stash){result.stash=0}
                 let feeData = {
                     value: parseFloat(result.value), // ✅ Ensure value is a number
-                    contract: result.contract || null
+                    contract: result.contract || null,
+                    stash: parseFloat(result.stash)
                 };
 
                 //console.log(`🔹 Fee Cache Parsed - Key: ${result._id}, Value: ${feeData.value}, Contract: ${feeData.contract}`);
@@ -513,7 +514,7 @@ class TallyMap {
     }
 
     // Method to update fee cache for a property
-    static async updateFeeCache(propertyId, amount, contractId,stash) {
+    static async updateFeeCache(propertyId, amount, contractId,stash,spendStash) {
         try {
             const db = await dbInstance.getDatabase('feeCache');
 
@@ -523,25 +524,38 @@ class TallyMap {
             let existingEntry = await db.findOneAsync({ _id: cacheId });
 
             let currentValue = new BigNumber(existingEntry ? existingEntry.value : 0);
-             // Ensure strict 8 decimal places
-            if(!stash){
-                let updatedValue = currentValue.plus(amount).toFixed(8);
+            let currentStash = new BigNumber(existingEntry?.stash ?? 0);
+
+            if(!stash&&!spendStash){
+                let updatedValue = currentValue.plus(amount).decimalPlaces(8).toNumber();
                 await db.updateAsync(
                 { _id: cacheId },
                 { $set: { value: updatedValue, contract: contractId } }, // Store `value` as a STRING
                 { upsert: true }
                 );
                   //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
-            }else if(stash){
+            }else if(stash&&!spendStash){
                 //the concept of stash is to maintain state if there is nothing to trade the fee for on the book of 1-<propertyId>
-                let updatedValue = currentValue.minus(amount).toFixed(8)
-                let stashBN = new BigNumber(amount).toFixed(8)
+                
+                let stashBN = new BigNumber(amount).decimalPlaces(8).toNumber()
+                let updatedValue = currentValue.minus(amount).decimalPlaces(8).toNumber()
+                let updatedStash = new BigNumber(currentStash).plus(stashBN).decimalPlaces(8).toNumber()
+                console.log('✅ about to write to feeCache '+amount+' '+currentValue+' '+updatedValue)
+                console.log(updatedStash+' '+currentStash)
                 await db.updateAsync(
                 { _id: cacheId },
-                { $set: { value: updatedValue, contract: contractId, stash: stashBN } }, // Store `value` as a STRING
+                { $set: { value: updatedValue, contract: contractId, stash: updatedStash } }, // Store `value` as a STRING
                 { upsert: true }
                 );
                   //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);  
+            }else if(stash&&spendStash){
+                let updatedValue = currentStash.minus(amount).decimalPlaces(8).toNumber()
+                console.log('✅ about to write to feeCache '+amount+' '+currentValue+' '+updatedValue)
+                await db.updateAsync(
+                { _id: cacheId },
+                { $set: { value: currentValue, contract: contractId, stash: updatedValue } }, // Store `value` as a STRING
+                { upsert: true }
+                );
             }
             
             } catch (error) {

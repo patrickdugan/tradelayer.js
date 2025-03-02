@@ -310,7 +310,7 @@ class ContractRegistry {
     }
 
     static async isNativeContract(contractId){
-        console.log('inside isNative')
+        //console.log('inside isNative')
         const contractInfo = await this.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
     }
