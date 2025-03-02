@@ -41,7 +41,7 @@ class InsuranceFund {
     }
 
     /** 💰 Deposit funds into the insurance fund */
-    async deposit(propertyId, amount) {
+    async deposit(propertyId, amount,block) {
         let propertyFound = false;
 
         for (const balance of this.balances) {
@@ -56,17 +56,18 @@ class InsuranceFund {
             this.balances.push({ propertyId, amountAvailable: amount });
         }
 
-        await this.recordEvent("deposit", { contractId: this.contractSeriesId, propertyId, amount });
+        await this.recordEvent("deposit", { contractId: this.contractSeriesId, propertyId, amount },block);
         await this.saveSnapshot();
     }
 
     /** 💸 Withdraw from the insurance fund */
-    async withdraw(amount, propertyId) {
+    async withdraw(amount, propertyId,block) {
         const balanceEntry = this.balances.find(b => b.propertyId === propertyId);
         if (!balanceEntry || balanceEntry.amountAvailable < amount) {
             throw new Error("Insufficient balance in the insurance fund");
         }
         balanceEntry.amountAvailable -= amount;
+        await this.recordEvent("withdraw", { contractId: this.contractSeriesId, propertyId, amount }, block);   
         await this.saveSnapshot();
     }
 
@@ -94,11 +95,11 @@ class InsuranceFund {
     }
 
     /** 📌 Record important events in the insurance fund */
-    async recordEvent(eventType, eventData) {
+    async recordEvent(eventType, eventData,block) {
         const eventRecord = {
             type: eventType,
             data: eventData,
-            timestamp: new Date().toISOString()
+            timestamp: block
         };
 
         const dbInstance = await db.getDatabase("insurance");

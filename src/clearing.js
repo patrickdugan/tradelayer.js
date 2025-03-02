@@ -122,7 +122,8 @@ static async feeCacheBuy(block) {
                     await orderbook.processTokenMatches(matchResult.matches, block, null, false);
 
                     //console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
-                    await globalInsurance.deposit(1, matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0)));
+                    const depositAmount = matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0))
+                    await globalInsurance.deposit(1, depositAmount,block);
                     await TallyMap.updateFeeCache(property, matchResult.matches.reduce((acc, match) => acc.plus(match.amountofTokenB), new BigNumber(0)).toNumber(), contractId);
                 } else {
                     console.log(`⚠️ No matching orders found for ${property}.`);
@@ -147,7 +148,7 @@ static async feeCacheBuy(block) {
         if (insuranceAmount.gt(0)) {
             console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
             try {
-                await insurance.deposit(property, insuranceAmount.toNumber());
+                await insurance.deposit(property, insuranceAmount.toNumber(),block);
                 await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
             } catch (error) {
                 console.error(`❌ Error processing insurance deposit for ${contractId}:`, error);

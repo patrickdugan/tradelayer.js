@@ -533,6 +533,7 @@ class TallyMap {
                 );
                   //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
             }else if(stash){
+                //the concept of stash is to maintain state if there is nothing to trade the fee for on the book of 1-<propertyId>
                 let updatedValue = currentValue.minus(amount).toFixed(8)
                 let stashBN = new BigNumber(amount).toFixed(8)
                 await db.updateAsync(
