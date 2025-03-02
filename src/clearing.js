@@ -786,7 +786,7 @@ static sortPositionsForPNL(positions, priceDiff) {
                 // Step 4: Socialize remaining loss if any
                 const remainingLoss = totalLoss - payout;
                 console.log('remaining loss '+remainingLoss)
-                if (remainingLoss > 0) {
+                if (Math.abs(remainingLoss) > 0) {
                     await Clearing.socializeLoss(contractId, remainingLoss);
                 }
             }
@@ -934,9 +934,9 @@ static sortPositionsForPNL(positions, priceDiff) {
 static async socializeLoss(contractId, totalLoss) {
     //try {
         console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
-
+        const margins = await MarginMap.getInstance(contractId)
         // Get all positions
-        const openPositions = await this.getAllPositions();
+        const openPositions = await margins.getAllPositions();
 
         // Filter only positions with positive uPNL
         const positiveUPNLPositions = openPositions.filter(pos => new BigNumber(pos.unrealizedPNL).gt(0));
