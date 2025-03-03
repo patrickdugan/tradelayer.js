@@ -941,11 +941,21 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         // Filter only positions with positive uPNL
        console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
 
-        const positiveUPNLPositions = openPositions.filter(pos => 
-             pos.unrealizedPNL !== undefined && pos.unrealizedPNL !== null && new BigNumber(pos.unrealizedPNL).gt(0)
-        );
+        // **Step 1: Identify positions with either uPNL or rPNL (or both)**
+        const positivePnLPositions = openPositions
+            .map(pos => {
+                const uPNL = new BigNumber(pos.unrealizedPNL || 0);
+                const rPNL = new BigNumber(rPNLs.get(pos.address) || 0);
+                const totalPnL = uPNL.plus(rPNL);
 
-console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
+                if (totalPnL.gt(0)) {
+                    return { ...pos, realizedPNL: rPNL.toNumber(), totalPnL: totalPnL.toNumber() };
+                }
+                return null;
+            })
+            .filter(pos => pos !== null);
+
+        console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
 
 
         // Calculate total positive uPNL
