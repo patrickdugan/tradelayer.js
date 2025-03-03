@@ -787,7 +787,7 @@ static sortPositionsForPNL(positions, priceDiff) {
                 const remainingLoss = totalLoss - payout;
                 console.log('remaining loss '+remainingLoss)
                 if (Math.abs(remainingLoss) > 0) {
-                    await Clearing.socializeLoss(contractId, remainingLoss);
+                    await Clearing.socializeLoss(contractId, remainingLoss,blockHeight,collateralId);
                 }
             }
         //} catch (error) {
@@ -931,20 +931,21 @@ static sortPositionsForPNL(positions, priceDiff) {
         return JSON.stringify(auditData);
     }
 
-static async socializeLoss(contractId, totalLoss) {
+static async socializeLoss(contractId, totalLoss,block,collateralId) {
     //try {
         console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
         const margins = await MarginMap.getInstance(contractId)
         // Get all positions
-        const openPositions = await margins.getAllPositions();
-
+        const openPositions = await margins.getAllPositions(contractId);
         // Filter only positions with positive uPNL
-        const positiveUPNLPositions = openPositions.filter(pos => new BigNumber(pos.unrealizedPNL).gt(0));
+       console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
 
-        if (positiveUPNLPositions.length === 0) {
-            console.log("⚠️ No positive uPNL positions found. No loss to socialize.");
-            return;
-        }
+        const positiveUPNLPositions = openPositions.filter(pos => 
+             pos.unrealizedPNL !== undefined && pos.unrealizedPNL !== null && new BigNumber(pos.unrealizedPNL).gt(0)
+        );
+
+console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
+
 
         // Calculate total positive uPNL
         const totalUPNL = positiveUPNLPositions.reduce((sum, pos) => sum.plus(pos.unrealizedPNL), new BigNumber(0));
@@ -969,8 +970,8 @@ static async socializeLoss(contractId, totalLoss) {
             pos.unrealizedPNL = new BigNumber(pos.unrealizedPNL).minus(lossForPosition).toNumber();
 
             // Update margin map
-            this.margins.set(pos.address, pos);
-            await this.recordMarginMapDelta(
+            margins.margins.set(pos.address, pos);
+            await margins.recordMarginMapDelta(
                 pos.address,
                 contractId,
                 0, 0, 0,
@@ -978,10 +979,11 @@ static async socializeLoss(contractId, totalLoss) {
                 0,
                 'socializeLoss'
             );
+            TallyMap.updateBalance(pos.address, collateralId,-lossForPosition,0,0,0,'crawback',block,'')
         }
 
         // Save updated margin map
-        await this.saveMarginMap(true);
+        await margins.saveMarginMap(true);
 
         console.log("✅ Socialized loss successfully applied.");
 

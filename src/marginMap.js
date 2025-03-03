@@ -87,25 +87,34 @@ class MarginMap {
 
         return margin;
     }*/
+async getAllPositions(contractId) {
+    let map = await MarginMap.loadMarginMap(contractId);
 
-    async getAllPositions(contractId) {
-       
-        const allPositions = [];
-        const map = await MarginMap.loadMarginMap(contractId)
-        for(const [address, position] of map.margins.entries()){
-            if(!address){continue}
-            allPositions.push({
-                address: address,
-                contracts: position.contracts,
-                margin: position.margin,
-                unrealizedPNL: position.unrealizedPNL,
-                avgPrice: position.avgPrice
-                // Add other relevant fields if necessary
-            });
-        }
-
-        return allPositions;
+    // If the margins map is empty, attempt to reload from the database
+    if (!map.margins || map.margins.size === 0) {
+        console.log(`🔄 Margins map empty for contract ${contractId}, reloading from DB...`);
+        map = await MarginMap.loadMarginMap(contractId);  // Assuming this method exists
     }
+
+    console.log(`📊 Getting positions for contract ${contractId}:`, JSON.stringify([...map.margins]));
+
+    const allPositions = [];
+    for (const [address, position] of map.margins.entries()) {
+        if (!address) continue;
+
+        allPositions.push({
+            address: address,
+            contracts: position.contracts,
+            margin: position.margin,
+            unrealizedPNL: position.unrealizedPNL,
+            avgPrice: position.avgPrice
+            // Add other relevant fields if necessary
+        });
+    }
+
+    return allPositions;
+}
+
 
 
 // Set initial margin for a new position in the MarginMap
@@ -968,124 +977,124 @@ class MarginMap {
     return deleveragingData;
     }
 
-// Adjust deleveraging position
-async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
-    console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
-    const ContractRegistry= require('./contractRegistry.js')
-    const TallyMap= require('./tally.js')
-    let position = await this.getPositionForAddress(address, contractId);
-    const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
-    const collateral = await ContractRegistry.getCollateralId(contractId)    
-    if (!position) return;
-    const contractChange = sell ? -size : size
-    console.log('⚠️ '+contractChange+' '+position.contracts)
-    if(!contractChange||!position.contracts){
-        console.log('issue in deleveraging '+contractChange+' '+position.contracts)
-        throw new Error()
-    } 
+    // Adjust deleveraging position
+    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
+        console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
+        const ContractRegistry= require('./contractRegistry.js')
+        const TallyMap= require('./tally.js')
+        let position = await this.getPositionForAddress(address, contractId);
+        const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
+        const collateral = await ContractRegistry.getCollateralId(contractId)    
+        if (!position) return;
+        const contractChange = sell ? -size : size
+        console.log('⚠️ '+contractChange+' '+position.contracts)
+        if(!contractChange||!position.contracts){
+            console.log('issue in deleveraging '+contractChange+' '+position.contracts)
+            throw new Error()
+        } 
 
-    const contractChangeBN = new BigNumber(contractChange)
-    position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
-    let reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
-    console.log('reduction '+reduction)
-    const hasSufficient = await TallyMap.hasSufficientMargin(address,collateral,reduction)
-    console.log(JSON.stringify(hasSufficient))
-    if(!hasSufficient.hasSufficient){
-        reduction = new BigNumber(reduction).minus(hasSufficient.shortfall).decimalPlaces(8).toNumber()
-    }
-    if(reduction !==0){
-         await TallyMap.updateBalance(address, collateral, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
-    }
-    if (position.contracts === 0) {
-        position.liqPrice = null;
-        position.bankruptcyPrice = null;
-    }
-
-    console.log('⚠️ '+position.contracts)
-    this.margins.set(position.address, position);
-    this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
-    await this.saveMarginMap(true);
-    return position
-}
-
-async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
-    console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
-
-    let remainingSize = new BigNumber(unfilledContracts);
-
-    // Load marginMap instance for the given contractId
-    const marginMap = await MarginMap.getInstance(contractId);
-
-    // Fetch all positions from marginMap
-    const allPositions = await marginMap.getAllPositions();
-
-    // Load contract details for collateral filtering
-    const contractInfo = await ContractRegistry.getContractInfo(contractId);
-    const collateralId = contractInfo.collateralPropertyId;
-    const notionalValue = new BigNumber(contractInfo.notionalValue);
-
-    let potentialCounterparties = [];
-
-    for (let position of allPositions) {
-        if (position.contracts === 0) continue; // Skip inactive positions
-
-        // Ensure the position belongs to the same collateral pool
-        if (position.collateralId !== collateralId) continue;
-
-        // Fetch available and reserved balances from TallyMap
-        const tally = await TallyMap.getTally(position.address, collateralId);
-        const availableCollateral = new BigNumber(tally.available);
-        const reservedCollateral = new BigNumber(tally.reserved);
-
-        // Calculate position notional value at liquidation price
-        const positionNotional = notionalValue.times(Math.abs(position.contracts)).times(liqPrice);
-
-        // Compute net exposure by summing positions for this collateral across all contracts
-        const totalExposure = await calculateNetExposure(position.address, collateralId);
-
-        // Ensure the side is opposite (we need shorts to absorb long liquidations and vice versa)
-        const isCounterparty = side ? position.contracts < 0 : position.contracts > 0;
-
-        if (isCounterparty) {
-            // Calculate leverage = (position notional) / (available + reserved collateral)
-            const totalCollateral = availableCollateral.plus(reservedCollateral);
-            const leverage = totalCollateral.isZero() ? new BigNumber(Infinity) : positionNotional.dividedBy(totalCollateral);
-
-            potentialCounterparties.push({
-                address: position.address,
-                contracts: position.contracts,
-                leverage,
-                exposure: totalExposure
-            });
+        const contractChangeBN = new BigNumber(contractChange)
+        position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
+        let reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
+        console.log('reduction '+reduction)
+        const hasSufficient = await TallyMap.hasSufficientMargin(address,collateral,reduction)
+        console.log(JSON.stringify(hasSufficient))
+        if(!hasSufficient.hasSufficient){
+            reduction = new BigNumber(reduction).minus(hasSufficient.shortfall).decimalPlaces(8).toNumber()
         }
+        if(reduction !==0){
+             await TallyMap.updateBalance(address, collateral, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
+        }
+        if (position.contracts === 0) {
+            position.liqPrice = null;
+            position.bankruptcyPrice = null;
+        }
+
+        console.log('⚠️ '+position.contracts)
+        this.margins.set(position.address, position);
+        this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
+        await this.saveMarginMap(true);
+        return position
     }
 
-    // Sort counterparties by highest leverage, then by naked exposure (descending order)
-    potentialCounterparties.sort((a, b) => {
-        if (!b.exposure && a.exposure) return 1; // Prefer naked positions
-        if (!a.exposure && b.exposure) return -1;
-        return b.leverage.minus(a.leverage).toNumber(); // Highest leverage first
-    });
+    async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
+        console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
 
-    // Match positions for deleveraging
-    for (let counterparty of potentialCounterparties) {
-        if (remainingSize.isZero()) break;
+        let remainingSize = new BigNumber(unfilledContracts);
 
-        let absorbAmount = new BigNumber(Math.abs(counterparty.contracts));
-        let matchedAmount = BigNumber.min(remainingSize, absorbAmount);
+        // Load marginMap instance for the given contractId
+        const marginMap = await MarginMap.getInstance(contractId);
 
-        console.log(`Matching ${matchedAmount} contracts to ${counterparty.address}`);
+        // Fetch all positions from marginMap
+        const allPositions = await marginMap.getAllPositions();
 
-        await executeDeleveraging(counterparty.address, contractId, matchedAmount, side, liqPrice);
+        // Load contract details for collateral filtering
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
+        const collateralId = contractInfo.collateralPropertyId;
+        const notionalValue = new BigNumber(contractInfo.notionalValue);
 
-        remainingSize = remainingSize.minus(matchedAmount);
+        let potentialCounterparties = [];
+
+        for (let position of allPositions) {
+            if (position.contracts === 0) continue; // Skip inactive positions
+
+            // Ensure the position belongs to the same collateral pool
+            if (position.collateralId !== collateralId) continue;
+
+            // Fetch available and reserved balances from TallyMap
+            const tally = await TallyMap.getTally(position.address, collateralId);
+            const availableCollateral = new BigNumber(tally.available);
+            const reservedCollateral = new BigNumber(tally.reserved);
+
+            // Calculate position notional value at liquidation price
+            const positionNotional = notionalValue.times(Math.abs(position.contracts)).times(liqPrice);
+
+            // Compute net exposure by summing positions for this collateral across all contracts
+            const totalExposure = await calculateNetExposure(position.address, collateralId);
+
+            // Ensure the side is opposite (we need shorts to absorb long liquidations and vice versa)
+            const isCounterparty = side ? position.contracts < 0 : position.contracts > 0;
+
+            if (isCounterparty) {
+                // Calculate leverage = (position notional) / (available + reserved collateral)
+                const totalCollateral = availableCollateral.plus(reservedCollateral);
+                const leverage = totalCollateral.isZero() ? new BigNumber(Infinity) : positionNotional.dividedBy(totalCollateral);
+
+                potentialCounterparties.push({
+                    address: position.address,
+                    contracts: position.contracts,
+                    leverage,
+                    exposure: totalExposure
+                });
+            }
+        }
+
+        // Sort counterparties by highest leverage, then by naked exposure (descending order)
+        potentialCounterparties.sort((a, b) => {
+            if (!b.exposure && a.exposure) return 1; // Prefer naked positions
+            if (!a.exposure && b.exposure) return -1;
+            return b.leverage.minus(a.leverage).toNumber(); // Highest leverage first
+        });
+
+        // Match positions for deleveraging
+        for (let counterparty of potentialCounterparties) {
+            if (remainingSize.isZero()) break;
+
+            let absorbAmount = new BigNumber(Math.abs(counterparty.contracts));
+            let matchedAmount = BigNumber.min(remainingSize, absorbAmount);
+
+            console.log(`Matching ${matchedAmount} contracts to ${counterparty.address}`);
+
+            await executeDeleveraging(counterparty.address, contractId, matchedAmount, side, liqPrice);
+
+            remainingSize = remainingSize.minus(matchedAmount);
+        }
+
+        if (!remainingSize.isZero()) {
+            console.log(`WARNING: Unable to fully deleverage ${remainingSize.toString()} contracts`);
+        }
+        console.log(`Deleveraging complete.`);
     }
-
-    if (!remainingSize.isZero()) {
-        console.log(`WARNING: Unable to fully deleverage ${remainingSize.toString()} contracts`);
-    }
-    console.log(`Deleveraging complete.`);
-}
 
 // Helper function to compute net exposure across all contract positions for an address
 async calculateNetExposure(address, collateralId) {
@@ -1249,6 +1258,48 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
 
         return marketPrice;
     }
+
+    async recordContractTrade(trade, blockHeight, sellerTx, buyerTx) {
+            const tradeRecordKey = `contract-${trade.contractId}`;
+            const tradeRecord = {
+                key: tradeRecordKey,
+                type: 'contract',
+                trade,
+                blockHeight,
+                sellerTx,
+                buyerTx
+            };
+            //console.log('saving contract trade ' +JSON.stringify(trade))
+            await this.saveTrade(tradeRecord);
+        }
+
+        async saveTrade(tradeRecord) {
+            const tradeDB =await dbInstance.getDatabase('tradeHistory');
+
+            const uuid = uuidv4();
+
+            // Use the key provided in the trade record for storage
+            const tradeId = `${tradeRecord.key}-${uuid}-${tradeRecord.blockHeight}`;
+
+            // Construct the document to be saved
+            const tradeDoc = {
+                _id: tradeId,
+                ...tradeRecord
+            };
+
+            // Save or update the trade record in the database
+            try {
+                await tradeDB.updateAsync(
+                    { _id: tradeId },
+                    tradeDoc,
+                    { upsert: true }
+                );
+                //console.log(`Trade record saved successfully: ${tradeId}`);
+            } catch (error) {
+                //console.error(`Error saving trade record: ${tradeId}`, error);
+                throw error; // Rethrow the error for handling upstream
+            }
+        }
 
 }
 
