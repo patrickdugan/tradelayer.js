@@ -334,11 +334,48 @@ class OracleList {
     }
 
 
+    /**
+     * Fetches VWAP for an oracle-based contract over `trailingBlocks`
+     * @param {number} oracleId - The oracle ID
+     * @param {number} blockHeight - The current block height
+     * @param {number} trailingBlocks - The number of blocks to look back
+     * @returns {Promise<number|null>} - The calculated VWAP or null if no data
+     */
+    static async getTWAP(oracleId, blockHeight, trailingBlocks) {
+        try {
+            const oracleDB = await db.getDatabase('oracleData');
+            const blockStart = blockHeight - trailingBlocks;
 
-    static async getTwap(contractId) {
-        // Logic to fetch TWAP data for the given contractId
-        // Example:
-        // return await someExternalOracleService.getTwap(contractId);
+            // Query oracle data within the block range
+            const oracleData = await oracleDB.findAsync({
+                oracleId,
+                blockHeight: { $gte: blockStart, $lte: blockHeight }
+            });
+
+            if (!oracleData || oracleData.length === 0) {
+                console.warn(`⚠️ No Oracle VWAP data for oracle ${oracleId} in blocks ${blockStart}-${blockHeight}`);
+                return null;
+            }
+
+            // Calculate VWAP
+            let totalVolume = new BigNumber(0);
+            let sumVolumeTimesPrice = new BigNumber(0);
+
+            for (const entry of oracleData) {
+                const price = new BigNumber(entry.data.price);
+                const volume = new BigNumber(1); // Assume equal weight for each oracle entry
+
+                totalVolume = totalVolume.plus(volume);
+                sumVolumeTimesPrice = sumVolumeTimesPrice.plus(volume.times(price));
+            }
+
+            if (totalVolume.isZero()) return null;
+
+            return sumVolumeTimesPrice.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+        } catch (error) {
+            console.error(`❌ Error fetching VWAP for oracle ${oracleId}:`, error);
+            return null;
+        }
     }
 
     // Additional methods for managing oracles

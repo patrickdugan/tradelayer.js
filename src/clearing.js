@@ -34,7 +34,7 @@ class Clearing {
         // 3. Ensure correct margins, init margin and liq prices for new conditions
         //await Clearing.updateAllPositions(blockHeight)
         // 4. Funding Settlement
-        await Clearing.applyFundingRates(blockHeight)
+        //await Clearing.applyFundingRates(blockHeight)
         // 5. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
@@ -45,18 +45,18 @@ class Clearing {
 static async applyFundingRates(block) {
     if (block % 24 !== 0) return; // Only run every 24 blocks (~1 hour)
     
-    console.log(`⏳ Applying funding rates at block ${block}`);
+    //console.log(`⏳ Applying funding rates at block ${block}`);
 
     const ContractRegistry = require('./contractRegistry.js');
     const contracts = await ContractRegistry.getAllPerpContracts(); // Get all perpetual contracts
 
     for (const contractId of contracts) {
-        console.log(`📜 Processing funding for contract ${contractId}`);
+        //console.log(`📜 Processing funding for contract ${contractId}`);
 
         // **Step 1: Calculate Funding Rate**
         const fundingRate = await Clearing.calculateFundingRate(contractId, block);
         if (fundingRate === 0) {
-            console.log(`⚠️ Skipping contract ${contractId}, funding rate is 0`);
+            //console.log(`⚠️ Skipping contract ${contractId}, funding rate is 0`);
             continue;
         }
 
@@ -64,18 +64,37 @@ static async applyFundingRates(block) {
 
         // **Step 2: Apply Funding to Positions**
         await Clearing.applyFundingToPositions(contractId, fundingRate, block);
+        await Clearing.saveFundingEvent(contractId, fundingRate, block)
     }
 
-    console.log("✅ Funding rate application complete");
+    //console.log("✅ Funding rate application complete");
 }
 
 static async calculateFundingRate(contractId, blockHeight) {
     try {
         const ContractRegistry = require('./contractRegistry.js');
         const VolumeIndex = require('./volumeIndex.js');
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
+        if (!contractInfo) {
+            console.warn(`⚠️ No contract found for ID ${contractId}`);
+            return 0;
+        }
 
-        // Get VWAP over last 8 hours (192 blocks)
-        const vwap = await VolumeIndex.getVWAP(contractId, blockHeight, 192);
+        let vwap;
+
+        if (contractInfo.native) {
+            // Native contract → Fetch VWAP from `VolumeIndex`
+            vwap = await VolumeIndex.getVWAP(
+                contractInfo.notionalPropertyId,
+                contractInfo.collateralPropertyId,
+                blockHeight,
+                192 // Last 8 hours (192 blocks)
+            );
+        } else {
+            // Oracle-based contract → Fetch VWAP from `OracleList`
+            vwap = await OracleList.getVWAP(contractInfo.underlyingOracleId, blockHeight, 192);
+        }
+
         if (!vwap) {
             console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
             return 0;
@@ -84,7 +103,7 @@ static async calculateFundingRate(contractId, blockHeight) {
         // Get latest index price (Oracle or VolumeIndex)
         const indexPrice = await ContractRegistry.getIndexPrice(contractId, blockHeight);
         if (!indexPrice) {
-            console.warn(`⚠️ No index price available for contract ${contractId}.`);
+            //console.warn(`⚠️ No index price available for contract ${contractId}.`);
             return 0;
         }
 
@@ -126,7 +145,7 @@ static async applyFundingToPositions(contractId, fundingRate, block) {
     const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
 
     if (!openPositions.length) {
-        console.log(`⚠️ No positions found for contract ${contractId}`);
+        //console.log(`⚠️ No positions found for contract ${contractId}`);
         return;
     }
 
@@ -824,17 +843,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight,markPrice);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight,markPrice,collateralId);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight,markPrice);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight,markPrice,collateralId);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight, markPrice);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight, markPrice,collateralId);
         }
     } 
 
@@ -1273,6 +1292,41 @@ static async loadRealizedPnLForBlock(contractId, blockHeight) {
         }
     }
 
+     static async saveFundingEvent(contractId, fundingRate, blockHeight) {
+        try {
+            const fundingDB = await db.getDatabase('fundingEvents');
+
+            const event = {
+                _id: `funding-${contractId}-${blockHeight}`,
+                contractId,
+                fundingRate,
+                blockHeight,
+                timestamp: new Date().toISOString()
+            };
+
+            await fundingDB.updateAsync({ _id: event._id }, event, { upsert: true });
+
+            console.log(`✅ [Funding Event Saved] Contract: ${contractId}, Block: ${blockHeight}, Rate: ${fundingRate} bps`);
+        } catch (error) {
+            console.error(`❌ Error saving funding event for contract ${contractId}:`, error);
+        }
+    }
+
+    static async loadFundingEvents(contractId, startBlock, endBlock) {
+        try {
+            const fundingDB = await db.getDatabase('fundingEvents');
+
+            const query = {
+                contractId: contractId,
+                blockHeight: { $gte: startBlock, $lte: endBlock }
+            };
+
+            return await fundingDB.findAsync(query);
+        } catch (error) {
+            console.error(`❌ Error loading funding events:`, error);
+            return [];
+        }
+    }
     // Additional helper methods or logic as required
 }
 

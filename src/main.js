@@ -843,6 +843,19 @@ class Main {
         }
     }
 
+    static async getGenesisBlock() {
+        const mainInstance = await Main.getInstance();
+        return mainInstance.genesisBlock;
+    }
+
+    static async getLastBlock() {
+        try {
+            return await TxUtils.getLatestBlockHeight(); // Calls the blockchain for last block height
+        } catch (error) {
+            console.error("Error getting latest block height:", error);
+            throw error;
+        }
+    }
     // ... other methods ...
 }
 

@@ -386,6 +386,46 @@ class VolumeIndex {
         return liquidityReward;
     }
 
+
+    static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
+        try {
+            const volumeDB = await db.getDatabase('volumeIndex');
+            const blockStart = blockHeight - trailingBlocks;
+
+            // Query VWAP data within the block range
+            const vwapData = await volumeDB.findAsync({
+                _id: { $regex: `^${propertyId1}-${propertyId2}-` },
+                'value.blockHeight': { $gte: blockStart, $lte: blockHeight }
+            });
+
+            if (!vwapData || vwapData.length === 0) {
+                //console.warn(`⚠️ No VWAP data found for ${propertyId1}-${propertyId2} in blocks ${blockStart}-${blockHeight}`);
+                return null;
+            }
+
+            // Calculate total volume and sum of (volume * price)
+            let totalVolume = new BigNumber(0);
+            let sumVolumeTimesPrice = new BigNumber(0);
+
+            for (const entry of vwapData) {
+                const price = new BigNumber(entry.value.price);
+                const volume = new BigNumber(entry.value.volume);
+
+                totalVolume = totalVolume.plus(volume);
+                sumVolumeTimesPrice = sumVolumeTimesPrice.plus(volume.times(price));
+            }
+
+            // Avoid division by zero
+            if (totalVolume.isZero()) return null;
+
+            // Calculate VWAP
+            return sumVolumeTimesPrice.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+        } catch (error) {
+            console.error(`❌ Error fetching VWAP data:`, error);
+            throw new Error('Failed to fetch VWAP data.');
+        }
+    }
+
     static async baselineLiquidityReward(tradeVolume, fee, token) {
         const totalVolume = this.globalCumulativeVolume - tradeVolume;
         let tlPriceInLTC = 0.001 

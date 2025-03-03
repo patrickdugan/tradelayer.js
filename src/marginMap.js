@@ -885,7 +885,7 @@ async getAllPositions(contractId) {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice) {
+    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice,collateralId) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
       const TallyMap = require('./tally.js')
       let remainingSize = new BigNumber(unfilledContracts);
@@ -1291,7 +1291,7 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
         }
 
         async saveTrade(tradeRecord) {
-            const tradeDB =await dbInstance.getDatabase('tradeHistory');
+            const tradeDB =await db.getDatabase('tradeHistory');
 
             const uuid = uuidv4();
 

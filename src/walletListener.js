@@ -15,6 +15,7 @@ const Consensus = require('./consensus.js')
 const Channels = require('./channels.js')
 const Types = require('./types.js')
 const ClearList = require('./clearlist.js')
+const Clearing = require('./clearing.js')
 
 
 let isInitialized = false; // A flag to track the initialization status
@@ -466,7 +467,12 @@ app.get('/tl_contractTradeHistory', async (req, res) => {
 app.get('/tl_fundingHistory', async (req, res) => {
     try {
         const { contractId } = req.query;
-        const fundingHistory = await ContractsRegistry.loadFundingEvents(contractId);
+        if (!contractId) return res.status(400).send("Missing contractId");
+
+        const startBlock = req.query.startBlock || await Main.getGenesisBlock();
+        const endBlock = req.query.endBlock || await Main.getLastBlock();
+
+        const fundingHistory = await Clearing.loadFundingEvents(contractId, startBlock, endBlock);
         res.json(fundingHistory);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
