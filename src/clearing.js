@@ -456,7 +456,7 @@ static async updateAllPositions(blockHeight) {
                         await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
                         if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
-                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent);
+                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice);
                             if (liquidationResult) {
                                 if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
@@ -481,7 +481,7 @@ static async updateAllPositions(blockHeight) {
                             if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional);
+                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice);
                                     
                                             console.log("Before update:", JSON.stringify(positions, null, 2));
                                     if (liquidationResult) {
@@ -496,7 +496,7 @@ static async updateAllPositions(blockHeight) {
                                 }
                                 continue;
                             } else {
-                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional);
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice);
                                 console.log("Before update:", JSON.stringify(liquidationResult));
                                 if (liquidationResult) {
                                     if(liquidationResult.counterparties.length>0){
@@ -532,7 +532,7 @@ static updatePositions(positions, updatedCounterparties) {
     );
 }
 
-static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional) {
+static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional, markPrice) {
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
 
@@ -600,17 +600,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight,markPrice);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight,markPrice);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight, markPrice);
         }
     } 
 
@@ -936,6 +936,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
         const margins = await MarginMap.getInstance(contractId)
         // Get all positions
+        const rPNLs = await loadRealizedPnLForBlock(contractId,block)
         const openPositions = await margins.getAllPositions(contractId);
         // Filter only positions with positive uPNL
        console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
@@ -992,6 +993,39 @@ console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.leng
     //    throw error;
     //}
 }
+
+static async loadRealizedPnLForBlock(contractId, blockHeight) {
+    console.log(`📜 Fetching realized PNL for contract ${contractId} at block ${blockHeight}`);
+
+    const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
+
+    try {
+        // Query for rPNL records specific to this contract and block
+        const query = { _id: new RegExp(`^rPNL-.*-${contractId}-${blockHeight}$`) };
+        const rPNLRecords = await tradeHistoryDB.findAsync(query);
+
+        const realizedPnLMap = new Map();
+
+        for (const record of rPNLRecords) {
+            const value = JSON.parse(record.value);
+            const address = value.address;
+            const pnl = new BigNumber(value.accountingPNL || 0);
+
+            if (realizedPnLMap.has(address)) {
+                realizedPnLMap.set(address, realizedPnLMap.get(address).plus(pnl));
+            } else {
+                realizedPnLMap.set(address, pnl);
+            }
+        }
+
+        console.log(`✅ Loaded realized PNL: ${JSON.stringify([...realizedPnLMap])}`);
+        return realizedPnLMap;
+    } catch (error) {
+        console.error("❌ Error loading realized PNL for block:", error);
+        return new Map();
+    }
+}
+
 
 
     static async fetchAuditData(auditDataKey) {

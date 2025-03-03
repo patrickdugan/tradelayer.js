@@ -887,7 +887,7 @@ async getAllPositions(contractId) {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block) {
+    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
 
       let remainingSize = new BigNumber(unfilledContracts);
@@ -960,6 +960,25 @@ async getAllPositions(contractId) {
             !sell,
             contractId
           );
+
+        const settlementPNL = await this.settlePNL(pos.address, matchSize, liqPrice, markPrice, contractId,block) 
+        await TallyMap.updateBalance(pos.address, collateralId,settlementPNL,0,0,0,'settlePNLDelev',block,'')
+
+          // **Construct Trade Object**
+            const trade = {
+                contractId: contractId,
+                amount: matchSize,
+                price: liqPrice,
+                markPrice: markPrice,
+                counterpartyAddress: pos.address,
+                liquidatingAddress: liquidatingAddress,
+                block: block,
+                realizedPnL: settlementPNL,
+                liquidation: true
+            };
+
+            // **Record Trade in Trade History**
+            await this.recordContractTrade(trade, block,'','');
 
           deleveragingData.totalDeleveraged += matchSize;
           deleveragingData.counterparties.push(pos);
