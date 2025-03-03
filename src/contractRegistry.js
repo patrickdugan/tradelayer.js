@@ -179,6 +179,33 @@ class ContractRegistry {
     }
 
 
+    static async getAllPerpContracts() {
+    try {
+        const contractListDB = await db.getDatabase('contractList');
+        const contracts = await contractListDB.findAsync({ type: 'contractSeries' });
+
+        if (!contracts || contracts.length === 0) {
+            console.log("⚠️ No contracts found in the registry.");
+            return [];
+        }
+
+        // **Filter contracts using both expiryPeriod == 0 OR ticker contains "PERP"**
+        const perpContracts = contracts
+            .filter(doc => 
+                doc.data.expiryPeriod === 0 || 
+                (doc.data.ticker && doc.data.ticker.includes("PERP"))
+            )
+            .map(doc => doc.data.id);
+
+        console.log(`📜 Found ${perpContracts.length} perpetual contracts:`, perpContracts);
+        return perpContracts;
+
+    } catch (error) {
+        console.error("❌ Error fetching perpetual contracts:", error);
+        return [];
+    }
+}
+
 
     // Generate contracts within the series
     static async generateContracts(expiryPeriod, series, seriesId, block) {

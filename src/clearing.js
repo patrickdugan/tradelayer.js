@@ -33,12 +33,236 @@ class Clearing {
 
         // 3. Ensure correct margins, init margin and liq prices for new conditions
         //await Clearing.updateAllPositions(blockHeight)
-        // 4. Settle trades at block level
+        // 4. Funding Settlement
+        await Clearing.applyFundingRates(blockHeight)
+        // 5. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return
     }
+
+static async applyFundingRates(block) {
+    if (block % 24 !== 0) return; // Only run every 24 blocks (~1 hour)
+    
+    console.log(`⏳ Applying funding rates at block ${block}`);
+
+    const ContractRegistry = require('./contractRegistry.js');
+    const contracts = await ContractRegistry.getAllPerpContracts(); // Get all perpetual contracts
+
+    for (const contractId of contracts) {
+        console.log(`📜 Processing funding for contract ${contractId}`);
+
+        // **Step 1: Calculate Funding Rate**
+        const fundingRate = await Clearing.calculateFundingRate(contractId, block);
+        if (fundingRate === 0) {
+            console.log(`⚠️ Skipping contract ${contractId}, funding rate is 0`);
+            continue;
+        }
+
+        console.log(`💰 [Funding Rate] Contract=${contractId}, Rate=${fundingRate} bps`);
+
+        // **Step 2: Apply Funding to Positions**
+        await Clearing.applyFundingToPositions(contractId, fundingRate, block);
+    }
+
+    console.log("✅ Funding rate application complete");
+}
+
+static async calculateFundingRate(contractId, blockHeight) {
+    try {
+        const ContractRegistry = require('./contractRegistry.js');
+        const VolumeIndex = require('./volumeIndex.js');
+
+        // Get VWAP over last 8 hours (192 blocks)
+        const vwap = await VolumeIndex.getVWAP(contractId, blockHeight, 192);
+        if (!vwap) {
+            console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
+            return 0;
+        }
+
+        // Get latest index price (Oracle or VolumeIndex)
+        const indexPrice = await ContractRegistry.getIndexPrice(contractId, blockHeight);
+        if (!indexPrice) {
+            console.warn(`⚠️ No index price available for contract ${contractId}.`);
+            return 0;
+        }
+
+        // Compute basis points difference
+        const priceDiff = new BigNumber(indexPrice).minus(vwap);
+        const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2).toNumber(); // Convert to bps
+
+        console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints} bps)`);
+
+        // Apply clamp function
+        const clampedBps = this.clampFundingRate(basisPoints);
+
+        // Compute per-hour funding rate (divided by 8)
+        let fundingRate = new BigNumber(clampedBps).dividedBy(8).decimalPlaces(4).toNumber();
+
+        // Cap max rate at ±100 bps per 8 hours (12.5 bps per hour)
+        if (Math.abs(fundingRate) > 12.5) {
+            fundingRate = Math.sign(fundingRate) * 12.5;
+        }
+
+        console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
+        return fundingRate;
+    } catch (error) {
+        console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
+        return 0;
+    }
+}
+
+// **Clamp function for funding rate**
+static clampFundingRate(basisPoints) {
+    if (Math.abs(basisPoints) < 5) return 0; // Ignore small deviations
+    return Math.sign(basisPoints) * (Math.abs(basisPoints) - 5); // Reduce deviation >5bps by 5
+}
+
+
+static async applyFundingToPositions(contractId, fundingRate, block) {
+    const margins = await MarginMap.getInstance(contractId);
+    const openPositions = await margins.getAllPositions(contractId);
+    const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
+
+    if (!openPositions.length) {
+        console.log(`⚠️ No positions found for contract ${contractId}`);
+        return;
+    }
+
+    // Separate longs and shorts
+    let longs = openPositions.filter(pos => pos.contracts > 0);
+    let shorts = openPositions.filter(pos => pos.contracts < 0);
+
+    let longFunding = new BigNumber(0);
+    let shortFunding = new BigNumber(0);
+
+    // **Calculate total funding owed by each side**
+    for (let pos of openPositions) {
+        const contractsBN = new BigNumber(Math.abs(pos.contracts));
+        const fundingAmount = contractsBN.times(notionalPerContract).times(fundingRate / 10000).decimalPlaces(8);
+
+        if (fundingRate > 0 && pos.contracts > 0) {
+            longFunding = longFunding.plus(fundingAmount); // Longs owe shorts
+        } else if (fundingRate < 0 && pos.contracts < 0) {
+            shortFunding = shortFunding.plus(fundingAmount); // Shorts owe longs
+        }
+    }
+
+    // **Distribute funding payments**
+    if (fundingRate > 0) {
+        console.log(`💳 Longs pay shorts: ${longFunding}`);
+        await Clearing.processFundingPayments(longs, shorts, longFunding, contractId, block);
+    } else if (fundingRate < 0) {
+        console.log(`💳 Shorts pay longs: ${shortFunding}`);
+        await Clearing.processFundingPayments(shorts, longs, shortFunding, contractId, block);
+    }
+}
+
+
+static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
+    if (totalFunding.isZero()) return;
+
+    const collateralId = await ContractRegistry.getCollateralId(contractId);
+    let totalContracts = payers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+
+    if (totalContracts.isZero()) return;
+
+    for (let pos of payers) {
+        let contractsBN = new BigNumber(Math.abs(pos.contracts));
+        let amountOwed = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+
+        console.log(`💸 Funding Deduction: ${pos.address} pays ${amountOwed}`);
+
+        await TallyMap.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
+    }
+
+    totalContracts = receivers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+
+    for (let pos of receivers) {
+        let contractsBN = new BigNumber(Math.abs(pos.contracts));
+        let amountReceived = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+
+        console.log(`💰 Funding Credit: ${pos.address} receives ${amountReceived}`);
+
+        await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
+    }
+}
+
+static async getVWAP(contractId, block) {
+    const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
+    const query = { "trade.contractId": contractId, blockHeight: { $gte: block - 23, $lte: block } };
+    const trades = await tradeHistoryDB.findAsync(query);
+
+    if (!trades.length) return null;
+
+    let totalVolume = new BigNumber(0);
+    let totalValue = new BigNumber(0);
+
+    for (let trade of trades) {
+        const price = new BigNumber(trade.trade.price);
+        const volume = new BigNumber(trade.trade.amount);
+        totalVolume = totalVolume.plus(volume);
+        totalValue = totalValue.plus(price.times(volume));
+    }
+
+    return totalVolume.isZero() ? null : totalValue.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+}
+
+static async getIndexPrice(contractId, blockHeight) {
+    try {
+        const ContractRegistry = require('./contractRegistry.js');
+        const OracleRegistry = require('./oracle.js');
+        const VolumeIndex = require('./volumeIndex.js');
+        const db = require('./db.js');
+
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
+        if (!contractInfo) {
+            console.error(`❌ Contract ${contractId} not found.`);
+            return null;
+        }
+
+        if (contractInfo.native) {
+            // **For native contracts, use Volume Index (DEX trade data)**
+            const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
+            const volumeIndexDB = await db.getDatabase('volumeIndex');
+
+            const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
+            if (!volumeData || volumeData.length === 0) {
+                console.warn(`⚠️ No volume data found for pair ${pairKey}.`);
+                return null;
+            }
+
+            // **Sort by blockHeight descending & get latest**
+            const sortedData = volumeData.sort((a, b) => b.value.blockHeight - a.value.blockHeight);
+            const latestEntry = sortedData.find(entry => entry.value.blockHeight <= blockHeight);
+
+            if (latestEntry) {
+                console.log(`📊 Latest native index price for ${pairKey}: ${latestEntry.value.price} (at block ${latestEntry.value.blockHeight})`);
+                return latestEntry.value.price;
+            }
+        } else {
+            // **For oracle contracts, get the latest oracle price**
+            const oracleId = contractInfo.underlyingOracleId;
+            const latestOracleData = await OracleRegistry.getLatestOracleData(oracleId);
+
+            if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
+                console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
+                return null;
+            }
+
+            console.log(`📊 Latest oracle price for contract ${contractId}: ${latestOracleData.price} (at block ${latestOracleData.blockHeight})`);
+            return latestOracleData.price;
+        }
+
+        return null;
+    } catch (error) {
+        console.error(`❌ Error retrieving index price for contract ${contractId}:`, error.message);
+        return null;
+    }
+}
+
+
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...static async feeCacheBuy(block) {
