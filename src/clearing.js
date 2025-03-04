@@ -38,18 +38,16 @@ class Clearing {
         await Clearing.makeSettlement(blockHeight);
 
          // Ensure Net Contracts = 0
-    const netContracts = await verifyNetContracts();
+    const netContracts = await Clearing.verifyNetContracts();
     if (netContracts !== 0) {
         throw new Error(`❌ Clearing failed: Net contracts imbalance detected: ${netContracts}`);
     }
-
-    console.log("✅ Net contracts check passed: System is balanced.");
-
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return
     }
 
-async verifyNetContracts() {
+static async verifyNetContracts() {
+    const ContractRegistry = require('./contractRegistry.js')
     const allContracts = await ContractRegistry.getAllContracts();
     let netContracts = new BigNumber(0);
 
@@ -185,7 +183,7 @@ static async calculateFundingRate(contractId, blockHeight) {
         console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
         return fundingRate;
     } catch (error) {
-        console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
+        //console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
         return 0;
     }
 }

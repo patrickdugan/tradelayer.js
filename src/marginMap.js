@@ -28,8 +28,7 @@ class MarginMap {
             const doc = await marginMapsDB.findOneAsync({ _id: key });
             if (!doc) {
                 // Return a new instance if not found
-                console.log('no MarginMap found, spinning up a fresh one');
-                return new MarginMap(seriesId);
+                  return new MarginMap(seriesId);
             }
 
             //console.log('marginMap parsed from DB ' + JSON.stringify(doc));
@@ -89,15 +88,13 @@ class MarginMap {
         return margin;
     }*/
 async getAllPositions(contractId) {
+    if(!contractId){return []}
     let map = await MarginMap.loadMarginMap(contractId);
 
     // If the margins map is empty, attempt to reload from the database
     if (!map.margins || map.margins.size === 0) {
-        console.log(`🔄 Margins map empty for contract ${contractId}, reloading from DB...`);
         map = await MarginMap.loadMarginMap(contractId);  // Assuming this method exists
     }
-
-    console.log(`📊 Getting positions for contract ${contractId}:`, JSON.stringify([...map.margins]));
 
     const allPositions = [];
     for (const [address, position] of map.margins.entries()) {

@@ -55,7 +55,7 @@ class InsuranceFund {
         if (!propertyFound) {
             this.balances.push({ propertyId, amountAvailable: amount });
         }
-
+        console.log('about to record event in ins. deposit '+{ contractId: this.contractSeriesId, propertyId, amount })
         await this.recordEvent("deposit", { contractId: this.contractSeriesId, propertyId, amount },block);
         await this.saveSnapshot();
     }
@@ -72,20 +72,29 @@ class InsuranceFund {
     }
 
     /** 💾 Save the insurance fund state */
-    async saveSnapshot() {
-        let key = `${this.contractSeriesId}${this.oracle ? "-oracle" : ""}`;
-        const block = await TxUtils.getBlockCount();
-        const snapshot = {
-            balances: this.balances,
-            contractSeriesId: this.contractSeriesId,
-            hedgeRatio: this.hedgeRatio,
-            block
-        };
+async saveSnapshot() {
+    let _id = `${this.contractSeriesId}${this.oracle ? "-oracle" : ""}`;
+    const block = await TxUtils.getBlockCount();
 
-        console.log("📌 Saving to insurance fund:", snapshot);
-        const dbInstance = await db.getDatabase("insurance");
-        await dbInstance.updateAsync({ key }, { $set: { value: snapshot } }, { upsert: true });
-    }
+    const snapshot = {
+        balances: this.balances,
+        contractSeriesId: this.contractSeriesId,
+        hedgeRatio: this.hedgeRatio,
+        block
+    };
+
+    console.log("📌 Saving to insurance fund:", snapshot);
+    
+    const dbInstance = await db.getDatabase("insurance");
+
+    // ✅ Use _id instead of key
+    await dbInstance.updateAsync(
+        { _id }, // Query by _id
+        { $set: snapshot }, // Store snapshot directly
+        { upsert: true } // Insert if not exists, update if exists
+    );
+}
+
 
     /** 📜 Fetch a stored snapshot */
     async getSnapshot() {
@@ -95,16 +104,30 @@ class InsuranceFund {
     }
 
     /** 📌 Record important events in the insurance fund */
-    async recordEvent(eventType, eventData,block) {
-        const eventRecord = {
-            type: eventType,
-            data: eventData,
-            timestamp: block
-        };
+async recordEvent(eventType, eventData, block) {
+    const eventRecord = {
+        type: eventType,
+        data: JSON.stringify(eventData), // ✅ Convert object to string
+        timestamp: block
+    };
 
-        const dbInstance = await db.getDatabase("insurance");
-        await dbInstance.insertAsync({ key: `event-${eventRecord.timestamp}`, value: eventRecord });
-    }
+    const dbInstance = await db.getDatabase("insurance");
+
+    // Use `_id` instead of `key`
+    const _id = `event-${String(block)}`;
+
+    console.log('about to record ins. event', _id, eventRecord);
+
+    // ✅ Use updateAsync with upsert: true to insert or update
+    await dbInstance.updateAsync(
+        { _id }, // Query by _id
+        { $set: eventRecord }, // Set new data
+        { upsert: true } // Insert if not exists
+    );
+}
+
+
+
 
     /** 🔥 Liquidate insurance fund to an admin address */
     static async liquidate(adminAddress, contractId, isOracle = false) {
@@ -136,23 +159,23 @@ class InsuranceFund {
         }
     }
 
-/** 📊 Calculate payouts for a range of blocks */
 async getPayouts(contractId, startBlock, endBlock) {
-  // Get the insurance database instance
+  // Ensure contractId is a string before using in regex
+  const contractIdStr = String(contractId); // ✅ Convert to string
+
   const dbInstance = await db.getDatabase("insurance");
 
   // Query for all payout events for this contract in the given block range.
-  // Assumes events are stored with keys of the form "payout-<contractId>-<block>"
   const query = {
-    key: { $regex: `^payout-${contractId}-` },
+    key: { $regex: new RegExp(`^payout-${contractIdStr}-`) }, // ✅ Use RegExp object
     "value.block": { $gte: startBlock, $lte: endBlock }
   };
 
-  // Using findAsync which returns an array of documents.
+  // Fetch data
   const docs = await dbInstance.findAsync(query);
-  // Map to just the payout event values
-  const payouts = docs.map(doc => doc.value);
-  return payouts;
+
+  // Return extracted payout values
+  return docs.map(doc => doc.value);
 }
 
 
