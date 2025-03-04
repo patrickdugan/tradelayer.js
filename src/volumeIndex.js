@@ -388,16 +388,16 @@ class VolumeIndex {
 
        static async getVWAP(propertyId1, propertyId2, trailingBlocks) {
         try {
-            const base = await db.getDatabase('volumeIndex');
+            const db = await db.getDatabase('volumeIndex');
 
             // Ensure propertyId1 and propertyId2 are strings
             const pairKey = `${String(propertyId1)}-${String(propertyId2)}`;
 
             // Fetch VWAP entries for the past N blocks
-           const vwapData = await base.findAsync({ _id: { $regex: `^${pairKey}-` } })
-                .sort({ blockHeight: -1 })  // ✅ Sort properly
-                .limit(trailingBlocks);      // ✅ Apply limit properly
-
+            const vwapData = await db.findAsync(
+                { _id: { $regex: `^${pairKey}-` } }, // Ensure proper regex format
+                { sort: { blockHeight: -1 }, limit: trailingBlocks }
+            );
 
             let totalVolume = new BigNumber(0);
             let sumVolumeTimesPrice = new BigNumber(0);
@@ -418,7 +418,7 @@ class VolumeIndex {
             console.log(`✅ Calculated VWAP for ${pairKey}: ${vwap.toFixed()}`);
             return vwap.toFixed(8);
         } catch (error) {
-            //console.error(`🚨 Error fetching VWAP data:`, error);
+            console.error(`🚨 Error fetching VWAP data:`, error);
             throw new Error('Failed to fetch VWAP data.');
         }
     }
