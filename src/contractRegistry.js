@@ -196,8 +196,7 @@ class ContractRegistry {
                 (doc.data.ticker && doc.data.ticker.includes("PERP"))
             )
             .map(doc => doc.data.id);
-
-        console.log(`📜 Found ${perpContracts.length} perpetual contracts:`, perpContracts);
+            
         return perpContracts;
 
     } catch (error) {

@@ -353,7 +353,7 @@ class OracleList {
             });
 
             if (!oracleData || oracleData.length === 0) {
-                console.warn(`⚠️ No Oracle VWAP data for oracle ${oracleId} in blocks ${blockStart}-${blockHeight}`);
+                //console.warn(`⚠️ No Oracle VWAP data for oracle ${oracleId} in blocks ${blockStart}-${blockHeight}`);
                 return null;
             }
 

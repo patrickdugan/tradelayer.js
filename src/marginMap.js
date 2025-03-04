@@ -1,7 +1,8 @@
 // Assuming the LevelDB database is stored at './path_to_margin_db'
 const db = require('./db.js');
 const BigNumber = require('bignumber.js')
-const uuid = require('uuid');
+const { v4: uuidv4 } = require('uuid');
+
 
 
 class MarginMap {
@@ -694,7 +695,7 @@ async getAllPositions(contractId) {
 }
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block){
-            const newUuid = uuid.v4();
+            const newUuid = uuidv4();
             const dbInstance = await db.getDatabase('marginMapDelta');
             const deltaKey = `${address}-${contractId}-${newUuid}`;if (typeof contracts === 'object' && contracts.toNumber) {
                 contracts = contracts.toNumber();

@@ -12,7 +12,6 @@ const PropertyManager = require('./property.js')
 const VolumeIndex = require('./volumeIndex.js')
 const Oracles = require('./oracle.js')
 
-
 class Clearing {
     // ... other methods ...
     constructor() {
@@ -34,7 +33,7 @@ class Clearing {
         // 3. Ensure correct margins, init margin and liq prices for new conditions
         //await Clearing.updateAllPositions(blockHeight)
         // 4. Funding Settlement
-        //await Clearing.applyFundingRates(blockHeight)
+        await Clearing.applyFundingRates(blockHeight)
         // 5. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
@@ -92,11 +91,11 @@ static async calculateFundingRate(contractId, blockHeight) {
             );
         } else {
             // Oracle-based contract → Fetch VWAP from `OracleList`
-            vwap = await OracleList.getVWAP(contractInfo.underlyingOracleId, blockHeight, 192);
+            vwap = await Oracles.getTWAP(contractInfo.underlyingOracleId, blockHeight, 192);
         }
 
         if (!vwap) {
-            console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
+            //console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
             return 0;
         }
 
@@ -404,11 +403,13 @@ static async feeCacheBuy(block) {
     }
 }
 
-static async updateAllPositions(blockHeight) {
+static async updateAllPositions(blockHeight, contractRegistry) {
   // Fetch all valid contract IDs (adjust this function to your environment)
-  const contractIds = await ContractRegistry.getAllContractIds();
+  const ContractRegistry = require('./contractRegistry.js')
+  const contracts = await ContractRegistry.getAllContracts();
 
-  for (const contractId of contractIds) {
+  for (const contract of contracts) {
+    const contractId = contract.id; // ✅ Extract only the contract ID
     console.log(`Updating positions for contract ${contractId} at block ${blockHeight}`);
 
     // Load the margin map for this contract.

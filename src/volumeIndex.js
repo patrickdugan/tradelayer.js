@@ -394,7 +394,7 @@ class VolumeIndex {
 
             // Query VWAP data within the block range
             const vwapData = await volumeDB.findAsync({
-                _id: { $regex: `^${propertyId1}-${propertyId2}-` },
+                _id: { $regex: `^${String(propertyId1)}-${String(propertyId2)}-` },
                 'value.blockHeight': { $gte: blockStart, $lte: blockHeight }
             });
 
