@@ -1017,8 +1017,7 @@ static sortPositionsForPNL(positions, priceDiff) {
     }
 
     static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss,collateralId){
-        console.log('herro '+blockHeight+' '+JSON.stringify(positions)+' '+contractId+' '+mark+' '+totalLoss+' '+collateralId)
-        //try {
+       //try {
             // Step 2: Check if insurance fund payout is needed
             if (Math.abs(totalLoss) > 0) {
                 // Step 3: Apply insurance fund payout
@@ -1180,7 +1179,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
         const margins = await MarginMap.getInstance(contractId)
         // Get all positions
-        const rPNLs = await loadRealizedPnLForBlock(contractId,block)
+        const rPNLs = await Clearing.loadRealizedPnLForBlock(contractId,block)
         const openPositions = await margins.getAllPositions(contractId);
         // Filter only positions with positive uPNL
        console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));

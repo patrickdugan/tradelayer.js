@@ -962,8 +962,8 @@ async getAllPositions(contractId) {
             contractId
           );
 
-        const settlementPNL = await this.settlePNL(pos.address, matchSize, liqPrice, markPrice, contractId,block) 
-        await TallyMap.updateBalance(pos.address, collateralId,settlementPNL,0,0,0,'settlePNLDelev',block,'')
+        //const settlementPNL = await this.settlePNL(pos.address, matchSize, liqPrice, markPrice, contractId,block) 
+        //await TallyMap.updateBalance(pos.address, collateralId,settlementPNL,0,0,0,'settlePNLDelev',block,'')
 
           // **Construct Trade Object**
             const trade = {
@@ -974,7 +974,7 @@ async getAllPositions(contractId) {
                 counterpartyAddress: pos.address,
                 liquidatingAddress: liquidatingAddress,
                 block: block,
-                realizedPnL: settlementPNL,
+                realizedPnL: pos.realizedPNL,
                 liquidation: true
             };
 
