@@ -648,51 +648,53 @@ async getAllPositions(contractId) {
         return pos;
     }
 
- async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy, contractId) {
-    if (!pos) return new BigNumber(0);
+    
+    async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
+        if (!pos) return new BigNumber(0);
 
-    console.log(`🔹 [realizePnl] Address=${address}, Contracts=${contracts}, Price=${price}, AvgPrice=${avgPrice}, IsInverse=${isInverse}, Notional=${notionalValue}`);
+        let pnl;
+        console.log('inside realizedPNL ' + address + ' ' + contracts + ' trade price ' + price + ' avg. entry ' + avgPrice + ' is inverse ' + isInverse + ' notional ' + notionalValue + ' position' + JSON.stringify(pos));
+        
+        if(avgPrice==0||avgPrice==null||avgPrice==undefined||isNaN(avgPrice)){
+            console.log('weird avg. price input for realizedPNL ' +avgPrice+' '+address+ ' '+price+' '+JSON.stringify(pos))
+        }
 
-    if (!avgPrice || isNaN(avgPrice)) {
-        console.warn(`⚠️ Invalid avg. entry price in realized PNL: ${avgPrice} for ${address}, Trade Price: ${price}, Position: ${JSON.stringify(pos)}`);
+        const priceBN = new BigNumber(price);
+        const avgPriceBN = new BigNumber(avgPrice);
+        const contractsBN = new BigNumber(contracts);
+        const notionalValueBN = new BigNumber(notionalValue);
+
+        if (isInverse) {
+            let one = new BigNumber(1)
+            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+            pnl = one.dividedBy(avgPriceBN).minus(one.dividedBy(priceBN))
+                .times(contractsBN)
+                .times(notionalValueBN)
+            //console.log('pnl ' + pnl.toNumber());
+        } else {
+            // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
+            pnl = priceBN
+                .minus(avgPriceBN)
+                .times(contractsBN)
+                .times(notionalValueBN);
+            //console.log('pnl ' + pnl.toNumber());
+        }
+
+        // Adjust the sign based on the isBuy flag
+        pnl = isBuy ? pnl.times(-1) : pnl;
+        pnl = pnl.decimalPlaces(8).toNumber()
+        const absRPNL = Math.abs(pnl)
+        const sign = pos.unrealizedPNL>0 ? 1: -1
+        const signBN = new BigNumber(sign)
+        // Modify the position object
+        const uPNLBig = new BigNumber(Math.abs(pos.unrealizedPNL))
+        pos.unrealizedPNL = uPNLBig.minus(absRPNL).times(sign).decimalPlaces(8).toNumber();
+        pos.realizedPNL = pnl
+        console.log('inside realizePnl ' + pnl + ' price then avgPrice ' + avgPrice + ' contracts ' + contracts + ' notionalValue ' + notionalValue);
+        await this.recordMarginMapDelta(address, contractId,0,0,0,pnl,0,'rPNL')
+      
+        return pos
     }
-
-    const priceBN = new BigNumber(price);
-    const avgPriceBN = new BigNumber(avgPrice);
-    const contractsBN = new BigNumber(contracts);
-    const notionalValueBN = new BigNumber(notionalValue);
-
-    let pnl;
-
-    if (isInverse) {
-        pnl = new BigNumber(1)
-            .dividedBy(avgPriceBN)
-            .minus(new BigNumber(1).dividedBy(priceBN))
-            .times(contractsBN)
-            .times(notionalValueBN);
-    } else {
-        pnl = priceBN.minus(avgPriceBN).times(contractsBN).times(notionalValueBN);
-    }
-
-    // **Adjust sign based on trade direction**
-    pnl = isBuy ? pnl.times(-1) : pnl;
-    pnl = pnl.decimalPlaces(8).toNumber();
-
-    console.log(`💰 [Realized PNL] for ${address}: ${pnl}`);
-
-    // **Directly subtract `rPNL` from `uPNL`**
-    pos.unrealizedPNL = new BigNumber(pos.unrealizedPNL || 0).minus(pnl).decimalPlaces(8).toNumber();
-
-    // **Update realized PNL**
-    pos.realizedPNL = new BigNumber(pos.realizedPNL || 0).plus(pnl).decimalPlaces(8).toNumber();
-
-    console.log(`📊 [Final State] Address=${address}, rPNL=${pos.realizedPNL}, uPNL=${pos.unrealizedPNL}`);
-
-    // **Record margin change**
-    await this.recordMarginMapDelta(address, contractId, 0, 0, 0, pnl, 0, 'rPNL');
-
-    return pos;
-}
 
     async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block){
             const newUuid = uuidv4();
@@ -888,7 +890,7 @@ async getAllPositions(contractId) {
 
     async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice,collateralId) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
-      const TallyMap = require('./tally.js')
+
       let remainingSize = new BigNumber(unfilledContracts);
       
       if(remainingSize.isNaN() || remainingSize.isNegative()){
