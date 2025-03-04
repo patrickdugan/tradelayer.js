@@ -233,6 +233,17 @@ async getPayouts(contractId, startBlock, endBlock) {
       return payoutAmount.decimalPlaces(8).toNumber()
 
     }
+
+    static async getInsuranceFundBalance(propertyId) {
+        const db = await dbInstance.getDatabase('insuranceFund');
+        const insuranceEntry = await db.findOneAsync({ _id: propertyId });
+
+        if (insuranceEntry) {
+            return new BigNumber(insuranceEntry.amount);
+        } else {
+            return new BigNumber(0);
+        }
+    }
 }
 
 module.exports = InsuranceFund;

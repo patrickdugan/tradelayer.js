@@ -386,24 +386,19 @@ class VolumeIndex {
         return liquidityReward;
     }
 
-
-    static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
+       static async getVWAP(propertyId1, propertyId2, trailingBlocks) {
         try {
-            const volumeDB = await db.getDatabase('volumeIndex');
-            const blockStart = blockHeight - trailingBlocks;
+            const db = await db.getDatabase('volumeIndex');
 
-            // Query VWAP data within the block range
-            const vwapData = await volumeDB.findAsync({
-                _id: { $regex: `^${String(propertyId1)}-${String(propertyId2)}-` },
-                'value.blockHeight': { $gte: blockStart, $lte: blockHeight }
-            });
+            // Ensure propertyId1 and propertyId2 are strings
+            const pairKey = `${String(propertyId1)}-${String(propertyId2)}`;
 
-            if (!vwapData || vwapData.length === 0) {
-                //console.warn(`⚠️ No VWAP data found for ${propertyId1}-${propertyId2} in blocks ${blockStart}-${blockHeight}`);
-                return null;
-            }
+            // Fetch VWAP entries for the past N blocks
+            const vwapData = await db.findAsync(
+                { _id: { $regex: `^${pairKey}-` } }, // Ensure proper regex format
+                { sort: { blockHeight: -1 }, limit: trailingBlocks }
+            );
 
-            // Calculate total volume and sum of (volume * price)
             let totalVolume = new BigNumber(0);
             let sumVolumeTimesPrice = new BigNumber(0);
 
@@ -415,13 +410,15 @@ class VolumeIndex {
                 sumVolumeTimesPrice = sumVolumeTimesPrice.plus(volume.times(price));
             }
 
-            // Avoid division by zero
-            if (totalVolume.isZero()) return null;
+            if (totalVolume.isZero()) {
+                return null;
+            }
 
-            // Calculate VWAP
-            return sumVolumeTimesPrice.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+            const vwap = sumVolumeTimesPrice.dividedBy(totalVolume);
+            console.log(`✅ Calculated VWAP for ${pairKey}: ${vwap.toFixed()}`);
+            return vwap.toFixed(8);
         } catch (error) {
-            console.error(`❌ Error fetching VWAP data:`, error);
+            console.error(`🚨 Error fetching VWAP data:`, error);
             throw new Error('Failed to fetch VWAP data.');
         }
     }

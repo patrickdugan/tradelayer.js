@@ -201,6 +201,25 @@ class TallyMap {
             await instance.saveToDB(); // Save the updated balance to the database
         }
 
+        static async getTotalForProperty(propertyId) {
+            const instance = await TallyMap.getInstance();
+            let totalBalance = new BigNumber(0);
+
+            // Iterate over all addresses in tallyMap
+            for (const [address, properties] of instance.addresses.entries()) {
+                if (properties[propertyId]) {
+                    const balance = properties[propertyId];
+
+                    totalBalance = totalBalance.plus(balance.available)
+                                               .plus(balance.reserved)
+                                               .plus(balance.margin)
+                                               .plus(balance.channel);
+                }
+            }
+            console.log(`🔹 TallyMap total for property ${propertyId}: ${totalBalance.toFixed()}`);
+            return totalBalance;
+        }
+
 
         static calculateTotal(balanceObj) {
             return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();

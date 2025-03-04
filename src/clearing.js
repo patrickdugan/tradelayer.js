@@ -37,9 +37,68 @@ class Clearing {
         // 5. Settle trades at block level
         await Clearing.makeSettlement(blockHeight);
 
+         // Ensure Net Contracts = 0
+    const netContracts = await verifyNetContracts();
+    if (netContracts !== 0) {
+        throw new Error(`❌ Clearing failed: Net contracts imbalance detected: ${netContracts}`);
+    }
+
+    console.log("✅ Net contracts check passed: System is balanced.");
+
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return
     }
+
+async verifyNetContracts() {
+    const allContracts = await ContractRegistry.getAllContracts();
+    let netContracts = new BigNumber(0);
+
+    for (const contract of allContracts) {
+        const marginMap = await MarginMap.loadMarginMap(contract.id);
+        const positions = await marginMap.getAllPositions();
+        
+        for (const pos of positions) {
+            netContracts = netContracts.plus(pos.contracts);
+        }
+    }
+
+    return netContracts.toNumber();
+}
+
+async getTotalTokenBalances() {
+    const TallyMap = require('./tally.js');
+    const InsuranceFund = require('./insurance.js');
+    const PropertyList = require('./property.js');
+
+    let totalSupply = new BigNumber(0);
+
+    // Load the property list to iterate over property IDs
+    const propertyIndex = await PropertyList.getPropertyIndex();
+
+    // Iterate over each property ID to get its total supply across all sources
+    for (const propertyId of propertyIndex.keys()) {
+        let propertyTotal = new BigNumber(0);
+
+        // Get all balances from TallyMap for the current property
+        const propertyBalances = await TallyMap.getTotalForProperty(propertyId);
+        propertyTotal = propertyTotal.plus(propertyBalances);
+
+        // Get feeCache balance for the property
+        const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
+        propertyTotal = propertyTotal.plus(feeCacheBalance);
+
+        // Get insurance fund balance for the property
+        const insuranceBalance = await InsuranceFund.getInsuranceFundBalance(propertyId);
+        propertyTotal = propertyTotal.plus(insuranceBalance);
+
+        console.log(`🔹 Property ${propertyId} total: ${propertyTotal.toFixed()}`);
+        totalSupply = totalSupply.plus(propertyTotal);
+    }
+
+    console.log(`✅ Total supply across all properties: ${totalSupply.toFixed()}`);
+    return totalSupply;
+}
+
 
 static async applyFundingRates(block) {
     if (block % 24 !== 0) return; // Only run every 24 blocks (~1 hour)
