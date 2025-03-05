@@ -38,18 +38,21 @@ class Clearing {
         await Clearing.makeSettlement(blockHeight);
 
          // Ensure Net Contracts = 0
-    const netContracts = await verifyNetContracts();
+    const netContracts = await Clearing.verifyNetContracts();
     if (netContracts !== 0) {
         throw new Error(`❌ Clearing failed: Net contracts imbalance detected: ${netContracts}`);
     }
 
-    console.log("✅ Net contracts check passed: System is balanced.");
+    await Clearing.getTotalTokenBalances()
+
+    //console.log("✅ Net contracts check passed: System is balanced.");
 
         //console.log(`Clearing operations completed for block ${blockHeight}`);
         return
     }
 
-async verifyNetContracts() {
+static async verifyNetContracts() {
+    const ContractRegistry = require('./contractRegistry.js')
     const allContracts = await ContractRegistry.getAllContracts();
     let netContracts = new BigNumber(0);
 
@@ -64,34 +67,47 @@ async verifyNetContracts() {
 
     return netContracts.toNumber();
 }
-
-async getTotalTokenBalances() {
+static async getTotalTokenBalances() {
     const TallyMap = require('./tally.js');
     const InsuranceFund = require('./insurance.js');
     const PropertyList = require('./property.js');
 
     let totalSupply = new BigNumber(0);
 
-    // Load the property list to iterate over property IDs
+    // Load the property index to iterate over property IDs
     const propertyIndex = await PropertyList.getPropertyIndex();
 
-    // Iterate over each property ID to get its total supply across all sources
-    for (const propertyId of propertyIndex.keys()) {
+    for (const [propertyId, propertyData] of Object.entries(propertyIndex)) {
         let propertyTotal = new BigNumber(0);
 
-        // Get all balances from TallyMap for the current property
-        const propertyBalances = await TallyMap.getTotalForProperty(propertyId);
-        propertyTotal = propertyTotal.plus(propertyBalances);
+        // Sum balances from TallyMap
+        const tallyBalance = await TallyMap.getTotalForProperty(propertyId);
+        propertyTotal = propertyTotal.plus(tallyBalance);
 
-        // Get feeCache balance for the property
+        // Sum balances from Fee Cache
         const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
         propertyTotal = propertyTotal.plus(feeCacheBalance);
 
-        // Get insurance fund balance for the property
+        // Sum balances from Insurance Fund
         const insuranceBalance = await InsuranceFund.getInsuranceFundBalance(propertyId);
         propertyTotal = propertyTotal.plus(insuranceBalance);
 
-        console.log(`🔹 Property ${propertyId} total: ${propertyTotal.toFixed()}`);
+        console.log(`🔹 Property ${propertyId} total computed: ${propertyTotal.toFixed()}`);
+        
+        // Fetch the expected total in circulation from property list
+        const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
+
+        // ⚠️ Check for inconsistencies, but allow exceptions for:
+        // - Property ID 3 & 4
+        // - Type 2 (Managed Tokens)
+        if (!propertyTotal.eq(expectedCirculation)) {
+            if (!(["3", "4"].includes(propertyId) || propertyData.type === 2)) {
+                throw new Error(`❌ Supply mismatch for Property ${propertyId}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`);
+            } else {
+                console.warn(`⚠️ Property ${propertyId} supply changed (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+            }
+        }
+
         totalSupply = totalSupply.plus(propertyTotal);
     }
 
@@ -1244,7 +1260,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
        console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
 
         // **Step 1: Identify positions with either uPNL or rPNL (or both)**
-        const positivePnLPositions = openPositions
+        const positiveUPNLPositions = openPositions
             .map(pos => {
                 const uPNL = new BigNumber(pos.unrealizedPNL || 0);
                 const rPNL = new BigNumber(rPNLs.get(pos.address) || 0);
@@ -1257,8 +1273,9 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
             })
             .filter(pos => pos !== null);
 
-        console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
-
+        if(positiveUPNLPositions){            
+            console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
+        }
 
         // Calculate total positive uPNL
         const totalUPNL = positiveUPNLPositions.reduce((sum, pos) => sum.plus(pos.unrealizedPNL), new BigNumber(0));
@@ -1309,7 +1326,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
 static async loadRealizedPnLForBlock(contractId, blockHeight) {
     console.log(`📜 Fetching realized PNL for contract ${contractId} at block ${blockHeight}`);
 
-    const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
+    const tradeHistoryDB = await db.getDatabase('tradeHistory');
 
     try {
         // Query for rPNL records specific to this contract and block

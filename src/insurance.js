@@ -235,8 +235,8 @@ async getPayouts(contractId, startBlock, endBlock) {
     }
 
     static async getInsuranceFundBalance(propertyId) {
-        const db = await dbInstance.getDatabase('insuranceFund');
-        const insuranceEntry = await db.findOneAsync({ _id: propertyId });
+        const base = await db.getDatabase('insurance');
+        const insuranceEntry = await base.findOneAsync({ _id: propertyId });
 
         if (insuranceEntry) {
             return new BigNumber(insuranceEntry.amount);

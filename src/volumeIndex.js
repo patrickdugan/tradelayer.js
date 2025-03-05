@@ -385,43 +385,43 @@ class VolumeIndex {
 
         return liquidityReward;
     }
+static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
+    try {
+        const base = await db.getDatabase('volumeIndex');
+        const blockStart = blockHeight - trailingBlocks;
 
-       static async getVWAP(propertyId1, propertyId2, trailingBlocks) {
-        try {
-            const db = await db.getDatabase('volumeIndex');
+        // Query volume index within the block range
+        const vwapData = await base.findAsync({
+            _id: { $in: [`${propertyId1}-${propertyId2}`, `${propertyId2}-${propertyId1}`] }, // Check both pair orders
+            "value.blockHeight": { $gte: blockStart, $lte: blockHeight }
+        });
 
-            // Ensure propertyId1 and propertyId2 are strings
-            const pairKey = `${String(propertyId1)}-${String(propertyId2)}`;
-
-            // Fetch VWAP entries for the past N blocks
-            const vwapData = await db.findAsync(
-                { _id: { $regex: `^${pairKey}-` } }, // Ensure proper regex format
-                { sort: { blockHeight: -1 }, limit: trailingBlocks }
-            );
-
-            let totalVolume = new BigNumber(0);
-            let sumVolumeTimesPrice = new BigNumber(0);
-
-            for (const entry of vwapData) {
-                const price = new BigNumber(entry.value.price);
-                const volume = new BigNumber(entry.value.volume);
-
-                totalVolume = totalVolume.plus(volume);
-                sumVolumeTimesPrice = sumVolumeTimesPrice.plus(volume.times(price));
-            }
-
-            if (totalVolume.isZero()) {
-                return null;
-            }
-
-            const vwap = sumVolumeTimesPrice.dividedBy(totalVolume);
-            console.log(`✅ Calculated VWAP for ${pairKey}: ${vwap.toFixed()}`);
-            return vwap.toFixed(8);
-        } catch (error) {
-            console.error(`🚨 Error fetching VWAP data:`, error);
-            throw new Error('Failed to fetch VWAP data.');
+        if (!vwapData || vwapData.length === 0) {
+            console.warn(`⚠️ No VWAP data for ${propertyId1}-${propertyId2} in blocks ${blockStart}-${blockHeight}`);
+            return null;
         }
+
+        // Calculate VWAP
+        let totalVolume = new BigNumber(0);
+        let sumVolumeTimesPrice = new BigNumber(0);
+
+        for (const entry of vwapData) {
+            const price = new BigNumber(entry.value.price);
+            const volume = new BigNumber(entry.value.volume);
+
+            totalVolume = totalVolume.plus(volume);
+            sumVolumeTimesPrice = sumVolumeTimesPrice.plus(volume.times(price));
+        }
+
+        if (totalVolume.isZero()) return null;
+
+        return sumVolumeTimesPrice.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+    } catch (error) {
+        console.error(`❌ Error fetching VWAP for ${propertyId1}-${propertyId2}:`, error);
+        return null;
     }
+}
+
 
     static async baselineLiquidityReward(tradeVolume, fee, token) {
         const totalVolume = this.globalCumulativeVolume - tradeVolume;
