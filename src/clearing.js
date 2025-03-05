@@ -67,53 +67,61 @@ static async verifyNetContracts() {
 
     return netContracts.toNumber();
 }
+
 static async getTotalTokenBalances() {
     const TallyMap = require('./tally.js');
     const InsuranceFund = require('./insurance.js');
     const PropertyList = require('./property.js');
 
-    let totalSupply = new BigNumber(0);
-
-    // Load the property index to iterate over property IDs
+    // Load property list
     const propertyIndex = await PropertyList.getPropertyIndex();
+    //console.log('📌 Parsed property index:', propertyIndex);
 
-    for (const [propertyId, propertyData] of Object.entries(propertyIndex)) {
+    for (const propertyData of propertyIndex) {
+        const propertyId = propertyData.id;
         let propertyTotal = new BigNumber(0);
 
-        // Sum balances from TallyMap
-        const tallyBalance = await TallyMap.getTotalForProperty(propertyId);
-        propertyTotal = propertyTotal.plus(tallyBalance);
+        // ✅ 1️⃣ Fetch total balance from TallyMap
+        const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
+        //console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
+        propertyTotal = propertyTotal.plus(tallyTotal);
 
-        // Sum balances from Fee Cache
+        // ✅ 2️⃣ Add feeCache balance
         const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
         propertyTotal = propertyTotal.plus(feeCacheBalance);
 
-        // Sum balances from Insurance Fund
-        const insuranceBalance = await InsuranceFund.getInsuranceFundBalance(propertyId);
+        // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
+        const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
         propertyTotal = propertyTotal.plus(insuranceBalance);
+        //console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
 
-        console.log(`🔹 Property ${propertyId} total computed: ${propertyTotal.toFixed()}`);
-        
-        // Fetch the expected total in circulation from property list
+        // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
+        if (propertyId === 1) {
+            const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
+            propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
+            //console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
+        }
+        if (propertyId === 4) {
+            const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI
+            propertyTotal = propertyTotal.plus(vestingTLI.vesting);
+            //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
+        }
+
+        // ✅ 5️⃣ Compare Against Expected Circulating Supply
         const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
-
-        // ⚠️ Check for inconsistencies, but allow exceptions for:
-        // - Property ID 3 & 4
-        // - Type 2 (Managed Tokens)
         if (!propertyTotal.eq(expectedCirculation)) {
-            if (!(["3", "4"].includes(propertyId) || propertyData.type === 2)) {
+            if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
                 throw new Error(`❌ Supply mismatch for Property ${propertyId}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`);
             } else {
                 console.warn(`⚠️ Property ${propertyId} supply changed (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
             }
         }
-
-        totalSupply = totalSupply.plus(propertyTotal);
     }
 
-    console.log(`✅ Total supply across all properties: ${totalSupply.toFixed()}`);
-    return totalSupply;
+    return
 }
+
+
 
 
 static async applyFundingRates(block) {

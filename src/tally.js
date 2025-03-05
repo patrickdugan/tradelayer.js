@@ -205,21 +205,38 @@ class TallyMap {
             const instance = await TallyMap.getInstance();
             let totalBalance = new BigNumber(0);
 
+            // Convert propertyId to a string to match stored keys
+            const propertyKey = String(propertyId);
+
             // Iterate over all addresses in tallyMap
             for (const [address, properties] of instance.addresses.entries()) {
-                if (properties[propertyId]) {
-                    const balance = properties[propertyId];
+                
+                if (properties[propertyKey]) {
+                    const balance = properties[propertyKey];
 
-                    totalBalance = totalBalance.plus(balance.available)
-                                               .plus(balance.reserved)
-                                               .plus(balance.margin)
-                                               .plus(balance.channel);
+                    // Ensure all balance components are properly defined
+                    const available = new BigNumber(balance.available || 0);
+                    const reserved = new BigNumber(balance.reserved || 0);
+                    const margin = new BigNumber(balance.margin || 0);
+                    const channel = new BigNumber(balance.channelBalance || 0);
+
+                    if (available.isNaN() || reserved.isNaN() || margin.isNaN() || channel.isNaN()) {
+                        console.error(`🚨 NaN detected in balance calculation for property ${propertyKey}`, {
+                            available: available.toFixed(),
+                            reserved: reserved.toFixed(),
+                            margin: margin.toFixed(),
+                            channel: channel.toFixed(),
+                        });
+                        continue; // Skip this entry
+                    }
+
+                    // Add up all the valid balances
+                    totalBalance = totalBalance.plus(available).plus(reserved).plus(margin).plus(channel);
                 }
             }
-            console.log(`🔹 TallyMap total for property ${propertyId}: ${totalBalance.toFixed()}`);
+
             return totalBalance;
         }
-
 
         static calculateTotal(balanceObj) {
             return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();
@@ -271,14 +288,13 @@ class TallyMap {
             //console.log(`Data for address ${address}:`, addressObj);
             const balances = [];
             for (const propertyId in addressObj) {
-                console.log('bleh' +propertyId+' '+JSON.stringify(addressObj))
+                //console.log('bleh' +propertyId+' '+JSON.stringify(addressObj))
                 const info = await PropertyList.getPropertyData(propertyId)
-                console.log(JSON.stringify(info))
                 if (Object.hasOwnProperty.call(addressObj, propertyId)) {
                     const balanceObj = addressObj[propertyId];
                     let ticker = ''
                     if(info!=null&&info.ticker){ticker=info.ticker}
-                    console.log(propertyId, JSON.stringify(balanceObj),JSON.stringify(info))
+                    //console.log(propertyId, JSON.stringify(balanceObj),JSON.stringify(info))
                     balances.push({
                         propertyId: propertyId,
                         ticker: info.ticker,
@@ -293,6 +309,36 @@ class TallyMap {
             }
             //console.log(`Balances for address ${address}:`, balances);
             return balances;
+    }
+
+      /**
+     * Retrieves the total tally for a given property ID across all addresses.
+     * @param {number|string} propertyId - The property ID to aggregate balances for.
+     * @returns {Promise<Object>} - An object representing the total tally for the given property.
+     */
+    static async getTotalTally(propertyId) {
+        const instance = await TallyMap.getInstance();
+        const totalTally = {
+            amount: 0,
+            available: 0,
+            reserved: 0,
+            margin: 0,
+            vesting: 0,
+            channelBalance: 0
+        };
+
+        for (const properties of instance.addresses.values()) {
+            if (properties[propertyId]) {
+                totalTally.amount += properties[propertyId].amount || 0;
+                totalTally.available += properties[propertyId].available || 0;
+                totalTally.reserved += properties[propertyId].reserved || 0;
+                totalTally.margin += properties[propertyId].margin || 0;
+                totalTally.vesting += properties[propertyId].vesting || 0;
+                totalTally.channelBalance += properties[propertyId].channelBalance || 0;
+            }
+        }
+
+        return totalTally;
     }
 
     /**
@@ -426,8 +472,7 @@ class TallyMap {
             if (result && result.data) {
                 // Deserialize the data from a JSON string to an array
                 const mapDataArray = JSON.parse(result.data);
-
-                // Convert the array back into a Map
+                 // Convert the array back into a Map
                 this.addresses = new Map(mapDataArray.map(([key, value]) => [key, value]));
             } else {
                 console.log('failed to load tallyMap, starting a new map')
@@ -510,19 +555,19 @@ class TallyMap {
         try {
             const db = await dbInstance.getDatabase('feeCache');
             const result = await db.findAsync({});
-            console.log('Database contents:', JSON.stringify(result, null, 2));
+            //console.log('Database contents:', JSON.stringify(result, null, 2));
 
             let value = 0;
             for (const doc of result) {
                 if (doc._id == id) {
                     value = parseFloat(doc.value);
-                    console.log('FeeCache loaded for property ' + id + ': ' + value);
+                    ///console.log('FeeCache loaded for property ' + id + ': ' + value);
                     break;
                 }
             }
 
             if (value === 0) {
-                console.log('No FeeCache found for property ' + id);
+                //console.log('No FeeCache found for property ' + id);
             }
 
             return value;

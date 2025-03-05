@@ -4,7 +4,6 @@ const BigNumber = require('bignumber.js')
 const { v4: uuidv4 } = require('uuid');
 
 
-
 class MarginMap {
     constructor(seriesId) {
         this.seriesId = seriesId;

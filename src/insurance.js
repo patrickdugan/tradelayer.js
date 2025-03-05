@@ -234,6 +234,64 @@ async getPayouts(contractId, startBlock, endBlock) {
 
     }
 
+    static async getTotalBalanceForProperty(propertyId) {
+        const dbInstance = await db.getDatabase("insurance");
+        const insuranceEntries = await dbInstance.findAsync({}); // Fetch all insurance entries
+
+        let totalBalance = new BigNumber(0);
+
+        for (const entry of insuranceEntries) {
+            if (entry.value && entry.value.balances) {
+                for (const balance of entry.value.balances) {
+                    if (balance.propertyId === propertyId) {
+                        totalBalance = totalBalance.plus(new BigNumber(balance.amountAvailable || 0));
+                    }
+                }
+            }
+        }
+
+        return totalBalance;
+    }
+
+    /** 🔄 Updates a centralized summary of insurance balances by propertyId */
+    static async updateInsuranceSummary() {
+        const dbInstance = await db.getDatabase("insurance");
+
+        // Fetch all insurance fund entries
+        const insuranceEntries = await dbInstance.findAsync({});
+        
+        let insuranceSummary = {};
+
+        for (const entry of insuranceEntries) {
+            if (entry.value && entry.value.balances) {
+                for (const balance of entry.value.balances) {
+                    const propertyId = balance.propertyId;
+                    const amountAvailable = new BigNumber(balance.amountAvailable || 0);
+
+                    if (!insuranceSummary[propertyId]) {
+                        insuranceSummary[propertyId] = new BigNumber(0);
+                    }
+
+                    insuranceSummary[propertyId] = insuranceSummary[propertyId].plus(amountAvailable);
+                }
+            }
+        }
+
+        // Convert BigNumber values to standard numbers before storing
+        const summaryToStore = Object.fromEntries(
+            Object.entries(insuranceSummary).map(([propertyId, total]) => [propertyId, total.toFixed(8)])
+        );
+
+        console.log("📌 Updated insuranceSummary:", summaryToStore);
+
+        // Store the summary in the insurance database
+        await dbInstance.updateAsync(
+            { _id: "insuranceSummary" },
+            { $set: { totals: summaryToStore } },
+            { upsert: true }
+        );
+    }
+
     static async getInsuranceFundBalance(propertyId) {
         const base = await db.getDatabase('insurance');
         const insuranceEntry = await base.findOneAsync({ _id: propertyId });
