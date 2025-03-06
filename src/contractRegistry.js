@@ -531,7 +531,7 @@ class ContractRegistry {
                     let excessMargin = 0
                     console.log('about to calc. excess margin '+orderPrice +' '+price+ ' '+totalComparedMargin + ' '+totalInitialMargin+' '+side+' '+maker)
             if(orderPrice<price&&side==true&&channel==false&&maker==false){
-                    excessMargin = BigNumber(totalComparedMargin).minus(totalInitialMargin).decimalPlaces(8).toNumber()
+                    excessMargin = BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber()
                     console.log('calling move margin in seller excess margin channel false '+sender+' '+excessMargin)
                     //contract was bid higher than the fill, the initMargin in reserve is too high and will be returned to available
                      await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin,0, 0, 'returnExcessMargin',block);
@@ -549,6 +549,7 @@ class ContractRegistry {
                         excessMargin=BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber();                          
                     //contract was offered lower than the fill, init Margin in reserve is too high extra will return to available
                     console.log('calling move margin in seller excess margin channel false, insufficient Balance '+sender+' '+excessMargin)
+                        throw new Error()
                         await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin',block);    
                     }else{
                         totalInitialMargin = BigNumber(initMargin).minus(excessMargin).decimalPlaces(8).toNumber();

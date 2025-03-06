@@ -119,9 +119,11 @@ static async getTotalTokenBalances(block) {
         const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
         if (!propertyTotal.eq(expectedCirculation)) {
             if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
-                throw new Error(`❌ Supply mismatch for Property ${propertyId}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
+                throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
             } else {
-                console.warn(`⚠️ Property ${propertyId} supply changed (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+                const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
+                console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
             }
         }
     }

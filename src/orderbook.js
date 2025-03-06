@@ -2166,7 +2166,7 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
         });
 
         console.log(`✅ Cancelled ${cancelledOrders.length} orders for ${fromAddress}. Returning ${returnFromReserve} to reserve.`);
-
+        console.log(JSON.stringify(cancelledOrders))
         // Save the updated order book
         this.orderBooks[key] = orderBook; // Ensure it overwrites, not merges
         await this.saveOrderBook(orderBook, key);
