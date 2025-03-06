@@ -38,12 +38,20 @@ class Clearing {
         await Clearing.makeSettlement(blockHeight);
 
          // Ensure Net Contracts = 0
-    const netContracts = await Clearing.verifyNetContracts();
-    if (netContracts !== 0) {
-        throw new Error(`❌ Clearing failed on block ${blockHeight}: Net contracts imbalance detected: ${netContracts}`);
+         const ContractRegistry = require('./contractRegistry.js')
+    if(ContractRegistry.modFlag){
+        const netContracts = await Clearing.verifyNetContracts();
+        if (netContracts !== 0) {
+            throw new Error(`❌ Clearing failed on block ${blockHeight}: Net contracts imbalance detected: ${netContracts}`);
+        }
+        ContractRegistry.setModFlag(false) //reset the flag to be set true next time there's a marginMap delta
     }
 
-    await Clearing.getTotalTokenBalances(blockHeight)
+        const TallyMap = require('./tally.js')    
+    if(TallyMap.modFlag){
+       await Clearing.getTotalTokenBalances(blockHeight)
+        TallyMap.setModFlag(false) //reset the flag to be set true next time there's a marginMap delta
+    }
 
     //console.log("✅ Net contracts check passed: System is balanced.");
 
@@ -93,7 +101,7 @@ static async getTotalTokenBalances(block) {
         // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
         const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
         propertyTotal = propertyTotal.plus(insuranceBalance);
-        //console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
+        console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
 
         // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
         if (propertyId === 1) {
@@ -796,18 +804,20 @@ static async updateAllPositions(blockHeight, contractRegistry) {
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
                         let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                         let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, marginDent);
-
+                        console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
                         if (postCancelBalance.hasSufficient) {
                             await TallyMap.updateBalance(position.address, collateralId, -marginDent, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
                             continue;
                         } else {
+                            marginDent= postCancelBalance.shortfall
+                            console.log('post cancel margin dent '+marginDent)
                             let postCancelTally = await TallyMap.getTally(position.address, collateralId);
+                            console.log('post cancel tally '+JSON.stringify(postCancelTally))
                             if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancel', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                                     let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice);
-                                    
-                                            console.log("Before update:", JSON.stringify(positions, null, 2));
+                                    console.log("Before update:", JSON.stringify(positions, null, 2));
                                     if (liquidationResult) {
                                         if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
@@ -877,22 +887,27 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
         liq.price=splat.trueLiqPrice
-        if(isPartialLiquidation&&((splat.estimatedFillPrice<bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>bankruptcyPrice&&liq.sell==false))){
+        if(isPartialLiquidation&&((splat.estimatedFillPrice<liq.bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>liq.bankruptcyPrice&&liq.sell==false))){
             isFullLiquidation==true
             isPartialLiquidation==false
             liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
+            liq.price=liq.bankruptcyPrice
         }
+    }
+    if(!liq.price){
+        liq.price=liq.bankruptcyPrice
     }
 
     let marginReduce = position.margin;
     if (liquidationType === "partial") {
+        console.log('margin reduce equaling margin dent '+marginDent+' '+marginReduce)
         marginReduce = marginDent;
     }
 
      const infoBlob = { posMargin: position.margin, reduce: marginReduce, dent: marginDent };
 
     // Step 3: Adjust margin & balances
-     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position));
+     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
  
     position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
     await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);

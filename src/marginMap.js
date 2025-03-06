@@ -571,12 +571,12 @@ async getAllPositions(contractId) {
 
         const ContractRegistry = require('./contractRegistry.js')
         // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgEntry);
+        let initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgPrice);
         let initialMarginBN = new BigNumber(initialMargin)
         let contractsBN = new BigNumber(position.contracts)
         let maintenanceMarginFactorBN = new BigNumber(0.5)
         let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
-        console.log('components '+initialMargin+' '+position.contracts+' '+contractId+' '+position.avgEntry)
+        console.log('components '+initialMargin+' '+position.contracts+' '+contractId+' '+position.avgPrice)
         console.log('checking maint margin '+position.margin+' '+position.unrealizedPNL+' <? '+maintenanceMargin)
         if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
@@ -702,7 +702,7 @@ async getAllPositions(contractId) {
                 contracts = contracts.toNumber();
             }
             const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode, block: block};
-
+            const ContractRegistry = require('./contractRegistry.js')
             console.log('saving marginMap delta ' + JSON.stringify(delta));
 
             try {
@@ -716,6 +716,8 @@ async getAllPositions(contractId) {
                     // If the document doesn't exist, insert a new one
                     await dbInstance.insertAsync({ _id: deltaKey, data: delta });
                 }
+
+                ContractRegistry.setModFlag(true)
 
                 return; // Return success or handle as needed
             } catch (error) {

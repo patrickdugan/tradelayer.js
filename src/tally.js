@@ -12,6 +12,7 @@ class TallyMap {
             this.addresses = new Map();
             this.feeCache = new Map(); // Map for storing fees for each propertyId
             TallyMap.instance = this;
+            this.modFlag = false
         }
         return TallyMap.instance;
     }
@@ -27,6 +28,11 @@ class TallyMap {
         }
         await TallyMap.instance.loadFromDB();
         return TallyMap.instance;
+    }
+
+    static async setModFlag(flag){
+        this.modFlag = flag
+        return
     }
 
     async verifyPropertyIds() {
@@ -691,6 +697,7 @@ class TallyMap {
                 // If the document doesn't exist, insert a new one
                 await db.insertAsync({ _id: deltaKey, data: delta });
             }
+            TallyMap.setModFlag(true)
 
             return; // Return success or handle as needed
         } catch (error) {

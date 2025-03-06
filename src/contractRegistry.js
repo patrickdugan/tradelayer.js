@@ -14,7 +14,12 @@ class ContractRegistry {
         this.contractList = new Map()
         this.oracleList = new Map(); // Initialize if needed
         this.nativeList = new Map(); // Initialize if needed
-   
+        this.modFlag = false
+    }
+
+    static async setModFlag(flag){
+        this.modFlag = flag
+        return
     }
 
     static async loadContractSeries() {
