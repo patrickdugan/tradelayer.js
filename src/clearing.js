@@ -40,10 +40,10 @@ class Clearing {
          // Ensure Net Contracts = 0
     const netContracts = await Clearing.verifyNetContracts();
     if (netContracts !== 0) {
-        throw new Error(`❌ Clearing failed: Net contracts imbalance detected: ${netContracts}`);
+        throw new Error(`❌ Clearing failed on block ${blockHeight}: Net contracts imbalance detected: ${netContracts}`);
     }
 
-    await Clearing.getTotalTokenBalances()
+    await Clearing.getTotalTokenBalances(blockHeight)
 
     //console.log("✅ Net contracts check passed: System is balanced.");
 
@@ -68,7 +68,7 @@ static async verifyNetContracts() {
     return netContracts.toNumber();
 }
 
-static async getTotalTokenBalances() {
+static async getTotalTokenBalances(block) {
     const TallyMap = require('./tally.js');
     const InsuranceFund = require('./insurance.js');
     const PropertyList = require('./property.js');
@@ -111,7 +111,7 @@ static async getTotalTokenBalances() {
         const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
         if (!propertyTotal.eq(expectedCirculation)) {
             if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
-                throw new Error(`❌ Supply mismatch for Property ${propertyId}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`);
+                throw new Error(`❌ Supply mismatch for Property ${propertyId}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
             } else {
                 console.warn(`⚠️ Property ${propertyId} supply changed (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
             }
@@ -148,7 +148,6 @@ static async applyFundingRates(block) {
         await Clearing.applyFundingToPositions(contractId, fundingRate, block);
         await Clearing.saveFundingEvent(contractId, fundingRate, block)
     }
-
     //console.log("✅ Funding rate application complete");
 }
 
@@ -362,8 +361,6 @@ static async getIndexPrice(contractId, blockHeight) {
         return null;
     }
 }
-
-
 
     // Define each of the above methods with corresponding logic based on the C++ functions provided
     // ...static async feeCacheBuy(block) {
@@ -1266,7 +1263,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         const openPositions = await margins.getAllPositions(contractId);
         // Filter only positions with positive uPNL
        console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
-
+       console.log('checking rPNLs '+JSON.stringify(rPNLs))
         // **Step 1: Identify positions with either uPNL or rPNL (or both)**
         const positiveUPNLPositions = openPositions
             .map(pos => {

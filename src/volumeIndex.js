@@ -397,7 +397,7 @@ static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
         });
 
         if (!vwapData || vwapData.length === 0) {
-            console.warn(`⚠️ No VWAP data for ${propertyId1}-${propertyId2} in blocks ${blockStart}-${blockHeight}`);
+            //console.warn(`⚠️ No VWAP data for ${propertyId1}-${propertyId2} in blocks ${blockStart}-${blockHeight}`);
             return null;
         }
 
