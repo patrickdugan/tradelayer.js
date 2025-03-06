@@ -50,6 +50,7 @@ class TallyMap {
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block,txid) {
             console.log('inside updateBalance for '+address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block)
+
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
