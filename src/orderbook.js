@@ -31,6 +31,7 @@ class Orderbook {
 
                 try {
                     const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
+                    console.log('load book '+JSON.stringify(orderBookData))
                     if (orderBookData && orderBookData.value) {
                         const parsedOrderBook = JSON.parse(orderBookData.value);
                         this.orderBooks[key] = parsedOrderBook;
@@ -58,6 +59,8 @@ class Orderbook {
                 { _id: key, value: JSON.stringify(orderbookData) },
                 { upsert: true }
             );
+            await orderBooksDB.loadDatabase();
+            return
         }
                 // Record a token trade with specific key identifiers
         async recordTokenTrade(trade, blockHeight, txid) {
@@ -2207,7 +2210,11 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
         console.log(`\n🛑 Cancelling all contract ${key} orders for ${fromAddress}`);
 
         // Load the correct order book
-        let orderBook = await this.loadOrderBook(key, fromAddress);
+        //let orderBook = this.orderBooks[key]; // Correctly get the order book
+        //if (!orderBook) {
+            //console.log('cant find locally loading book from db');
+            let orderBook = await this.loadOrderBook(key, fromAddress);
+        //}
 
         // Ensure `buy` and `sell` arrays exist but avoid overwriting
         if (!Array.isArray(orderBook.buy)) orderBook.buy = [];
@@ -2242,6 +2249,7 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
         console.log(JSON.stringify(cancelledOrders))
         // Save the updated order book
         this.orderBooks[key] = orderBook; // Ensure it overwrites, not merges
+        console.log('about to save orderbook '+JSON.stringify(orderBook))
         await this.saveOrderBook(orderBook, key);
 
         // Process reserve refunds
