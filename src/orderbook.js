@@ -2207,11 +2207,7 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
         console.log(`\n🛑 Cancelling all contract ${key} orders for ${fromAddress}`);
 
         // Load the correct order book
-        let orderBook = this.orderBooks[key]; // Correctly get the order book
-        if (!orderBook) {
-            console.log('cant find locally loading book from db');
-            orderBook = await this.loadOrderBook(key, fromAddress);
-        }
+        let orderBook = await this.loadOrderBook(key, fromAddress);
 
         // Ensure `buy` and `sell` arrays exist but avoid overwriting
         if (!Array.isArray(orderBook.buy)) orderBook.buy = [];

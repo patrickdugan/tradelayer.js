@@ -573,12 +573,12 @@ async getAllPositions(contractId) {
         // Calculate the maintenance margin, which is half of the initial margin
         let initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgPrice);
         let initialMarginBN = new BigNumber(initialMargin)
-        let contractsBN = new BigNumber(position.contracts)
+        let contractsBN = new BigNumber(Math.abs(position.contracts))
         let maintenanceMarginFactorBN = new BigNumber(0.5)
         let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
         console.log('components '+initialMargin+' '+position.contracts+' '+contractId+' '+position.avgPrice)
         console.log('checking maint margin '+position.margin+' '+position.unrealizedPNL+' <? '+maintenanceMargin)
-        if ((position.margin+position.unrealizedPNL) < maintenanceMargin) {
+        if (position.margin < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
             // Trigger liquidation or other necessary actions here
             // Example: this.triggerLiquidation(address, contractId);
