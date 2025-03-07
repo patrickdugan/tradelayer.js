@@ -59,518 +59,542 @@ class Clearing {
         return
     }
 
-static async verifyNetContracts() {
-    const ContractRegistry = require('./contractRegistry.js')
-    const allContracts = await ContractRegistry.getAllContracts();
-    let netContracts = new BigNumber(0);
+    static async verifyNetContracts() {
+        const ContractRegistry = require('./contractRegistry.js')
+        const allContracts = await ContractRegistry.getAllContracts();
+        let netContracts = new BigNumber(0);
 
-    for (const contract of allContracts) {
-        const marginMap = await MarginMap.loadMarginMap(contract.id);
-        const positions = await marginMap.getAllPositions();
-        
-        for (const pos of positions) {
-            netContracts = netContracts.plus(pos.contracts);
-        }
-    }
-
-    return netContracts.toNumber();
-}
-
-static async getTotalTokenBalances(block) {
-    const TallyMap = require('./tally.js');
-    const InsuranceFund = require('./insurance.js');
-    const PropertyList = require('./property.js');
-
-    // Load property list
-    const propertyIndex = await PropertyList.getPropertyIndex();
-    //console.log('📌 Parsed property index:', propertyIndex);
-
-    for (const propertyData of propertyIndex) {
-        const propertyId = propertyData.id;
-        let propertyTotal = new BigNumber(0);
-
-        // ✅ 1️⃣ Fetch total balance from TallyMap
-        const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
-        //console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
-        propertyTotal = propertyTotal.plus(tallyTotal);
-
-        // ✅ 2️⃣ Add feeCache balance
-        const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
-        propertyTotal = propertyTotal.plus(feeCacheBalance);
-
-        // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
-        const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
-        propertyTotal = propertyTotal.plus(insuranceBalance);
-        console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
-
-        // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
-        if (propertyId === 1) {
-            const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
-            propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
-            //console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
-        }
-        if (propertyId === 4) {
-            const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI
-            propertyTotal = propertyTotal.plus(vestingTLI.vesting);
-            //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
-        }
-
-        // ✅ 5️⃣ Compare Against Expected Circulating Supply
-        const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
-        if (!propertyTotal.eq(expectedCirculation)) {
-            if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
-                const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
-            } else {
-                const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+        for (const contract of allContracts) {
+            const marginMap = await MarginMap.loadMarginMap(contract.id);
+            const positions = await marginMap.getAllPositions();
+            
+            for (const pos of positions) {
+                netContracts = netContracts.plus(pos.contracts);
             }
         }
+
+        return netContracts.toNumber();
     }
 
-    return
-}
+    static async getTotalTokenBalances(block) {
+        const TallyMap = require('./tally.js');
+        const InsuranceFund = require('./insurance.js');
+        const PropertyList = require('./property.js');
 
+        // Load property list
+        const propertyIndex = await PropertyList.getPropertyIndex();
+        //console.log('📌 Parsed property index:', propertyIndex);
 
+        for (const propertyData of propertyIndex) {
+            const propertyId = propertyData.id;
+            let propertyTotal = new BigNumber(0);
 
+            // ✅ 1️⃣ Fetch total balance from TallyMap
+            const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
+            //console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
+            propertyTotal = propertyTotal.plus(tallyTotal);
 
-static async applyFundingRates(block) {
-    if (block % 24 !== 0) return; // Only run every 24 blocks (~1 hour)
-    
-    //console.log(`⏳ Applying funding rates at block ${block}`);
+            // ✅ 2️⃣ Add feeCache balance
+            const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
+            propertyTotal = propertyTotal.plus(feeCacheBalance);
 
-    const ContractRegistry = require('./contractRegistry.js');
-    const contracts = await ContractRegistry.getAllPerpContracts(); // Get all perpetual contracts
+            // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
+            const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
+            propertyTotal = propertyTotal.plus(insuranceBalance);
+            console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
 
-    for (const contractId of contracts) {
-        //console.log(`📜 Processing funding for contract ${contractId}`);
+            // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
+            if (propertyId === 1) {
+                const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
+                propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
+                //console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
+            }
+            if (propertyId === 4) {
+                const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI
+                propertyTotal = propertyTotal.plus(vestingTLI.vesting);
+                //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
+            }
 
-        // **Step 1: Calculate Funding Rate**
-        const fundingRate = await Clearing.calculateFundingRate(contractId, block);
-        if (fundingRate === 0) {
-            //console.log(`⚠️ Skipping contract ${contractId}, funding rate is 0`);
-            continue;
+            // ✅ 5️⃣ Compare Against Expected Circulating Supply
+            const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
+            if (!propertyTotal.eq(expectedCirculation)) {
+                if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
+                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
+                    throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                } else {
+                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
+                    console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+                }
+            }
         }
 
-        console.log(`💰 [Funding Rate] Contract=${contractId}, Rate=${fundingRate} bps`);
-
-        // **Step 2: Apply Funding to Positions**
-        await Clearing.applyFundingToPositions(contractId, fundingRate, block);
-        await Clearing.saveFundingEvent(contractId, fundingRate, block)
+        return
     }
-    //console.log("✅ Funding rate application complete");
-}
 
-static async calculateFundingRate(contractId, blockHeight) {
-    try {
+    static async applyFundingRates(block) {
+        if (block % 24 !== 0) return; // Only run every 24 blocks (~1 hour)
+        
+        //console.log(`⏳ Applying funding rates at block ${block}`);
+
         const ContractRegistry = require('./contractRegistry.js');
-        const VolumeIndex = require('./volumeIndex.js');
-        const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        if (!contractInfo) {
-            console.warn(`⚠️ No contract found for ID ${contractId}`);
+        const contracts = await ContractRegistry.getAllPerpContracts(); // Get all perpetual contracts
+
+        for (const contractId of contracts) {
+            //console.log(`📜 Processing funding for contract ${contractId}`);
+
+            // **Step 1: Calculate Funding Rate**
+            const fundingRate = await Clearing.calculateFundingRate(contractId, block);
+            if (fundingRate === 0) {
+                //console.log(`⚠️ Skipping contract ${contractId}, funding rate is 0`);
+                continue;
+            }
+
+            console.log(`💰 [Funding Rate] Contract=${contractId}, Rate=${fundingRate} bps`);
+
+            // **Step 2: Apply Funding to Positions**
+            await Clearing.applyFundingToPositions(contractId, fundingRate, block);
+            await Clearing.saveFundingEvent(contractId, fundingRate, block)
+        }
+        //console.log("✅ Funding rate application complete");
+    }
+
+    static async calculateFundingRate(contractId, blockHeight) {
+        try {
+            const ContractRegistry = require('./contractRegistry.js');
+            const VolumeIndex = require('./volumeIndex.js');
+            const contractInfo = await ContractRegistry.getContractInfo(contractId);
+            if (!contractInfo) {
+                console.warn(`⚠️ No contract found for ID ${contractId}`);
+                return 0;
+            }
+
+            let vwap;
+
+            if (contractInfo.native) {
+                // Native contract → Fetch VWAP from `VolumeIndex`
+                vwap = await VolumeIndex.getVWAP(
+                    contractInfo.notionalPropertyId,
+                    contractInfo.collateralPropertyId,
+                    blockHeight,
+                    192 // Last 8 hours (192 blocks)
+                );
+            } else {
+                // Oracle-based contract → Fetch VWAP from `OracleList`
+                vwap = await Oracles.getTWAP(contractInfo.underlyingOracleId, blockHeight, 192);
+            }
+
+            if (!vwap) {
+                //console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
+                return 0;
+            }
+
+            // Get latest index price (Oracle or VolumeIndex)
+            const indexPrice = await ContractRegistry.getIndexPrice(contractId, blockHeight);
+            if (!indexPrice) {
+                //console.warn(`⚠️ No index price available for contract ${contractId}.`);
+                return 0;
+            }
+
+            // Compute basis points difference
+            const priceDiff = new BigNumber(indexPrice).minus(vwap);
+            const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2).toNumber(); // Convert to bps
+
+            console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints} bps)`);
+
+            // Apply clamp function
+            const clampedBps = this.clampFundingRate(basisPoints);
+
+            // Compute per-hour funding rate (divided by 8)
+            let fundingRate = new BigNumber(clampedBps).dividedBy(8).decimalPlaces(4).toNumber();
+
+            // Cap max rate at ±100 bps per 8 hours (12.5 bps per hour)
+            if (Math.abs(fundingRate) > 12.5) {
+                fundingRate = Math.sign(fundingRate) * 12.5;
+            }
+
+            console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
+            return fundingRate;
+        } catch (error) {
+            console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
             return 0;
         }
-
-        let vwap;
-
-        if (contractInfo.native) {
-            // Native contract → Fetch VWAP from `VolumeIndex`
-            vwap = await VolumeIndex.getVWAP(
-                contractInfo.notionalPropertyId,
-                contractInfo.collateralPropertyId,
-                blockHeight,
-                192 // Last 8 hours (192 blocks)
-            );
-        } else {
-            // Oracle-based contract → Fetch VWAP from `OracleList`
-            vwap = await Oracles.getTWAP(contractInfo.underlyingOracleId, blockHeight, 192);
-        }
-
-        if (!vwap) {
-            //console.warn(`⚠️ No VWAP data found for contract ${contractId} in last 8 hours.`);
-            return 0;
-        }
-
-        // Get latest index price (Oracle or VolumeIndex)
-        const indexPrice = await ContractRegistry.getIndexPrice(contractId, blockHeight);
-        if (!indexPrice) {
-            //console.warn(`⚠️ No index price available for contract ${contractId}.`);
-            return 0;
-        }
-
-        // Compute basis points difference
-        const priceDiff = new BigNumber(indexPrice).minus(vwap);
-        const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2).toNumber(); // Convert to bps
-
-        console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints} bps)`);
-
-        // Apply clamp function
-        const clampedBps = this.clampFundingRate(basisPoints);
-
-        // Compute per-hour funding rate (divided by 8)
-        let fundingRate = new BigNumber(clampedBps).dividedBy(8).decimalPlaces(4).toNumber();
-
-        // Cap max rate at ±100 bps per 8 hours (12.5 bps per hour)
-        if (Math.abs(fundingRate) > 12.5) {
-            fundingRate = Math.sign(fundingRate) * 12.5;
-        }
-
-        console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
-        return fundingRate;
-    } catch (error) {
-        console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
-        return 0;
-    }
-}
-
-// **Clamp function for funding rate**
-static clampFundingRate(basisPoints) {
-    if (Math.abs(basisPoints) < 5) return 0; // Ignore small deviations
-    return Math.sign(basisPoints) * (Math.abs(basisPoints) - 5); // Reduce deviation >5bps by 5
-}
-
-
-static async applyFundingToPositions(contractId, fundingRate, block) {
-    const margins = await MarginMap.getInstance(contractId);
-    const openPositions = await margins.getAllPositions(contractId);
-    const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
-
-    if (!openPositions.length) {
-        //console.log(`⚠️ No positions found for contract ${contractId}`);
-        return;
     }
 
-    // Separate longs and shorts
-    let longs = openPositions.filter(pos => pos.contracts > 0);
-    let shorts = openPositions.filter(pos => pos.contracts < 0);
+    // **Clamp function for funding rate**
+    static clampFundingRate(basisPoints) {
+        if (Math.abs(basisPoints) < 5) return 0; // Ignore small deviations
+        return Math.sign(basisPoints) * (Math.abs(basisPoints) - 5); // Reduce deviation >5bps by 5
+    }
 
-    let longFunding = new BigNumber(0);
-    let shortFunding = new BigNumber(0);
 
-    // **Calculate total funding owed by each side**
-    for (let pos of openPositions) {
-        const contractsBN = new BigNumber(Math.abs(pos.contracts));
-        const fundingAmount = contractsBN.times(notionalPerContract).times(fundingRate / 10000).decimalPlaces(8);
+    static async applyFundingToPositions(contractId, fundingRate, block) {
+        const margins = await MarginMap.getInstance(contractId);
+        const openPositions = await margins.getAllPositions(contractId);
+        const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
 
-        if (fundingRate > 0 && pos.contracts > 0) {
-            longFunding = longFunding.plus(fundingAmount); // Longs owe shorts
-        } else if (fundingRate < 0 && pos.contracts < 0) {
-            shortFunding = shortFunding.plus(fundingAmount); // Shorts owe longs
+        if (!openPositions.length) {
+            //console.log(`⚠️ No positions found for contract ${contractId}`);
+            return;
+        }
+
+        // Separate longs and shorts
+        let longs = openPositions.filter(pos => pos.contracts > 0);
+        let shorts = openPositions.filter(pos => pos.contracts < 0);
+
+        let longFunding = new BigNumber(0);
+        let shortFunding = new BigNumber(0);
+
+        // **Calculate total funding owed by each side**
+        for (let pos of openPositions) {
+            const contractsBN = new BigNumber(Math.abs(pos.contracts));
+            const fundingAmount = contractsBN.times(notionalPerContract).times(fundingRate / 10000).decimalPlaces(8);
+
+            if (fundingRate > 0 && pos.contracts > 0) {
+                longFunding = longFunding.plus(fundingAmount); // Longs owe shorts
+            } else if (fundingRate < 0 && pos.contracts < 0) {
+                shortFunding = shortFunding.plus(fundingAmount); // Shorts owe longs
+            }
+        }
+
+        // **Distribute funding payments**
+        if (fundingRate > 0) {
+            console.log(`💳 Longs pay shorts: ${longFunding}`);
+            await Clearing.processFundingPayments(longs, shorts, longFunding, contractId, block);
+        } else if (fundingRate < 0) {
+            console.log(`💳 Shorts pay longs: ${shortFunding}`);
+            await Clearing.processFundingPayments(shorts, longs, shortFunding, contractId, block);
         }
     }
 
-    // **Distribute funding payments**
-    if (fundingRate > 0) {
-        console.log(`💳 Longs pay shorts: ${longFunding}`);
-        await Clearing.processFundingPayments(longs, shorts, longFunding, contractId, block);
-    } else if (fundingRate < 0) {
-        console.log(`💳 Shorts pay longs: ${shortFunding}`);
-        await Clearing.processFundingPayments(shorts, longs, shortFunding, contractId, block);
-    }
-}
 
+    static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
+        if (totalFunding.isZero()) return;
 
-static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
-    if (totalFunding.isZero()) return;
+        const collateralId = await ContractRegistry.getCollateralId(contractId);
+        let totalContracts = payers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
 
-    const collateralId = await ContractRegistry.getCollateralId(contractId);
-    let totalContracts = payers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        if (totalContracts.isZero()) return;
 
-    if (totalContracts.isZero()) return;
+        for (let pos of payers) {
+            let contractsBN = new BigNumber(Math.abs(pos.contracts));
+            let amountOwed = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
 
-    for (let pos of payers) {
-        let contractsBN = new BigNumber(Math.abs(pos.contracts));
-        let amountOwed = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            console.log(`💸 Funding Deduction: ${pos.address} pays ${amountOwed}`);
 
-        console.log(`💸 Funding Deduction: ${pos.address} pays ${amountOwed}`);
+            await TallyMap.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
+        }
 
-        await TallyMap.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
-    }
+        totalContracts = receivers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
 
-    totalContracts = receivers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        for (let pos of receivers) {
+            let contractsBN = new BigNumber(Math.abs(pos.contracts));
+            let amountReceived = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
 
-    for (let pos of receivers) {
-        let contractsBN = new BigNumber(Math.abs(pos.contracts));
-        let amountReceived = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            console.log(`💰 Funding Credit: ${pos.address} receives ${amountReceived}`);
 
-        console.log(`💰 Funding Credit: ${pos.address} receives ${amountReceived}`);
-
-        await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
-    }
-}
-
-static async getVWAP(contractId, block) {
-    const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
-    const query = { "trade.contractId": contractId, blockHeight: { $gte: block - 23, $lte: block } };
-    const trades = await tradeHistoryDB.findAsync(query);
-
-    if (!trades.length) return null;
-
-    let totalVolume = new BigNumber(0);
-    let totalValue = new BigNumber(0);
-
-    for (let trade of trades) {
-        const price = new BigNumber(trade.trade.price);
-        const volume = new BigNumber(trade.trade.amount);
-        totalVolume = totalVolume.plus(volume);
-        totalValue = totalValue.plus(price.times(volume));
+            await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
+        }
     }
 
-    return totalVolume.isZero() ? null : totalValue.dividedBy(totalVolume).decimalPlaces(8).toNumber();
-}
+    static async getVWAP(contractId, block) {
+        const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
+        const query = { "trade.contractId": contractId, blockHeight: { $gte: block - 23, $lte: block } };
+        const trades = await tradeHistoryDB.findAsync(query);
 
-static async getIndexPrice(contractId, blockHeight) {
-    try {
-        const ContractRegistry = require('./contractRegistry.js');
-        const OracleRegistry = require('./oracle.js');
-        const VolumeIndex = require('./volumeIndex.js');
-        const db = require('./db.js');
+        if (!trades.length) return null;
 
-        const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        if (!contractInfo) {
-            console.error(`❌ Contract ${contractId} not found.`);
+        let totalVolume = new BigNumber(0);
+        let totalValue = new BigNumber(0);
+
+        for (let trade of trades) {
+            const price = new BigNumber(trade.trade.price);
+            const volume = new BigNumber(trade.trade.amount);
+            totalVolume = totalVolume.plus(volume);
+            totalValue = totalValue.plus(price.times(volume));
+        }
+
+        return totalVolume.isZero() ? null : totalValue.dividedBy(totalVolume).decimalPlaces(8).toNumber();
+    }
+
+    static async getIndexPrice(contractId, blockHeight) {
+        try {
+            const ContractRegistry = require('./contractRegistry.js');
+            const OracleRegistry = require('./oracle.js');
+            const VolumeIndex = require('./volumeIndex.js');
+            const db = require('./db.js');
+
+            const contractInfo = await ContractRegistry.getContractInfo(contractId);
+            if (!contractInfo) {
+                console.error(`❌ Contract ${contractId} not found.`);
+                return null;
+            }
+
+            if (contractInfo.native) {
+                // **For native contracts, use Volume Index (DEX trade data)**
+                const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
+                const volumeIndexDB = await db.getDatabase('volumeIndex');
+
+                const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
+                if (!volumeData || volumeData.length === 0) {
+                    console.warn(`⚠️ No volume data found for pair ${pairKey}.`);
+                    return null;
+                }
+
+                // **Sort by blockHeight descending & get latest**
+                const sortedData = volumeData.sort((a, b) => b.value.blockHeight - a.value.blockHeight);
+                const latestEntry = sortedData.find(entry => entry.value.blockHeight <= blockHeight);
+
+                if (latestEntry) {
+                    console.log(`📊 Latest native index price for ${pairKey}: ${latestEntry.value.price} (at block ${latestEntry.value.blockHeight})`);
+                    return latestEntry.value.price;
+                }
+            } else {
+                // **For oracle contracts, get the latest oracle price**
+                const oracleId = contractInfo.underlyingOracleId;
+                const latestOracleData = await OracleRegistry.getLatestOracleData(oracleId);
+
+                if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
+                    console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
+                    return null;
+                }
+
+                console.log(`📊 Latest oracle price for contract ${contractId}: ${latestOracleData.price} (at block ${latestOracleData.blockHeight})`);
+                return latestOracleData.price;
+            }
+
+            return null;
+        } catch (error) {
+            console.error(`❌ Error retrieving index price for contract ${contractId}:`, error.message);
             return null;
         }
-
-        if (contractInfo.native) {
-            // **For native contracts, use Volume Index (DEX trade data)**
-            const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
-            const volumeIndexDB = await db.getDatabase('volumeIndex');
-
-            const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
-            if (!volumeData || volumeData.length === 0) {
-                console.warn(`⚠️ No volume data found for pair ${pairKey}.`);
-                return null;
-            }
-
-            // **Sort by blockHeight descending & get latest**
-            const sortedData = volumeData.sort((a, b) => b.value.blockHeight - a.value.blockHeight);
-            const latestEntry = sortedData.find(entry => entry.value.blockHeight <= blockHeight);
-
-            if (latestEntry) {
-                console.log(`📊 Latest native index price for ${pairKey}: ${latestEntry.value.price} (at block ${latestEntry.value.blockHeight})`);
-                return latestEntry.value.price;
-            }
-        } else {
-            // **For oracle contracts, get the latest oracle price**
-            const oracleId = contractInfo.underlyingOracleId;
-            const latestOracleData = await OracleRegistry.getLatestOracleData(oracleId);
-
-            if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
-                console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
-                return null;
-            }
-
-            console.log(`📊 Latest oracle price for contract ${contractId}: ${latestOracleData.price} (at block ${latestOracleData.blockHeight})`);
-            return latestOracleData.price;
-        }
-
-        return null;
-    } catch (error) {
-        console.error(`❌ Error retrieving index price for contract ${contractId}:`, error.message);
-        return null;
-    }
-}
-
-    // Define each of the above methods with corresponding logic based on the C++ functions provided
-    // ...static async feeCacheBuy(block) {
-static async feeCacheBuy(block) {
-    const ContractRegistry = require('./contractRegistry.js');
-
-    // Load fees from database (includes contract IDs now)
-    let fees = await TallyMap.loadFeeCacheFromDB();
-
-    if (!fees || fees.size === 0) {
-        return;
     }
 
-    for (let [key, feeData] of fees.entries()) {
-        //console.log('🔎 Fee cache ' + key +' '+ JSON.stringify(feeData));
-        if (!feeData || !feeData.contract || feeData.value <= 0) continue;
+        // Define each of the above methods with corresponding logic based on the C++ functions provided
+        // ...static async feeCacheBuy(block) {
+    static async feeCacheBuy(block) {
+        const ContractRegistry = require('./contractRegistry.js');
 
-        let [property, contractId] = key.split("-");
-        let feeAmount = new BigNumber(feeData.value);
-        let stash = feeData.stash ||0
-        if (feeAmount.isZero()) continue;
+        // Load fees from database (includes contract IDs now)
+        let fees = await TallyMap.loadFeeCacheFromDB();
 
-        //console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
-
-        let isNativeAsset = property.toString().startsWith("s") || property === "1";
-
-        // Lookup contract details to check if it's oracle-based
-        let isOracle = !(await ContractRegistry.isNativeContract(contractId));
-        let insurance = await Insurance.getInstance(contractId, isOracle);
-        let globalInsurance = await Insurance.getInstance(1, false); // Ensure global insurance for contract 1
-        let buyAmount = new BigNumber(0);
-        let insuranceAmount = new BigNumber(0);
-        let stashAmount = new BigNumber(0);
-
-        if (isOracle) {
-            // Oracle-based contracts: 50% to contract's insurance fund, 50% to insurance fund 1
-            insuranceAmount = feeAmount.dividedBy(2).decimalPlaces(8, BigNumber.ROUND_DOWN);
-            stashAmount = feeAmount.minus(insuranceAmount).decimalPlaces(8, BigNumber.ROUND_UP); // Ensure remainder goes to stash
-            console.log('stash amount '+stashAmount +' '+stashAmount.toNumber())
-        } else {
-            // Native contracts: 100% goes to buying property 1
-            buyAmount = feeAmount;
+        if (!fees || fees.size === 0) {
+            return;
         }
 
-        //console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
+        for (let [key, feeData] of fees.entries()) {
+            //console.log('🔎 Fee cache ' + key +' '+ JSON.stringify(feeData));
+            if (!feeData || !feeData.contract || feeData.value <= 0) continue;
 
-        // **Ensure buy orders are only placed if there's liquidity**
-        if (buyAmount.gt(0) || stashAmount.gt(0)) {
-            let orderBookKey = `1-${property}`;
-            let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+            let [property, contractId] = key.split("-");
+            let feeAmount = new BigNumber(feeData.value);
+            let stash = feeData.stash ||0
+            if (feeAmount.isZero()) continue;
 
-            let extractedOrderbook = orderbook.orderBooks[orderBookKey] || { buy: [], sell: [] };
+            //console.log(`💰 Processing fee: property=${property}, contract=${contractId}, amount=${feeAmount}`);
 
-            let orderbookCopy = {
-                buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
-                sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
-            };
+            let isNativeAsset = property.toString().startsWith("s") || property === "1";
 
-            // Check if there are any sell orders available before placing a buy order
-            if (orderbookCopy.sell.length > 0) {
-                const totalBuy = buyAmount.plus(stashAmount);
+            // Lookup contract details to check if it's oracle-based
+            let isOracle = !(await ContractRegistry.isNativeContract(contractId));
+            let insurance = await Insurance.getInstance(contractId, isOracle);
+            let globalInsurance = await Insurance.getInstance(1, false); // Ensure global insurance for contract 1
+            let buyAmount = new BigNumber(0);
+            let insuranceAmount = new BigNumber(0);
+            let stashAmount = new BigNumber(0);
 
-                const order = {
-                    offeredPropertyId: property,
-                    desiredPropertyId: 1,
-                    amountOffered: totalBuy.toNumber(),
-                    amountExpected: 0.00000001,
-                    blockTime: block,
-                    sender: "feeCache"
+            if (isOracle) {
+                // Oracle-based contracts: 50% to contract's insurance fund, 50% to insurance fund 1
+                insuranceAmount = feeAmount.dividedBy(2).decimalPlaces(8, BigNumber.ROUND_DOWN);
+                stashAmount = feeAmount.minus(insuranceAmount).decimalPlaces(8, BigNumber.ROUND_UP); // Ensure remainder goes to stash
+                console.log('stash amount '+stashAmount +' '+stashAmount.toNumber())
+            } else {
+                // Native contracts: 100% goes to buying property 1
+                buyAmount = feeAmount;
+            }
+
+            //console.log(`🔹 Allocations - Buy: ${buyAmount}, Contract Insurance: ${insuranceAmount}, Global Insurance: ${globalInsuranceAmount}`);
+
+            // **Ensure buy orders are only placed if there's liquidity**
+            if (buyAmount.gt(0) || stashAmount.gt(0)) {
+                let orderBookKey = `1-${property}`;
+                let orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+
+                let extractedOrderbook = orderbook.orderBooks[orderBookKey] || { buy: [], sell: [] };
+
+                let orderbookCopy = {
+                    buy: Array.isArray(extractedOrderbook.buy) ? [...extractedOrderbook.buy] : [],
+                    sell: Array.isArray(extractedOrderbook.sell) ? [...extractedOrderbook.sell] : []
                 };
 
-                const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
-                order.price = calculatedPrice;
+                // Check if there are any sell orders available before placing a buy order
+                if (orderbookCopy.sell.length > 0) {
+                    const totalBuy = buyAmount.plus(stashAmount);
 
-                let reply = await orderbook.insertOrder(order, orderBookKey, false, false);
-                console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
+                    const order = {
+                        offeredPropertyId: property,
+                        desiredPropertyId: 1,
+                        amountOffered: totalBuy.toNumber(),
+                        amountExpected: 0.00000001,
+                        blockTime: block,
+                        sender: "feeCache"
+                    };
 
-                await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId,true,true);
-                const matchResult = await orderbook.matchTokenOrders(reply);
-                if (matchResult.matches && matchResult.matches.length > 0) {
-                    //console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
-                    await orderbook.processTokenMatches(matchResult.matches, block, null, false);
-                    //console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
-                    const depositAmount = matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0))
-                    await globalInsurance.deposit(1, depositAmount,block);
-                    const totalMatchedB = matchResult.matches.reduce((acc, match) => {
-                    const amountB = new BigNumber(match.amountOfTokenB || 0); // Fallback to 0 if undefined
-                    return acc.plus(amountB);
-                }, new BigNumber(0));
+                    const calculatedPrice = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
+                    order.price = calculatedPrice;
 
+                    let reply = await orderbook.insertOrder(order, orderBookKey, false, false);
+                    console.log(`📊 Order placed: ${JSON.stringify(reply)}`);
+
+                    await TallyMap.updateFeeCache(property, -totalBuy.toNumber(), contractId,true,true);
+                    const matchResult = await orderbook.matchTokenOrders(reply);
+                    if (matchResult.matches && matchResult.matches.length > 0) {
+                        //console.log(`✅ Fee Match Result: ${JSON.stringify(matchResult)}`);
+                        await orderbook.processTokenMatches(matchResult.matches, block, null, false);
+                        //console.log(`🌎 Sending ${globalInsuranceAmount} to global insurance fund 1`);
+                        const depositAmount = matchResult.matches.reduce((acc, match) => acc.plus(match.amountOfTokenA), new BigNumber(0))
+                        await globalInsurance.deposit(1, depositAmount,block);
+                        const totalMatchedB = matchResult.matches.reduce((acc, match) => {
+                        const amountB = new BigNumber(match.amountOfTokenB || 0); // Fallback to 0 if undefined
+                        return acc.plus(amountB);
+                    }, new BigNumber(0));
+
+                    } else {
+                        console.log(`⚠️ No matching orders found for ${property}.`);
+                    }
+                    await orderbook.saveOrderBook(orderBookKey);
                 } else {
-                    console.log(`⚠️ No matching orders found for ${property}.`);
-                }
-                await orderbook.saveOrderBook(orderBookKey);
-            } else {
-                //console.log(`⚠️ No sell liquidity for ${property}, checking stash handling.`);
-                let newStash = new BigNumber(stash).plus(stashAmount);
-                console.log('🏦 stash '+stash+' '+stashAmount)
-                // Prevent dust accumulation by setting a minimum threshold
-                if (newStash.isLessThan(1e-8)) {
-                    //console.log(`🚨 Preventing dust accumulation: Stash is too small (${newStash}), discarding.`);
-                    newStash = new BigNumber(0);
-                }
+                    //console.log(`⚠️ No sell liquidity for ${property}, checking stash handling.`);
+                    let newStash = new BigNumber(stash).plus(stashAmount);
+                    console.log('🏦 stash '+stash+' '+stashAmount)
+                    // Prevent dust accumulation by setting a minimum threshold
+                    if (newStash.isLessThan(1e-8)) {
+                        //console.log(`🚨 Preventing dust accumulation: Stash is too small (${newStash}), discarding.`);
+                        newStash = new BigNumber(0);
+                    }
 
-                // Update the fee cache with the adjusted stash
-                await TallyMap.updateFeeCache(property, stashAmount.toNumber(), contractId, true);
+                    // Update the fee cache with the adjusted stash
+                    await TallyMap.updateFeeCache(property, stashAmount.toNumber(), contractId, true);
+                }
             }
-        }
 
-        // **Ensure contract insurance deposit is stored correctly**
-        if (insuranceAmount.gt(0)) {
-            console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
-            try {
-                await insurance.deposit(property, insuranceAmount.toNumber(),block);
-                await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
-            } catch (error) {
-                console.error(`❌ Error processing insurance deposit for ${contractId}:`, error);
+            // **Ensure contract insurance deposit is stored correctly**
+            if (insuranceAmount.gt(0)) {
+                console.log(`🏦 Sending ${insuranceAmount} to insurance fund for contract ${contractId}`);
+                try {
+                    await insurance.deposit(property, insuranceAmount.toNumber(),block);
+                    await TallyMap.updateFeeCache(property, -insuranceAmount.toNumber(), contractId);
+                } catch (error) {
+                    console.error(`❌ Error processing insurance deposit for ${contractId}:`, error);
+                }
             }
         }
     }
-}
 
-static async updateAllPositions(blockHeight, contractRegistry) {
-  // Fetch all valid contract IDs (adjust this function to your environment)
-  const ContractRegistry = require('./contractRegistry.js')
-  const contracts = await ContractRegistry.getAllContracts();
+    static async updateAllPositions(blockHeight, contractRegistry) {
+      // Fetch all valid contract IDs (adjust this function to your environment)
+      const ContractRegistry = require('./contractRegistry.js')
+      const contracts = await ContractRegistry.getAllContracts();
 
-  for (const contract of contracts) {
-    const contractId = contract.id; // ✅ Extract only the contract ID
-    console.log(`Updating positions for contract ${contractId} at block ${blockHeight}`);
+      for (const contract of contracts) {
+        const contractId = contract.id; // ✅ Extract only the contract ID
+        //console.log(`Updating positions for contract ${contractId} at block ${blockHeight}`);
 
-    // Load the margin map for this contract.
-    const marginMap = await MarginMap.loadMarginMap(contractId);
-    // Get the current positions stored in the margin map.
-    const positions = await marginMap.getAllPositions();
+        // Load the margin map for this contract.
+        const marginMap = await MarginMap.loadMarginMap(contractId);
+        // Get the current positions stored in the margin map.
+        const positions = await marginMap.getAllPositions();
 
-    // Get contract details used in calculations.
-    const contractInfo = await ContractRegistry.getContractInfo(contractId);
-    const collateralPropertyId = contractInfo.collateralPropertyId;
-    const notionalValue = contractInfo.notionalValue;
-    const isInverse = contractInfo.inverse;
+        // Get contract details used in calculations.
+        const contractInfo = await ContractRegistry.getContractInfo(contractId);
+        const collateralPropertyId = contractInfo.collateralPropertyId;
+        const notionalValue = contractInfo.notionalValue;
+        const isInverse = contractInfo.inverse;
 
-    // Loop through each position.
-    for (const pos of positions) {
-      // 1. Recalculate bankruptcy/liquidation prices.
-      // Get the latest available balance and reserve from the tally.
-      const tally = await TallyMap.getTally(pos.address, collateralPropertyId);
-      const liqInfo = marginMap.calculateLiquidationPrice(
-        tally.available,
-        tally.margin,
-        pos.contracts,
-        notionalValue,
-        isInverse,
-        pos.contracts > 0, // isLong: positive means long, negative means short.
-        pos.avgPrice
-      );
-      pos.liquidationPrice = liqInfo.liquidationPrice;
-      pos.bankruptcyPrice = liqInfo.bankruptcyPrice;
-      console.log(`For ${pos.address}: recalculated liqPrice = ${pos.liquidationPrice}, bankruptcyPrice = ${pos.bankruptcyPrice}`);
+        // Loop through each position.
+        for (const pos of positions) {
+            if(blockHeight%1000){
+            //Clearing.reconcileReserve(pos.address,collateralPropertyId)
+            }
+        /*  // 1. Recalculate bankruptcy/liquidation prices.
+          // Get the latest available balance and reserve from the tally.
+          const tally = await TallyMap.getTally(pos.address, collateralPropertyId);
+          const liqInfo = marginMap.calculateLiquidationPrice(
+            tally.available,
+            tally.margin,
+            pos.contracts,
+            notionalValue,
+            isInverse,
+            pos.contracts > 0, // isLong: positive means long, negative means short.
+            pos.avgPrice
+          );
+          pos.liquidationPrice = liqInfo.liquidationPrice;
+          pos.bankruptcyPrice = liqInfo.bankruptcyPrice;
+          console.log(`For ${pos.address}: recalculated liqPrice = ${pos.liquidationPrice}, bankruptcyPrice = ${pos.bankruptcyPrice}`);
 
-      // 2. Recalculate margin requirements.
-      const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
-      const requiredMargin = new BigNumber(initialMarginPerContract)
-        .times(Math.abs(pos.contracts))
-        .toNumber();
-      if (pos.margin < requiredMargin) {
-        const marginDeficit = requiredMargin - pos.margin;
-        console.log(`Adjusting margin for ${pos.address}: current margin ${pos.margin} is less than required ${requiredMargin}. Deficit: ${marginDeficit}`);
-        // Force the margin up to the required level.
-        pos.margin = requiredMargin;
-        // Reflect this change in the tally (reserve vs. available).
-        await TallyMap.updateBalance(
-          pos.address,
-          collateralPropertyId,
-          marginDeficit,      // Increase margin (or move from reserve as needed)
-          0,
-          -marginDeficit,     // Deduct from reserve (example logic)
-          0,
-          'marginRequirementAdjustment',
-          blockHeight
-        );
+          // 2. Recalculate margin requirements.
+          const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
+          const requiredMargin = new BigNumber(initialMarginPerContract)
+            .times(Math.abs(pos.contracts))
+            .toNumber();
+          if (pos.margin < requiredMargin) {
+            const marginDeficit = requiredMargin - pos.margin;
+            console.log(`Adjusting margin for ${pos.address}: current margin ${pos.margin} is less than required ${requiredMargin}. Deficit: ${marginDeficit}`);
+            // Force the margin up to the required level.
+            pos.margin = requiredMargin;
+            // Reflect this change in the tally (reserve vs. available).
+            await TallyMap.updateBalance(
+              pos.address,
+              collateralPropertyId,
+              marginDeficit,      // Increase margin (or move from reserve as needed)
+              0,
+              -marginDeficit,     // Deduct from reserve (example logic)
+              0,
+              'marginRequirementAdjustment',
+              blockHeight
+            );
+          }*/
+
+          // Update the position in the margin map.
+          //marginMap.margins.set(pos.address, pos);
+          //console.log(`Final state for ${pos.address} on contract ${contractId}: contracts=${pos.contracts}, margin=${pos.margin}, liqPrice=${pos.liquidationPrice}`);
+        }
+
+        // Save the updated margin map for this contract.
+        await marginMap.saveMarginMap(false);
       }
-
-      // 3. Adjust orderbook orders for this address.
-      // For example, if a position no longer qualifies for the "initialReduce" flag,
-      // cancel or modify the orders. (Assumes Orderbooks.adjustOrdersForAddress exists.)
-      await Orderbooks.adjustOrdersForAddress(pos.address, contractId, tally, pos);
-
-      // Update the position in the margin map.
-      marginMap.margins.set(pos.address, pos);
-      console.log(`Final state for ${pos.address} on contract ${contractId}: contracts=${pos.contracts}, margin=${pos.margin}, liqPrice=${pos.liquidationPrice}`);
+      //console.log(`Finished updating positions for all contracts at block ${blockHeight}`);
     }
 
-    // Save the updated margin map for this contract.
-    await marginMap.saveMarginMap(false);
-  }
-  console.log(`Finished updating positions for all contracts at block ${blockHeight}`);
-}
+    static async reconcileReserve(address, collateralId,block) {
+        console.log(`🔄 Reconciling reserved balance for ${address}`);
+        const ContractRegistry = require("./contractRegistry.js");
+        const TallyMap = require("./tally.js");
 
+        const tally = await TallyMap.getTally(address, collateralId);
+        const allContracts = await ContractRegistry.getAllContractsForCollateral(address, collateralId);
 
+        let totalReservedAcrossOrders = new BigNumber(0);
+
+        for (const contractId of allContracts) {
+            // Load the orderbook instance for the contract
+            const orderbook = await Orderbooks.getOrderbookInstance(contractId);
+            console.log('book for '+contractId+' '+orderbook)
+            if (!orderbook || !orderbook.orderBooks[contractId]) continue;
+            console.log('total reserved '+totalReservedAcrossOrders.toNumber())
+            // Add the reserve amount for this contract
+            totalReservedAcrossOrders = totalReservedAcrossOrders.plus(orderbook.getReserveByAddress(address,contractId));
+            console.log('total reserved '+totalReservedAcrossOrders.toNumber())
+        }
+        // Compare total reserved margin to tallyMap reserved balance
+        const excess = new BigNumber(tally.reserved).minus(totalReservedAcrossOrders);
+
+        if (excess.gt(0)) {
+            console.log(`📉 Returning ${excess.toFixed(8)} excess from reserved to available for ${address}`);
+            await TallyMap.updateBalance(address, collateralId, excess.toNumber(), -excess.toNumber(), 0, 0, "reserveReconciliation", block);
+        } else {
+            console.log(`✅ No excess reserve found for ${address}.`);
+        }
+    }
 
    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
@@ -782,6 +806,7 @@ static async updateAllPositions(blockHeight, contractRegistry) {
                 if(balance.hasSufficient){
                     await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 }else{
+                    await Clearing.reconcileReserve(position.address,collateralId,blockHeight)
                     let tally = await TallyMap.getTally(position.address, collateralId);
                     let totalCollateral = tally.available + tally.margin;
                     let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
@@ -793,10 +818,10 @@ static async updateAllPositions(blockHeight, contractRegistry) {
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice);
                             if (liquidationResult) {
                                 if(liquidationResult.counterparties.length>0){
-                                            console.log(JSON.stringify(liquidationResult.counterparties))
-                                            console.log("Before update:", JSON.stringify(positions, null, 2));
-                                            positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
-                                            console.log("After update:", JSON.stringify(positions, null, 2));
+                                        console.log(JSON.stringify(liquidationResult.counterparties))
+                                        console.log("Before update:", JSON.stringify(positions, null, 2));
+                                        positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                        console.log("After update:", JSON.stringify(positions, null, 2));
                                 }
                                 isLiq.push(liquidationResult.liquidation);
                                 systemicLoss += liquidationResult.systemicLoss;

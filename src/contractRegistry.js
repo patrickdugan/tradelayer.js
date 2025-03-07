@@ -313,6 +313,37 @@ class ContractRegistry {
         return docs.map(doc => doc.data);
     }
 
+      /**
+     * Returns an array of contract IDs where the collateral matches collateralId.
+     * @param {string} address - The trader's address (not used in filtering, but included for compatibility)
+     * @param {number} collateralId - The collateral property ID to filter by
+     * @returns {Promise<number[]>} - A promise that resolves to an array of contract IDs
+     */
+    /**
+ * Returns an array of contract IDs where the collateral matches collateralId.
+ * @param {string} address - The trader's address (not used in filtering, but included for compatibility)
+ * @param {number} collateralId - The collateral property ID to filter by
+ * @returns {Promise<number[]>} - A promise that resolves to an array of contract IDs
+ */
+static async getAllContractsForCollateral(address, collateralId) {
+    // Fetch contract data from DB
+    const contractList = await ContractRegistry.getAllContracts();
+
+    if (!contractList || contractList.length === 0) {
+        console.log(`⚠️ No contracts found in database.`);
+        return [];
+    }
+
+    // Filter contracts that match the collateralId
+    const contractIds = contractList
+        .filter(contract => contract.collateralPropertyId === collateralId)
+        .map(contract => contract.id); // Ensure we're extracting the correct ID field
+
+    console.log(`🔎 Found ${contractIds.length} contracts using collateral ${collateralId} for address ${address}.`);
+    return contractIds; // Returns an array usable in for...of loops
+}
+
+
     async hasOpenPositions(contract) {
         try {
             // Load the margin map for the contract's series ID
@@ -345,6 +376,8 @@ class ContractRegistry {
         const contractInfo = await this.getContractInfo(contractId);
         return contractInfo ? contractInfo.native : false;
     }
+
+
 
     static async getContractInfo(contractId) {
         //console.log('retrieving db info for contract '+contractId)

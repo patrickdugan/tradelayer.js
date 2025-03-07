@@ -25,9 +25,7 @@ class Orderbook {
             return orderbook;
         }
 
-
-
-         async loadOrderBook(key,addr) {
+        async loadOrderBook(key,addr) {
                 const stringKey = typeof key === 'string' ? key : String(key);
                 const orderBooksDB = await dbInstance.getDatabase('orderBooks');
 
@@ -36,7 +34,7 @@ class Orderbook {
                     if (orderBookData && orderBookData.value) {
                         const parsedOrderBook = JSON.parse(orderBookData.value);
                         this.orderBooks[key] = parsedOrderBook;
-                        console.log('loading the orderbook in check from addr '+addr+' for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
+                        //console.log('loading the orderbook in check from addr '+addr+' for ' + key + ' in the form of ' + JSON.stringify(parsedOrderBook.buy));
                         return parsedOrderBook; // Return the parsed order book
                     } else {
                         console.log('new orderbook for ' + key);
@@ -190,6 +188,28 @@ class Orderbook {
             await orderbook.saveOrderBook(matchResult.orderBook,normalizedOrderBookKey);
 
             return matchResult;
+        }
+
+         /**
+         * Get the total reserved margin for a specific address across buy and sell orders
+         * @param {string} address - The address whose reserved margin is being calculated
+         * @returns {BigNumber} - Total reserved margin for the address
+         */
+        getReserveByAddress(address,key) {
+            const stringKey = typeof key === 'string' ? key : String(key);
+
+            let totalReserved = new BigNumber(0);
+            for (const side of ["buy", "sell"]) {
+                console.log('inside get reserve by addr book '+JSON.stringify(this.orderBooks))
+                if (!this.orderBooks[stringKey][side]) continue;
+                for (const order of this.orderBooks[stringKey][side]) {
+                    if ((order.sender || order.address) === address) {
+                        console.log('in getReserveByAddr '+totalReserved.toNumber())
+                        totalReserved = totalReserved.plus(order.initMargin || 0);
+                    }
+                }
+            }
+            return totalReserved;
         }
 
         normalizeOrderBookKey(propertyId1, propertyId2) {
@@ -884,59 +904,110 @@ async matchContractOrders(orderBook) {
         }
 
         // In Orderbooks.js
-// In Orderbooks.js// In Orderbooks.js
-static async adjustOrdersForAddress(address, contractId, tally, pos) {
-  // Load the orderbook instance for the given contractId.
-  const orderbook = await Orderbooks.getOrderbookInstance(contractId);
-  // Assume orderbook.orderBooks is keyed by contractId (as a string) with separate buy and sell arrays.
-  const obForContract = orderbook.orderBooks[contractId] || { buy: [], sell: [] };
+async adjustOrdersForAddress(address, contractId, tally, pos) {
+    const orderBookKey = `${this.orderBookKey}`;
+    const orderbook = await this.loadOrderBook(orderBookKey, false);
+    const obForContract = orderbook.orderBooks[contractId] || { buy: [], sell: [] };
 
-  console.log(`Adjusting orders for ${address} on contract ${contractId} with current position: ${JSON.stringify(pos)}`);
+    console.log(`🔄 Adjusting orders for ${address} on contract ${contractId} with position: ${JSON.stringify(pos)}`);
 
-  // Loop through both buy and sell sides
-  for (const side of ['buy', 'sell']) {
-    // Iterate backwards so that splicing out orders doesn’t affect the loop index.
-    for (let i = obForContract[side].length - 1; i >= 0; i--) {
-      const order = obForContract[side][i];
-      // Use a unified sender property.
-      const orderAddress = order.sender || order.address;
-      if (orderAddress !== address) continue;
+    let totalInitMarginForAddress = new BigNumber(0);
+    let changedOrders = false;
+    let requiredMarginChange = new BigNumber(0);
 
-      // Determine order side:
-      // Use order.side if available; otherwise, infer from the boolean 'sell' property.
-      const orderSide = order.side || (order.sell ? 'sell' : 'buy');
+    // Loop through buy & sell sides
+    for (const side of ['buy', 'sell']) {
+        for (let i = obForContract[side].length - 1; i >= 0; i--) {
+            const order = obForContract[side][i];
+            const orderAddress = order.sender || order.address;
+            if (orderAddress !== address) continue;
 
-      // Determine if this order should be a reduce order:
-      // - A buy order should be reducing a short position (negative contracts).
-      // - A sell order should be reducing a long position (positive contracts).
-      const shouldBeReduce = (orderSide === 'buy' && pos.contracts < 0) ||
-                             (orderSide === 'sell' && pos.contracts > 0);
+            const orderSide = order.side || (order.sell ? 'sell' : 'buy');
+            const shouldBeReduce = (orderSide === 'buy' && pos.contracts < 0) ||
+                                   (orderSide === 'sell' && pos.contracts > 0);
 
-      if (order.initialReduce !== shouldBeReduce) {
-        console.log(`Order ${order.txid}: initialReduce flag (${order.initialReduce}) does not match expected (${shouldBeReduce}). Updating.`);
-        order.initialReduce = shouldBeReduce;
-      }
+            if (order.initialReduce !== shouldBeReduce) {
+                console.log(`🔄 Order ${order.txid}: initialReduce flipped (${order.initialReduce} → ${shouldBeReduce})`);
+                order.initialReduce = shouldBeReduce;
+                changedOrders = true;
 
-      // Recalculate the expected margin usage for this order.
-      // Retrieve the current initial margin per contract for the updated average price.
-      const newInitialMargin = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
-      const expectedMarginUsed = new BigNumber(newInitialMargin)
-                                  .times(order.amount)
-                                  .decimalPlaces(8)
-                                  .toNumber();
+                if (shouldBeReduce) {
+                    // ✅ **Return `initMargin` to `available` since it's now a take-profit order**
+                    console.log(`📉 Order ${order.txid} converted to take-profit. Returning ${order.initMargin} to available.`);
+                    await TallyMap.updateBalance(address, tally.propertyId, order.initMargin, -order.initMargin, 0, 0, 'takeProfitMarginReturn', tally.block);
+                } else {
+                    // ❌ **Pull `initMargin` from `available` for new entry orders**
+                    console.log(`📈 Order ${order.txid} requires fresh margin allocation.`);
+                    requiredMarginChange = requiredMarginChange.plus(order.initMargin);
+                }
+            }
 
-      if (order.marginUsed !== expectedMarginUsed) {
-        console.log(`Order ${order.txid}: marginUsed is ${order.marginUsed}, expected ${expectedMarginUsed}. Updating.`);
-        order.marginUsed = expectedMarginUsed;
-      }
+            // Update margin usage
+            const newInitialMargin = await ContractRegistry.getInitialMargin(contractId, pos.avgPrice);
+            const expectedMarginUsed = new BigNumber(newInitialMargin).times(order.amount).decimalPlaces(8).toNumber();
+
+            if (order.marginUsed !== expectedMarginUsed) {
+                console.log(`🔧 Updating marginUsed ${order.marginUsed} → ${expectedMarginUsed} for Order ${order.txid}`);
+                order.marginUsed = expectedMarginUsed;
+                changedOrders = true;
+            }
+
+            // Track total reserved margin for address
+            totalInitMarginForAddress = totalInitMarginForAddress.plus(expectedMarginUsed);
+        }
     }
-  }
 
-  // Save the updated orderbook back to storage.
-  orderbook.orderBooks[contractId] = obForContract;
-  await Orderbooks.saveOrderbook(orderbook);
-  console.log(`Finished adjusting orders for ${address} on contract ${contractId}.`);
-  return orderbook;
+    // **Step 2: Ensure sufficient balance before applying margin changes**
+    if (requiredMarginChange.gt(0)) {
+        const hasSufficient = await TallyMap.hasSufficientBalance(address, tally.propertyId, requiredMarginChange.toNumber());
+
+        if (!hasSufficient) {
+            console.log(`⚠️ Insufficient balance for new entry orders. Cancelling lower-priority orders.`);
+            await this.cancelExcessOrders(address, contractId, obForContract, requiredMarginChange);
+        } else {
+            console.log(`✅ Sufficient balance. Allocating ${requiredMarginChange.toFixed(8)} to margin.`);
+            await TallyMap.updateBalance(address, tally.propertyId, -requiredMarginChange.toNumber(), requiredMarginChange.toNumber(), 0, 0, 'reduceFlagReallocation', tally.block);
+        }
+    }
+
+    // Save updated orderbook
+    orderbook.orderBooks[contractId] = obForContract;
+    await Orderbooks.saveOrderbook(orderbook);
+    console.log(`✅ Finished adjusting orders for ${address} on contract ${contractId}.`);
+
+    return orderbook;
+}
+
+static async cancelExcessOrders(address, contractId, obForContract, requiredMargin) {
+    let freedMargin = new BigNumber(0);
+
+    console.log(`🚨 Cancelling excess orders for ${address} on contract ${contractId} to free up ${requiredMargin.toFixed(8)} margin.`);
+
+    // Sort sell orders by highest price first (worst price for seller)
+    obForContract.sell.sort((a, b) => new BigNumber(b.price).comparedTo(a.price));
+
+    // Sort buy orders by lowest price first (worst price for buyer)
+    obForContract.buy.sort((a, b) => new BigNumber(a.price).comparedTo(b.price));
+
+    for (const side of ['buy', 'sell']) {
+        for (let i = obForContract[side].length - 1; i >= 0; i--) {
+            const order = obForContract[side][i];
+            if ((order.sender || order.address) !== address) continue;
+
+            console.log(`❌ Cancelling Order ${order.txid}, freeing ${order.initMargin} margin.`);
+            freedMargin = freedMargin.plus(order.initMargin);
+            obForContract[side].splice(i, 1); // Remove order
+
+            await TallyMap.updateBalance(address, tally.propertyId, order.initMargin, -order.initMargin, 0, 0, 'excessOrderCancellation', tally.block);
+
+            if (freedMargin.gte(requiredMargin)) {
+                console.log(`✅ Enough margin freed. Stopping cancellations.`);
+                return;
+            }
+        }
+    }
+
+    console.log(`⚠️ Could not free all required margin. User may still be undercollateralized.`);
 }
      
     async processContractMatches(matches, currentBlockHeight, channel){
@@ -1067,6 +1138,9 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
                             'updateContractBalancesFlip'
                         );
 
+                        let refreshedBalance = await TallyMap.getTally(match.buyOrder.buyerAddress,collateralPropertyId)
+                        //this.adjustOrdersForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId, refreshedBalance, match.buyerPosition)
+
                         buyerFullyClosed = true;
                         console.log(`Flip logic updated: closed=${closedContracts}, flipped=${flipLong}`);
                     }
@@ -1114,6 +1188,9 @@ static async adjustOrdersForAddress(address, contractId, tally, pos) {
                             match.sellerPosition.contracts - match.sellOrder.amount, match.sellOrder.amount, 0, 0, 0, 
                             'updateContractBalancesFlip'
                         );
+
+                        let refreshedBalanceB = await TallyMap.getTally(match.sellOrder.sellerAddress,collateralPropertyId)
+                        //this.adjustOrdersForAddress(match.sellOrder.sellerAddress, match.sellOrder.contractId, refreshedBalanceB, match.sellerPosition)
 
                         sellerFullyClosed = true;
                         console.log(`Sell flip logic updated: closed=${closedContracts}, flipped=${flipShort}`);
