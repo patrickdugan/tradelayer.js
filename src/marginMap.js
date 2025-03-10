@@ -153,18 +153,13 @@ async getAllPositions(contractId) {
     }
 
       // add save/load methods
-    async saveMarginMap(isMargin) {
+    async saveMarginMap(block) {
         try {
             const key = JSON.stringify({ seriesId: this.seriesId });
             const marginMapsDB = await db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
-            if(isMargin){
-                //console.log('updating marginMap with margin '+JSON.stringify(value))
-            }else{
-                //console.log('updating marginMap after match process '+JSON.stringify(value))
-            }
-            // Save the margin map to the database
-            await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+                    // Save the margin map to the database
+            await marginMapsDB.updateAsync({ _id: key }, { $set: {block: block, value } }, { upsert: true });
             //await marginMapsDB.loadDatabase();
 
             //console.log('MarginMap saved successfully.');
@@ -207,10 +202,10 @@ async getAllPositions(contractId) {
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,liq,inClearing,block) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block) {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
+
         if(position.contracts==null){position.contracts=0}
-        if(liq){return position}
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
@@ -257,6 +252,7 @@ async getAllPositions(contractId) {
         console.log('isLong '+isLong)
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log('liquidation info ' +JSON.stringify(liquidationInfo));
+        
         if(liquidationInfo==null||position.contracts==0){
             position.liqPrice=0
             position.bankruptcyPrice=0
@@ -271,8 +267,12 @@ async getAllPositions(contractId) {
         if(inClearing){
             tag = 'liquidatingContract'
         }
+
+        if(!liquidationInfo.bankruptcyPrice&&position.contracts<0){
+            throw new Error()
+            position.bankruptcyPrice=0}
         await this.saveMarginMap()
-        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block)
+        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block,liquidationInfo.bankruptcyPrice)
         return position
     }
     
@@ -854,7 +854,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
                     blockTime: block
                 }
 
-                if(total){
+                if(total||!position.liqPrice){
                     liquidationOrder.price = position.bankruptcyPrice
                 }
         return liquidationOrder;

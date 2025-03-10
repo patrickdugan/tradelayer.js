@@ -784,9 +784,9 @@ class Clearing {
             console.log('position before '+JSON.stringify(positions))
             const tally = await TallyMap.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
-            const {liquidationPrice,bankruptcyPrice} = await marginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notional,inverse,Boolean(position.contracts>0),position.avgPrice)
-            position.liquidationPrice = liquidationPrice
-            position.bankruptcyPrice = bankruptcyPrice
+            //const {liquidationPrice,bankruptcyPrice} = await marginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notional,inverse,Boolean(position.contracts>0),position.avgPrice,position.unrealizedPNL)
+            //position.liquidationPrice = liquidationPrice
+            //position.bankruptcyPrice = bankruptcyPrice
             if(position.contracts==0){continue}
             if(!blob.lastPrice){
                 console.log('last price was null, using avg price:', position.avgPrice);
@@ -900,18 +900,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     let isPartialLiquidation = liquidationType === "partial";
 
     console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
-
+    
     // Step 1: Generate the liquidation order
     let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
-    if (liq === "err:0 contracts") {
+    if(liq === "err:0 contracts"){
         console.log("No contracts to liquidate.");
         return null;
     }
-
     // Step 2: Estimate liquidation impact on the orderbook
     let splat = await orderbook.estimateLiquidation(liq);
     console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
-    
+      
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
