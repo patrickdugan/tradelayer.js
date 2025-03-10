@@ -174,7 +174,7 @@ async getAllPositions(contractId) {
         }
     }
 
-    async updateContractBalancesWithMatch(match, channelTrade, close,flip) {
+    async updateContractBalancesWithMatch(match, channelTrade, close,flip,block) {
         console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         console.log('with match '+JSON.stringify(match))
         let buyerPosition = await this.updateContractBalances(
@@ -187,7 +187,8 @@ async getAllPositions(contractId) {
             close,
             flip,
             match.buyOrder.contractId,
-            match.buyOrder.isLiq
+            match.buyOrder.isLiq,
+            block
         );
 
         let sellerPosition = await this.updateContractBalances(
@@ -200,12 +201,13 @@ async getAllPositions(contractId) {
             close,
             flip,
             match.sellOrder.contractId,
-            match.sellOrder.isLiq
+            match.sellOrder.isLiq,
+            block
         );
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,liq,inClearing) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,liq,inClearing,block) {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
         if(position.contracts==null){position.contracts=0}
         if(liq){return position}
@@ -248,6 +250,7 @@ async getAllPositions(contractId) {
         const collateralId = contractInfo.collateralPropertyId
         console.log('about to call getTally in updateContractBalances '+address +' '+collateralId)
         const balances = await TallyMap.getTally(address,collateralId)
+        console.log(JSON.stringify(balances))
         const available = balances.available
         console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse+' '+'avg entry '+position.avgPrice)
         const isLong = position.contracts>0? true: false
@@ -269,8 +272,10 @@ async getAllPositions(contractId) {
             tag = 'liquidatingContract'
         }
         await this.saveMarginMap()
-        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag)
-      
+        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block)
+        if(block==3617781){
+            throw new Error()
+        }
         return position
     }
 calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {

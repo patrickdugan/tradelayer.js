@@ -1138,7 +1138,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         await marginMap.setInitialMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId, newMarginRequired);
                         await marginMap.recordMarginMapDelta(match.buyOrder.buyerAddress, match.buyOrder.contractId, 
                             match.buyerPosition.contracts + match.buyOrder.amount, match.buyOrder.amount, 0, 0, 0, 
-                            'updateContractBalancesFlip'
+                            'updateContractBalancesFlip',currentBlockHeight
                         );
 
                         let refreshedBalance = await TallyMap.getTally(match.buyOrder.buyerAddress,collateralPropertyId)
@@ -1189,7 +1189,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         await marginMap.setInitialMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId, newMarginRequired);
                         await marginMap.recordMarginMapDelta(match.sellOrder.sellerAddress, match.sellOrder.contractId, 
                             match.sellerPosition.contracts - match.sellOrder.amount, match.sellOrder.amount, 0, 0, 0, 
-                            'updateContractBalancesFlip'
+                            'updateContractBalancesFlip',currentBlockHeight
                         );
 
                         let refreshedBalanceB = await TallyMap.getTally(match.sellOrder.sellerAddress,collateralPropertyId)
@@ -1244,7 +1244,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     }
 
                     console.log('close? flip? '+close+' '+flip)
-                    let positions = await marginMap.updateContractBalancesWithMatch(match, channel, close,flip)
+                    let positions = await marginMap.updateContractBalancesWithMatch(match, channel, close,flip,currentBlockHeight)
                     let sellerClosed = 0
                     let buyerClosed = 0
                     

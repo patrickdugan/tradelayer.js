@@ -154,7 +154,7 @@ class TallyMap {
             }
             instance.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
-            await instance.saveToDB(); // Save changes to the database
+            await instance.saveToDB(block); // Save changes to the database
         }
 
         static async updateChannelBalance(address, propertyId, channelChange, type,block) {
@@ -205,7 +205,7 @@ class TallyMap {
 
             // Save the updated object back to the map
             instance.addresses.set(address, addressObj);
-            await instance.saveToDB(); // Save the updated balance to the database
+            await instance.saveToDB(block); // Save the updated balance to the database
         }
 
         static async getTotalForProperty(propertyId) {
@@ -457,13 +457,13 @@ class TallyMap {
         }
     }
 
-    async saveToDB() {
+    async saveToDB(block) {
         try {
             const db = await dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
             console.log('saving tallymap')
             // Use upsert option
-            await db.updateAsync({ _id: 'tallyMap' }, { $set: { data: serializedData } }, { upsert: true });
+            await db.updateAsync({ _id: 'tallyMap' }, { $set: {block: block, data: serializedData } }, { upsert: true });
             //console.log('TallyMap saved successfully.');
         } catch (error) {
             console.error('Error saving TallyMap:', error);
