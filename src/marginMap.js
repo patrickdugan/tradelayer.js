@@ -273,83 +273,72 @@ async getAllPositions(contractId) {
       
         return position
     }
+calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
+    const balanceBN = new BigNumber(available);
+    const marginBN = new BigNumber(margin);
+    const contractsBN = new BigNumber(Math.abs(contracts));
+    const notionalValueBN = new BigNumber(notionalValue);
+    const avgPriceBN = new BigNumber(avgPrice);
 
-    calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
-        const balanceBN = new BigNumber(available);
-        const marginBN = new BigNumber(margin);
-        const contractsBN = new BigNumber(Math.abs(contracts));
-        const notionalValueBN = new BigNumber(notionalValue);
-        const avgPriceBN = new BigNumber(avgPrice)
+    // For linear contracts, use your existing formulas.
+    const totalCollateralBN = balanceBN.plus(marginBN);
+    const positionNotional = notionalValueBN.times(contractsBN);
+    let bankruptcyPriceBN = new BigNumber(0);
+    let liquidationPriceBN = new BigNumber(0);
+    const adjustment = marginBN.dividedBy(2).dividedBy(contractsBN); // This is used for linear
 
-        //inverse long    const liquidationPrice = (quantity * (1 / averageEntryPrice - 1 / liquidationPrice)) / -(accountBalance - orderMargin - (quantity / averageEntryPrice) * maintenanceMarginRate - (quantity * fee) / bankruptcyPrice);
-        //inverese short  const liquidationPrice = (quantity * (1 / liquidationPrice-1 / averageEntryPrice)) / -(accountBalance - orderMargin - (quantity / averageEntryPrice) * maintenanceMarginRate - (quantity * fee) / bankruptcyPrice);
-        const totalCollateralBN = balanceBN.plus(marginBN)
-        const positionNotional = notionalValueBN.times(contractsBN)
-        let bankruptcyPriceBN = new BigNumber(0)
-        let liquidationPriceBN = new BigNumber(0)
-        const adjustment = marginBN.dividedBy(2).dividedBy(contractsBN);
-
-        console.log('inside calc liq price '+isInverse+' '+isLong+ 'avail and margin '+available+ ' '+margin)
-        if (isInverse==false) {
-            // Linear contracts
-            // Calculate liquidation price for long position
-            if(isLong){
-                console.log('inside calc liq isLong linear '+totalCollateralBN.toNumber()+' '+positionNotional.times(avgPriceBN).toNumber()+' avg '+avgPriceBN.toNumber()+' total/notional '+totalCollateralBN.dividedBy(positionNotional).toNumber())
-                if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional.times(avgPriceBN))){
-                    let bankruptcyPrice =null
-                    let liquidationPrice = null
-                    return {
-                        bankruptcyPrice,
-                        liquidationPrice
-                    }
-                }else{
-                   bankruptcyPriceBN = (avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional))).times(1.005);
-                   liquidationPriceBN = bankruptcyPriceBN.plus(adjustment)
-                   console.log('calculating linear long '+avgPrice+' total coll.'+(available+margin)+' position notional '+(notionalValue*contracts))
-                }
-            }else{
-                 console.log('inside calc liq short linear', totalCollateralBN.toNumber(), positionNotional.times(avgPriceBN).toNumber(), 
-                'avg', avgPriceBN.toNumber(), 'total/notional', totalCollateralBN.dividedBy(positionNotional).toNumber());
-
-                bankruptcyPriceBN = (avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional))).times(0.995);
-             // Original formula:
-                // liquidationPriceBN = bankruptcyPriceBN.minus(bankruptcyPriceBN.minus(avgPriceBN).times(0.5));
-
-                // Revised formula: subtract 5% of the difference between bankruptcyPrice and avgPrice
-                liquidationPriceBN = bankruptcyPriceBN.minus(adjustment);
-                console.log('calculating linear short', avgPrice, 'total coll.', (available + margin), 'position notional', (notionalValue * contracts));
-                }
+    console.log('inside calc liq price', isInverse, isLong, 'avail and margin', available, margin);
+    
+    if (!isInverse) {
+        // Linear contracts: existing logic
+        if (isLong) {
+            if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional.times(avgPriceBN))) {
+                return { bankruptcyPrice: null, liquidationPrice: null };
+            } else {
+                bankruptcyPriceBN = avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional)).times(1.005);
+                liquidationPriceBN = bankruptcyPriceBN.plus(adjustment);
+            }
         } else {
-            // Inverse contracts
-            // Calculate liquidation price for long inverse position
-            if (isLong) {
-                bankruptcyPriceBN =  positionNotional.times(1.005).dividedBy(totalCollateralBN);
-
-              liquidationPriceBN = avgPriceBN.minus(
-                                    avgPriceBN.times(positionNotional).minus(contractsBN.times(avgPriceBN).times(2))
-                                        .minus(bankruptcyPriceBN.times(contractsBN).times(1.000025).times(avgPriceBN))
-                                ).dividedBy(contractsBN.plus(positionNotional).minus(contractsBN.times(2))).negated();
-          } else {
-                // Calculate liquidation price for short inverse position
-                if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional)) {
-                   return {bankruptcyPrice: null, liquidationPrice: null}
-                } else {
-                    bankruptcyPriceBN =  positionNotional.times(0.995).dividedBy(totalCollateralBN);
-                    liquidationPriceBN = avgPriceBN.plus(
-                                        avgPriceBN.times(positionNotional).minus(contractsBN.times(avgPriceBN).times(2))
-                                            .minus(bankruptcyPriceBN.times(contractsBN).times(1.000025).times(avgPriceBN))
-                                    ).dividedBy(contractsBN.plus(positionNotional).minus(contractsBN.times(2))).negated();
-                }
-          }
+            bankruptcyPriceBN = avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional)).times(0.995);
+            liquidationPriceBN = bankruptcyPriceBN.minus(adjustment);
         }
-        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber())
-        let liquidationPrice = Math.abs(liquidationPriceBN.decimalPlaces(4).toNumber())
-        
-        return {
-            bankruptcyPrice,
-            liquidationPrice
-        };
+    } else {
+        // Inverse contracts: use reciprocal PnL logic.
+        // Define term = (margin / 2) / (contracts * notional)
+        const term = marginBN.dividedBy(2).dividedBy(contractsBN.multipliedBy(notionalValueBN));
+
+        if (isLong) {
+            // For a long inverse position:
+            // 1/Pliq = 1/Pentry + term  => Pliq = 1 / (1/Pentry + term)
+            const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).plus(term);
+            liquidationPriceBN = new BigNumber(1).dividedBy(reciprocalLiq);
+            // For bankruptcy, you might apply a slight multiplier:
+            const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).plus(term.multipliedBy(1.005));
+            bankruptcyPriceBN = new BigNumber(1).dividedBy(reciprocalBankruptcy);
+        } else {
+            // For a short inverse position:
+            // 1/Pliq = 1/Pentry - term. If that term becomes <= 0, liquidation price is null.
+            const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).minus(term);
+            if (reciprocalLiq.lte(0)) {
+                return { bankruptcyPrice: null, liquidationPrice: null };
+            } else {
+                liquidationPriceBN = new BigNumber(1).dividedBy(reciprocalLiq);
+                // Bankruptcy price with a slight multiplier:
+                const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).minus(term.multipliedBy(1.005));
+                bankruptcyPriceBN = new BigNumber(1).dividedBy(reciprocalBankruptcy);
+            }
+        }
     }
+
+    let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber());
+    let liquidationPrice = Math.abs(liquidationPriceBN.decimalPlaces(4).toNumber());
+    
+    return {
+        bankruptcyPrice,
+        liquidationPrice
+    };
+}
+
 
     async updateAveragePrice(position, amount, price, contractId, isBuy) {
         // Make sure our absolute value order amounts for sells register
