@@ -165,6 +165,7 @@ async getAllPositions(contractId) {
             }
             // Save the margin map to the database
             await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
+            await marginMapsDB.loadDatabase();
 
             //console.log('MarginMap saved successfully.');
         } catch (err) {
@@ -695,13 +696,13 @@ async getAllPositions(contractId) {
         return pos
     }
 
-    async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block){
+    async recordMarginMapDelta(address, contractId, total, contracts, margin, uPNL, avgEntry, mode,block,mark){
             const newUuid = uuidv4();
             const dbInstance = await db.getDatabase('marginMapDelta');
             const deltaKey = `${address}-${contractId}-${newUuid}`;if (typeof contracts === 'object' && contracts.toNumber) {
                 contracts = contracts.toNumber();
             }
-            const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode, block: block};
+            const delta = { address, contract: contractId, totalPosition: total, position: contracts, margin: margin, uPNL: uPNL, avgEntry, mode, block: block, lastPrice:mark};
             const ContractRegistry = require('./contractRegistry.js')
             console.log('saving marginMap delta ' + JSON.stringify(delta));
 
@@ -807,15 +808,18 @@ async getAllPositions(contractId) {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(position, address, pnlChange, avgPrice,contractId,block) {
+    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice) {
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
+            position.lastMark = markPrice
             const uPNLBN = new BigNumber(position.unrealizedPNL)
             position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
             if(address==null){throw new Error()}
             this.margins.set(position.address, position)
-            await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block)
+            console.log('set clearing in position '+JSON.stringify(position))
+            await this.saveMarginMap()
+            await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block,markPrice)
             return position
     }
 
@@ -950,6 +954,32 @@ async getAllPositions(contractId) {
         if (matchSize > 0) {
           pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice);
             const matchBN = new BigNumber(matchSize)
+
+             // **** New Clawback Logic ****
+      // Compare the position's lastPrice (set previously during clearing) to markPrice.
+      // If they are equal, calculate the difference between lastPrice and liqPrice.
+      console.log('🔧'+pos.lastMark+' '+markPrice)
+      if (pos.lastMark && new BigNumber(pos.lastMark).isEqualTo(markPrice)) {
+        // For example: if liq.sell is true, difference = lastPrice - liqPrice; else liqPrice - lastPrice.
+        let diff = sell 
+          ? new BigNumber(pos.lastMark).minus(liqPrice) 
+          : new BigNumber(liqPrice).minus(pos.lastMark);
+          console.log('diff '+diff.toNumber()+' '+pos.lastMark)
+        if (diff.gt(0)) {
+            
+            const crawback = diff.times()
+          console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${diff.toFixed(8)}`);
+          await TallyMap.updateBalance(
+            pos.address,
+            collateralId,
+            diff.toNumber(),      // Add to available (or subtract, depending on your accounting)
+            diff.negated().toNumber(),
+            0, 0,
+            'clawbackSettlement',
+            block
+          );
+        }
+      }
 
           pos = await this.realizePnl(
             pos.address,

@@ -797,8 +797,9 @@ class Clearing {
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
-            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight);
+            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice);
             if(pnlChange>0){
+
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
