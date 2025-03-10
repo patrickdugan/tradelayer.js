@@ -273,20 +273,22 @@ async getAllPositions(contractId) {
         }
         await this.saveMarginMap()
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block)
-        if(block==3617781){
-            throw new Error()
-        }
         return position
     }
-calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice) {
+    
+calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
     const balanceBN = new BigNumber(available);
     const marginBN = new BigNumber(margin);
+    let uPNLBN = 0
+    if(uPNL<0){
+        uPNLBN = new BigNumber(Math.abs(uPNL))
+    }
     const contractsBN = new BigNumber(Math.abs(contracts));
     const notionalValueBN = new BigNumber(notionalValue);
     const avgPriceBN = new BigNumber(avgPrice);
 
     // For linear contracts, use your existing formulas.
-    const totalCollateralBN = balanceBN.plus(marginBN);
+    const totalCollateralBN = balanceBN.plus(marginBN).plus(uPNLBN);
     const positionNotional = notionalValueBN.times(contractsBN);
     let bankruptcyPriceBN = new BigNumber(0);
     let liquidationPriceBN = new BigNumber(0);
