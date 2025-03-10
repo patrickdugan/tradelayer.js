@@ -165,7 +165,7 @@ async getAllPositions(contractId) {
             }
             // Save the margin map to the database
             await marginMapsDB.updateAsync({ _id: key }, { $set: { value } }, { upsert: true });
-            await marginMapsDB.loadDatabase();
+            //await marginMapsDB.loadDatabase();
 
             //console.log('MarginMap saved successfully.');
         } catch (err) {
@@ -287,6 +287,7 @@ async getAllPositions(contractId) {
         const positionNotional = notionalValueBN.times(contractsBN)
         let bankruptcyPriceBN = new BigNumber(0)
         let liquidationPriceBN = new BigNumber(0)
+        const adjustment = marginBN.dividedBy(2).dividedBy(contractsBN);
 
         console.log('inside calc liq price '+isInverse+' '+isLong+ 'avail and margin '+available+ ' '+margin)
         if (isInverse==false) {
@@ -303,7 +304,7 @@ async getAllPositions(contractId) {
                     }
                 }else{
                    bankruptcyPriceBN = (avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional))).times(1.005);
-                   liquidationPriceBN = bankruptcyPriceBN.plus(avgPriceBN.minus(bankruptcyPriceBN).times(0.5))
+                   liquidationPriceBN = bankruptcyPriceBN.plus(adjustment)
                    console.log('calculating linear long '+avgPrice+' total coll.'+(available+margin)+' position notional '+(notionalValue*contracts))
                 }
             }else{
@@ -311,9 +312,13 @@ async getAllPositions(contractId) {
                 'avg', avgPriceBN.toNumber(), 'total/notional', totalCollateralBN.dividedBy(positionNotional).toNumber());
 
                 bankruptcyPriceBN = (avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional))).times(0.995);
-                liquidationPriceBN = bankruptcyPriceBN.minus(bankruptcyPriceBN.minus(avgPriceBN).times(0.5));
+             // Original formula:
+                // liquidationPriceBN = bankruptcyPriceBN.minus(bankruptcyPriceBN.minus(avgPriceBN).times(0.5));
+
+                // Revised formula: subtract 5% of the difference between bankruptcyPrice and avgPrice
+                liquidationPriceBN = bankruptcyPriceBN.minus(adjustment);
                 console.log('calculating linear short', avgPrice, 'total coll.', (available + margin), 'position notional', (notionalValue * contracts));
-            }
+                }
         } else {
             // Inverse contracts
             // Calculate liquidation price for long inverse position
@@ -966,7 +971,7 @@ async getAllPositions(contractId) {
           : new BigNumber(liqPrice).minus(pos.lastMark);
           console.log('diff '+diff.toNumber()+' '+pos.lastMark)
         if (diff.gt(0)) {
-            
+
             const crawback = diff.times()
           console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${diff.toFixed(8)}`);
           await TallyMap.updateBalance(
