@@ -1287,7 +1287,6 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     };
 
                     console.log('trade '+JSON.stringify(trade))
-                    if(currentBlockHeight==3617112){throw new Error()}
                     match.buyerPosition = positions.bp
                     match.sellerPosition = positions.sp
                     console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))

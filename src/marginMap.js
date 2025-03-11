@@ -896,7 +896,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
 
     async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice,collateralId) {
       console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
-
+             const TallyMap= require('./tally.js')
       let remainingSize = new BigNumber(unfilledContracts);
       
       if(remainingSize.isNaN() || remainingSize.isNegative()){
@@ -953,7 +953,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
 
         // Ensure matchSize is positive before proceeding
         if (matchSize > 0) {
-          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice);
+          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
             const matchBN = new BigNumber(matchSize)
 
              // **** New Clawback Logic ****
@@ -962,20 +962,25 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
       console.log('🔧'+pos.lastMark+' '+markPrice)
       if (pos.lastMark && new BigNumber(pos.lastMark).isEqualTo(markPrice)) {
         // For example: if liq.sell is true, difference = lastPrice - liqPrice; else liqPrice - lastPrice.
+        console.log('inside crawback '+sell)
         let diff = sell 
-          ? new BigNumber(pos.lastMark).minus(liqPrice) 
-          : new BigNumber(liqPrice).minus(pos.lastMark);
-          console.log('diff '+diff.toNumber()+' '+pos.lastMark)
-        if (diff.gt(0)) {
-
-            const crawback = diff.times()
-          console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${diff.toFixed(8)}`);
+          ? new BigNumber(pos.lastMark).minus(liqPrice)
+          : new BigNumber(liqPrice).minus(pos.lastMark)
+          console.log('diff '+diff.decimalPlaces(8).toNumber()+' '+pos.lastMark+' '+liqPrice)
+          console.log(Boolean(Math.abs(diff.toNumber())>0))
+        if(Math.abs(diff.toNumber())>0){
+            let crawback = diff.times(matchSize).times(notional)
+            if(isInverse){
+                crawback = diff.dividedBy(
+                  new BigNumber(pos.lastMark).times(new BigNumber(liqPrice))
+                ).times(matchSize).times(notional);
+            }
+          console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${crawback.toFixed(8)}`);
           await TallyMap.updateBalance(
             pos.address,
             collateralId,
-            diff.toNumber(),      // Add to available (or subtract, depending on your accounting)
-            diff.negated().toNumber(),
-            0, 0,
+            crawback.toNumber(),      // Add to available (or subtract, depending on your accounting)
+            0,0,0,
             'clawbackSettlement',
             block
           );
@@ -1030,10 +1035,10 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
     }
 
     // Adjust deleveraging position
-    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice) {
+    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice,TallyMap) {
         console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
         const ContractRegistry= require('./contractRegistry.js')
-        const TallyMap= require('./tally.js')
+ 
         let position = await this.getPositionForAddress(address, contractId);
         const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
         const collateral = await ContractRegistry.getCollateralId(contractId)    

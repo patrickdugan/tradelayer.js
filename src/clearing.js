@@ -784,9 +784,7 @@ class Clearing {
             console.log('position before '+JSON.stringify(positions))
             const tally = await TallyMap.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
-            //const {liquidationPrice,bankruptcyPrice} = await marginMap.calculateLiquidationPrice(tally.available, tally.margin,position.contracts,notional,inverse,Boolean(position.contracts>0),position.avgPrice,position.unrealizedPNL)
-            //position.liquidationPrice = liquidationPrice
-            //position.bankruptcyPrice = bankruptcyPrice
+       
             if(position.contracts==0){continue}
             if(!blob.lastPrice){
                 console.log('last price was null, using avg price:', position.avgPrice);
@@ -817,7 +815,7 @@ class Clearing {
                         await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
                         if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
-                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice);
+                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,0);
                             if (liquidationResult) {
                                 if(liquidationResult.counterparties.length>0){
                                         console.log(JSON.stringify(liquidationResult.counterparties))
@@ -830,6 +828,7 @@ class Clearing {
                             }
                         }
                     } else {
+                        const markShortfall = new BigNumber(tally.margin).minus(marginDent).decimalPlaces(8).toNumber()
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
                         let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                         let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
@@ -845,7 +844,7 @@ class Clearing {
                             if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
                                 await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancelPlusMarginDent', blockHeight);
                                 if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,false);
+                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,false,markShortfall);
                                     console.log("Before update:", JSON.stringify(positions, null, 2));
                                     if (liquidationResult) {
                                         if(liquidationResult.counterparties.length>0){
@@ -859,7 +858,7 @@ class Clearing {
                                 }
                                 continue;
                             } else {
-                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true);
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall);
                                 console.log("Before update:", JSON.stringify(liquidationResult));
                                 if (liquidationResult) {
                                     if(liquidationResult.counterparties.length>0){
@@ -882,6 +881,59 @@ class Clearing {
         await marginMap.saveMarginMap(false);
         return { positions, isLiq, systemicLoss };
     }
+// Make sure BigNumber is imported:
+// const BigNumber = require("bignumber.js");
+
+static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse) {
+  const feePercent = new BigNumber(0/*0.005*/);
+
+  // Convert inputs to BigNumber
+  const BNMark = new BigNumber(markPrice);
+  const BNSystemicLoss = new BigNumber(systemicLoss);
+  const BNContracts = new BigNumber(contracts);
+  const BNNotional = new BigNumber(notional);
+
+  if (!inverse) {
+    let baseLiqPrice;
+    if (BNContracts.gt(0)) {
+      // For long positions:
+      // systemicLoss = (markPrice - liqPrice) * (contracts * notional)
+      // So: liqPrice = markPrice - systemicLoss / (contracts * notional)
+      baseLiqPrice = BNMark.minus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
+      // Adjust for fee: liqPrice / (1 + feePercent)
+      return baseLiqPrice.dividedBy(new BigNumber(1).plus(feePercent));
+    } else if (BNContracts.lt(0)) {
+      // For short positions:
+      // systemicLoss = (liqPrice - markPrice) * (|contracts| * notional)
+      // So: liqPrice = markPrice + systemicLoss / (|contracts| * notional)
+      baseLiqPrice = BNMark.plus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
+      return baseLiqPrice.dividedBy(new BigNumber(1).minus(feePercent));
+    }
+    return null;
+  } else {
+    // For inverse contracts using the 1/price formulation.
+    let baseLiqPrice;
+    if (BNContracts.gt(0)) {
+      // Inverse Long:
+      // systemicLoss = (1/liqPrice - 1/markPrice) * (contracts * notional)
+      // Rearranged: 1/liqPrice = 1/markPrice + systemicLoss / (contracts * notional)
+      const invLiq = new BigNumber(1).dividedBy(BNMark)
+                        .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
+      baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
+      return baseLiqPrice.dividedBy(new BigNumber(1).plus(feePercent));
+    } else if (BNContracts.lt(0)) {
+      // Inverse Short:
+      // systemicLoss = (1/markPrice - 1/liqPrice) * (|contracts| * notional)
+      // Rearranged: 1/liqPrice = 1/markPrice - systemicLoss / (|contracts| * notional)
+      const invLiq = new BigNumber(1).dividedBy(BNMark)
+                        .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
+      baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
+      return baseLiqPrice.dividedBy(new BigNumber(1).minus(feePercent));
+    }
+    return null;
+  }
+}
+
 
 static updatePositions(positions, updatedCounterparties) {
     //console.log('updated counterparties '+JSON.stringify(updatedCounterparties))
@@ -895,12 +947,12 @@ static updatePositions(positions, updatedCounterparties) {
     );
 }
 
-static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional, markPrice,applyDent) {
+static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional, markPrice,applyDent, markShortfall) {
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
 
     console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
-    
+
     // Step 1: Generate the liquidation order
     let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
     if(liq === "err:0 contracts"){
@@ -910,7 +962,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     // Step 2: Estimate liquidation impact on the orderbook
     let splat = await orderbook.estimateLiquidation(liq);
     console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
-      
+    let delevPrice = Clearing.computeLiquidationPriceFromLoss(markPrice, markShortfall, position.contracts, notional, inverse)     
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
@@ -969,17 +1021,17 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
 
         if (splat.partiallyFilledBelowLiqPrice) {
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional, blockHeight,markPrice,collateralId);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight,markPrice,collateralId);
         } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
         } else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight,markPrice,collateralId);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
         } else if (splat.trueBookEmpty) {
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, liq.price, position.address, inverse, notional,blockHeight, markPrice,collateralId);
+            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
         }
     } 
 
