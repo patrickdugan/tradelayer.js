@@ -120,6 +120,7 @@ class Clearing {
             if (!propertyTotal.eq(expectedCirculation)) {
                 if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
+                    
                     throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
                 } else {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
@@ -797,7 +798,6 @@ class Clearing {
 
             let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice);
             if(pnlChange>0){
-
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
                 let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
@@ -829,6 +829,7 @@ class Clearing {
                         }
                     } else {
                         const markShortfall = new BigNumber(tally.margin).minus(marginDent).decimalPlaces(8).toNumber()
+                        console.log('markShortfall '+markShortfall)
                         console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
                         let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                         let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
@@ -859,11 +860,13 @@ class Clearing {
                                 continue;
                             } else {
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall);
+                                const newTally = await TallyMap.getTally(position.address, collateralId)
+                                await TallyMap.updateBalance(position.address, collateralId, 0, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
                                 console.log("Before update:", JSON.stringify(liquidationResult));
                                 if (liquidationResult) {
                                     if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
-                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                            positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
                                             console.log("🔄 After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
@@ -883,11 +886,11 @@ class Clearing {
     }
 // Make sure BigNumber is imported:
 // const BigNumber = require("bignumber.js");
-
 static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse) {
-  const feePercent = new BigNumber(0/*0.005*/);
+  // We'll use feePercent = 0 and high internal precision
+  const feePercent = new BigNumber(0);
+  const PRECISION = 30; // high precision for internal calculations
 
-  // Convert inputs to BigNumber
   const BNMark = new BigNumber(markPrice);
   const BNSystemicLoss = new BigNumber(systemicLoss);
   const BNContracts = new BigNumber(contracts);
@@ -897,38 +900,33 @@ static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notio
     let baseLiqPrice;
     if (BNContracts.gt(0)) {
       // For long positions:
-      // systemicLoss = (markPrice - liqPrice) * (contracts * notional)
-      // So: liqPrice = markPrice - systemicLoss / (contracts * notional)
+      // liqPrice = markPrice - (systemicLoss / (contracts * notional))
       baseLiqPrice = BNMark.minus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
-      // Adjust for fee: liqPrice / (1 + feePercent)
-      return baseLiqPrice.dividedBy(new BigNumber(1).plus(feePercent));
+      // Fee adjustment is trivial with feePercent 0, so just return with high precision:
+      return baseLiqPrice.decimalPlaces(PRECISION);
     } else if (BNContracts.lt(0)) {
       // For short positions:
-      // systemicLoss = (liqPrice - markPrice) * (|contracts| * notional)
-      // So: liqPrice = markPrice + systemicLoss / (|contracts| * notional)
+      // liqPrice = markPrice + (systemicLoss / (|contracts| * notional))
       baseLiqPrice = BNMark.plus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
-      return baseLiqPrice.dividedBy(new BigNumber(1).minus(feePercent));
+      return baseLiqPrice.decimalPlaces(PRECISION);
     }
     return null;
   } else {
-    // For inverse contracts using the 1/price formulation.
     let baseLiqPrice;
     if (BNContracts.gt(0)) {
       // Inverse Long:
-      // systemicLoss = (1/liqPrice - 1/markPrice) * (contracts * notional)
-      // Rearranged: 1/liqPrice = 1/markPrice + systemicLoss / (contracts * notional)
+      // 1/liqPrice = 1/markPrice + (systemicLoss / (contracts * notional))
       const invLiq = new BigNumber(1).dividedBy(BNMark)
-                        .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
+                      .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
       baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-      return baseLiqPrice.dividedBy(new BigNumber(1).plus(feePercent));
+      return baseLiqPrice.decimalPlaces(PRECISION);
     } else if (BNContracts.lt(0)) {
       // Inverse Short:
-      // systemicLoss = (1/markPrice - 1/liqPrice) * (|contracts| * notional)
-      // Rearranged: 1/liqPrice = 1/markPrice - systemicLoss / (|contracts| * notional)
+      // 1/liqPrice = 1/markPrice - (systemicLoss / (|contracts| * notional))
       const invLiq = new BigNumber(1).dividedBy(BNMark)
-                        .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
+                      .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
       baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-      return baseLiqPrice.dividedBy(new BigNumber(1).minus(feePercent));
+      return baseLiqPrice.decimalPlaces(PRECISION);
     }
     return null;
   }

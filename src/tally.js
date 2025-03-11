@@ -707,8 +707,6 @@ class TallyMap {
         }
     }
 
-
-
 // Function to apply a delta to the TallyMap
     applyDeltaToTallyMap(delta) {
         const { address, propertyId, amountChange } = delta;

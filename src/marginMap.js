@@ -969,7 +969,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
           console.log('diff '+diff.decimalPlaces(8).toNumber()+' '+pos.lastMark+' '+liqPrice)
           console.log(Boolean(Math.abs(diff.toNumber())>0))
         if(Math.abs(diff.toNumber())>0){
-            let crawback = diff.times(matchSize).times(notional)
+            let crawback = diff.times(matchSize).times(notional).decimalPlaces(8)
             if(isInverse){
                 crawback = diff.dividedBy(
                   new BigNumber(pos.lastMark).times(new BigNumber(liqPrice))
