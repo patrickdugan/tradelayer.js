@@ -819,9 +819,8 @@ class MarginMap {
             //if(!position.bankruptcyPrice&&position.bankruptcyPrice!==null){position.bankruptcyPrice = bankruptcyPrice}
             this.margins.set(position.address, position)
             console.log('set clearing in position '+JSON.stringify(position))
-            //await this.saveMarginMap(block)
+            await this.saveMarginMap(block)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block,markPrice)
-            if(block==3617631){throw new Error()}
             return position
     }
 
