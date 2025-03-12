@@ -810,10 +810,10 @@ class Clearing {
                     const excess = await Clearing.reconcileReserve(position.address,collateralId,blockHeight)
                     let tally = await TallyMap.getTally(position.address, collateralId);
                     let totalCollateral = tally.available + tally.margin;
-                    let marginDent = new BigNumber(tally.available).plus(pnlChange).decimalPlaces(8).toNumber();
-                    console.log('STOP - '+totalCollateral+' '+Math.abs(pnlChange)+' '+marginDent+' '+tally.margin)
-                    if(totalCollateral > Math.abs(pnlChange) && Math.abs(marginDent) < tally.margin) {
-                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, marginDent, 0, 'clearingLossPartialLiq', blockHeight);
+                    let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
+
+                    if(totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
+                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
                         if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,0);
@@ -836,7 +836,7 @@ class Clearing {
                         let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                         console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
                         if(postCancelBalance.hasSufficient){
-                            await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancelSufficient', blockHeight);
+                            await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
                             continue;
                         }else{
                             marginDent= postCancelBalance.shortfall
@@ -995,7 +995,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
  
     position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
     if(applyDent){
-        await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
+        await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);
     }
     position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
 
