@@ -51,7 +51,6 @@ class MarginMap {
         }
     }
 
-
     /*static async loadMarginMap(seriesId) {
         const key = JSON.stringify({ seriesId});
         console.log('loading margin map for '+seriesId)
@@ -87,35 +86,34 @@ class MarginMap {
 
         return margin;
     }*/
-async getAllPositions(contractId) {
-    let map = await MarginMap.loadMarginMap(contractId);
+    async getAllPositions(contractId) {
+        let map = await MarginMap.loadMarginMap(contractId);
 
-    // If the margins map is empty, attempt to reload from the database
-    if (!map.margins || map.margins.size === 0) {
-        //console.log(`🔄 Margins map empty for contract ${contractId}, reloading from DB...`);
-        map = await MarginMap.loadMarginMap(contractId);  // Assuming this method exists
+        // If the margins map is empty, attempt to reload from the database
+        /*if (!map.margins || map.margins.size === 0) {
+            //console.log(`🔄 Margins map empty for contract ${contractId}, reloading from DB...`);
+            map = await MarginMap.loadMarginMap(contractId);  // Assuming this method exists
+        }*/
+
+        //console.log(`📊 Getting positions for contract ${contractId}:`, JSON.stringify([...map.margins]));
+
+        const allPositions = [];
+        for (const [address, position] of map.margins.entries()) {
+            if (!address) continue;
+
+            allPositions.push({
+                address: address,
+                contracts: position.contracts,
+                margin: position.margin,
+                unrealizedPNL: position.unrealizedPNL,
+                avgPrice: position.avgPrice,
+                liqPrice: position.liqPrice,
+                bankruptcyPrice: position.bankruptcyPrice
+                // Add other relevant fields if necessary
+            });
+        }
+        return allPositions;
     }
-
-    //console.log(`📊 Getting positions for contract ${contractId}:`, JSON.stringify([...map.margins]));
-
-    const allPositions = [];
-    for (const [address, position] of map.margins.entries()) {
-        if (!address) continue;
-
-        allPositions.push({
-            address: address,
-            contracts: position.contracts,
-            margin: position.margin,
-            unrealizedPNL: position.unrealizedPNL,
-            avgPrice: position.avgPrice
-            // Add other relevant fields if necessary
-        });
-    }
-
-    return allPositions;
-}
-
-
 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin,block) {
@@ -159,9 +157,8 @@ async getAllPositions(contractId) {
             const marginMapsDB = await db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
                     // Save the margin map to the database
-            await marginMapsDB.updateAsync({ _id: key }, { $set: {block: block, value } }, { upsert: true });
+            await marginMapsDB.updateAsync({ _id: key }, { $set: {block: block, value: value}},{upsert: true})
             //await marginMapsDB.loadDatabase();
-
             //console.log('MarginMap saved successfully.');
         } catch (err) {
             console.error('Error saving MarginMap:', err);
@@ -204,7 +201,6 @@ async getAllPositions(contractId) {
 
     async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block) {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
-
         if(position.contracts==null){position.contracts=0}
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
@@ -259,7 +255,8 @@ async getAllPositions(contractId) {
             position.avgPrice=price
         }else{
             position.liqPrice = liquidationInfo.liquidationPrice || null
-            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice   
+            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice  
+            console.log('position with possible nulls '+JSON.stringify(position)) 
         }
         if(address==null){throw new Error()}
         this.margins.set(address, position);  
@@ -268,84 +265,85 @@ async getAllPositions(contractId) {
             tag = 'liquidatingContract'
         }
 
-        if(!liquidationInfo.bankruptcyPrice&&position.contracts<0){
+        if(position.bankruptcyPrice===undefined){
+            console.log('missing liq prices in position '+JSON.stringify(position))
             throw new Error()
-            position.bankruptcyPrice=0}
-        await this.saveMarginMap()
+            position.bankruptcyPrice=0
+        }
+        await this.saveMarginMap(block)
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block,liquidationInfo.bankruptcyPrice)
         return position
     }
     
-calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
-    const balanceBN = new BigNumber(available);
-    const marginBN = new BigNumber(margin);
-    let uPNLBN = 0
-    if(uPNL<0){
-        uPNLBN = new BigNumber(Math.abs(uPNL))
-    }
-    const contractsBN = new BigNumber(Math.abs(contracts));
-    const notionalValueBN = new BigNumber(notionalValue);
-    const avgPriceBN = new BigNumber(avgPrice);
+    calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
+        const balanceBN = new BigNumber(available);
+        const marginBN = new BigNumber(margin);
+        let uPNLBN = 0
+        if(uPNL<0){
+            uPNLBN = new BigNumber(Math.abs(uPNL))
+        }
+        const contractsBN = new BigNumber(Math.abs(contracts));
+        const notionalValueBN = new BigNumber(notionalValue);
+        const avgPriceBN = new BigNumber(avgPrice);
 
-    // For linear contracts, use your existing formulas.
-    const totalCollateralBN = balanceBN.plus(marginBN).plus(uPNLBN);
-    const positionNotional = notionalValueBN.times(contractsBN);
-    let bankruptcyPriceBN = new BigNumber(0);
-    let liquidationPriceBN = new BigNumber(0);
-    const adjustment = marginBN.dividedBy(2).dividedBy(contractsBN); // This is used for linear
+        // For linear contracts, use your existing formulas.
+        const totalCollateralBN = balanceBN.plus(marginBN).plus(uPNLBN);
+        const positionNotional = notionalValueBN.times(contractsBN);
+        let bankruptcyPriceBN = new BigNumber(0);
+        let liquidationPriceBN = new BigNumber(0);
+        const adjustment = marginBN.dividedBy(2).dividedBy(contractsBN); // This is used for linear
 
-    console.log('inside calc liq price', isInverse, isLong, 'avail and margin', available, margin);
-    
-    if (!isInverse) {
-        // Linear contracts: existing logic
-        if (isLong) {
-            if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional.times(avgPriceBN))) {
-                return { bankruptcyPrice: null, liquidationPrice: null };
+        console.log('inside calc liq price', isInverse, isLong, 'avail and margin', available, margin);
+        
+        if (!isInverse) {
+            // Linear contracts: existing logic
+            if (isLong) {
+                if (totalCollateralBN.isGreaterThanOrEqualTo(positionNotional.times(avgPriceBN))) {
+                    return { bankruptcyPrice: null, liquidationPrice: null };
+                } else {
+                    bankruptcyPriceBN = avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional)).times(1.005);
+                    liquidationPriceBN = bankruptcyPriceBN.plus(adjustment);
+                }
             } else {
-                bankruptcyPriceBN = avgPriceBN.minus(totalCollateralBN.dividedBy(positionNotional)).times(1.005);
-                liquidationPriceBN = bankruptcyPriceBN.plus(adjustment);
+                bankruptcyPriceBN = avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional)).times(0.995);
+                liquidationPriceBN = bankruptcyPriceBN.minus(adjustment);
             }
         } else {
-            bankruptcyPriceBN = avgPriceBN.plus(totalCollateralBN.dividedBy(positionNotional)).times(0.995);
-            liquidationPriceBN = bankruptcyPriceBN.minus(adjustment);
-        }
-    } else {
-        // Inverse contracts: use reciprocal PnL logic.
-        // Define term = (margin / 2) / (contracts * notional)
-        const term = marginBN.dividedBy(2).dividedBy(contractsBN.multipliedBy(notionalValueBN));
+            // Inverse contracts: use reciprocal PnL logic.
+            // Define term = (margin / 2) / (contracts * notional)
+            const term = marginBN.dividedBy(2).dividedBy(contractsBN.multipliedBy(notionalValueBN));
 
-        if (isLong) {
-            // For a long inverse position:
-            // 1/Pliq = 1/Pentry + term  => Pliq = 1 / (1/Pentry + term)
-            const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).plus(term);
-            liquidationPriceBN = new BigNumber(1).dividedBy(reciprocalLiq);
-            // For bankruptcy, you might apply a slight multiplier:
-            const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).plus(term.multipliedBy(1.005));
-            bankruptcyPriceBN = new BigNumber(1).dividedBy(reciprocalBankruptcy);
-        } else {
-            // For a short inverse position:
-            // 1/Pliq = 1/Pentry - term. If that term becomes <= 0, liquidation price is null.
-            const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).minus(term);
-            if (reciprocalLiq.lte(0)) {
-                return { bankruptcyPrice: null, liquidationPrice: null };
-            } else {
+            if (isLong) {
+                // For a long inverse position:
+                // 1/Pliq = 1/Pentry + term  => Pliq = 1 / (1/Pentry + term)
+                const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).plus(term);
                 liquidationPriceBN = new BigNumber(1).dividedBy(reciprocalLiq);
-                // Bankruptcy price with a slight multiplier:
-                const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).minus(term.multipliedBy(1.005));
+                // For bankruptcy, you might apply a slight multiplier:
+                const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).plus(term.multipliedBy(1.005));
                 bankruptcyPriceBN = new BigNumber(1).dividedBy(reciprocalBankruptcy);
+            } else {
+                // For a short inverse position:
+                // 1/Pliq = 1/Pentry - term. If that term becomes <= 0, liquidation price is null.
+                const reciprocalLiq = new BigNumber(1).dividedBy(avgPriceBN).minus(term);
+                if (reciprocalLiq.lte(0)) {
+                    return { bankruptcyPrice: null, liquidationPrice: null };
+                } else {
+                    liquidationPriceBN = new BigNumber(1).dividedBy(reciprocalLiq);
+                    // Bankruptcy price with a slight multiplier:
+                    const reciprocalBankruptcy = new BigNumber(1).dividedBy(avgPriceBN).minus(term.multipliedBy(1.005));
+                    bankruptcyPriceBN = new BigNumber(1).dividedBy(reciprocalBankruptcy);
+                }
             }
         }
+
+        let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber());
+        let liquidationPrice = Math.abs(liquidationPriceBN.decimalPlaces(4).toNumber());
+        
+        return {
+            bankruptcyPrice,
+            liquidationPrice
+        };
     }
-
-    let bankruptcyPrice = Math.abs(bankruptcyPriceBN.decimalPlaces(4).toNumber());
-    let liquidationPrice = Math.abs(liquidationPriceBN.decimalPlaces(4).toNumber());
-    
-    return {
-        bankruptcyPrice,
-        liquidationPrice
-    };
-}
-
 
     async updateAveragePrice(position, amount, price, contractId, isBuy) {
         // Make sure our absolute value order amounts for sells register
@@ -380,7 +378,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         return position.avgPrice;
     }
 
-    async moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin) {
+    async moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin,block) {
         // Check if the margin map exists for the given contractId
         const position = this.margins.get(address);
         const synthId = 's-'+propertyId+'-'+contractId
@@ -437,12 +435,12 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         this.margins.set(synthId,vaultPosition)
         await this.recordMarginMapDelta(synthId, contractId, vaultPosition.contracts, contracts, margin, 0, avgDelta, 'mintMarginAndContractsToVault');
         await this.recordMarginMapDelta(propertyId, contractId, position.contracts, contracts*-1, -margin, 0, 0, 'moveMarginAndContractsForMint');
-        await this.saveMarginMap(true);
+        await this.saveMarginMap(block);
 
         return {contracts, margin,excess};
     }
 
-    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin,mark) {
+    async moveMarginAndContractsForRedeem(address, propertyId, contractId, amount, vault, notional, initMargin,mark,block) {
             const position = this.margins.get(address);
             const vaultPosition = this.margins.get(propertyId)
             if (!position) {
@@ -529,7 +527,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
             this.margins.set(address, position);
             await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -accountingPNL, 0, 'redeemMarginAndContractsFromVault');
             await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, accountingPNL,0,'moveMarginAndContractsForRedeem')
-            await this.saveMarginMap(true);
+            await this.saveMarginMap(block);
 
             return { contracts: contractShort, margin: marginToReturn, available: availToReturn, excess: excess, rPNL: accountingPNL, reduction:reduction };
         }
@@ -591,7 +589,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         }
     }
 
-    async reduceMargin(pos, contracts, initPerContract, contractId, address, side, feeDebit, fee) {
+    async reduceMargin(pos, contracts, initPerContract, contractId, address, side, feeDebit, fee,block) {
         if (!pos) return { netMargin: new BigNumber(0), mode: 'none' };
 
         let posMargin = new BigNumber(pos.margin);
@@ -632,12 +630,12 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
 
         this.margins.set(pos.address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction, 0, 0, 'marginReduction');
-        await this.saveMarginMap(true);
+        await this.saveMarginMap(block);
 
         return reduction
     }
 
-    async feeMarginReduce(address,pos, reduction,contractId){
+    async feeMarginReduce(address,pos, reduction,contractId,block){
              // Now you can use the minus method
         pos.margin = new BigNumber(pos.margin).minus(reduction).decimalPlaces(8)
         .toNumber(); // Update the margin for the existing or new position
@@ -645,12 +643,12 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         this.margins.set(pos.address, pos);
         await this.recordMarginMapDelta(address, contractId, 0, 0, -reduction,0,0,'marginFeeReduction')
         //console.log('returning from reduceMargin '+reduction + ' '+JSON.stringify(pos)+ 'contractAmount '+contractAmount)
-        await this.saveMarginMap(true);
+        await this.saveMarginMap(block);
         return pos;
     }
 
     
-    async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId) {
+    async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId,block){
         if (!pos) return new BigNumber(0);
 
         let pnl;
@@ -804,12 +802,12 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         await this.recordMarginMapDelta(address, contractId, position.contracts, 0, marginChange, 0, 0, 'updateMargin',block);
 
         // Persist changes to the database
-        await this.saveMarginMap(true);
+        await this.saveMarginMap(block);
         return position
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice) {
+    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice) {
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
@@ -817,14 +815,17 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
             const uPNLBN = new BigNumber(position.unrealizedPNL)
             position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
             if(address==null){throw new Error()}
+            //if(!position.liqPrice&&position.liqPrice!==null){position.liqPrice = liqPrice}
+            //if(!position.bankruptcyPrice&&position.bankruptcyPrice!==null){position.bankruptcyPrice = bankruptcyPrice}
             this.margins.set(position.address, position)
             console.log('set clearing in position '+JSON.stringify(position))
-            await this.saveMarginMap()
+            //await this.saveMarginMap(block)
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block,markPrice)
+            if(block==3617631){throw new Error()}
             return position
     }
 
-    generateLiquidationOrder(position, contractId,total,block) {
+    generatmeLiquidationOrder(position, contractId,total,block) {
                 // Liquidate 50% of the position if below maintenance margin
                 let sell 
                 if(position.contracts>0){
@@ -857,6 +858,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
                 if(total||!position.liqPrice){
                     liquidationOrder.price = position.bankruptcyPrice
                 }
+                console.log('inside gen liq order '+total+' '+position.liqPrice+' '+position.bankruptcyPrice )
         return liquidationOrder;
     }
 
@@ -1070,7 +1072,7 @@ calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse
         console.log('⚠️ '+position.contracts)
         this.margins.set(position.address, position);
         this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
-        await this.saveMarginMap(true);
+        await this.saveMarginMap(block);
         return position
     }
 
@@ -1169,7 +1171,7 @@ async calculateNetExposure(address, collateralId) {
 }
 
 // Helper function to execute deleveraging trade
-async executeDeleveraging(address, contractId, size, side, liqPrice) {
+async executeDeleveraging(address, contractId, size, side, liqPrice,block) {
     console.log(`Executing deleveraging: ${address} ${size} contracts at ${liqPrice}`);
     
     const marginMap = await MarginMap.getInstance(contractId);
@@ -1185,7 +1187,7 @@ async executeDeleveraging(address, contractId, size, side, liqPrice) {
     }
 
     marginMap.margins.set(position.address, position);
-    await marginMap.saveMarginMap(true);
+    await marginMap.saveMarginMap(block);
 }
 
 async fetchLiquidationVolume(blockHeight, contractId, mark) {

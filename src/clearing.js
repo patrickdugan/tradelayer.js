@@ -561,7 +561,7 @@ class Clearing {
         }
 
         // Save the updated margin map for this contract.
-        await marginMap.saveMarginMap(false);
+        await marginMap.saveMarginMap(blockHeight);
       }
       //console.log(`Finished updating positions for all contracts at block ${blockHeight}`);
     }
@@ -785,7 +785,8 @@ class Clearing {
             console.log('position before '+JSON.stringify(positions))
             const tally = await TallyMap.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
-       
+            const liq = 0
+            const bank = 0
             if(position.contracts==0){continue}
             if(!blob.lastPrice){
                 console.log('last price was null, using avg price:', position.avgPrice);
@@ -796,7 +797,7 @@ class Clearing {
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
-            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice);
+            let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank);
             if(pnlChange>0){
                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
@@ -881,7 +882,7 @@ class Clearing {
 
         positions.lastMark = blob.lastPrice;
         console.log('systemic loss '+systemicLoss)
-        await marginMap.saveMarginMap(false);
+        await marginMap.saveMarginMap(blockHeight);
         return { positions, isLiq, systemicLoss };
     }
 // Make sure BigNumber is imported:
@@ -961,6 +962,10 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     let splat = await orderbook.estimateLiquidation(liq);
     console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
     let delevPrice = Clearing.computeLiquidationPriceFromLoss(markPrice, markShortfall, position.contracts, notional, inverse)     
+    if(isNaN(delevPrice)||!delevPrice){
+        delevPrice = liq.price
+
+    }
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
@@ -980,6 +985,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     if (liquidationType === "partial") {
         console.log('margin reduce equaling margin dent '+marginDent+' '+marginReduce)
         marginReduce = marginDent;
+        delevPrice = liq.price
     }
 
      const infoBlob = { posMargin: position.margin, reduce: marginReduce, dent: marginDent };
@@ -1415,7 +1421,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         }
 
         // Save updated margin map
-        await margins.saveMarginMap(true);
+        await margins.saveMarginMap(block);
 
         console.log("✅ Socialized loss successfully applied.");
 

@@ -1425,7 +1425,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         TallyMap.updateBalance(match.buyOrder.buyerAddress,3,liqRewardBaseline,0,0,0,'enhancedLiquidityReward')
                     }
                     // Save the updated margin map
-                    await marginMap.saveMarginMap(false);  
+                    await marginMap.saveMarginMap(currentBlockHeight);  
                     trades.push(trade)                     
             }
              return trades
@@ -1597,7 +1597,7 @@ async processContractMatchesShort(matches, currentBlockHeight, channel) {
     await updateVolumeAndRewards(match, currentBlockHeight);
 
     // Save the updated margin map after processing the match.
-    await MarginMap.saveMarginMap(false);
+    await MarginMap.saveMarginMap(currentBlockHeight);
   }
   // Return something if needed.
   return;
