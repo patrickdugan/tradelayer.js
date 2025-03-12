@@ -824,7 +824,7 @@ class MarginMap {
             return position
     }
 
-    generatmeLiquidationOrder(position, contractId,total,block) {
+    generateLiquidationOrder(position, contractId,total,block) {
                 // Liquidate 50% of the position if below maintenance margin
                 let sell 
                 if(position.contracts>0){
