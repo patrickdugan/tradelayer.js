@@ -813,7 +813,7 @@ class Clearing {
                     let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
 
                     if(totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
-                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLoss', blockHeight);
+                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLossPartialLiq', blockHeight);
                         await marginMap.updateMargin(position.address, contractId, -marginDent);
                         if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                             let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,0);
@@ -995,7 +995,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
  
     position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
     if(applyDent){
-        await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLoss", blockHeight);
+        await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
     }
     position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
 
