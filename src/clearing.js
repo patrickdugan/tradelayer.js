@@ -808,70 +808,69 @@ class Clearing {
                     await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 }else{
                     const excess = await Clearing.reconcileReserve(position.address,collateralId,blockHeight)
-                    let tally = await TallyMap.getTally(position.address, collateralId);
-                    let totalCollateral = tally.available + tally.margin;
-                    let marginDent = new BigNumber(Math.abs(pnlChange)).minus(new BigNumber(tally.available)).decimalPlaces(8).toNumber();
-
-                    if(totalCollateral > Math.abs(pnlChange) && marginDent < tally.margin) {
-                        await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -marginDent, 0, 'clearingLossPartialLiq', blockHeight);
-                        await marginMap.updateMargin(position.address, contractId, -marginDent);
-                        if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
-                            let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,0);
-                            if (liquidationResult) {
-                                if(liquidationResult.counterparties.length>0){
-                                        console.log(JSON.stringify(liquidationResult.counterparties))
-                                        console.log("Before update:", JSON.stringify(positions, null, 2));
-                                        positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
-                                        console.log("After update:", JSON.stringify(positions, null, 2));
-                                }
-                                isLiq.push(liquidationResult.liquidation);
-                                systemicLoss += liquidationResult.systemicLoss;
-                            }
-                        }
-                    } else {
-                        const markShortfall = new BigNumber(tally.margin).minus(marginDent).decimalPlaces(8).toNumber()
-                        console.log('markShortfall '+markShortfall)
-                        console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, marginDent, tally.margin);
-                        let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
-                        let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
-                        console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
-                        if(postCancelBalance.hasSufficient){
-                            await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
-                            continue;
-                        }else{
-                            marginDent= postCancelBalance.shortfall
-                            console.log('post cancel margin dent '+marginDent)
-                            let postCancelTally = await TallyMap.getTally(position.address, collateralId);
-                            console.log('post cancel tally '+JSON.stringify(postCancelTally))
-                            if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
-                                await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancelPlusMarginDent', blockHeight);
-                                if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
-                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",marginDent,notional,blob.thisPrice,false,markShortfall);
-                                    console.log("Before update:", JSON.stringify(positions, null, 2));
-                                    if (liquidationResult) {
-                                        if(liquidationResult.counterparties.length>0){
-                                            console.log(JSON.stringify(liquidationResult.counterparties))
-                                            positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
-                                            console.log("After update:", JSON.stringify(positions, null, 2));
-                                        }
-                                        isLiq.push(liquidationResult.liquidation);
-                                        systemicLoss += liquidationResult.systemicLoss;
-                                    }
-                                }
-                                continue;
-                            } else {
-                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall);
-                                const newTally = await TallyMap.getTally(position.address, collateralId)
-                                await TallyMap.updateBalance(position.address, collateralId, 0, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
-                                console.log("Before update:", JSON.stringify(liquidationResult));
+                    let balance2 = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                    if(balance2.hasSufficient){
+                         await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingAfterRecReserve', blockHeight);
+                    }else if(balance2.shortfall< tally.margin) {
+                        console.log('STOP - '+balance2.shortfall+' '+tally.margin)                        
+                            await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -balance2.shortfall, 0, 'clearingLossPartialLiq', blockHeight);
+                            await marginMap.updateMargin(position.address, contractId, -marginDent);
+                            if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
+                                let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-balance2.shortfall,notional,blob.thisPrice,0);
                                 if (liquidationResult) {
                                     if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
+                                            console.log("Before update:", JSON.stringify(positions, null, 2));
                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
-                                            console.log("🔄 After update:", JSON.stringify(positions, null, 2));
+                                            console.log("After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
                                     systemicLoss += liquidationResult.systemicLoss;
+                                }
+                            }
+                        } else {
+                            const markShortfall = new BigNumber(tally.margin).minus(balance2.shortfall).decimalPlaces(8).toNumber()
+                            console.log('markShortfall '+markShortfall)
+                            console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, balance2.shortfall, tally.margin);
+                            let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
+                            let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                            console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
+                            if(postCancelBalance.hasSufficient){
+                                await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
+                                continue;
+                            }else{
+                                console.log('post cancel margin dent '+postCancelBalance.shortfall)
+                                let postCancelTally = await TallyMap.getTally(position.address, collateralId);
+                                console.log('post cancel tally '+JSON.stringify(postCancelTally))
+                                if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
+                                    await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancelPlusMarginDent', blockHeight);
+                                    if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
+                                        let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-postCancelBalance.shortfall,notional,blob.thisPrice,false,markShortfall);
+                                        console.log("Before update:", JSON.stringify(positions, null, 2));
+                                        if (liquidationResult) {
+                                            if(liquidationResult.counterparties.length>0){
+                                                console.log(JSON.stringify(liquidationResult.counterparties))
+                                                positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                                console.log("After update:", JSON.stringify(positions, null, 2));
+                                            }
+                                            isLiq.push(liquidationResult.liquidation);
+                                            systemicLoss += liquidationResult.systemicLoss;
+                                        }
+                                    }
+                                    continue;
+                                } else {
+                                    let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall);
+                                    const newTally = await TallyMap.getTally(position.address, collateralId)
+                                    await TallyMap.updateBalance(position.address, collateralId, 0, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
+                                    console.log("Before update:", JSON.stringify(liquidationResult));
+                                    if (liquidationResult) {
+                                        if(liquidationResult.counterparties.length>0){
+                                                console.log(JSON.stringify(liquidationResult.counterparties))
+                                                positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                                console.log("🔄 After update:", JSON.stringify(positions, null, 2));
+                                    }
+                                        isLiq.push(liquidationResult.liquidation);
+                                        systemicLoss += liquidationResult.systemicLoss;
                                 }
                             }
                         }
