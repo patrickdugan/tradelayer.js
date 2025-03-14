@@ -992,6 +992,7 @@ class MarginMap {
           deleveragingData.counterparties.push(pos);
 
           remainingSize = remainingSize.minus(matchSize);
+          console.log('delev data obj '+JSON.stringify(deleveragingData))
           if (remainingSize.isZero()) break;
         }
 
@@ -999,8 +1000,7 @@ class MarginMap {
         console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
       }
     }
-        
-          console.log('delev data obj '+JSON.stringify(deleveragingData))
+      
     
         return deleveragingData;
 }

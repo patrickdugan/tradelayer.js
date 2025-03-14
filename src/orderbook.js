@@ -1297,7 +1297,19 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
                     let lastMark = await ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
+                    console.log('LAST MARK '+lastMark)
                     if(lastMark==null){lastMark=trade.price}
+                    console.log(lastMark)  
+                    let buyerMark = lastMark
+                    let sellerMark = lastMark
+                    if(match.buyerPosition.lastMark!==lastMark&&match.buyerPosition.lastMark){
+                        buyerMark = match.buyerPosition.lastMark
+                    }
+                    if(match.sellerPosition.lastMark!==lastMark&&match.sellerPosition.lastMark){
+                        sellerMark = match.sellerPosition.lastMark
+                    }    
+                    console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
+                    console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     if ((isBuyerReducingPosition||isBuyerFlippingPosition)&&!match.buyOrder.liq){
@@ -1318,7 +1330,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, lastMark, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}   
@@ -1359,27 +1371,19 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         if(isSellerFlippingPosition){
                             closedContracts-=flipShort
                         }
-                        //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
-                        //on a LIFO basis that are being retroactively 'closed' by reference here
-                        //console.log('position before going into LIFO '+JSON.stringify(match.sellerPosition))
-                        //console.log('about to call trade history manager '+match.sellOrder.contractId)
-                        //const LIFO = await tradeHistoryManager.calculateLIFOEntry(match.sellOrder.sellerAddress, closedContracts, match.sellOrder.contractId)
                         let avgEntry = match.sellerPosition.avgPrice
-                        //{AvgEntry,blockTimes} 
-                        //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
-                        //and we figure what is the PNL that one would show on their taxes, to save a record.
-                        //console.log('LIFO '+JSON.stringify(LIFO))
-
+                      
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
                         match.sellerPosition = await marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.sellerPosition, false,match.sellOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, lastMark, match.sellOrder.contractId,currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, sellerMark, match.sellOrder.contractId,currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, initialMarginPerContract, match.sellOrder.contractId, match.sellOrder.sellerAddress, false, feeInfo.sellFeeFromMargin, sellerFee)
+                        console.log('sell reduction '+JSON.stringify(reduction))
                         //{netMargin,mode} 
                         if(reduction !==0){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
