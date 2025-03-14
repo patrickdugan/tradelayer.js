@@ -814,7 +814,7 @@ class Clearing {
                     }else if(balance2.shortfall< tally.margin) {
                         console.log('STOP - '+balance2.shortfall+' '+tally.margin)                        
                             await TallyMap.updateBalance(position.address, collateralId, -tally.available, 0, -balance2.shortfall, 0, 'clearingLossPartialLiq', blockHeight);
-                            await marginMap.updateMargin(position.address, contractId, -marginDent);
+                            await marginMap.updateMargin(position.address, contractId, -balance2.shortfall);
                             if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-balance2.shortfall,notional,blob.thisPrice,0);
                                 if (liquidationResult) {
@@ -831,7 +831,7 @@ class Clearing {
                         } else {
                             const markShortfall = new BigNumber(tally.margin).minus(balance2.shortfall).decimalPlaces(8).toNumber()
                             console.log('markShortfall '+markShortfall)
-                            console.log('Danger zone! Margin is insufficient:', totalCollateral, pnlChange, balance2.shortfall, tally.margin);
+                            console.log('Danger zone! Margin is insufficient:', markShortfall, pnlChange, balance2.shortfall, tally.margin);
                             let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                             let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                             console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
@@ -1017,25 +1017,26 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     let result = {counterparties:[]};
 
     // Step 4: Handle different liquidation scenarios
-    if (!splat.filled) {
+    if(!splat.filled){
         const remainder = splat.remainder;
         const lossBN = new BigNumber(splat.liquidationLoss);
         systemicLoss = systemicLoss.plus(lossBN).decimalPlaces(8);
 
-        if (splat.partiallyFilledBelowLiqPrice) {
+        if(splat.partiallyFilledBelowLiqPrice){
             caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight,markPrice,collateralId);
-        } else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
+        }else if(splat.filledBelowLiqPrice && splat.remainder === 0){
             caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
-        } else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
+        }else if (splat.filledBelowLiqPrice && splat.remainder > 0){
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
-        } else if (splat.trueBookEmpty) {
+        } else if(splat.trueBookEmpty){
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
             console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
         }
+        console.log('result from delev '+JSON.stringify(result))
     } 
 
         const deleverageAmount = result.totalDeleveraged || 0

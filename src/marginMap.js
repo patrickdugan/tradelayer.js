@@ -957,36 +957,7 @@ class MarginMap {
           pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
             const matchBN = new BigNumber(matchSize)
 
-             // **** New Clawback Logic ****
-      // Compare the position's lastPrice (set previously during clearing) to markPrice.
-      // If they are equal, calculate the difference between lastPrice and liqPrice.
-      console.log('🔧'+pos.lastMark+' '+markPrice)
-      if (pos.lastMark && new BigNumber(pos.lastMark).isEqualTo(markPrice)) {
-        // For example: if liq.sell is true, difference = lastPrice - liqPrice; else liqPrice - lastPrice.
-        console.log('inside crawback '+sell)
-        let diff = sell 
-          ? new BigNumber(pos.lastMark).minus(liqPrice)
-          : new BigNumber(liqPrice).minus(pos.lastMark)
-          console.log('diff '+diff.decimalPlaces(8).toNumber()+' '+pos.lastMark+' '+liqPrice)
-          console.log(Boolean(Math.abs(diff.toNumber())>0))
-        if(Math.abs(diff.toNumber())>0){
-            let crawback = diff.times(matchSize).times(notional).decimalPlaces(8)
-            if(isInverse){
-                crawback = diff.dividedBy(
-                  new BigNumber(pos.lastMark).times(new BigNumber(liqPrice))
-                ).times(matchSize).times(notional);
-            }
-          console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${crawback.toFixed(8)}`);
-          await TallyMap.updateBalance(
-            pos.address,
-            collateralId,
-            crawback.toNumber(),      // Add to available (or subtract, depending on your accounting)
-            0,0,0,
-            'clawbackSettlement',
-            block
-          );
-        }
-      }
+        await this.clawbackOrClawForward(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
 
           pos = await this.realizePnl(
             pos.address,
@@ -1000,11 +971,9 @@ class MarginMap {
             contractId
           );
 
-        //const settlementPNL = await this.settlePNL(pos.address, matchSize, liqPrice, markPrice, contractId,block) 
-        //await TallyMap.updateBalance(pos.address, collateralId,settlementPNL,0,0,0,'settlePNLDelev',block,'')
-
+        console.log('post rPNL pos '+JSON.stringify(pos))
           // **Construct Trade Object**
-            const trade = {
+        const trade = {
                 contractId: contractId,
                 amount: matchSize,
                 price: liqPrice,
@@ -1023,17 +992,86 @@ class MarginMap {
           deleveragingData.counterparties.push(pos);
 
           remainingSize = remainingSize.minus(matchSize);
-
           if (remainingSize.isZero()) break;
         }
-      }
 
       if (remainingSize.gt(0)) {
         console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
       }
-    
-    return deleveragingData;
     }
+        
+          console.log('delev data obj '+JSON.stringify(deleveragingData))
+    
+        return deleveragingData;
+}
+
+async clawbackOrClawForward(pos, markPrice, matchSize, notional, liqPrice, collateralId, block, TallyMap, sell, isInverse) {
+  // **** New Clawback Logic ****
+  // Compare the position's lastPrice (set previously during clearing) to markPrice.
+  // If they are equal, calculate the difference between lastPrice and liqPrice.
+  console.log('🔧' + pos.lastMark + ' ' + markPrice);
+  
+  if (pos.lastMark && new BigNumber(pos.lastMark).isEqualTo(markPrice)) {
+    // For example: if sell is true, difference = lastPrice - liqPrice; else liqPrice - lastPrice.
+    console.log('inside clawback ' + sell);
+    let diff = sell 
+      ? new BigNumber(pos.lastMark).minus(liqPrice)
+      : new BigNumber(liqPrice).minus(pos.lastMark);
+    console.log('diff ' + diff.decimalPlaces(8).toNumber() + ' ' + pos.lastMark + ' ' + liqPrice);
+    console.log(Boolean(Math.abs(diff.toNumber()) > 0));
+    
+    if (Math.abs(diff.toNumber()) > 0) {
+      let crawback = diff.times(matchSize).times(notional).decimalPlaces(8);
+      if (isInverse) {
+        crawback = diff
+          .dividedBy(new BigNumber(pos.lastMark).times(new BigNumber(liqPrice)))
+          .times(matchSize)
+          .times(notional);
+      }
+      console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${crawback.toFixed(8)}`);
+    
+    await TallyMap.updateBalance(
+        pos.address,
+        collateralId,
+        crawback.toNumber(),      // Add to available (or subtract, depending on your accounting)
+        0,
+        0,
+        0,
+        'clawbackSettlement',
+        block
+      );
+    }
+  } else {
+    // Profit adjustment logic: when lastMark != markPrice,
+    // calculate profit as the difference between markPrice and lastMark.
+    let profitDiff = sell 
+      ? new BigNumber(pos.lastMark).minus(markPrice)
+      : new BigNumber(markPrice).minus(pos.lastMark);
+    console.log(`Profit difference for ${pos.address}: ${profitDiff.toFixed(8)}`);
+    
+    if (Math.abs(profitDiff.toNumber()) > 0) {
+      let profit = profitDiff.times(matchSize).times(notional).decimalPlaces(8);
+      if (isInverse) {
+        profit = profit
+          .dividedBy(new BigNumber(pos.lastMark).times(new BigNumber(markPrice)))
+          .times(matchSize)
+          .times(notional);
+      }
+      console.log(`🔧 Profit adjustment for ${pos.address}: Profit = ${profit.toFixed(8)}`);
+      await TallyMap.updateBalance(
+        pos.address,
+        collateralId,
+        profit.toNumber(), // add profit tokens to available balance
+        0,
+        0,
+        0,
+        'profitAdjustmentSettlement',
+        block
+      );
+    }
+  }
+  return
+}
 
     // Adjust deleveraging position
     async adjustDeleveraging(address, contractId, size, sell, block, liqPrice,TallyMap) {
@@ -1352,7 +1390,7 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
                     tradeDoc,
                     { upsert: true }
                 );
-                //console.log(`Trade record saved successfully: ${tradeId}`);
+                console.log(`Trade record saved successfully: ${tradeId}`);
             } catch (error) {
                 //console.error(`Error saving trade record: ${tradeId}`, error);
                 throw error; // Rethrow the error for handling upstream
