@@ -759,10 +759,10 @@ class MarginMap {
                 // Check if the contract is associated with an orac
 
                 // Calculate PnL based on settlement price
-                console.log('inside settlePNL ' +lastMark+' '+price)
-                const pnl = new BigNumber((price - lastMark) * Math.abs(contracts));
+                console.log('inside settlePNL ' +lastMark+' '+price+' '+contracts)
+                const pnl = new BigNumber((price - lastMark) * contracts);
                 console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
-                if (contracts < 0) {
+                if(contracts < 0){
                     pnl.negated(); // Invert the value if contracts is negative
                 }
                 // Update margin and unrealized PnL
@@ -1000,7 +1000,7 @@ class MarginMap {
         console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
       }
     }
-      
+
     
         return deleveragingData;
 }

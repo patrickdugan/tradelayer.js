@@ -1312,12 +1312,14 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
-                    if ((isBuyerReducingPosition||isBuyerFlippingPosition)&&!match.buyOrder.liq){
+                    console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
+                    if((isBuyerReducingPosition||isBuyerFlippingPosition)&&!match.buyOrder.liq){
                         let closedContracts = match.buyOrder.amount
 
                         if(isBuyerFlippingPosition){
                             closedContracts-=flipLong
                         }
+                        console.log('closed contracts '+match.buyOrder.amount+' '+closedContracts)
                         //this loops through our position history and closed/open trades in that history to figure a precise entry price for the trades 
                         //on a LIFO basis that are being retroactively 'closed' by reference here
                         //console.log('about to call trade history manager '+match.buyOrder.contractId)
@@ -1330,7 +1332,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedContracts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}   
