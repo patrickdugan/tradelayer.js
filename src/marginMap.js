@@ -1000,8 +1000,6 @@ class MarginMap {
         console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
       }
     }
-
-    
         return deleveragingData;
 }
 
@@ -1045,8 +1043,8 @@ async clawbackOrClawForward(pos, markPrice, matchSize, notional, liqPrice, colla
     // Profit adjustment logic: when lastMark != markPrice,
     // calculate profit as the difference between markPrice and lastMark.
     let profitDiff = sell 
-      ? new BigNumber(pos.lastMark).minus(markPrice)
-      : new BigNumber(markPrice).minus(pos.lastMark);
+      ? new BigNumber(pos.lastMark).minus(liqPrice/*markPrice*/)
+      : new BigNumber(liqPrice/*markPrice*/).minus(pos.lastMark);
     console.log(`Profit difference for ${pos.address}: ${profitDiff.toFixed(8)}`);
     
     if (Math.abs(profitDiff.toNumber()) > 0) {

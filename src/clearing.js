@@ -861,7 +861,7 @@ class Clearing {
                                 } else {
                                     let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall);
                                     const newTally = await TallyMap.getTally(position.address, collateralId)
-                                    await TallyMap.updateBalance(position.address, collateralId, 0, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
+                                    await TallyMap.updateBalance(position.address, collateralId, -newTally.available, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
                                     console.log("Before update:", JSON.stringify(liquidationResult));
                                     if (liquidationResult) {
                                         if(liquidationResult.counterparties.length>0){
@@ -961,6 +961,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     let splat = await orderbook.estimateLiquidation(liq);
     console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
     let delevPrice = Clearing.computeLiquidationPriceFromLoss(markPrice, markShortfall, position.contracts, notional, inverse)     
+    console.log('delev price '+delevPrice)
     if(isNaN(delevPrice)||!delevPrice){
         delevPrice = liq.price
 
