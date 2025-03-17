@@ -829,11 +829,11 @@ class Clearing {
                                 }
                             }
                         } else {
-                            const markShortfall = new BigNumber(tally.margin).minus(balance2.shortfall).decimalPlaces(8).toNumber()
-                            console.log('markShortfall '+markShortfall)
-                            console.log('Danger zone! Margin is insufficient:', markShortfall, pnlChange, balance2.shortfall, tally.margin);
+                            console.log('Danger zone! Margin is insufficient:'+pnlChange, balance2.shortfall, tally.margin);
                             let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                             let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                            const markShortfall = new BigNumber(tally.margin).minus(postCancelBalance.shortfall).decimalPlaces(8).toNumber()
+                            console.log('markShortfall '+markShortfall)
                             console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
                             if(postCancelBalance.hasSufficient){
                                 await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
