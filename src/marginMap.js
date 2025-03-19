@@ -108,7 +108,8 @@ class MarginMap {
                 unrealizedPNL: position.unrealizedPNL,
                 avgPrice: position.avgPrice,
                 liqPrice: position.liqPrice,
-                bankruptcyPrice: position.bankruptcyPrice
+                bankruptcyPrice: position.bankruptcyPrice,
+                newPosThisBlock: position.newPosThisBlock
                 // Add other relevant fields if necessary
             });
         }
@@ -202,6 +203,9 @@ class MarginMap {
     async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block) {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
         if(position.contracts==null){position.contracts=0}
+        if (position.newPosThisBlock === undefined) {
+             position.newPosThisBlock = 0;
+        }
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
@@ -259,7 +263,12 @@ class MarginMap {
             console.log('position with possible nulls '+JSON.stringify(position)) 
         }
         if(address==null){throw new Error()}
+        
+        if(isBuyOrder){
             position.newPosThisBlock+=amount
+        }else{
+            position.newPosThisBlock-=amount
+        }
 
         this.margins.set(address, position);  
         let tag = 'updateContractBalances'
@@ -272,6 +281,7 @@ class MarginMap {
             throw new Error()
             position.bankruptcyPrice=0
         }
+        console.log('✅ position before saving to marginMap '+JSON.stringify(position))
         await this.saveMarginMap(block)
         await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block,liquidationInfo.bankruptcyPrice)
         return position

@@ -795,6 +795,7 @@ class Clearing {
             console.log('🔄 position '+JSON.stringify(position))
 
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
+            position.newPosThisBlock=0
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
 
             let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank);
@@ -1163,7 +1164,7 @@ static sortPositionsForPNL(positions, priceDiff) {
     return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
 }
 
-async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
+static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
   const priceBN = new BigNumber(currentMarkPrice);
   const notionalValueBN = new BigNumber(notionalValue);
   
@@ -1201,9 +1202,10 @@ async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,
                     .times(newPosBN)
                     .times(notionalValueBN);
     pnl = pnlOld.plus(pnlNew);
+
+  console.log('Calculated PnL change:', pnl.toFixed(8)+' '+pnlOld+' '+pnlNew);
   }
 
-  console.log('Calculated PnL change:', pnl.toFixed(8));
   return pnl.decimalPlaces(8).toNumber();
 }
 
