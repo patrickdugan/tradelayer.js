@@ -653,7 +653,6 @@ static async getAllContractsForCollateral(address, collateralId) {
             oracleId = await ContractRegistry.getOracleId(contractId);
             latestData = await oracleDataDB.findAsync({ oracleId: oracleId });
         } else {
-
             let info = await ContractRegistry.getContractInfo(contractId);
             propertyId1 = info.onChainData[0][0];
             propertyId2 = info.onChainData[0][1];
@@ -662,7 +661,6 @@ static async getAllContractsForCollateral(address, collateralId) {
             return latestData
             console.log('inside get price at block '+typeof latestData, JSON.stringify(latestData))
         }
-
         // Filter data to get updates before the given blockHeight
         const filteredData = latestData.filter(entry => entry.blockHeight < blockHeight);
 
@@ -690,7 +688,6 @@ static async getAllContractsForCollateral(address, collateralId) {
             }
             return null; // No valid price data found before the provided blockHeight
         }
-
         return lastPriceEntry.data.price;
     }
 

@@ -66,7 +66,7 @@ async function buildSignAndSendTransaction(fromAddress, btcPrice) {
         // Create the payload
         const params = {
             oracleid: 2,
-            price: 153,
+            price: 142,//btcPrice,
             targetAddress: fromAddress
         };
 

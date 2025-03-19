@@ -768,7 +768,7 @@ class Clearing {
         return
     }
     
-    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
+    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional){
         let liquidationData = [];
         let marginMap = await MarginMap.getInstance(contractId);
         let positions = await marginMap.getAllPositions(contractId);
@@ -778,7 +778,7 @@ class Clearing {
         let isLiq = [];
         let systemicLoss = 0;
 
-        for (let i = 0; i < positions.length; i++) {
+        for(let i = 0; i < positions.length; i++){
             let position = positions[i];
             let orderbook = await Orderbooks.getOrderbookInstance(contractId);
             //if(position.contracts==null){throw new Error()}
@@ -822,6 +822,7 @@ class Clearing {
                                             console.log(JSON.stringify(liquidationResult.counterparties))
                                             console.log("Before update:", JSON.stringify(positions, null, 2));
                                             positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                            positions = Clearing.flattenMark(positions)
                                             console.log("After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
@@ -851,6 +852,7 @@ class Clearing {
                                             if(liquidationResult.counterparties.length>0){
                                                 console.log(JSON.stringify(liquidationResult.counterparties))
                                                 positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                                positions = Clearing.flattenMark(positions)
                                                 console.log("After update:", JSON.stringify(positions, null, 2));
                                             }
                                             isLiq.push(liquidationResult.liquidation);
@@ -867,26 +869,36 @@ class Clearing {
                                         if(liquidationResult.counterparties.length>0){
                                                 console.log(JSON.stringify(liquidationResult.counterparties))
                                                 positions = Clearing.updatePositions(positions, liquidationResult.counterparties);
+                                                positions = Clearing.flattenMark(positions)
                                                 console.log("🔄 After update:", JSON.stringify(positions, null, 2));
-                                    }
+                                        }
                                         isLiq.push(liquidationResult.liquidation);
                                         systemicLoss += liquidationResult.systemicLoss;
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-
         positions.lastMark = blob.lastPrice;
         console.log('systemic loss '+systemicLoss)
         await marginMap.saveMarginMap(blockHeight);
         return { positions, isLiq, systemicLoss };
     }
+
+static flattenMark(positions) {
+  positions.forEach(pos => {
+    if (pos.contracts === 0) {
+      pos.lastMark = null;
+    }
+  });
+  return positions;
+}
+
 // Make sure BigNumber is imported:
 // const BigNumber = require("bignumber.js");
-static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse) {
+static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse){
   // We'll use feePercent = 0 and high internal precision
   const feePercent = new BigNumber(0);
   const PRECISION = 30; // high precision for internal calculations
@@ -1034,7 +1046,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
         } else if(splat.trueBookEmpty){
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
-            console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + liq.price);
+            console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + markPrice);
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
         }
         console.log('result from delev '+JSON.stringify(result))
@@ -1045,9 +1057,9 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         position = await marginMap.updateContractBalances(position.address, deleverageAmount, liq.price, !liq.sell, position, inverse, true, false, contractId, false, true);
    
         console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
-        const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId)
+        const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId) 
         console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
-       
+       infoBlob.systemicLoss = systemicLoss
     // Step 5: Save liquidation results
     await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
 
@@ -1151,17 +1163,20 @@ static sortPositionsForPNL(positions, priceDiff) {
     return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
 }
 
-
     static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){
         // Calculate P&L change for the position based on the number of contracts
         // Assuming a long position benefits from a price increase and vice versa
         let pnl 
 
         const priceBN = new BigNumber(currentMarkPrice);
-        const avgPriceBN = new BigNumber(previousMarkPrice);
+        let avgPriceBN = new BigNumber(previousMarkPrice);
+        if(position.newFlag){
+            avgPriceBN = position.avgPrice
+            console.log('calcing PNL from avg price for new position '+JSON.stringify(position) )
+        }
         const contractsBN = new BigNumber(position.contracts);
         const notionalValueBN = new BigNumber(notionalValue);
-
+        //if(!position.lastMark){avgPriceBN= new BigNumber(position.avgPrice)}
         if (inverse) {
             // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
             pnl = priceBN
@@ -1180,10 +1195,6 @@ static sortPositionsForPNL(positions, priceDiff) {
         }
 
         console.log('clearing PNL ' +priceBN +' '+currentMarkPrice+' '+avgPriceBN+' ' +previousMarkPrice+' '+contractsBN+' '+position.contracts+' '+notionalValueBN+' '+notionalValue)
-        // Adjust sign based on whether the position is long or short
-        if(contractsBN<0){
-            pnl.times(-1)
-        }
         //pnl = position.contracts>0 ? pnl : pnl.negated();
         console.log('pnl '+pnl.toNumber())
         return pnl.decimalPlaces(8).toNumber();

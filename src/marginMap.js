@@ -259,6 +259,8 @@ class MarginMap {
             console.log('position with possible nulls '+JSON.stringify(position)) 
         }
         if(address==null){throw new Error()}
+            position.newPosThisBlock+=amount
+
         this.margins.set(address, position);  
         let tag = 'updateContractBalances'
         if(inClearing){
@@ -835,7 +837,7 @@ class MarginMap {
                     return "err:0 contracts"
                 }
                 
-                 console.log(total+' '+position.contracts)
+                console.log(total+' '+position.contracts)
                     let liquidationSize = position.contracts
                 
                 if(!total){
@@ -857,7 +859,7 @@ class MarginMap {
                 if(total||!position.liqPrice){
                     liquidationOrder.price = position.bankruptcyPrice
                 }
-                console.log('inside gen liq order '+total+' '+position.liqPrice+' '+position.bankruptcyPrice )
+                console.log('inside gen liq order '+total+' '+position.liqPrice+' '+position.bankruptcyPrice)
         return liquidationOrder;
     }
 

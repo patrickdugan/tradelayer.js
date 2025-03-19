@@ -1297,8 +1297,14 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
                     let lastMark = await ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
-                    console.log('LAST MARK '+lastMark)
+                    console.log('LAST MARK '+lastMark+' '+match.buyerPosition.lastMark+' '+match.sellerPosition.lastMark+' '+JSON.stringify(match.buyerPosition))
                     if(lastMark==null){lastMark=trade.price}
+                    if(match.buyerPosition.lastMark==null){
+                        match.buyerPosition.newFlag=true
+                    }
+                    if(match.sellerPosition.lastMark==null){
+                        match.sellerPosition.newFlag=true
+                    }
                     console.log(lastMark)  
                     let buyerMark = lastMark
                     let sellerMark = lastMark
@@ -1308,6 +1314,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     if(match.sellerPosition.lastMark!==lastMark&&match.sellerPosition.lastMark){
                         sellerMark = match.sellerPosition.lastMark
                     }    
+
                     console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
                     // Realize PnL if the trade reduces the position size
