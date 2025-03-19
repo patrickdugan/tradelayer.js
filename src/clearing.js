@@ -1163,42 +1163,50 @@ static sortPositionsForPNL(positions, priceDiff) {
     return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
 }
 
-    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse,notionalValue){
-        // Calculate P&L change for the position based on the number of contracts
-        // Assuming a long position benefits from a price increase and vice versa
-        let pnl 
+async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
+  const priceBN = new BigNumber(currentMarkPrice);
+  const notionalValueBN = new BigNumber(notionalValue);
+  
+  // Determine the number of "new" contracts for this block.
+  const newPosBN = new BigNumber(position.newPosThisBlock || 0);
+  const totalContractsBN = new BigNumber(position.contracts);
+  const oldContractsBN = totalContractsBN.minus(newPosBN);
 
-        const priceBN = new BigNumber(currentMarkPrice);
-        let avgPriceBN = new BigNumber(previousMarkPrice);
-        if(position.newFlag){
-            avgPriceBN = position.avgPrice
-            console.log('calcing PNL from avg price for new position '+JSON.stringify(position) )
-        }
-        const contractsBN = new BigNumber(position.contracts);
-        const notionalValueBN = new BigNumber(notionalValue);
-        //if(!position.lastMark){avgPriceBN= new BigNumber(position.avgPrice)}
-        if (inverse) {
-            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
-            pnl = priceBN
-                .minus(1)
-                .dividedBy(avgPriceBN.minus(1))
-                .times(contractsBN)
-                .times(notionalValueBN);
-            //console.log('pnl ' + pnl.toNumber());
-        } else {
-            // For linear contracts: PnL = (exitPrice - entryPrice) * contracts * notional
-            pnl = priceBN
-                .minus(avgPriceBN)
-                .times(contractsBN)
-                .times(notionalValueBN);
-            //console.log('pnl ' + pnl.toNumber());
-        }
+  let pnl;
 
-        console.log('clearing PNL ' +priceBN +' '+currentMarkPrice+' '+avgPriceBN+' ' +previousMarkPrice+' '+contractsBN+' '+position.contracts+' '+notionalValueBN+' '+notionalValue)
-        //pnl = position.contracts>0 ? pnl : pnl.negated();
-        console.log('pnl '+pnl.toNumber())
-        return pnl.decimalPlaces(8).toNumber();
-    }
+  if (!inverse) {
+    // Linear contracts:
+    // For old contracts, baseline = previousMarkPrice.
+    // For new contracts, baseline = position.avgPrice (set at the trade time).
+    const oldBaselineBN = new BigNumber(previousMarkPrice);
+    // If avgPrice is not defined, fallback to previousMarkPrice.
+    const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
+    
+    const pnlOld = priceBN.minus(oldBaselineBN).times(oldContractsBN).times(notionalValueBN);
+    const pnlNew = priceBN.minus(newBaselineBN).times(newPosBN).times(notionalValueBN);
+    pnl = pnlOld.plus(pnlNew);
+  } else {
+    // Inverse contracts:
+    // For old contracts, baseline = previousMarkPrice.
+    // For new contracts, baseline = position.avgPrice.
+    const oldBaselineBN = new BigNumber(previousMarkPrice);
+    const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
+    
+    const pnlOld = new BigNumber(1).dividedBy(oldBaselineBN)
+                    .minus(new BigNumber(1).dividedBy(priceBN))
+                    .times(oldContractsBN)
+                    .times(notionalValueBN);
+    const pnlNew = new BigNumber(1).dividedBy(newBaselineBN)
+                    .minus(new BigNumber(1).dividedBy(priceBN))
+                    .times(newPosBN)
+                    .times(notionalValueBN);
+    pnl = pnlOld.plus(pnlNew);
+  }
+
+  console.log('Calculated PnL change:', pnl.toFixed(8));
+  return pnl.decimalPlaces(8).toNumber();
+}
+
 
     static async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
