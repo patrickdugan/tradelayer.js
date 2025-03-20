@@ -266,9 +266,14 @@ class MarginMap {
         
         if(isBuyOrder&&!inClearing){
             position.newPosThisBlock+=amount
+            console.log('buy order not in clearing '+position.newPosThisBlock)
         }else if(!isBuyOrder&&!inClearing){
             position.newPosThisBlock-=amount
+            console.log('sell order not in clearing '+position.newPosThisBlock)
+        }else{
+            console.log('in clearing '+position.newPosThisBlock)
         }
+
 
         this.margins.set(address, position);  
         let tag = 'updateContractBalances'
@@ -942,7 +947,7 @@ class MarginMap {
       let counterparties = sell ? shorts:longs;
 
       // Calculate contract differences for more even distribution
-      for (let i = 0; i < counterparties.length; i++) {
+      for(let i = 0; i < counterparties.length; i++){
         let bigger = counterparties[i];
         let next = counterparties[i + 1] || { contracts: 0 };
         counterparties[i].difference = bigger.contracts - next.contracts;
