@@ -1061,6 +1061,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         }else if (splat.filledBelowLiqPrice && splat.remainder > 0){
             caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
             console.log(caseLabel);
+            console.log('remainder in case 4 '+remainder)
             result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
         } else if(splat.trueBookEmpty){
             caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
