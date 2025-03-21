@@ -984,13 +984,14 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     }*/
     // Adjust liquidation size based on actual matches
     liq.amount = splat.filledSize;
+    liq.price = splat.trueLiqPrice
     if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
         liq.price=splat.trueLiqPrice
         if(isPartialLiquidation&&((splat.estimatedFillPrice<liq.bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>liq.bankruptcyPrice&&liq.sell==false))){
             isFullLiquidation==true
             isPartialLiquidation==false
             liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
-            liq.price=liq.bankruptcyPrice
+            liq.price=splat.trueLiqPrice
         }
     }
     if(!liq.price){
@@ -1009,6 +1010,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
  
     position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight);
+    
     if(applyDent){
         await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
     }
@@ -1018,6 +1020,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         let orderbookData = orderbook.orderBooks[orderbookKey] || { buy: [], sell: [] };
         console.log('🛑 liq JSON '+JSON.stringify(liq))    
         orderbookData = await orderbook.insertOrder(liq, orderbookData, liq.sell, true);
+        console.log('orderbook data '+JSON.stringify(orderbookData))
         let matchResult = await orderbook.matchContractOrders(orderbookData);
         console.log('match Result '+matchResult.matches.length+' '+JSON.stringify(matchResult))
         if (matchResult.matches.length > 0) {
@@ -1025,7 +1028,6 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
             const trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
             console.log('trade result '+JSON.stringify(trade))
             await orderbook.saveOrderBook(matchResult.orderBook,orderbookKey);
-
         }
 
     let systemicLoss = new BigNumber(0);
