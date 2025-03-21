@@ -621,146 +621,169 @@ async estimateLiquidation(liquidationOrder) {
         counterpartyOrders // List of actual matched counterparties
     };
 }
-
 async matchContractOrders(orderBook) {
-    if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
-        return { orderBook, matches: [] }; // Return empty matches if no orders
+  // Base condition: if there are no buy or sell orders, return an empty match array.
+  if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
+    return { orderBook, matches: [] };
+  }
+
+  let matches = [];
+  const maxIterations = Math.min(orderBook.buy.length, orderBook.sell.length, 10000); // Safety guard
+
+  // Sort buy orders descending by price and ascending by blockTime,
+  // sort sell orders ascending by price and ascending by blockTime.
+  orderBook.buy.sort((a, b) =>
+    BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime
+  );
+  orderBook.sell.sort((a, b) =>
+    BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime
+  );
+
+  // Process a round of matching
+  for (let i = 0; i < maxIterations; i++) {
+    if (orderBook.sell.length === 0 || orderBook.buy.length === 0) break;
+
+    let sellOrder = orderBook.sell[0];
+    let buyOrder = orderBook.buy[0];
+
+    console.log('remaining sells ' + JSON.stringify(orderBook.sell));
+    console.log('sell order ' + JSON.stringify(sellOrder));
+
+    // Remove orders with zero amounts
+    if (BigNumber(sellOrder.amount).isZero()) {
+      orderBook.sell.splice(0, 1);
+      continue;
+    }
+    if (BigNumber(buyOrder.amount).isZero()) {
+      orderBook.buy.splice(0, 1);
+      continue;
     }
 
-    let matches = [];
-    const maxIterations = Math.min(orderBook.buy.length, orderBook.sell.length, 10000); // Safety guard
+    // Check for price match: if the best buy price is below the best sell price, no trade can occur.
+    if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break;
 
-    // Sort buy and sell orders by price and time
-    orderBook.buy.sort((a, b) => BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime); // Highest price first
-    orderBook.sell.sort((a, b) => BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime); // Lowest price first
+    // Determine trade price (using the order with the earlier blockTime)
+    let tradePrice =
+      sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+    sellOrder.maker = sellOrder.blockTime < buyOrder.blockTime;
+    buyOrder.maker = buyOrder.blockTime < sellOrder.blockTime;
 
-    for (let i = 0; i < maxIterations; i++) {
-        if (orderBook.sell.length === 0 || orderBook.buy.length === 0) break;
-
-        let sellOrder = orderBook.sell[0];
-        let buyOrder = orderBook.buy[0];
-        console.log('remaining sells '+JSON.stringify(orderBook.sell))
-        console.log('sell order '+JSON.stringify(sellOrder))
-        // Remove orders with zero amounts
-        if (BigNumber(sellOrder.amount).isZero()) {
-            orderBook.sell.splice(0, 1);
-            continue;
-        }
-        if (BigNumber(buyOrder.amount).isZero()) {
-            orderBook.buy.splice(0, 1);
-            continue;
-        }
-
-        let txid = '';
-
-         // Check for price match
-        if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break;
-
-        // Determine trade price
-        let tradePrice = sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
-        sellOrder.maker = sellOrder.blockTime < buyOrder.blockTime;
-        buyOrder.maker = buyOrder.blockTime < sellOrder.blockTime;
-        // Prevent self-trading
-        const sellSender = sellOrder.sender || sellOrder.address;
-        const buySender = buyOrder.sender || buyOrder.address;
-
-        if (sellSender === buySender) {
-            console.log("Self-trade detected, removing the maker (resting) order.");
-            if (sellOrder.maker) {
-                console.log('before self-cancel '+JSON.stringify(orderBook.sell))
-                orderBook.sell.splice(0, 1);
-                console.log('after self-cancel '+JSON.stringify(orderBook.buy))
-            } else {
-                orderBook.buy.splice(0, 1);
-            }
-            continue;
-        }
-
-        // Prioritize post-only orders for trade price
-        if (sellOrder.blockTime === buyOrder.blockTime) {
-            console.log("Trades in the same block, defaulting to buy order");
-            tradePrice = buyOrder.price;
-            if (sellOrder.post) {
-                tradePrice = sellOrder.price;
-                sellOrder.maker = true;
-                buyOrder.maker = false;
-            } else if (buyOrder.post) {
-                tradePrice = buyOrder.price;
-                buyOrder.maker = true;
-                sellOrder.maker = false;
-            } else {
-                sellOrder.maker = false;
-                buyOrder.maker = false;
-            }
-        }
-
-        // Execute trade
-        let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
-
-        // **📌 Compute Initial Margin Properly**
-        const ContractRegistry = require('./contractRegistry.js');
-        let initialMarginPerContract = await ContractRegistry.getInitialMargin(buyOrder.contractId, tradePrice);
-        if (!initialMarginPerContract || isNaN(initialMarginPerContract)) {
-            console.error(`Invalid initialMarginPerContract: ${initialMarginPerContract} for contract ${buyOrder.contractId} at price ${tradePrice}`);
-            initialMarginPerContract = 0; // Prevent NaN errors
-        }
-        
-        let marginUsed = BigNumber(initialMarginPerContract).times(tradeAmount).decimalPlaces(8).toNumber();
-        if (isNaN(marginUsed)) {
-            console.error(`NaN detected in marginUsed: ${marginUsed}, using default 0`);
-            marginUsed = 0;
-        }
-
-        txid = sellOrder.maker ? sellOrder.txid : buyOrder.txid;
-
-        matches.push({
-            sellOrder: {
-                ...sellOrder,
-                contractId: sellOrder.contractId,
-                amount: tradeAmount.toNumber(),
-                sellerAddress: sellOrder.sender || sellOrder.address,
-                sellerTx: sellOrder.txid,
-                maker:sellOrder.maker, 
-                liq: sellOrder.isLiq || false,
-                marginUsed: marginUsed, // ✅ Fixed
-                initialReduce: sellOrder.initialReduce
-            },
-            buyOrder: {
-                ...buyOrder,
-                contractId: buyOrder.contractId,
-                amount: tradeAmount.toNumber(),
-                buyerAddress: buyOrder.sender || buyOrder.address,
-                buyerTx: buyOrder.txid,
-                liq: buyOrder.isLiq || false,
-                maker: buyOrder.maker,
-                marginUsed: marginUsed, // ✅ Fixed
-                initialReduce: buyOrder.initialReduce
-            },
-            tradePrice,
-            txid: txid
-        });
-
-        // **Update order amounts correctly**
-        sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
-        buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
-
-        // **Handle partial fills properly**
-        if (sellOrder.amount === 0) {
-            orderBook.sell.splice(0, 1);
-        } else {
-            // Retain remaining portion of partially filled order
-            orderBook.sell[0] = sellOrder;
-        }
-
-        if (buyOrder.amount === 0) {
-            orderBook.buy.splice(0, 1);
-        } else {
-            // Retain remaining portion of partially filled order
-            orderBook.buy[0] = buyOrder;
-        }
+    // Prevent self-trading
+    const sellSender = sellOrder.sender || sellOrder.address;
+    const buySender = buyOrder.sender || buyOrder.address;
+    if (sellSender === buySender) {
+      console.log("Self-trade detected, removing the maker (resting) order.");
+      if (sellOrder.maker) {
+        orderBook.sell.splice(0, 1);
+      } else {
+        orderBook.buy.splice(0, 1);
+      }
+      continue;
     }
-    //this.saveOrderBook(orderBook, buyOrder.contractId.toString())
-    return { orderBook, matches };
+
+    // For orders in the same block, decide based on the post-only flag.
+    if (sellOrder.blockTime === buyOrder.blockTime) {
+      console.log("Trades in the same block, defaulting to buy order");
+      tradePrice = buyOrder.price;
+      if (sellOrder.post) {
+        tradePrice = sellOrder.price;
+        sellOrder.maker = true;
+        buyOrder.maker = false;
+      } else if (buyOrder.post) {
+        tradePrice = buyOrder.price;
+        buyOrder.maker = true;
+        sellOrder.maker = false;
+      } else {
+        sellOrder.maker = false;
+        buyOrder.maker = false;
+      }
+    }
+
+    // Execute trade: match the minimum of the two orders’ amounts.
+    let tradeAmount = BigNumber.min(sellOrder.amount, buyOrder.amount);
+
+    // Compute initial margin per contract (and marginUsed)
+    const ContractRegistry = require('./contractRegistry.js');
+    let initialMarginPerContract = await ContractRegistry.getInitialMargin(
+      buyOrder.contractId,
+      tradePrice
+    );
+    if (!initialMarginPerContract || isNaN(initialMarginPerContract)) {
+      console.error(
+        `Invalid initialMarginPerContract: ${initialMarginPerContract} for contract ${buyOrder.contractId} at price ${tradePrice}`
+      );
+      initialMarginPerContract = 0;
+    }
+    let marginUsed = BigNumber(initialMarginPerContract)
+      .times(tradeAmount)
+      .decimalPlaces(8)
+      .toNumber();
+    if (isNaN(marginUsed)) {
+      console.error(`NaN detected in marginUsed: ${marginUsed}, using default 0`);
+      marginUsed = 0;
+    }
+
+    // Choose a txid based on maker flag
+    let txid = sellOrder.maker ? sellOrder.txid : buyOrder.txid;
+
+    // Construct the match object
+    matches.push({
+      sellOrder: {
+        ...sellOrder,
+        contractId: sellOrder.contractId,
+        amount: tradeAmount.toNumber(),
+        sellerAddress: sellOrder.sender || sellOrder.address,
+        sellerTx: sellOrder.txid,
+        maker: sellOrder.maker,
+        liq: sellOrder.isLiq || false,
+        marginUsed: marginUsed,
+        initialReduce: sellOrder.initialReduce
+      },
+      buyOrder: {
+        ...buyOrder,
+        contractId: buyOrder.contractId,
+        amount: tradeAmount.toNumber(),
+        buyerAddress: buyOrder.sender || buyOrder.address,
+        buyerTx: buyOrder.txid,
+        liq: buyOrder.isLiq || false,
+        maker: buyOrder.maker,
+        marginUsed: marginUsed,
+        initialReduce: buyOrder.initialReduce
+      },
+      tradePrice,
+      txid: txid
+    });
+
+    // Update order amounts after the match
+    sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
+    buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
+
+    // Remove fully filled orders from the front of the arrays
+    if (sellOrder.amount === 0) {
+      orderBook.sell.splice(0, 1);
+    } else {
+      orderBook.sell[0] = sellOrder;
+    }
+    if (buyOrder.amount === 0) {
+      orderBook.buy.splice(0, 1);
+    } else {
+      orderBook.buy[0] = buyOrder;
+    }
+  }
+
+  // After this round, if there are still orders and the best buy price is at or above the best sell price,
+  // recursively match the remaining orders.
+  if (
+    orderBook.buy.length > 0 &&
+    orderBook.sell.length > 0 &&
+    BigNumber(orderBook.buy[0].price).isGreaterThanOrEqualTo(orderBook.sell[0].price)
+  ) {
+    const recResult = await this.matchContractOrders(orderBook);
+    matches = matches.concat(recResult.matches);
+    orderBook = recResult.orderBook;
+  }
+
+  return { orderBook, matches };
 }
 
     async getAddressOrders(address, sell) {
