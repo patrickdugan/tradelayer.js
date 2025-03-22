@@ -1290,6 +1290,8 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
                     console.log(JSON.stringify(match.sellOrder))
                     const trade = {
+                        buyerPosition: match.buyerPosition,
+                        sellerPosition: match.sellerPosition,
                         contractId: match.sellOrder.contractId,
                         amount: match.sellOrder.amount,
                         price: match.tradePrice,

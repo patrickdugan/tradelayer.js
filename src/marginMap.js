@@ -17,7 +17,7 @@ class MarginMap {
         return marginMap;
     }
 
-    static async loadMarginMap(seriesId) {
+    static async loadMarginMap(seriesId,flag) {
         const key = JSON.stringify({ seriesId });
         //console.log('loading margin map for ' + seriesId);
         // Retrieve the marginMaps database from your Database instance
@@ -31,7 +31,7 @@ class MarginMap {
                 return new MarginMap(seriesId);
             }
 
-            //console.log('marginMap parsed from DB ' + JSON.stringify(doc));
+            if(flag){console.log('marginMap parsed from DB ' + JSON.stringify(doc));}
             const map = new MarginMap(seriesId);
 
             // Parse the value property assuming it's a JSON string
@@ -86,8 +86,8 @@ class MarginMap {
 
         return margin;
     }*/
-    async getAllPositions(contractId) {
-        let map = await MarginMap.loadMarginMap(contractId);
+    async getAllPositions(contractId,flag) {
+        let map = await MarginMap.loadMarginMap(contractId,flag);
 
         // If the margins map is empty, attempt to reload from the database
         /*if (!map.margins || map.margins.size === 0) {
@@ -153,10 +153,12 @@ class MarginMap {
 
       // add save/load methods
     async saveMarginMap(block) {
+        console.log('saving margin map')
         try {
             const key = JSON.stringify({ seriesId: this.seriesId });
             const marginMapsDB = await db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
+            console.log(value)
                     // Save the margin map to the database
             await marginMapsDB.updateAsync({ _id: key }, { $set: {block: block, value: value}},{upsert: true})
             //await marginMapsDB.loadDatabase();
@@ -200,7 +202,7 @@ class MarginMap {
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block) {
+    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block,initial) {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
         if(position.contracts==null){position.contracts=0}
         if (position.newPosThisBlock === undefined) {
@@ -279,6 +281,9 @@ class MarginMap {
         let tag = 'updateContractBalances'
         if(inClearing){
             tag = 'liquidatingContract'
+            if(initial){
+                tag = 'initialLiq'
+            }
         }
 
         if(position.bankruptcyPrice===undefined){
@@ -930,7 +935,7 @@ class MarginMap {
         counterparties: []
       };
 
-      const allPositions = await this.getAllPositions(contractId);
+      const allPositions = await this.getAllPositions(contractId,true);
       console.log(` Found ${allPositions.length} total positions in marginMap.`);
 
       // Filter out all longs vs. shorts

@@ -1009,8 +1009,6 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     // Step 3: Adjust margin & balances
     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
  
-    position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight);
-    
     if(applyDent){
         await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
     }
@@ -1023,17 +1021,24 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         console.log('orderbook data '+JSON.stringify(orderbookData))
         let matchResult = await orderbook.matchContractOrders(orderbookData);
         console.log('match Result '+matchResult.matches.length+' '+JSON.stringify(matchResult))
+        let trade = []
         if (matchResult.matches.length > 0) {
             console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
-            const trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+            trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
             console.log('trade result '+JSON.stringify(trade))
             await orderbook.saveOrderBook(matchResult.orderBook,orderbookKey);
         }
-
+    //position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight,true);
     let systemicLoss = new BigNumber(0);
     let caseLabel = "";
     let result = {counterparties:[]};
 
+    console.log('about to remove deleveraged contracts from liq addr '+JSON.stringify(position)+' '+splat.remainder)
+    console.log('liquidation trades and positions '+JSON.stringify(trade))
+    let refreshedPosition = Clearing.getLatestPositionByAddress(trade, position.address)
+    if(trade.length==0){refreshedPosition=position}
+    console.log('refreshed position '+JSON.stringify(refreshedPosition))
+    
     // Step 4: Handle different liquidation scenarios
     if(!splat.filled){
         const remainder = splat.remainder;
@@ -1071,17 +1076,15 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         console.log('result from delev '+JSON.stringify(result))
     } 
 
-        const deleverageAmount = result.totalDeleveraged || 0
-        console.log('about to remove deleveraged contracts from liq addr '+position.address+' '+deleverageAmount+' '+JSON.stringify(result))
-        position = await marginMap.updateContractBalances(position.address, deleverageAmount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight);
-   
-        console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
-        const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId) 
-        console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
-       infoBlob.systemicLoss = systemicLoss
+    position = await marginMap.updateContractBalances(position.address, splat.remainder, liq.price, !liq.sell, refreshedPosition, inverse, true, false, contractId, true, blockHeight);
+
+    console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
+    const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId) 
+    console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
+    infoBlob.systemicLoss = systemicLoss
+
     // Step 5: Save liquidation results
     await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
-
        //await Clearing.getTotalTokenBalances(blockHeight)
 
     return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: counterparties || [] };
@@ -1109,7 +1112,6 @@ static async extractCounterpartyPositions(matches, deleveragedPositions, marginM
       }
     }
 
-
   // Now build the merged array using the latest DB entry for each address.
 
   for (const address of addresses) {
@@ -1125,6 +1127,24 @@ static async extractCounterpartyPositions(matches, deleveragedPositions, marginM
 
   return deleveragedPositions;
 }
+
+static getLatestPositionByAddress(trades, address) {
+  // Loop backwards since later trades are more recent
+  for (let i = trades.length - 1; i >= 0; i--) {
+    const trade = trades[i];
+    // Check buyerPosition first
+    if (trade.buyerPosition && trade.buyerPosition.address === address) {
+      return trade.buyerPosition;
+    }
+    // Check sellerPosition
+    if (trade.sellerPosition && trade.sellerPosition.address === address) {
+      return trade.sellerPosition;
+    }
+  }
+  // If no matching position is found, return null
+  return null;
+}
+
 
 static sortPositionsForPNL(positions, priceDiff) {
     return positions.sort((a, b) => {
