@@ -1345,7 +1345,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = 0, sellerPnl = 0;
                     console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
-                    if((isBuyerReducingPosition||isBuyerFlippingPosition)&&!match.buyOrder.liq){
+                    if((isBuyerReducingPosition||isBuyerFlippingPosition)/*&&!match.buyOrder.liq*/){
                         let closedContracts = match.buyOrder.amount
 
                         if(isBuyerFlippingPosition){
@@ -1364,11 +1364,13 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedContracts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedContracts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight,isInverse) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedContracts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
-                        //{netMargin,mode}   
-                        if(reduction!==0){
+                        //{netMargin,mode}
+                        const sufficientMargin = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId,reduction)
+                          
+                        if(reduction!==0&&sufficientMargin.hasSufficient){
                             //console.log('reduction about to pass to TallyMap' +reduction)
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         }
@@ -1382,8 +1384,18 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         //also if this trade realizes a loss that wipes out all maint. margin that we have to look at available balance and go for that
                         //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                         //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
-                        if(reduction.mode!='maint'){
+                        let debit = 0
+                        if(settlementPNL<0){
+                            debit = Math.abs(settlementPNL)
+                        }
+                        const sufficient = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress,collateralPropertyId,debit)
+                        if(reduction.mode!='maint'&&sufficient.hasSufficient){
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
+                        }else if(!sufficient.hasSufficient){
+                            again = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId,debit) 
+                            if(sufficientMargin.hasSufficient){
+                                await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
+                            }
                         } 
                         if(reduction.mode=='shortfall'){
                             //check the address available balance for the neg. balance
@@ -1399,7 +1411,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
 
-                    if ((isSellerReducingPosition||isSellerFlippingPosition)&&!match.sellOrder.liq){
+                    if ((isSellerReducingPosition||isSellerFlippingPosition)/*&&!match.sellOrder.liq*/){
                         let closedContracts = match.sellOrder.amount
 
                         if(isSellerFlippingPosition){
@@ -1413,13 +1425,15 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, sellerMark, match.sellOrder.contractId,currentBlockHeight) 
+                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, sellerMark, match.sellOrder.contractId,currentBlockHeight,isInverse) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, initialMarginPerContract, match.sellOrder.contractId, match.sellOrder.sellerAddress, false, feeInfo.sellFeeFromMargin, sellerFee)
                         console.log('sell reduction '+JSON.stringify(reduction))
                         //{netMargin,mode} 
-                        if(reduction !==0){
+                        const sufficientMargin = await TallyMap.hasSufficientMargin(match.sellOrder.sellerAddress,collateralPropertyId,reduction)
+                        
+                        if(reduction !==0&&sufficientMargin.hasSufficient){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
                         //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
@@ -1428,8 +1442,19 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
                         //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                         //unusual edge case but we're covering it here 'maint'
-                        if(reduction.mode!='maint'){
+                        let debit = 0
+                        if(settlementPNL<0){
+                            debit = Math.abs(settlementPNL)
+                        }
+                        const sufficient = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress,collateralPropertyId,debit)
+                        console.log('debit '+debit +' '+settlementPNL+ ' '+JSON.stringify(sufficient))
+                        if(reduction.mode!='maint'&&sufficient.hasSufficient){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0, 0, 'contractTradeSettlement',currentBlockHeight);
+                        }else if(!sufficient.hasSufficient){
+                            let again = await TallyMap.hasSufficientMargin(match.sellOrder.sellerAddress,collateralPropertyId,debit)            
+                            if(again.hasSufficient){
+                                await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
+                            }
                         } 
                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,

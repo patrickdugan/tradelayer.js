@@ -773,17 +773,27 @@ class MarginMap {
         return pnl;
     }*/
 
-    async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight) {
+    async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight,inverse) {
                 const pos = this.margins.get(address);
 
                 if (!pos) return 0;
                 const ContractRegistry = require('./ContractRegistry.js')
                 // Check if the contract is associated with an orac
-
-                // Calculate PnL based on settlement price
+                let pnl = 0
+                if(!inverse){
+                     // Calculate PnL based on settlement price
                 console.log('inside settlePNL ' +lastMark+' '+price+' '+contracts)
-                const pnl = new BigNumber((price - lastMark) * contracts);
+                pnl = new BigNumber((price - lastMark) * contracts);
                 console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
+                
+                }else{
+                      let one = new BigNumber(1)
+            // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
+                pnl = one.dividedBy(avgPriceBN).minus(one.dividedBy(priceBN))
+                .times(contractsBN)
+                .times(notionalValueBN)
+                }
+               
                 if(contracts < 0){
                     pnl.negated(); // Invert the value if contracts is negative
                 }
