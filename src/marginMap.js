@@ -169,7 +169,7 @@ class MarginMap {
         }
     }
 
-    async updateContractBalancesWithMatch(match, channelTrade, close,flip,block) {
+    async updateContractBalancesWithMatch(match, channelTrade, buyerClose,flipLong,sellerClose,flipShort,block) {
         console.log('updating contract balances, buyer '+JSON.stringify(match.buyerPosition)+ '  and seller '+JSON.stringify(match.sellerPosition))
         console.log('with match '+JSON.stringify(match))
         let buyerPosition = await this.updateContractBalances(
@@ -179,8 +179,8 @@ class MarginMap {
             true,
             match.buyerPosition,
             match.inverse,
-            close,
-            flip,
+            buyerClose,
+            flipLong,
             match.buyOrder.contractId,
             match.buyOrder.isLiq,
             block
@@ -193,8 +193,8 @@ class MarginMap {
             false,
             match.sellerPosition,
             match.inverse,
-            close,
-            flip,
+            sellerClose,
+            flipShort,
             match.sellOrder.contractId,
             match.sellOrder.isLiq,
             block
@@ -212,7 +212,7 @@ class MarginMap {
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
         //calculating avg. price
         console.log('inside updateContractBalances '+close +' '+flip+' position '+position.contracts+' avg. price '+position.avgPrice)
-        if(close==false&&flip==false){
+        if(close==0&&flip==0){
             if(position.contracts==0){
                 if(position.avgPrice==undefined||position.avgPrice==null){
                     position.avgPrice=price
@@ -225,7 +225,7 @@ class MarginMap {
                 position.avgPrice=await this.updateAveragePrice(position,amount,price,contractId, isBuyOrder)
                 console.log('after the avg price function '+position.avgPrice)
             }
-        }else if(flip==true&&close==false){
+        }else if(flip>0){
             //this is the first trade in the new direction of the flip so its price is the avg. entry price
             position.avgPrice=price
         }
@@ -267,10 +267,18 @@ class MarginMap {
         if(address==null){throw new Error()}
         
         if(isBuyOrder&&!inClearing){
-            position.newPosThisBlock+=amount
+            if(flip>0){
+                position.newPosThisBlock+=flip
+            }else if(close==0){
+                position.newPosThisBlock+=amount
+            }
             console.log('buy order not in clearing '+position.newPosThisBlock)
         }else if(!isBuyOrder&&!inClearing){
-            position.newPosThisBlock-=amount
+            if(flip>0){
+                position.newPosThisBlock-=flip
+            }else if(close==0){
+                position.newPosThisBlock-=amount   
+            }
             console.log('sell order not in clearing '+position.newPosThisBlock)
         }else{
             console.log('in clearing '+position.newPosThisBlock)
