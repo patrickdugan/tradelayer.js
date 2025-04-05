@@ -40,25 +40,50 @@ class InsuranceFund {
         }
     }
 
-    /** 💰 Deposit funds into the insurance fund */
-    async deposit(propertyId, amount,block) {
+        /** 💰 Deposit funds into the insurance fund */
+   async deposit(propertyId, amount, block) {
+        await this.loadFromSnapshot(); // Ensure you're always starting from the latest state
+
         let propertyFound = false;
 
         for (const balance of this.balances) {
-            if (balance.propertyId === propertyId) {
-                balance.amountAvailable += amount;
+            if (String(balance.propertyId) === String(propertyId)) {
+                balance.amountAvailable = new BigNumber(balance.amountAvailable || 0)
+                    .plus(new BigNumber(amount))
+                    .decimalPlaces(8)
+                    .toNumber();
                 propertyFound = true;
                 break;
             }
         }
 
         if (!propertyFound) {
-            this.balances.push({ propertyId, amountAvailable: amount });
+            this.balances.push({
+                propertyId: propertyId.toString(),
+                amountAvailable: new BigNumber(amount).decimalPlaces(8).toNumber()
+            });
         }
 
-        await this.recordEvent("deposit", { contractId: this.contractSeriesId, propertyId, amount },block);
-        await this.saveSnapshot();
+        console.log(`🏦 Depositing ${amount} into property ${propertyId} on contract ${this.contractSeriesId}`);
+        console.log(`✅ Updated balances:`, this.balances);
+
+        await this.recordEvent("deposit", {
+            contractId: this.contractSeriesId,
+            propertyId,
+            amount: new BigNumber(amount).decimalPlaces(8).toNumber()
+        }, block);
+
+        // Build snapshot explicitly
+        const snapshot = {
+            balances: this.balances,
+            contractSeriesId: this.contractSeriesId,
+            hedgeRatio: this.hedgeRatio,
+            block
+        };
+
+        await this.saveSnapshot(snapshot); // Pass it directly
     }
+
 
     /** 💸 Withdraw from the insurance fund */
     async withdraw(amount, propertyId,block) {
@@ -72,19 +97,21 @@ class InsuranceFund {
     }
 
     /** 💾 Save the insurance fund state */
-    async saveSnapshot() {
-        let key = `${this.contractSeriesId}${this.oracle ? "-oracle" : ""}`;
+    async saveSnapshot(snapshot = null) {
+        let key = `${this.contractSeriesId}`;
+        if (this.oracle) key += "-oracle";
+
         const block = await TxUtils.getBlockCount();
-        const snapshot = {
+        const finalSnapshot = snapshot || {
             balances: this.balances,
             contractSeriesId: this.contractSeriesId,
             hedgeRatio: this.hedgeRatio,
             block
         };
 
-        console.log("📌 Saving to insurance fund:", snapshot);
+        console.log("💾 Saving snapshot for", key, ":", finalSnapshot);
         const dbInstance = await db.getDatabase("insurance");
-        await dbInstance.updateAsync({ key }, { $set: { value: snapshot } }, { upsert: true });
+        await dbInstance.updateAsync({ key }, { $set: { value: finalSnapshot } }, { upsert: true });
     }
 
     /** 📜 Fetch a stored snapshot */
@@ -234,24 +261,26 @@ async getPayouts(contractId, startBlock, endBlock) {
 
     }
 
-    static async getTotalBalanceForProperty(propertyId) {
-        const dbInstance = await db.getDatabase("insurance");
-        const insuranceEntries = await dbInstance.findAsync({}); // Fetch all insurance entries
+  static async getTotalBalanceForProperty(propertyId) {
+    const dbInstance = await db.getDatabase("insurance");
+    const insuranceEntries = await dbInstance.findAsync({}); // Fetch all insurance entries
 
-        let totalBalance = new BigNumber(0);
+    let totalBalance = new BigNumber(0);
 
-        for (const entry of insuranceEntries) {
-            if (entry.value && entry.value.balances) {
-                for (const balance of entry.value.balances) {
-                    if (balance.propertyId === propertyId) {
-                        totalBalance = totalBalance.plus(new BigNumber(balance.amountAvailable || 0));
-                    }
-                }
-            }
-        }
+      for (const entry of insuranceEntries) {
+          if (entry.value && entry.value.balances) {
+              for (const balance of entry.value.balances) {
+                  // Use strict string comparison to avoid type mismatch
+                  if (String(balance.propertyId) === String(propertyId)) {
+                      totalBalance = totalBalance.plus(new BigNumber(balance.amountAvailable || 0));
+                  }
+              }
+          }
+      }
 
-        return totalBalance;
-    }
+      return totalBalance;
+  }
+
 
     /** 🔄 Updates a centralized summary of insurance balances by propertyId */
     static async updateInsuranceSummary() {

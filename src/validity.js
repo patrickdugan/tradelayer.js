@@ -371,7 +371,7 @@ const Validity = {
 
             if(params.channelAddress!=''){
                 if(!validateAddress(params.channelAddress)){
-                    const valid = TxUtils.validateAddressWrapper(params.channelAddress)
+                    const valid = await TxUtils.validateAddressWrapper(params.channelAddress)
                     if(!valid.isvalid){
                         params.valid= false
                         params.reason = 'Destination address is not validly formed.'
@@ -399,7 +399,7 @@ const Validity = {
             }
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId)
-            //console.log('getting propertyId in validate commit '+JSON.stringify(propertyData))
+            console.log('getting propertyId in validate commit '+JSON.stringify(propertyData))
             if(propertyData==null){
                 console.log('offending propertyId value '+params.propertyId)
                 params.valid=false
