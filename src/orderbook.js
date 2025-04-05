@@ -1562,88 +1562,96 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                 }
         }
 
-    async locateFee(
-  match,
-  reserveBalanceA,
-  reserveBalanceB,
-  collateralPropertyId,
-  buyerFee,
-  sellerFee,
-  isBuyerReducingPosition,
-  isSellerReducingPosition,
-  block,
-  isLiq
-) {
-  const TallyMap = require('./tally.js');
-  const MarginMap = require('./marginMap.js')
-  const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
-
-  let buyFeeFromMargin = false;
-  let buyFeeFromReserve = false;
-  let buyFeeFromAvailable = false;
-  let sellFeeFromMargin = false;
-  let sellFeeFromReserve = false;
-  let sellFeeFromAvailable = false;
-
-  let feeInfo = {
-    sellFeeFromAvailable,
-    sellFeeFromReserve,
-    sellFeeFromMargin,
-    buyFeeFromAvailable,
-    buyFeeFromReserve,
-    buyFeeFromMargin,
+  async locateFee(
+    match,
+    reserveBalanceA,
+    reserveBalanceB,
+    collateralPropertyId,
+    buyerFee,
     sellerFee,
-    buyerFee
-  };
+    isBuyerReducingPosition,
+    isSellerReducingPosition,
+    block,
+    isLiq
+) {
+    const TallyMap = require('./tally.js');
+    const MarginMap = require('./marginMap.js');
+    const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
 
-  console.log(`🔍 [locateFee] Checking balances to apply fees...`);
-  console.log(`🧾 Buyer fee: ${buyerFee}, Seller fee: ${sellerFee}, Property: ${collateralPropertyId}`);
+    let buyFeeFromMargin = false;
+    let buyFeeFromReserve = false;
+    let buyFeeFromAvailable = false;
+    let sellFeeFromMargin = false;
+    let sellFeeFromReserve = false;
+    let sellFeeFromAvailable = false;
 
-  let buyerAvail = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId, buyerFee);
-  let sellerAvail = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress, collateralPropertyId, sellerFee);
-  let buyerReserve = await TallyMap.hasSufficientReserve(match.buyOrder.buyerAddress, collateralPropertyId, buyerFee);
-  let sellerReserve = await TallyMap.hasSufficientReserve(match.sellOrder.sellerAddress, collateralPropertyId, sellerFee);
-  let buyerMargin = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress, collateralPropertyId, buyerFee);
-  let sellerMargin = await TallyMap.hasSufficientMargin(match.sellOrder.sellerAddress, collateralPropertyId, sellerFee);
+    const feeInfo = {
+        sellFeeFromAvailable,
+        sellFeeFromReserve,
+        sellFeeFromMargin,
+        buyFeeFromAvailable,
+        buyFeeFromReserve,
+        buyFeeFromMargin,
+        sellerFee,
+        buyerFee,
+    };
 
-  console.log(`🧾 Buyer available: ${buyerAvail.hasSufficient}, reserve: ${buyerReserve.hasSufficient}, margin: ${buyerMargin.hasSufficient}`);
-  console.log(`🧾 Seller available: ${sellerAvail.hasSufficient}, reserve: ${sellerReserve.hasSufficient}, margin: ${sellerMargin.hasSufficient}`);
+    console.log('🔍 [locateFee] Checking balances to apply fees...');
+    console.log('🧾 Buyer fee:', buyerFee, ', Seller fee:', sellerFee, ', Property:', collateralPropertyId);
 
-  if (buyerAvail.hasSufficient) {
-    console.log(`💸 Buyer fee from available balance`);
-    await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -buyerFee, 0, 0, 0, 'contractFee', block);
-    feeInfo.buyFeeFromAvailable = true;
-  } else if (buyerReserve.hasSufficient) {
-    console.log(`💰 Buyer fee from reserve`);
-    await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, -buyerFee, 0, 0, 'contractFee', block);
-    feeInfo.buyFeeFromReserve = true;
-  } else if (buyerMargin.hasSufficient) {
-    console.log(`📉 Buyer fee from margin`);
-    await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, 0, 0, -buyerFee, 0, 'contractFee', block);
-    feeInfo.buyFeeFromMargin = true;
-  } else {
-    console.warn(`❗ Buyer has insufficient funds in all sources for fee`);
-  }
+    const buyerAddr = match.buyOrder.buyerAddress;
+    const sellerAddr = match.sellOrder.sellerAddress;
+    const txid = match.txid || `contract-fee-${block}`; // 💡 Default txid fallback
 
-  if (sellerAvail.hasSufficient) {
-    console.log(`💸 Seller fee from available balance`);
-    await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, -sellerFee, 0, 0, 0, 'contractFee', block);
-    feeInfo.sellFeeFromAvailable = true;
-  } else if (sellerReserve.hasSufficient) {
-    console.log(`💰 Seller fee from reserve`);
-    await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, -sellerFee, 0, 0, 'contractFee', block);
-    feeInfo.sellFeeFromReserve = true;
-  } else if (sellerMargin.hasSufficient) {
-    console.log(`📉 Seller fee from margin`);
-    await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, 0, 0, -sellerFee, 0, 'contractFee', block);
-    feeInfo.sellFeeFromMargin = true;
-  } else {
-    console.warn(`❗ Seller has insufficient funds in all sources for fee`);
-  }
+    let buyerAvail = await TallyMap.hasSufficientBalance(buyerAddr, collateralPropertyId, buyerFee);
+    let sellerAvail = await TallyMap.hasSufficientBalance(sellerAddr, collateralPropertyId, sellerFee);
+    let buyerReserve = await TallyMap.hasSufficientReserve(buyerAddr, collateralPropertyId, buyerFee);
+    let sellerReserve = await TallyMap.hasSufficientReserve(sellerAddr, collateralPropertyId, sellerFee);
+    let buyerMargin = await TallyMap.hasSufficientMargin(buyerAddr, collateralPropertyId, buyerFee);
+    let sellerMargin = await TallyMap.hasSufficientMargin(sellerAddr, collateralPropertyId, sellerFee);
 
-  console.log(`✅ [locateFee] Fee sources determined:`, feeInfo);
-  return feeInfo;
+    buyerAvail = buyerAvail.hasSufficient;
+    sellerAvail = sellerAvail.hasSufficient;
+    buyerReserve = buyerReserve.hasSufficient;
+    sellerReserve = sellerReserve.hasSufficient;
+    buyerMargin = buyerMargin.hasSufficient;
+    sellerMargin = sellerMargin.hasSufficient;
+
+    console.log(`🧾 Buyer available: ${buyerAvail}, reserve: ${buyerReserve}, margin: ${buyerMargin}`);
+    console.log(`🧾 Seller available: ${sellerAvail}, reserve: ${sellerReserve}, margin: ${sellerMargin}`);
+
+    if (buyerAvail) {
+        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, -buyerFee, 0, 0, 0, 'contractFee', block, txid);
+        feeInfo.buyFeeFromAvailable = true;
+        console.log('💰 Buyer fee from available');
+    } else if (buyerReserve) {
+        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, -buyerFee, 0, 0, 'contractFee', block, txid);
+        feeInfo.buyFeeFromReserve = true;
+        console.log('💰 Buyer fee from reserve');
+    } else if (buyerMargin) {
+        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, 0, -buyerFee, 0, 'contractFee', block, txid);
+        feeInfo.buyFeeFromMargin = true;
+        console.log('💰 Buyer fee from margin');
+    }
+
+    if (sellerAvail) {
+        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, -sellerFee, 0, 0, 0, 'contractFee', block, txid);
+        feeInfo.sellFeeFromAvailable = true;
+        console.log('💰 Seller fee from available');
+    } else if (sellerReserve) {
+        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, -sellerFee, 0, 0, 'contractFee', block, txid);
+        feeInfo.sellFeeFromReserve = true;
+        console.log('💰 Seller fee from reserve');
+    } else if (sellerMargin) {
+        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, 0, -sellerFee, 0, 'contractFee', block, txid);
+        feeInfo.sellFeeFromMargin = true;
+        console.log('💰 Seller fee from margin');
+    }
+
+    console.log('✅ [locateFee] Fee sources determined:', JSON.stringify(feeInfo, null, 2));
+    return feeInfo;
 }
+
 
 
 async processContractMatchesShort(matches, currentBlockHeight, channel) {
