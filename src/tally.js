@@ -558,31 +558,31 @@ class TallyMap {
         return fees;
     }
 
-    static async loadFeeCacheForProperty(id) {    
-        try {
-            const db = await dbInstance.getDatabase('feeCache');
-            const result = await db.findAsync({});
-            //console.log('Database contents:', JSON.stringify(result, null, 2));
 
-            let value = 0;
-            for (const doc of result) {
-                if (doc._id == id) {
-                    value = parseFloat(doc.value);
-                    ///console.log('FeeCache loaded for property ' + id + ': ' + value);
-                    break;
-                }
+static async loadFeeCacheForProperty(id) {
+    try {
+        const db = await dbInstance.getDatabase('feeCache');
+        const result = await db.findAsync({});
+        console.log('📄 Database contents:', JSON.stringify(result, null, 2));
+
+        let total = new BigNumber(0);
+
+        for (const doc of result) {
+            if (doc._id.startsWith(`${id}-`)) {
+                const value = new BigNumber(doc.value || 0);
+                const stash = new BigNumber(doc.stash || 0);
+                total = total.plus(value).plus(stash);
+                console.log(`➕ Matched ${doc._id}: value=${value.toFixed()}, stash=${stash.toFixed()}, running total=${total.toFixed()}`);
             }
-
-            if (value === 0) {
-                //console.log('No FeeCache found for property ' + id);
-            }
-
-            return value;
-        } catch (error) {
-            console.error('Error loading fee cache from dbInstance:', error);
-            return 0; // Return a default value in case of error
         }
+
+        console.log(`✅ FeeCache total for property ${id}: ${total.toFixed()}`);
+        return total;
+    } catch (error) {
+        console.error('❌ Error loading fee cache from dbInstance:', error);
+        return new BigNumber(0);
     }
+}
 
     // Method to update fee cache for a property
     static async updateFeeCache(propertyId, amount, contractId,stash,spendStash) {

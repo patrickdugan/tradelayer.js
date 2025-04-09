@@ -96,6 +96,7 @@ class Clearing {
 
             // ✅ 2️⃣ Add feeCache balance
             const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
+            console.log('fee cache balance '+feeCacheBalance)
             propertyTotal = propertyTotal.plus(feeCacheBalance);
 
             // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances

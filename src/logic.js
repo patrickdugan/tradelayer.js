@@ -435,6 +435,7 @@ const Logic = {
             }else{
                 await TallyMap.updateBalance(tokenDeliveryAddress,propertyId,netDelivery,0,0,0,'UTXOTokenTradeCredit',block)
             }
+            await TallyMap.updateBalance(tokenDeliveryAddress, propertyId, -fee, 0, 0, 0, "utxoFee", block,txid)
             await TallyMap.updateFeeCache(propertyId,fee,1)
             const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
