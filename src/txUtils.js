@@ -57,6 +57,11 @@ const TxUtils = {
         return new litecore.Transaction(txBlob).addData(payload);
     },
 
+    isRBF(tx){
+        return tx.vin.some(input => input.sequence < 0xfffffffe);
+    }
+
+
     async getBlockHeight(blockhash) {
         if(!this.client){
             console.log('awaiting client in get raw tx')

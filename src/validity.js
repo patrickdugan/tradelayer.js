@@ -15,7 +15,7 @@ const VolumeIndex = require('./volumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
 const Scaling = require('./scaling.js')
 //const whiteLists = require('./whitelists.js')
-const bannedCountries = ["US", "KP", "SY", "RU", "IR", "CU"];
+const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 
 const Validity = {
 
