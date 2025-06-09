@@ -622,8 +622,8 @@ static async getAllContractsForCollateral(address, collateralId) {
             let hasReserve = await TallyMap.hasSufficientReserve(sender, collateralPropertyId,totalInitialMargin)
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
             if(hasReserve.hasSufficient){
-                await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'contractTradeInitMargin',block);
-                await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin',block);
+                await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin',block);
             }else{
                 if(hasReserve.reason!='undefined'){
                         let shortfallBN = new BigNumber(hasReserve.shortfall)

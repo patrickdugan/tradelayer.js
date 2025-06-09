@@ -813,7 +813,7 @@ const Logic = {
         const initMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
         const initMarginBN= new BigNumber(initMarginPerContract)
         const amountBN = new BigNumber(amount)
-        const initMargin = amountBN.times(initMarginBN).toNumber()
+        const marginUsed = amountBN.times(initMarginBN).toNumber()
         let buyerAddress
         let sellerAddress
         if(columnAIsSeller){
@@ -826,14 +826,14 @@ const Logic = {
         let sellSide = false
         let buySide = true
         const isInverse = ContractRegistry.isInverse(contractId)
-        const sellOrder = { contractId, amount, price, block, sellSide, initMargin, sellerAddress, txid };
-        const buyOrder = { contractId, amount, price, block, buySide, initMargin, buyerAddress, txid };
+        const sellOrder = { contractId, amount, price, block, sellSide, marginUsed, sellerAddress, txid };
+        const buyOrder = { contractId, amount, price, block, buySide, marginUsed, buyerAddress, txid };
 
         let match = { 
                         sellOrder,
                         buyOrder,
                         price,
-                        address: channelAddress,
+                        channelAddress: channelAddress,
                         tradePrice: price 
                     }
         let matches = []

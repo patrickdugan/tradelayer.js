@@ -59,7 +59,7 @@ const TxUtils = {
 
     isRBF(tx){
         return tx.vin.some(input => input.sequence < 0xfffffffe);
-    }
+    },
 
 
     async getBlockHeight(blockhash) {
