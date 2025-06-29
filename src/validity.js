@@ -1366,6 +1366,11 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            if(params.amount <= 1){
+                params.valid=false
+                params.reason += 'Contract amount must be a whole integer'
+            }
+            params.amount=Math.floor(params.amount)
             const isAlreadyActivated = await activationInstance.isTxTypeActive(19);
             if(isAlreadyActivated==false){
                 params.valid=false

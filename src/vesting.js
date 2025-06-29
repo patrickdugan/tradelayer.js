@@ -159,7 +159,7 @@ class TradeLayerManager {
                 underlyingOracleId: 0,
                 onChainData: [[0,1]],
                 notionalPropertyId: 0,
-                notionalValue: 0.0001,
+                notionalValue: 0.001,
                 collateralPropertyId: 1,
                 leverage: 5,
                 expiryPeriod: 4032,
