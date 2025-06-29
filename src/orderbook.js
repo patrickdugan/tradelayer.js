@@ -1366,7 +1366,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedShorts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedShorts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight,isInverse) 
+                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedShorts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight,isInverse,perContractNotional) 
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedShorts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}

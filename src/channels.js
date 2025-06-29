@@ -228,64 +228,60 @@ class Channels {
                 }
             }
     }
+static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
+    const channel = this.channelsRegistry.get(existingChannelAddress);
 
-  static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
-        const channel = this.channelsRegistry.get(existingChannelAddress);
-
-        // Fallback to default logic if channel doesn't exist or is uninitialized
-        if (!channel || !channel.commitAddress) {
-            return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-        }
-
-        const defaultColumn = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-        const lastUsedColumn = channel.data.lastUsedColumn;
-
-        // Respect the existing state if the default column matches the last used column
-        if (defaultColumn === lastUsedColumn) {
-            return defaultColumn === 'A' ? 'B' : 'A';
-        }
-
-        // Helper function to check if a character is odd
-        const isOddCharacter = (char) =>
-            ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'].includes(
-                char.toUpperCase()
-            );
-
-        // Get the last and second-to-last characters
-        const existingLastChar = existingChannelAddress.slice(-1).toUpperCase();
-        const newLastChar = newCommitAddress.slice(-1).toUpperCase();
-
-        // Compare odd/even of the last characters
-        const existingIsOdd = isOddCharacter(existingLastChar);
-        const newIsOdd = isOddCharacter(newLastChar);
-
-        if (existingIsOdd === newIsOdd) {
-            // Fall back to a deeper tie-breaker if both are odd/even
-            const existingSecondLastChar = existingChannelAddress.slice(-2, -1).toUpperCase();
-            const newSecondLastChar = newCommitAddress.slice(-2, -1).toUpperCase();
-
-            if (existingSecondLastChar !== newSecondLastChar) {
-                return existingSecondLastChar < newSecondLastChar ? 'B' : 'A';
-            }
-
-            // For deeper ties, compare further back in the string
-            for (let i = 3; i <= Math.min(existingChannelAddress.length, newCommitAddress.length); i++) {
-                const existingChar = existingChannelAddress.slice(-i, -i + 1).toUpperCase();
-                const newChar = newCommitAddress.slice(-i, -i + 1).toUpperCase();
-
-                if (existingChar !== newChar) {
-                    const bumpColumn = existingChar < newChar ? 'A' : 'B';
-                    Channels.bumpColumnAssignment(existingChannelAddress, defaultColumn, bumpColumn);
-                    return existingChar < newChar ? 'B' : 'A';
-                }
-            }
-        }
-
-        // Assign the opposite column if no other logic applies
-        const bumpColumn = existingIsOdd ? 'B' : 'A';
-        Channels.bumpColumnAssignment(existingChannelAddress, defaultColumn, bumpColumn);
-        return existingIsOdd ? 'B' : 'A';
+    // 1) If the channel isn't initialized yet, fall back to last-character rule
+    if (!channel || !channel.participants) {
+        return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
     }
+
+    // 2) If this address already committed, preserve its column
+    if (channel.participants.A === newCommitAddress) return 'A';
+    if (channel.participants.B === newCommitAddress) return 'B';
+
+    // 3) If one side is still empty, use that
+    if (!channel.participants.A) return 'A';
+    if (!channel.participants.B) return 'B';
+
+    // 4) Otherwise, use your existing default + tie-break logic
+    const defaultCol = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+    const lastCol    = channel.lastUsedColumn;
+
+    // If default equals lastUsed, flip it
+    if (defaultCol === lastCol) {
+        return defaultCol === 'A' ? 'B' : 'A';
+    }
+
+    // Odd/even deeper tie-breaker
+    const isOdd = c => /[ACEGIKMOQSUWY13579]/i.test(c);
+    const existOdd = isOdd(existingChannelAddress.slice(-1));
+    const newOdd   = isOdd(newCommitAddress.slice(-1));
+
+    if (existOdd === newOdd) {
+        // compare second-last char
+        const e2 = existingChannelAddress.slice(-2, -1);
+        const n2 = newCommitAddress.slice(-2, -1);
+        if (e2 !== n2) {
+            return e2 < n2 ? 'B' : 'A';
+        }
+        // fallback deeper
+        for (let i = 3; i <= Math.min(
+            existingChannelAddress.length,
+            newCommitAddress.length
+        ); i++) {
+            const ec = existingChannelAddress.slice(-i, -i+1);
+            const nc = newCommitAddress.slice(-i, -i+1);
+            if (ec !== nc) {
+                return ec < nc ? 'B' : 'A';
+            }
+        }
+    }
+
+    // final fallback: opposite of existing oddness
+    return existOdd ? 'B' : 'A';
+}
+
 
 
     static assignColumnBasedOnLastCharacter(address) {

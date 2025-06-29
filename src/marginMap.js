@@ -781,9 +781,12 @@ class MarginMap {
         return pnl;
     }*/
 
-    async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight,inverse) {
+    async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight,inverse,notional) {
                 const pos = this.margins.get(address);
-
+                const avgPriceBN = new BigNumber(pos.avgPrice);
+                const priceBN = new BigNumber(price)
+                const contractsBN = new BigNumber(contracts)
+                const notionalValueBN = new BigNumber(pos.notional)
                 if (!pos) return 0;
                 const ContractRegistry = require('./ContractRegistry.js')
                 // Check if the contract is associated with an orac
@@ -811,7 +814,7 @@ class MarginMap {
                 pos.unrealizedPNL -= uPNLBN.minus(pnl).decimalPlaces(8).toNumber();
                 this.margins.set(pos.address, pos)
                 await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL', currentBlockHeight)
-      
+                  
                 return pnl.decimalPlaces(8).toNumber();
         }
 
