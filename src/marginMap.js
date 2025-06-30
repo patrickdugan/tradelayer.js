@@ -17,7 +17,7 @@ class MarginMap {
         return marginMap;
     }
 
-    static async loadMarginMap(seriesId,flag) {
+    static async loadMarginMap(seriesId,flag=false) {
         const key = JSON.stringify({ seriesId });
         //console.log('loading margin map for ' + seriesId);
         // Retrieve the marginMaps database from your Database instance
@@ -25,18 +25,20 @@ class MarginMap {
 
         try {
             const doc = await marginMapsDB.findOneAsync({ _id: key });
+            console.log(Boolean(doc))
             if (!doc) {
                 // Return a new instance if not found
                 //console.log('no MarginMap found, spinning up a fresh one');
                 return new MarginMap(seriesId);
             }
 
-            if(flag){console.log('marginMap parsed from DB ' + JSON.stringify(doc));}
+            if(flag){console.log('marginMap parsed from DB ' + JSON.stringify(doc));
+            return doc.value}
             const map = new MarginMap(seriesId);
 
             // Parse the value property assuming it's a JSON string
             const parsedValue = JSON.parse(doc.value);
-            
+            console.log(JSON.stringify(parsedValue))
             if (parsedValue instanceof Array) {
                 // Assuming parsedValue is an array
                 map.margins = new Map(parsedValue);
@@ -956,7 +958,7 @@ class MarginMap {
         counterparties: []
       };
 
-      const allPositions = await this.getAllPositions(contractId,true);
+      const allPositions = await this.getAllPositions(contractId);
       console.log(` Found ${allPositions.length} total positions in marginMap.`);
 
       // Filter out all longs vs. shorts
@@ -1357,24 +1359,39 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
         return false; // No positions require liquidation
     }
 
+async getPositionForAddress(address, contractId) {
+    // This expects your loader to return { margins: array } 
+    // where margins is like: [ [address, {contracts: ...}], ... ]
 
-     // Get the position for a specific address
-    async getPositionForAddress(address, contractId) {
+    const map = await MarginMap.loadMarginMap(contractId);
+    const arr = map.margins
 
-            const map = await MarginMap.loadMarginMap(contractId);
-            let position = map.margins.get(address);
-        // If still not found, return a default position
-        if (!position) {
-            return {
-                contracts: 0,
-                margin: 0,
-                unrealizedPl: 0,
-                // Add other relevant fields if necessary
-            };
+    console.log("[DEBUG] Loaded margin map addresses:", JSON.stringify(arr))
+    console.log("[DEBUG] Looking for address:", address);
+
+    // First try exact match
+    for (const [addr, pos] of arr) {
+        if (addr === address) {
+            console.log("[DEBUG] Found exact match:", addr);
+            return pos;
         }
-
-        return position;
     }
+
+    // Fallback for Bech32 (case-insensitive)
+    if (address.startsWith('ltc1') || address.startsWith('tltc1')) {
+        for (const [addr, pos] of arr) {
+            if (addr.toLowerCase() === address.toLowerCase()) {
+                console.log("[DEBUG] Found Bech32 (lowercase) match:", addr);
+                return pos;
+            }
+        }
+    }
+
+    // Still not found
+    console.log("[DEBUG] Address not found in margin map for contractId", contractId);
+    return { contracts: 0, margin: 0, unrealizedPNL: 0 };
+}
+
 
     async getMarketPrice(contract) {
         let marketPrice;

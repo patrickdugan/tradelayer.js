@@ -420,13 +420,21 @@ app.post('/tl_listOracles', async (req, res) => {
 app.get('/tl_contractPosition', async (req, res) => {
     try {
         const { address, contractId } = req.query;
-        const marginMap = await MarginMap.getInstance(contractId);
-        const position = marginMap.getPositionForAddress(address);
+        if (!address || !contractId) {
+            return res.status(400).json({ error: "Missing address or contractId" });
+        }
+        const contractIdNum = Number(contractId);
+        if (isNaN(contractIdNum)) {
+            return res.status(400).json({ error: "contractId must be a number" });
+        }
+        const map = await MarginMap.getInstance(contractIdNum)
+        const position = await map.getPositionForAddress(address,contractIdNum);
         res.json(position);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
     }
 });
+
 
 // Get trade history
 app.get('/tl_tradeHistory', async (req, res) => {
