@@ -1394,7 +1394,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         if(reduction.mode!='maint'&&sufficient.hasSufficient){
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
                         }else if(!sufficient.hasSufficient){
-                            again = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId,debit) 
+                            const sufficientMargin = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId,debit) 
                             if(sufficientMargin.hasSufficient){
                                 await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
                             }

@@ -1439,6 +1439,11 @@ const Validity = {
             
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
             
+            const tallyA = await TallyMap.getTally(commitAddressA, collateralPropertyId);
+            const tallyB = await TallyMap.getTally(commitAddressB, collateralPropertyId);
+            const effectiveA = (balanceA || 0) + (tallyA?.available || 0);
+            const effectiveB = (balanceB || 0) + (tallyB?.available || 0);
+
             const marginMap = await MarginMap.getInstance(params.contractId)
             const existingPositionA = await marginMap.getPositionForAddress(commitAddressA, params.contractId);
             const existingPositionB = await marginMap.getPositionForAddress(commitAddressB, params.contractId);
@@ -1446,12 +1451,12 @@ const Validity = {
             let AIsSeller
             let isBuyerReducingPosition 
             let isSellerReducingPosition 
-            if(params.columnAIsSeller==true||params.columnAIsSeller==1||params.columnAIsSeller=="1"){
-                AIsSeller==true
+            if(params.columnAIsSeller===true||params.columnAIsSeller===1||params.columnAIsSeller==="1"){
+                AIsSeller=true
                 isBuyerReducingPosition= Boolean(existingPositionB.contracts > 0);
                 isSellerReducingPosition = Boolean(existingPositionA.contracts<0)
             }else{
-                AIsSeller==false
+                AIsSeller=false
                 isBuyerReducingPosition= Boolean(existingPositionA.contracts > 0);
                 isSellerReducingPosition = Boolean(existingPositionB.contracts<0)
             }
@@ -1459,7 +1464,7 @@ const Validity = {
                         let enoughMargin
             if (isBuyerReducingPosition == false && isSellerReducingPosition == false) {
                 // Check if the sender has enough balance for the initial margin
-                enoughMargin = balanceA >= totalInitialMargin && balanceB >= totalInitialMargin;
+                enoughMargin = Boolean((effectiveA >= totalInitialMargin) && (effectiveB >= totalInitialMargin))
                 if (enoughMargin == false) {
                     console.log('Insufficient balance for initial margin');
                     params.valid = false;
@@ -1467,9 +1472,9 @@ const Validity = {
                 }
             } else if (isBuyerReducingPosition == true && isSellerReducingPosition == false) {
                 if (AIsSeller == true) {
-                    enoughMargin = balanceA >= totalInitialMargin;
+                    enoughMargin = effectiveA >= totalInitialMargin;
                 } else {
-                    enoughMargin = balanceB >= totalInitialMargin;
+                    enoughMargin = effectiveB >= totalInitialMargin;
                 }
                 if (enoughMargin == false) {
                     console.log('Insufficient balance for initial margin');
@@ -1478,9 +1483,9 @@ const Validity = {
                 }
             } else if (isBuyerReducingPosition == false && isSellerReducingPosition == true) {
                 if (AIsSeller == true) {
-                    enoughMargin = balanceB >= totalInitialMargin;
+                    enoughMargin = effectiveB >= totalInitialMargin;
                 } else {
-                    enoughMargin = balanceA >= totalInitialMargin;
+                    enoughMargin = effectiveA >= totalInitialMargin;
                 }
                 if (enoughMargin == false) {
                     console.log('Insufficient balance for initial margin');
@@ -1525,33 +1530,30 @@ const Validity = {
                 BFlipShort=true
              }
 
-             let tallyA = await TallyMap.getTally(commitAddressA,collateralPropertyId)
-             let tallyB = await TallyMap.getTally(commitAddressB,collateralPropertyId)
-
-             if((balanceA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
-                ||(balanceA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
-                ||(balanceB<(flipLong*initialMarginPerContract)&&BFlipLong==true)
-                ||(balanceB<(flipShort*initialMarginPerContract)&&BFlipShort==true)){
+             if((effectiveA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
+                ||(effectiveA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
+                ||(effectiveB<(flipLong*initialMarginPerContract)&&BFlipLong==true)
+                ||(effectiveB<(flipShort*initialMarginPerContract)&&BFlipShort==true)){
                     let shortfall
                     let doubleFlip = Boolean((AFlipLong&&BFlipShort)||(BFlipLong&&AFlipShort))
                     let shortfall2
                     if(AFlipLong){
-                        shortfall==flipLong*initialMarginPerContract-(balanceA+tallyA.available)
+                        shortfall=flipLong*initialMarginPerContract-(effectiveA+tallyA.available)
                     }
                     if(AFlipShort){
-                        shortfall==flipShort*initialMarginPerContract-(balanceA+tallyA.available)
+                        shortfall=flipShort*initialMarginPerContract-(effectiveA+tallyA.available)
                     }
                     if(BFlipShort){
                         if(doubleFlip){
-                            shortfall2=flipLong*initialMarginPerContract-(balanceA+tallyA.available)
+                            shortfall2=flipLong*initialMarginPerContract-(effectiveA+tallyA.available)
                         }
-                        shortfall==flipShort*initialMarginPerContract-(balanceB+tallyB.available)
+                        shortfall=flipShort*initialMarginPerContract-(effectiveB+tallyB.available)
                     }
                     if(BFlipLong){
                         if(doubleFlip){
-                            shortfall2=flipShort*initialMarginPerContract-(balanceA+tallyA.available)
+                            shortfall2=flipShort*initialMarginPerContract-(effectiveA+tallyA.available)
                         }
-                        shortfall==flipLong
+                        shortfall=flipLong
                     }
                     if(doubleFlip){
                         shortfall=Math.max(shortfall,shortfall2)

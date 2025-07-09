@@ -464,11 +464,11 @@ static async getAllContractsForCollateral(address, collateralId) {
         console.log('getting contractInfo inside getInit Margin ' +JSON.stringify(contractInfo))
         let inverse = contractInfo.inverse;
         let notionalValue = contractInfo.notionalValue
-        let leverage = contractInfo.leverage
+        let leverage = contractInfo.leverage || 10
         let priceBN = new BigNumber(price)
         let leverageBN = new BigNumber(leverage)
         let notionalBN = new BigNumber(notionalValue)
-        //console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
+        console.log('inside getInitialMargin, inverse:'+inverse+ 'notional '+ notionalValue + 'lvg. '+ leverage + 'at price '+price)
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
             console.log('calc. init. margin inverse '+notionalValue+' '+priceBN+' '+leverage)
@@ -609,28 +609,30 @@ static async getAllContractsForCollateral(address, collateralId) {
                 if(hasReserve.reason!='undefined'){
                         console.log(JSON.stringify(hasReserve), totalInitialMargin, amount)
                         let shortfallBN = new BigNumber(hasReserve.shortfall)
-                        let marginBN = new BigNumber(shortfallBN)
-                        totalInitialMargin = marginBN.minus(shortfallBN).decimalPlaces(8).toNumber()
-                        console.log(totalInitialMargin)
-                       await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                        let tally = await TallyMap.getTally(sender)
+                        let reserveDebit = new BigNumber(totalInitialMargin).minus(shortfallBN).decimalPlaces(8).toNumber()
+                        console.log(reserveDebit+' '+hasReserve.shortfall)
+                       await TallyMap.updateBalance(sender, collateralPropertyId, -hasReserve.shortfall, -reserveDebit, totalInitialMargin, 0, 'contractTradeInitMargin',block);
                 }else{
                     throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
                 }
              }
 
         }else if(channel==true){
-            let hasReserve = await TallyMap.hasSufficientReserve(sender, collateralPropertyId,totalInitialMargin)
+            let hasChannel = await TallyMap.hasSufficientChannel(channelAddr, collateralPropertyId,totalInitialMargin)
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
-            if(hasReserve.hasSufficient){
+            if(hasChannel.hasSufficient){
                 await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin',block);
                 await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin',block);
             }else{
-                if(hasReserve.reason!='undefined'){
-                        let shortfallBN = new BigNumber(hasReserve.shortfall)
-                        let marginBN = new BigNumber(shortfallBN)
-                        totalInitialMargin = marginBN.minus(shortfallBN).decimalPlaces(8).toNumber()      
-                        await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'contractTradeInitMargin',block);
-                        await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                if(hasChannel.reason!='undefined'){
+                        let shortfallBN = new BigNumber(hasChannel.shortfall)
+                        let tally = await TallyMap.getTally(sender,collateralPropertyId)
+                        console.log('tally '+JSON.stringify(tally))
+                        let channelDebit = new BigNumber(totalInitialMargin).minus(shortfallBN).decimalPlaces(8).toNumber()
+                        console.log(totalInitialMargin)     
+                        await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -channelDebit, 'contractTradeInitMargin',block);
+                        await TallyMap.updateBalance(sender, collateralPropertyId, -shortfallBN.toNumber(), 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
                 }else{
                     throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
                 }
