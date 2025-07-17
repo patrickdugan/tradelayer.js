@@ -71,13 +71,13 @@ class TradeLayerManager {
             this.minRebate = 0.00000625;
             this.maxRebate = 0.0001;
             this.initialTokenAmount = 100000;
-            this.tickerSymbol = 'TB';
+            this.tickerSymbol = 'TL';
             this.hedgeLeverage = 5;
             this.expiryInterval = 12960
             this.sponsorAddress = "bc1qhc2cj60auf67e0pa3dfd46cvg0fehchx56vw0f"
-            this.freePortion = 0
+            this.freePortion = 0.1
             this.insurancePortion = 0.1
-            this.vestingPortion = 0.8999
+            this.vestingPortion = 0.5
             this.salePortion = 0
         } else if (this.chain === 'DOGE') {
             this.baseVolume = 2000000;
@@ -97,7 +97,7 @@ class TradeLayerManager {
             this.minRebate = 0.000003125;
             this.maxRebate = 0.0001;
             this.initialTokenAmount = 500000;
-            this.tickerSymbol = 'TL';
+            this.tickerSymbol = 'TLITE';
             this.hedgeLeverage = 5;
             this.expiryInterval= 51840
             this.sponsorAddress = "MWip91xMhaEmDn5oUW5NDNbWSDyG5dSK9Q"
@@ -154,20 +154,6 @@ class TradeLayerManager {
             const TLIVESTToken = await propertyManager.createToken(incomeTicker, TLIVESTinitialLiquidity, 'Vesting', 0)
             const TLI = await propertyManager.createToken(incomeVestTicker, TLITotalAmount, 'Native',0)
 
-            const hedgeParams = {
-                native: true,
-                underlyingOracleId: 0,
-                onChainData: [[0,1]],
-                notionalPropertyId: 0,
-                notionalValue: 0.001,
-                collateralPropertyId: 1,
-                leverage: 5,
-                expiryPeriod: 4032,
-                series: 5,
-                inverse: true,
-                fee: false
-            }
-
             const NativeHedgeId = await TradeLayerManager.initializeContractSeries(block)
 
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
@@ -183,7 +169,6 @@ class TradeLayerManager {
 
             const balances = await TallyMap.getAddressBalances(this.adminAddress)
 
-            //await initializeContractSeries()
             await TradeLayerManager.initializeClearlists();
 
             // After initializing tokens, set the flag
@@ -196,8 +181,8 @@ class TradeLayerManager {
         const params = {
             // Define contract properties such as margin requirements, expiry, etc.
             // Example properties:
-            initialMargin: 0.1, // 10%
-            maintenanceMargin: 0.05, // 5%
+            initialMargin: 0.2, // 20%
+            maintenanceMargin: 0.1, // 10%
             expiry: 'perp', //need to assure that perp or 0 or null etc. codes to perpetual
             onChainData: [[1, 0]], //LTC vs. TL, need to assure that the propertyid for TL init's to 1 and that 0 corresponds to LTC UTXO
             expiryInterval: this.expiryInterval,
@@ -207,7 +192,7 @@ class TradeLayerManager {
             inverse: true,
             fee: false,
             notionalPropertyId: 0,
-            notionalValue: 0.0001,
+            notionalValue: 0.001,
             collateralPropertyId: 1
         };
 
