@@ -217,7 +217,7 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
-             let propertyIds = [];
+            let propertyIds = [];
 
                 if (Array.isArray(params.propertyIds)) {
                     propertyIds = params.propertyIds;

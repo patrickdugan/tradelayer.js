@@ -788,13 +788,14 @@ class MarginMap {
                 const avgPriceBN = new BigNumber(pos.avgPrice);
                 const priceBN = new BigNumber(price)
                 const contractsBN = new BigNumber(contracts)
-                const notionalValueBN = new BigNumber(pos.notional)
+                const notionalValueBN = new BigNumber(notional)
                 if (!pos) return 0;
                 const ContractRegistry = require('./ContractRegistry.js')
                 // Check if the contract is associated with an orac
                 let pnl = 0
                 if(!inverse){
                      // Calculate PnL based on settlement price
+                      if (lastMark == null){lastMark = pos.avgPrice;}
                 console.log('inside settlePNL ' +lastMark+' '+price+' '+contracts)
                 pnl = new BigNumber((price - lastMark) * contracts);
                 console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
@@ -802,9 +803,18 @@ class MarginMap {
                 }else{
                       let one = new BigNumber(1)
             // For inverse contracts: PnL = (1/entryPrice - 1/exitPrice) * contracts * notional
-                pnl = one.dividedBy(avgPriceBN).minus(one.dividedBy(priceBN))
+                    if (lastMark == null){lastMark = pos.avgPrice;}
+                     console.log('inside settlePNL ' +lastMark+' '+price+' '+contracts)
+                    let lastMarkBN = new BigNumber(lastMark)
+                    console.log('settlePNL: lastMarkBN', lastMarkBN.toString(), typeof lastMarkBN)
+console.log('settlePNL: priceBN', priceBN.toString(), typeof priceBN)
+console.log('settlePNL: contractsBN', contractsBN.toString(), typeof contractsBN)
+console.log('settlePNL: notionalValueBN', notionalValueBN.toString(), typeof notionalValueBN)
+
+                pnl = one.dividedBy(lastMarkBN).minus(one.dividedBy(priceBN))
                 .times(contractsBN)
                 .times(notionalValueBN)
+                console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
                 }
                
                 if(contracts < 0){

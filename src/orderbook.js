@@ -502,8 +502,21 @@ class Orderbook {
                 initMargin = await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price,blockTime,txid) //first we line up the capital
             }else if(isBuyerReducingPosition||isSellerReducingPosition){
                 initialReduce=true
-            }
 
+                let flipAmount = 0;
+                if ((sell && existingPosition.contracts > 0 && amount > existingPosition.contracts) ||
+                    (!sell && existingPosition.contracts < 0 && amount > Math.abs(existingPosition.contracts))) {
+                    // This is a flip!
+                    flipAmount = sell
+                        ? amount - existingPosition.contracts
+                        : amount - Math.abs(existingPosition.contracts);
+
+                    // Move collateral to reserve for only the flipAmount, not the whole order
+                    if (flipAmount > 0) {
+                        await ContractRegistry.moveCollateralToReserve(sender, contractId, flipAmount, price, blockTime, txid);
+                    }
+                }
+            }
             // Create a contract order object with the sell parameter
             const contractOrder = { contractId, amount, price, blockTime, sell, initMargin, sender, txid, isLiq, reduce,post,stop, initialReduce};
 
@@ -1124,17 +1137,23 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         }
 
                         console.log(`Checking flip logic: ${match.buyOrder.buyerAddress} closing ${closedContracts}, flipping ${flipLong}`);
-
-                        // Release margin for closed contracts
-                        let marginToRelease = BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
-                        await TallyMap.updateBalance(
-                            match.buyOrder.buyerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
-                            'contractMarginRelease', currentBlockHeight
-                        );
-
-                        // Ensure there is enough margin for the new contracts beyond closing
                         let newMarginRequired = BigNumber(initialMarginPerContract).times(flipLong).decimalPlaces(8).toNumber();
                         console.log('newMargin flip '+newMarginRequired+' '+initialMarginPerContract+' '+flipLong)
+                        if(!channel){
+                            // Release margin for closed contracts
+                            let marginToRelease = BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
+                            //so in the event that this is not a channel trade we will deduct this as it matches the book
+                            await TallyMap.updateBalance(
+                                match.buyOrder.buyerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
+                                'contractMarginRelease', currentBlockHeight
+                            );
+                        }else if(channel){
+                           let diff = BigNumber(newMarginRequired).minus(match.buyerPosition.margin || 0).decimalPlaces(8).toNumber();
+                            if (diff !== 0) await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, -diff, 0, diff, 0, 'contractTradeInitMargin_channelFlip', currentBlockHeight);
+
+                        }
+
+                        // Ensure there is enough margin for the new contracts beyond closing
                         let hasSufficientBalance = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress, collateralPropertyId, newMarginRequired);
                         
                         if (!hasSufficientBalance.hasSufficient) {
@@ -1177,16 +1196,22 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
 
                         console.log(`Checking sell flip logic: ${match.sellOrder.sellerAddress} closing ${closedContracts}, flipping ${flipShort}`);
 
-                        // Release margin for closed contracts
-                        let marginToRelease = BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
-                        await TallyMap.updateBalance(
-                            match.sellOrder.sellerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
-                            'contractMarginRelease', currentBlockHeight
-                        );
-
-                        // Ensure there is enough margin for the new contracts beyond closing
+                        console.log(`Checking flip logic: ${match.buyOrder.buyerAddress} closing ${closedContracts}, flipping ${flipLong}`);
                         let newMarginRequired = BigNumber(initialMarginPerContract).times(flipShort).decimalPlaces(8).toNumber();
-                        
+                        console.log('newMargin flip '+newMarginRequired+' '+initialMarginPerContract+' '+flipLong)
+                        if(!channel){
+                            // Release margin for closed contracts
+                            let marginToRelease = BigNumber(initialMarginPerContract).times(closedContracts).decimalPlaces(8).toNumber();
+                            //so in the event that this is not a channel trade we will deduct this as it matches the book
+                            await TallyMap.updateBalance(
+                                match.sellOrder.sellerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
+                                'contractMarginRelease', currentBlockHeight
+                            );
+                        }else if(channel){
+                            let diff = BigNumber(newMarginRequired).minus(match.sellerPosition.margin || 0).decimalPlaces(8).toNumber();
+                            if (diff !== 0) await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, -diff, 0, diff, 0, 'contractTradeInitMargin_channelFlip', currentBlockHeight);
+                        }
+
                         if (feeInfo.sellFeeFromMargin) {
                             newMarginRequired = BigNumber(newMarginRequired).minus(sellerFee).decimalPlaces(8).toNumber();
                         }
