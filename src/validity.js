@@ -32,6 +32,10 @@ const Validity = {
             return true
         },
 
+        isValidNumber(x) {
+          return typeof x === 'number' && Number.isFinite(x) && !isNaN(x) && x > 0;
+        },
+
         //Type 0: Activation
         validateActivateTradeLayer: async (sender, params, txid) => {
             params.valid = true;
@@ -92,6 +96,7 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+            
             if (!(Number.isInteger(params.initialAmount) && params.initialAmount > 0)) {
                 params.valid=false
                 params.reason += 'Invalid initial amount; ';
@@ -259,6 +264,19 @@ const Validity = {
                     params.reason += `Recipient address not whitelisted in clearlist; `;
             }
 
+            if (Array.isArray(params.amounts)) {
+                params.amounts = params.amounts.filter(isValidAmount);
+                if (params.amounts.length === 0) {
+                    params.valid = false;
+                    params.reason += 'No valid amounts; ';
+                    return params;
+                }
+            } else if (!isValidAmount(params.amounts)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
+            }
+
             return params
         },
 
@@ -286,6 +304,12 @@ const Validity = {
             if (property==null) {
                 params.valid = false;
                 params.reason += 'Invalid property ID; ';
+            }
+
+            if (!isValidAmount(params.amounts)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
             }
 
             let has = await TallyMap.hasSufficientChannel(sender, params.propertyId, params.amount);
@@ -378,6 +402,13 @@ const Validity = {
                     }
                 }
             }
+
+            if (!isValidAmount(params.amount)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
+            }
+
             console.log('about to check tally for commit '+params.senderAddress+' '+params.propertyId+' '+params.amount)
             let hasSufficientBalance = await TallyMap.hasSufficientBalance(params.senderAddress, params.propertyId, params.amount)
             console.log('checking balance in commit '+JSON.stringify(hasSufficientBalance)+params.amount)
@@ -485,6 +516,12 @@ const Validity = {
             if (!params.propertyIdOffered || !params.propertyIdDesired || !params.amountOffered || !params.amountExpected) {
                 params.valid= false 
                 params.reason += 'Missing required parameters for tradeTokens '
+            }
+
+            if (!isValidAmount(params.amountOffered)||!isValidAmount(params.amountExpected)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
             }
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(5);
@@ -859,6 +896,12 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+
+            if (!isValidAmount(params.amount)||!isValidAmount(params.amount2)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
+            }
             const admin = activationInstance.getAdmin()
             console.log('admin '+admin)
             if(sender!=admin){
@@ -866,10 +909,10 @@ const Validity = {
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
                 if(params.Id1 == 1||params.Id1 == 2||params.Id1 == 3||params.propertyIdDesired == 4||params.Id2 == 1||params.Id2 == 2||params.Id2 == 3||params.Id2 == 4){
-                     if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                    params.valid = false;
-                    params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                     }
+                    if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
+                        params.valid = false;
+                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
+                    }
                 }
             }
 
@@ -885,7 +928,7 @@ const Validity = {
                 params.reason += 'Invalid target address; ';
             }
 
-             const propertyData1 = await PropertyList.getPropertyData(params.id)
+            const propertyData1 = await PropertyList.getPropertyData(params.id)
             const propertyData2 = await PropertyList.getPropertyData(params.id2)
 
              if(propertyData1==2||propertyData1==3||propertyData2==2||propertyData2==3){
@@ -921,7 +964,6 @@ const Validity = {
                     params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
             }
 
-
                return params;
         },
 
@@ -934,6 +976,12 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            if (!isValidAmount(params.amountGranted)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
             }
 
             if(!validateAddress(params.addressToGrantTo)){
@@ -969,6 +1017,12 @@ const Validity = {
             if(isAlreadyActivated==false){
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
+            }
+
+            if (!isValidAmount(params.amountDestroyed)) {
+                params.valid = false;
+                params.reason += 'Invalid or missing amount; ';
+                return params;
             }
 
             const is = await Validity.isActivated(params.block,txid,12)
@@ -1028,6 +1082,24 @@ const Validity = {
             if (params.valid==false) {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
+
+            if (!isValidNumber(params.price)) {
+                params.valid = false;
+                params.reason += 'Price is not a valid number; ';
+            }
+            if ('high' in params && !isValidNumber(params.high)) {
+                params.valid = false;
+                params.reason += 'High is not a valid number; ';
+            }
+            if ('low' in params && !isValidNumber(params.low)) {
+                params.valid = false;
+                params.reason += 'Low is not a valid number; ';
+            }
+            if ('close' in params && !isValidNumber(params.close)) {
+                params.valid = false;
+                params.reason += 'Close is not a valid number; ';
+            }
+
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(14);
             if(isAlreadyActivated==false){
@@ -1238,6 +1310,11 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
+            if (!isValidNumber(params.price)) {
+                params.valid = false;
+                params.reason += 'Price is not a valid number; ';
+            }
+
             if(sender==null){
                 params.valid=false
                 params.reason += "Sender is null"
@@ -1294,15 +1371,15 @@ const Validity = {
 
              console.log('flips? buy/sell'+isBuyerFlippingPosition+' '+isSellerFlippingPosition)
              console.log('params for flip flags '+params.amount+' '+existingPosition.contracts+' '+Math.abs(existingPosition.contracts))
-             if(isBuyerFlippingPosition){
+            if(isBuyerFlippingPosition){
                 flipLong=params.amount-Math.abs(existingPosition.contracts)
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipLong).toNumber();
-             }else if(isSellerFlippingPosition){
+            }else if(isSellerFlippingPosition){
                 flipShort=params.amount-existingPosition.contracts
                 totalInitialMargin = BigNumber(initialMarginPerContract).times(flipShort).toNumber();
-             }
+            }
 
-             if((isBuyerReducingPosition==false&&isSellerReducingPosition==false)||isBuyerFlippingPosition||isSellerFlippingPosition){
+            if((isBuyerReducingPosition==false&&isSellerReducingPosition==false)||isBuyerFlippingPosition||isSellerFlippingPosition){
 
                 // Check if the sender has enough balance for the initial margin
                 console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+sender, contractDetails.collateralPropertyId, totalInitialMargin)
@@ -1370,6 +1447,12 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Contract amount must be a whole integer'
             }
+
+            if (!isValidNumber(params.price)) {
+                params.valid = false;
+                params.reason += 'Price is not a valid number; ';
+            }
+
             params.amount=Math.floor(params.amount)
             const isAlreadyActivated = await activationInstance.isTxTypeActive(19);
             if(isAlreadyActivated==false){
@@ -1592,6 +1675,16 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
                 return params
+            }
+
+            if (!isValidNumber(params.amountDesired)) {
+                params.valid = false;
+                params.reason += 'Price is not a valid number; ';
+            }
+
+            if (!isValidNumber(params.amountOffered)) {
+                params.valid = false;
+                params.reason += 'Price is not a valid number; ';
             }
 
             const is = await Validity.isActivated(params.block,txid,20)
@@ -1839,6 +1932,10 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            if (!isValidNumber(params.amount)) {
+                params.valid = false;
+                params.reason += 'Amount is not a valid number; ';
+            }
 
             if(params.ref){
                 const outputs = await TxUtils.getTransactionOutputs(txid)
