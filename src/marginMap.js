@@ -788,9 +788,21 @@ class MarginMap {
                 const avgPriceBN = new BigNumber(pos.avgPrice);
                 const priceBN = new BigNumber(price)
                 const contractsBN = new BigNumber(contracts)
-                const notionalValueBN = new BigNumber(notional)
                 if (!pos) return 0;
                 const ContractRegistry = require('./ContractRegistry.js')
+                if (notional == null || isNaN(Number(notional))) {
+                    // Lazy fetch from ContractRegistry
+                    const info = await ContractRegistry.getContractInfo(contractId);
+                    if (info && info.notionalValue != null) {
+                        notional = info.notionalValue;
+                    } else {
+                        console.log('SOMEHOW CONTRACT INFO FAILED TO LOAD in SETTLEPNL')
+                        // Couldn’t find it—fail this tx gracefully!
+                        // e.g., return 0 or set pnl=0, maybe set a params.reason if you track validation
+                        notional = 1; // or 0, or whatever "safe" fallback makes sense for your protocol
+                    }
+                }
+                const notionalValueBN = new BigNumber(notional)
                 // Check if the contract is associated with an orac
                 let pnl = 0
                 if(!inverse){

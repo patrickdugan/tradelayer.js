@@ -271,7 +271,7 @@ const Validity = {
                     params.reason += 'No valid amounts; ';
                     return params;
                 }
-            } else if (!isValidAmount(params.amounts)) {
+            } else if (!Validity.isValidNumber(params.amounts)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -306,7 +306,7 @@ const Validity = {
                 params.reason += 'Invalid property ID; ';
             }
 
-            if (!isValidAmount(params.amounts)) {
+            if (!Validity.isValidNumber(params.amounts)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -403,7 +403,7 @@ const Validity = {
                 }
             }
 
-            if (!isValidAmount(params.amount)) {
+            if (!Validity.isValidNumber(params.amount)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -518,7 +518,7 @@ const Validity = {
                 params.reason += 'Missing required parameters for tradeTokens '
             }
 
-            if (!isValidAmount(params.amountOffered)||!isValidAmount(params.amountExpected)) {
+            if (!Validity.isValidNumber(params.amountOffered)||!Validity.isValidNumber(params.amountExpected)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -897,7 +897,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            if (!isValidAmount(params.amount)||!isValidAmount(params.amount2)) {
+            if (!Validity.isValidNumber(params.amount)||!Validity.isValidNumber(params.amount2)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -978,7 +978,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            if (!isValidAmount(params.amountGranted)) {
+            if (!Validity.isValidNumber(params.amountGranted)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -1019,7 +1019,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            if (!isValidAmount(params.amountDestroyed)) {
+            if (!Validity.isValidNumber(params.amountDestroyed)) {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -1083,19 +1083,19 @@ const Validity = {
                 params.reason = 'Sender is not admin of the specified oracle; ';
             }
 
-            if (!isValidNumber(params.price)) {
+            if (!Validity.isValidNumber(params.price)) {
                 params.valid = false;
                 params.reason += 'Price is not a valid number; ';
             }
-            if ('high' in params && !isValidNumber(params.high)) {
+            if ('high' in params && !Validity.isValidNumber(params.high)) {
                 params.valid = false;
                 params.reason += 'High is not a valid number; ';
             }
-            if ('low' in params && !isValidNumber(params.low)) {
+            if ('low' in params && !Validity.isValidNumber(params.low)) {
                 params.valid = false;
                 params.reason += 'Low is not a valid number; ';
             }
-            if ('close' in params && !isValidNumber(params.close)) {
+            if ('close' in params && !Validity.isValidNumber(params.close)) {
                 params.valid = false;
                 params.reason += 'Close is not a valid number; ';
             }
@@ -1310,7 +1310,7 @@ const Validity = {
                 params.reason += 'Tx type not yet activated '
             }
 
-            if (!isValidNumber(params.price)) {
+            if (!Validity.isValidNumber(params.price)) {
                 params.valid = false;
                 params.reason += 'Price is not a valid number; ';
             }
@@ -1448,7 +1448,7 @@ const Validity = {
                 params.reason += 'Contract amount must be a whole integer'
             }
 
-            if (!isValidNumber(params.price)) {
+            if (!Validity.isValidNumber(params.price)) {
                 params.valid = false;
                 params.reason += 'Price is not a valid number; ';
             }
@@ -1677,12 +1677,12 @@ const Validity = {
                 return params
             }
 
-            if (!isValidNumber(params.amountDesired)) {
+            if (!Validity.isValidNumber(params.amountDesired)) {
                 params.valid = false;
                 params.reason += 'Price is not a valid number; ';
             }
 
-            if (!isValidNumber(params.amountOffered)) {
+            if (!Validity.isValidNumber(params.amountOffered)) {
                 params.valid = false;
                 params.reason += 'Price is not a valid number; ';
             }
@@ -1932,7 +1932,7 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
-            if (!isValidNumber(params.amount)) {
+            if (!Validity.isValidNumber(params.amount)) {
                 params.valid = false;
                 params.reason += 'Amount is not a valid number; ';
             }
