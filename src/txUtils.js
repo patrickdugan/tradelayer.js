@@ -1,4 +1,3 @@
-
 const litecore = require('bitcore-lib-ltc');
 const Encode = require('./txEncoder.js');
 const BigNumber = require('bignumber.js');
@@ -40,6 +39,82 @@ const TxUtils = {
             console.error(`Error fetching transaction for txid ${txid}:`, error);
         }
     },
+
+    async getAddressTypeUniversal(address) {
+        // Bitcoin
+        if (address.startsWith('1')) return 'p2pkh';             // BTC legacy
+        if (address.startsWith('3')) return 'p2sh';              // BTC P2SH
+        if (address.startsWith('bc1q')) return 'p2wpkh';         // BTC bech32 segwit
+        if (address.startsWith('bc1p')) return 'p2tr';           // BTC taproot
+
+        // Litecoin
+        if (address.startsWith('L') || address.startsWith('M')) return 'p2pkh';   // LTC legacy (mainnet/testnet)
+        if (address.startsWith('3')) return 'p2sh';                               // LTC also uses '3' for P2SH
+        if (address.startsWith('ltc1q')) return 'p2wpkh';                         // LTC bech32 segwit
+        if (address.startsWith('ltc1p')) return 'p2tr';                           // LTC taproot
+
+        // Testnet Bitcoin
+        if (address.startsWith('m') || address.startsWith('n')) return 'p2pkh';   // BTC testnet legacy
+        if (address.startsWith('2')) return 'p2sh';                               // BTC testnet P2SH
+        if (address.startsWith('tb1q')) return 'p2wpkh';                          // BTC testnet bech32 segwit
+        if (address.startsWith('tb1p')) return 'p2tr';                            // BTC testnet taproot
+
+        // Testnet Litecoin (rare, for completeness)
+        if (address.startsWith('tltc1q')) return 'p2wpkh';                        // LTC testnet bech32 segwit
+        if (address.startsWith('tltc1p')) return 'p2tr';                          // LTC testnet taproot
+
+        return 'unknown';
+    },
+
+    async extractPubkeyByType(vin, scriptType) {
+        // P2PKH (legacy)
+        if (scriptType === 'p2pkh') {
+            if (vin.scriptSig && vin.scriptSig.asm) {
+                const asm = vin.scriptSig.asm.split(' ');
+                const pubkeyHex = asm[asm.length - 1];
+                if (/^[0-9a-fA-F]{66}$/.test(pubkeyHex) || /^[0-9a-fA-F]{130}$/.test(pubkeyHex)) {
+                    return [pubkeyHex];
+                }
+            }
+        }
+
+        // P2WPKH (native segwit)
+        if (scriptType === 'p2wpkh') {
+            if (vin.txinwitness && vin.txinwitness.length > 1) {
+                const pubkeyHex = vin.txinwitness[1];
+                if (/^[0-9a-fA-F]{66}$/.test(pubkeyHex) || /^[0-9a-fA-F]{130}$/.test(pubkeyHex)) {
+                    return [pubkeyHex];
+                }
+            }
+        }
+
+        // P2SH (multisig)
+        if (scriptType === 'p2sh') {
+            // P2SH can be anything, but for multisig, pubkeys are in redeemScript
+            // Look for scriptSig.asm, extract all pubkeys (33 or 65 bytes each)
+            if (vin.scriptSig && vin.scriptSig.asm) {
+                const asm = vin.scriptSig.asm.split(' ');
+                // Multisig format: <sig> <sig> ... <redeemScript>
+                // RedeemScript comes last; pubkeys are inside the redeemScript (need to parse it)
+                // Here, just return all valid-length hexes (skip signatures)
+                const possiblePubkeys = asm.filter(x =>
+                    /^[0-9a-fA-F]{66}$/.test(x) || /^[0-9a-fA-F]{130}$/.test(x)
+                );
+                return possiblePubkeys.length > 0 ? possiblePubkeys : null;
+            }
+        }
+
+        // P2TR (taproot, not usually relevant unless key path spent)
+        if (scriptType === 'p2tr') {
+            // Taproot doesn't always reveal a pubkey in the script (key path spend only reveals signature)
+            // If script path, pubkeys may be present in the control block/witness
+            return null; // (Implement as needed)
+        }
+
+        // Unknown type, fallback
+        return null;
+    },
+
 
     async validateAddressWrapper(address) {
         if(!this.client){

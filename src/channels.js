@@ -228,65 +228,48 @@ class Channels {
                 }
             }
     }
-static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
-    const channel = this.channelsRegistry.get(existingChannelAddress);
 
-    // 1) If the channel isn't initialized yet, fall back to last-character rule
-    if (!channel || !channel.participants) {
-        return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-    }
-
-    // 2) If this address already committed, preserve its column
-    if (channel.participants.A === newCommitAddress) return 'A';
-    if (channel.participants.B === newCommitAddress) return 'B';
-
-    // 3) If one side is still empty, use that
-    if (!channel.participants.A) return 'A';
-    if (!channel.participants.B) return 'B';
-
-    // 4) Otherwise, use your existing default + tie-break logic
-    const defaultCol = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-    const lastCol    = channel.lastUsedColumn;
-
-    // If default equals lastUsed, flip it
-    if (defaultCol === lastCol) {
-        return defaultCol === 'A' ? 'B' : 'A';
-    }
-
-    // Odd/even deeper tie-breaker
-    const isOdd = c => /[ACEGIKMOQSUWY13579]/i.test(c);
-    const existOdd = isOdd(existingChannelAddress.slice(-1));
-    const newOdd   = isOdd(newCommitAddress.slice(-1));
-
-    if (existOdd === newOdd) {
-        // compare second-last char
-        const e2 = existingChannelAddress.slice(-2, -1);
-        const n2 = newCommitAddress.slice(-2, -1);
-        if (e2 !== n2) {
-            return e2 < n2 ? 'B' : 'A';
+    static assignColumnBasedOnAddress(channel, newCommitAddress, cpAddress){
+        const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);   
+        // 1) If the channel isn't initialized yet, fall back to last-character rule
+        if (!channel.participants.A&&!channel.participants.B) {
+            channel.participants[column]=newCommitAddress
+            return channel
         }
-        // fallback deeper
-        for (let i = 3; i <= Math.min(
-            existingChannelAddress.length,
-            newCommitAddress.length
-        ); i++) {
-            const ec = existingChannelAddress.slice(-i, -i+1);
-            const nc = newCommitAddress.slice(-i, -i+1);
-            if (ec !== nc) {
-                return ec < nc ? 'B' : 'A';
-            }
+
+        // 2) If this address already committed, preserve its column
+        if (channel.participants.A === newCommitAddress||channel.participants.B === newCommitAddress){
+            return channel
+        } 
+
+        // 3) the cp address is assigned and there's no conflict, includes crowded channel
+        if(channel.participants[column]!==cpAddress&&!channel.participants[column]){
+            channel.participants[column]=newCommitAddress
+            return channel
         }
+        
+        // 4. Crowded: default spot is already filled, so we need tie-break and bump
+        if(channel.participants[column]==cpAddress||(channel.participants[column] && channel.participants[column] !== newCommitAddress)){
+            const tiebreak = Channels.tieBreakerByBackChar(newCommitAddress, cpAddress, column);
+            return Channels.bumpColumnAssignment(
+                channel,
+                tiebreak.winnerColumn === 'A' ? tiebreak.winner : tiebreak.loser,
+                tiebreak.winnerColumn === 'B' ? tiebreak.winner : tiebreak.loser
+            );
+        }
+
+        console.error(
+            `[Channel Assign] Unexpected case in channel assignment for channel ${channel.channel}.\n` +
+            `Participants: A=${channel.participants.A}, B=${channel.participants.B}\n` +
+            `Incoming commit: ${newCommitAddress}\n` +
+            `This should be handled earlier in the logic!`
+        );
+     
     }
 
-    // final fallback: opposite of existing oddness
-    return existOdd ? 'B' : 'A';
-}
-
-
-
-    static assignColumnBasedOnLastCharacter(address) {
+    static assignColumnBasedOnLastCharacter(address, last=1) {
         // Get the last character of the address
-        const lastChar = address[address.length - 1];
+        const lastChar = address[address.length - last];
         console.log('last char in assign column based on last character '+lastChar)
         // Define the characters considered odd
         const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
@@ -298,29 +281,71 @@ static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
         return isOdd ? 'A' : 'B';
     }
 
-    static bumpColumnAssignment(channelAddress, existingColumn, newColumn) {
-      // Get the channel information from the registry map object
-      const channel = this.channelsRegistry.get(channelAddress);
+  /**
+ * Tie-breaker to assign addresses to columns based on their last N characters' parity.
+ * Returns: { winner: address, loser: address, winnerColumn: 'A' | 'B', loserColumn: 'A' | 'B' }
+ */
+    static tieBreakerByBackChar(addr1, addr2, column, assignColFunc = Channels.assignColumnBasedOnLastCharacter) {
+        const len = Math.min(addr1.length, addr2.length);
+        for (let n = 1; n <= len; n++) {
+            const col1 = assignColFunc(addr1, n);
+            const col2 = assignColFunc(addr2, n);
+            if (col1 === column && col2 !== column) {
+                return {
+                    winner: addr1,
+                    loser: addr2,
+                    winnerColumn: column,
+                    loserColumn: column === 'A' ? 'B' : 'A'
+                };
+            }
+            if (col2 === column && col1 !== column) {
+                return {
+                    winner: addr2,
+                    loser: addr1,
+                    winnerColumn: column,
+                    loserColumn: column === 'A' ? 'B' : 'A'
+                };
+            }
+        }
+        // If no decisive winner, default addr1 to the requested column
+        return {
+            winner: addr1,
+            loser: addr2,
+            winnerColumn: column,
+            loserColumn: column === 'A' ? 'B' : 'A'
+        };
+    }
 
-      if (!channel) {
-          // If the channel doesn't exist, return without performing any action
-          return;
-      }
 
-      // Get the existing commit address and its corresponding column assignment
-      const existingCommitAddress = existingColumn === 'columnA' ? channel.columnAAddress : channel.columnBAddress;
 
-      // Determine the column to be bumped based on the existing and new column assignments
-      const columnToBump = existingColumn === 'columnA' ? 'columnB' : 'columnA';
+    static bumpColumnAssignment(channel, forceAis, forceBis) {
+        // `forceAis` and `forceBis` are the addresses you want in A and B, respectively.
+        if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
 
-      // Update the channel registry map to overwrite the column assignment of the other commit address
-      channel[columnToBump + 'Address'] = existingCommitAddress;
-      channel[columnToBump] = existingColumn;
+        // Only swap if necessary
+        const currentA = channel.participants.A;
+        const currentB = channel.participants.B;
 
-      // Update the channel registry map with the modified channel information
-      this.channelsRegistry.set(channelAddress, channel);
-  }
+        // If nothing needs to change, just return
+        if (currentA === forceAis && currentB === forceBis) return channel;
 
+        // If they are reversed, SWAP participants and all A/B properties
+        if (currentA === forceBis) {
+            // Swap participants
+            [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+            channel.A = channel.B
+            channel.B = {}
+
+        }else if(currentB === forceAis){
+            // Swap balances
+            [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+            channel.B = channel.A;
+            channel.A = {}
+
+        } 
+
+        return channel;
+    }
 
     // New function to process commitments and assign columns
     static async processChannelCommits(tradeChannelManager, channelAddress) {
@@ -354,10 +379,22 @@ static assignColumnBasedOnAddress(existingChannelAddress, newCommitAddress) {
         }
 
         // Get the channel from the registry
-        const channel = this.channelsRegistry.get(channelAddress);
+        let channel = this.channelsRegistry.get(channelAddress);
         console.log(JSON.stringify(channel))
         // Determine the column for the sender address
-        const channelColumn = Channels.assignColumnBasedOnAddress(channelAddress, senderAddress);
+        let cpAddress = ''
+        if(channel.data.participants.A!==sender&&channel.data.participants.A){
+            cpAddress = channel.data.participants.A
+        }else if(channel.data.participants.B!==sender&&channel.data.participants.B){
+            cpAddress = channel.data.participants.B
+        }
+        channel = Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress);
+        const participants = channel.data.participants;
+        const channelColumn =
+          participants.A === senderAddress ? 'A' :
+          participants.B === senderAddress ? 'B' :
+          null;
+          if(null){return console.log('ERR WITH COMMIT '+senderAddress+' '+channelAddress+' '+blockHeight)}
         console.log('assinging column in recordCommit' +channelColumn)
         // Update the balance in the specified column
         if (!channel[channelColumn][propertyId]) {

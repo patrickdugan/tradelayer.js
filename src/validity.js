@@ -367,6 +367,9 @@ const Validity = {
             params.reason = '';
             params.valid = true;
             //console.log('inside validate commit '+JSON.stringify(params))
+
+
+
             if(params.ref){
                 //console.log(params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
@@ -467,6 +470,34 @@ const Validity = {
 
             const channelData =await Channels.getChannel(params.channelAddress)
             if (channelData) {
+                    const tx = await TxUtils.getRawTransaction(txid);
+
+            // Find the vin corresponding to the sender
+            let senderVin =0
+
+            // Detect script type
+            const scriptType = TxUtils.detectScriptType(senderVin);
+            // Extract pubkey(s)
+            const pubkeys = TxUtils.extractPubkeyByType(senderVin, scriptType);
+
+            if (!pubkeys || pubkeys.length === 0) {
+                params.valid = false;
+                params.reason += "Could not extract pubkey from sender's input.";
+                return params;
+            }
+
+            // Compare pubkey to expected pubkeys for the channel
+            // (This depends on how you store the multisig pubkeys, but let's say channelData has channelPubkeys: {A: '...', B: '...'})
+            const expectedPubkeys = [
+                channelData.channelPubkeys?.A,
+                channelData.channelPubkeys?.B
+            ].filter(Boolean);
+
+            const matchesKnown = pubkeys.some(pk => expectedPubkeys.includes(pk));
+            if (!matchesKnown && expectedPubkeys.length > 0) {
+                params.valid = false;
+                params.reason += "Sender pubkey does not match channel pubkeys.";
+            }
                 console.log(JSON.stringify(channelData))
               const participants = channelData.participants;
               const commits = channelData.commits;

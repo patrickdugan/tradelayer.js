@@ -855,11 +855,12 @@ const Logic = {
         let buyerAddress
         let sellerAddress
         if(columnAIsOfferer){
+             sellerAddres=commitAddressA
+            buyerAddress=commitAddressB
+        }else{
             sellerAddres=commitAddressB
             buyerAddress=commitAddressA
-        }else{
-            sellerAddres=commitAddressA
-            buyerAddress=commitAddressB
+           
         }
 
         const sellOrder = {
