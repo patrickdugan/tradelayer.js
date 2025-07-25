@@ -285,12 +285,16 @@ class Channels {
  * Tie-breaker to assign addresses to columns based on their last N characters' parity.
  * Returns: { winner: address, loser: address, winnerColumn: 'A' | 'B', loserColumn: 'A' | 'B' }
  */
-    static tieBreakerByBackChar(addr1, addr2, column, assignColFunc = Channels.assignColumnBasedOnLastCharacter) {
+   static tieBreakerByBackChar(addr1, addr2, column, assignColFunc = Channels.assignColumnBasedOnLastCharacter) {
         const len = Math.min(addr1.length, addr2.length);
         for (let n = 1; n <= len; n++) {
             const col1 = assignColFunc(addr1, n);
             const col2 = assignColFunc(addr2, n);
+
+            console.log(`[TieBreak] Char ${n}: ${addr1}[${col1}] vs ${addr2}[${col2}], competing for ${column}`);
+
             if (col1 === column && col2 !== column) {
+                console.log(`[TieBreak WINNER] ${addr1} wins column ${column} at char -${n}`);
                 return {
                     winner: addr1,
                     loser: addr2,
@@ -299,6 +303,7 @@ class Channels {
                 };
             }
             if (col2 === column && col1 !== column) {
+                console.log(`[TieBreak WINNER] ${addr2} wins column ${column} at char -${n}`);
                 return {
                     winner: addr2,
                     loser: addr1,
@@ -308,6 +313,7 @@ class Channels {
             }
         }
         // If no decisive winner, default addr1 to the requested column
+        console.log(`[TieBreak DEFAULT] ${addr1} assigned ${column} by default (no unique winner)`);
         return {
             winner: addr1,
             loser: addr2,
@@ -316,34 +322,40 @@ class Channels {
         };
     }
 
-
-
-    static bumpColumnAssignment(channel, forceAis, forceBis) {
-        // `forceAis` and `forceBis` are the addresses you want in A and B, respectively.
+   static bumpColumnAssignment(channel, forceAis, forceBis) {
         if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
 
-        // Only swap if necessary
         const currentA = channel.participants.A;
         const currentB = channel.participants.B;
 
+        console.log(`[Bump] Current: A=${currentA}, B=${currentB} | Forcing: A=${forceAis}, B=${forceBis}`);
+
         // If nothing needs to change, just return
-        if (currentA === forceAis && currentB === forceBis) return channel;
+        if (currentA === forceAis && currentB === forceBis) {
+            console.log('[Bump] No swap needed.');
+            return channel;
+        }
 
         // If they are reversed, SWAP participants and all A/B properties
         if (currentA === forceBis) {
-            // Swap participants
+            console.log(`[Bump] Swapping A <-> B: ${currentA} <-> ${currentB}`);
             [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-            channel.A = channel.B
-            channel.B = {}
-
-        }else if(currentB === forceAis){
-            // Swap balances
+            channel.A = channel.B;
+            channel.B = {};
+        } else if (currentB === forceAis) {
+            console.log(`[Bump] Swapping B <-> A: ${currentB} <-> ${currentA}`);
             [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
             channel.B = channel.A;
-            channel.A = {}
+            channel.A = {};
+        } else {
+            // Unusual case—total overwrite?
+            console.log(`[Bump] Overwriting participants: A=${forceAis}, B=${forceBis}`);
+            channel.participants.A = forceAis;
+            channel.participants.B = forceBis;
+            // You may want to set or reset balances here if needed.
+        }
 
-        } 
-
+        console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
         return channel;
     }
 
