@@ -18,6 +18,14 @@ class TradeLayerManager {
         }
     }
 
+    getChain(){
+        return this.chain
+    }
+
+    getTest(){
+        return this.test
+    }
+
     async ensureChainInitialized() {
         console.log("Checking for valid chain..."+this.chain+' '+this.test);
 

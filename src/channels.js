@@ -1,6 +1,7 @@
 const dbInstance = require('./db.js');
 const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
+const TxUtils = require('./txUtils.js')
 
 class Channels {
       // Initialize channelsRegistry as a static property
@@ -264,7 +265,6 @@ class Channels {
             `Incoming commit: ${newCommitAddress}\n` +
             `This should be handled earlier in the logic!`
         );
-     
     }
 
     static assignColumnBasedOnLastCharacter(address, last=1) {
@@ -322,6 +322,36 @@ class Channels {
         };
     }
 
+    static predictColumnForAddress(channel, newCommitAddress, cpAddress) {
+    // 1) If channel is empty, fallback to last-character rule
+    if (!channel.participants.A && !channel.participants.B) {
+        return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+    }
+
+    // 2) If already present, preserve
+    if (channel.participants.A === newCommitAddress) return 'A';
+    if (channel.participants.B === newCommitAddress) return 'B';
+
+    // 3) If the computed column is free (not cpAddress), assign
+    const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+    if (channel.participants[column] !== cpAddress && !channel.participants[column]) {
+        return column;
+    }
+
+    // 4) Crowded, tie-break logic
+    if (
+        channel.participants[column] === cpAddress ||
+        (channel.participants[column] && channel.participants[column] !== newCommitAddress)
+    ) {
+        const tiebreak = Channels.tieBreakerByBackChar(newCommitAddress, cpAddress, column);
+        return tiebreak.winnerColumn;
+    }
+
+    // fallback: no assignment possible (shouldn't hit)
+    return null;
+}
+
+
    static bumpColumnAssignment(channel, forceAis, forceBis) {
         if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
 
@@ -366,12 +396,56 @@ class Channels {
             // Assign columns based on predefined logic
             const columnAssignments = Channels.assignColumns(channelAddress);
             Channels.updateChannelWithColumnAssignments(channelAddress, columnAssignments);
-
             //console.log(`Columns assigned for channel ${channelAddress}`);
         }
     }
 
-    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight) {
+    // This should be a static method of Channels, adjust class context as needed
+    // Returns: { channel, valid, reason }
+    static async handleChannelPubkey(channel, column, senderAddress, commitTxid) {
+        let valid = true;
+        let reason = '';
+
+        try {
+            const tx = await TxUtils.getRawTransaction(commitTxid);
+            const vin = tx.vin[0];  // Always use first input
+
+            const scriptType = TxUtils.getAddressTypeUniversal(senderAddress);
+            const pubkeys = TxUtils.extractPubkeyByType(vin, scriptType) || [];
+            if (!pubkeys.length) throw new Error('No pubkey found in commit tx');
+
+            // Store/overwrite pubkey for the column
+            channel.channelPubkeys[column] = pubkeys[0];
+
+            // If both pubkeys are set, validate multisig address
+            const pubA = channel.channelPubkeys.A;
+            const pubB = channel.channelPubkeys.B;
+
+            if (pubA && pubB) {
+                const chain = Vesting.getChain();
+                const network = Vesting.getTest();
+                const multisig1 = await TxUtils.createMultisig(pubA, pubB, chain, network);
+                const multisig2 = await TxUtils.createMultisig(pubB, pubA, chain, network);
+
+                if (channel.channel !== multisig1 && channel.channel !== multisig2) {
+                    valid = false;
+                    reason = 'Multisig does not match channel address.';
+                    return { channel, valid, reason };
+                }
+            }
+
+            // All good
+            return { channel, valid, reason };
+
+        } catch (err) {
+            valid = false;
+            reason = err.message;
+            return { channel, valid, reason };
+        }
+    }
+
+
+    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid){
         console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
@@ -386,7 +460,8 @@ class Channels {
                 A: {},
                 B: {},
                 lastCommitmentTime: blockHeight,
-                lastUsedColumn: null // Initialize lastUsedColumn to null
+                lastUsedColumn: null, // Initialize lastUsedColumn to null
+                channelPubkeys: {A:'',B:''}
             });
         }
 
@@ -395,14 +470,21 @@ class Channels {
         console.log(JSON.stringify(channel))
         // Determine the column for the sender address
         let cpAddress = ''
-        if(channel.data.participants.A!==sender&&channel.data.participants.A){
-            cpAddress = channel.data.participants.A
-        }else if(channel.data.participants.B!==sender&&channel.data.participants.B){
-            cpAddress = channel.data.participants.B
+        if(channel.participants.A!==senderAddress&&channel.participants.A){
+            cpAddress = channel.participants.A
+        }else if(channel.participants.B!==senderAddress&&channel.participants.B){
+            cpAddress = channel.participants.B
         }
+        let channelColumn = Channels.predictColumnForAddress(channel, senderAddress, cpAddress)
+        const { channel: updatedChannel, valid, reason } = await Channels.handleChannelPubkey(channel, channelColumn, senderAddress, txid);
+        if (!valid) {
+            console.log('DISPLACED COMMIT USURPER')
+            return
+        }
+        channel = updatedChannel
         channel = Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress);
-        const participants = channel.data.participants;
-        const channelColumn =
+        const participants = channel.participants;
+        channelColumn =
           participants.A === senderAddress ? 'A' :
           participants.B === senderAddress ? 'B' :
           null;

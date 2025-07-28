@@ -13,6 +13,7 @@ const MarginMap = require('./marginMap.js')
 const ClearList = require('./clearlist.js')
 const VolumeIndex = require('./volumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
+const Vesting = require('./vesting.js')
 const Scaling = require('./scaling.js')
 //const whiteLists = require('./whitelists.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
@@ -366,10 +367,8 @@ const Validity = {
         validateCommit: async (sender, params, txid) => {
             params.reason = '';
             params.valid = true;
+            params.txid = txid
             //console.log('inside validate commit '+JSON.stringify(params))
-
-
-
             if(params.ref){
                 //console.log(params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
@@ -469,20 +468,22 @@ const Validity = {
             }
 
             const channelData =await Channels.getChannel(params.channelAddress)
+            console.log('glaiven '+JSON.stringify(channelData)+' '+JSON.stringify(params))
             if (channelData) {
                     const tx = await TxUtils.getRawTransaction(txid);
 
             // Find the vin corresponding to the sender
-            let senderVin =0
+            let senderVin = tx.vin[0];
 
             // Detect script type
-            const scriptType = TxUtils.detectScriptType(senderVin);
+            const scriptType = TxUtils.getAddressTypeUniversal(sender);
             // Extract pubkey(s)
-            const pubkeys = TxUtils.extractPubkeyByType(senderVin, scriptType);
+            const pubkeys = TxUtils.extractPubkeyByType(senderVin, scriptType)|| [];
 
             if (!pubkeys || pubkeys.length === 0) {
                 params.valid = false;
                 params.reason += "Could not extract pubkey from sender's input.";
+                throw error("Could not extract pubkey from sender's input.")
                 return params;
             }
 
@@ -492,37 +493,26 @@ const Validity = {
                 channelData.channelPubkeys?.A,
                 channelData.channelPubkeys?.B
             ].filter(Boolean);
-
-            const matchesKnown = pubkeys.some(pk => expectedPubkeys.includes(pk));
-            if (!matchesKnown && expectedPubkeys.length > 0) {
-                params.valid = false;
-                params.reason += "Sender pubkey does not match channel pubkeys.";
+            console.log('channel pubkeys '+JSON.stringify(expectedPubkeys))
+            if(expectedPubkeys.length==2){
+                const chain = Vesting.getChain()
+                const network = Vesting.getTest()
+                const multiA = TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, test)
+                const multiB = TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, test) 
+                if(multiA!==params.channelAddress&&multiB!==params.channelAddress){
+                    params.valid = false;
+                    params.reason += "Commiter is not a party to the multisig channel.";
+                    return params;
+                }
             }
-                console.log(JSON.stringify(channelData))
-              const participants = channelData.participants;
-              const commits = channelData.commits;
-
-              // Check if both participants (A and B) are full
-              const participantAFilled = participants.A && Object.keys(channelData.A).length > 0;
-              const participantBFilled = participants.B && Object.keys(channelData.B).length > 0;
-
-              // Check if sender is neither A nor B
-              const senderIsParticipantA = participants.A === sender;
-              const senderIsParticipantB = participants.B === sender;
-
-              // Invalidate if both participants are full and sender is neither A nor B
-            if (participantAFilled && participantBFilled && !senderIsParticipantA && !senderIsParticipantB) {
-                isValid = false;
-                reason = 'Both participants are full and the sender is not a participant, try making a new multisig.';
-              }
-            }
+        }
 
             if(!passes&&propertyData.whitelistId!=0){
              params.valid = false;
                     params.reason += `Sender address not listed in clearlist for the token`;
             }
 
-             if (typeof params.payEnabled !== 'boolean') {
+            if (typeof params.payEnabled !== 'boolean') {
                 params.valid = false;
                 params.reason += 'payEnabled is not a boolean. ';
             }

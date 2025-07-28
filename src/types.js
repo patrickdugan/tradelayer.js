@@ -183,10 +183,12 @@ const Types = {
 
             case 4:
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));
+                console.log('in type decode '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid = txId
                 params.block=block
                 params = await Validity.validateCommit(sender, params, txId)
+                console.log('after validity '+JSON.stringify(params))
                 break;
             case 5:
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));

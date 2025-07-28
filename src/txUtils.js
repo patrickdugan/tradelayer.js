@@ -41,6 +41,7 @@ const TxUtils = {
     },
 
     async getAddressTypeUniversal(address) {
+        console.log('address in get type '+address)
         // Bitcoin
         if (address.startsWith('1')) return 'p2pkh';             // BTC legacy
         if (address.startsWith('3')) return 'p2sh';              // BTC P2SH
@@ -1196,13 +1197,22 @@ async createRedeemTransaction(thisAddress, params) {
     }
 },
 
-createLitecoinMultisigAddress(pubKey1, pubKey2) {
+createMultisigAddress(pubKey1, pubKey2, coin = 'ltc', network = 'mainnet') {
+    let bitcore, netParam;
+    if (coin === 'btc') {
+        bitcore = require('bitcore-lib'); // Bitcoin
+        netParam = (network === 'testnet') ? bitcore.Networks.testnet : bitcore.Networks.mainnet;
+    } else if (coin === 'ltc') {
+        bitcore = require('bitcore-lib-ltc'); // Litecoin
+        netParam = (network === 'testnet') ? bitcore.Networks.testnet : bitcore.Networks.livenet;
+    } else {
+        throw new Error("Unsupported coin");
+    }
     const publicKeys = [
-        new litecore.PublicKey(pubKey1),
-        new litecore.PublicKey(pubKey2)
+        new bitcore.PublicKey(pubKey1),
+        new bitcore.PublicKey(pubKey2)
     ];
-
-    const multisig = new litecore.Address(publicKeys, 2); // 2-of-2 multisig
+    const multisig = new bitcore.Address(publicKeys, 2, netParam); // 2-of-2
     return multisig.toString();
 },
 

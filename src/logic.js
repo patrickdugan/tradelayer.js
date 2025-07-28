@@ -59,7 +59,7 @@ const Logic = {
                 await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.tagWithdraw, params.block, params.txid);
                 break;
             case 4:
-                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block);
+                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block, params.txid);
                 break;
             case 5:
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block, params.stop, params.post);
@@ -488,7 +488,7 @@ const Logic = {
                 return
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block) {
+	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
        console.log('commiting tokens '+tokenAmount+' '+block)
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
@@ -497,7 +497,7 @@ const Logic = {
         await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
 
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block);
+        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
         return;
