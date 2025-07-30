@@ -1200,17 +1200,15 @@ async createRedeemTransaction(thisAddress, params) {
 
 createMultisig(pubKey1, pubKey2, coin = 'ltc', isTestnet, address = '') {
     const kind = TxUtils.inferChannelAddrType(address);
-    console.log('coin/net '+coin+' '+network)
+    console.log('coin/net '+coin+' '+isTestnet)
     coin = coin.toLowerCase();
     // --- Setup network params ---
     let params
     if (coin === 'btc') {
-        isTestnet = (network === 'testnet');
         params = isTestnet
             ? require('bitcoinjs-lib').networks.testnet
             : require('bitcoinjs-lib').networks.bitcoin;
     } else if (coin === 'ltc') {
-        isTestnet = (network === 'testnet');
         params = isTestnet
             ? {
                 messagePrefix: '\x19Litecoin Signed Message:\n',

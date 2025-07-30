@@ -499,7 +499,7 @@ const Validity = {
                 const instance = await Vesting.getInstance()
                 const chain = instance.getChain()
                 const isTestnet = instance.getTest()
-                console.log('params for sim multisig '+chain+' '+network)
+                console.log('params for sim multisig '+chain+' '+isTestnet)
                 const multiA = await TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, isTestnet,sender)
                 const multiB = await TxUtils.createMultisig(expectedPubkeys[1],expectedPubkeys[0], chain, isTestnet,sender) 
                 console.log('multiA and B '+multiA+' '+multiB+' '+params.channelAddress)

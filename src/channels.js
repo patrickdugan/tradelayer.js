@@ -429,7 +429,7 @@ class Channels {
                 const Vesting = require('./vesting.js')
                 const instance = await Vesting.getInstance()
                 const chain = instance.getChain();
-                const network = instance.getTest();
+                const isTestnet = instance.getTest();
                 const multisig1 = await TxUtils.createMultisig(pubA, pubB, chain, isTestnet,senderAddress);
                 const multisig2 = await TxUtils.createMultisig(pubB, pubA, chain, isTestnet,senderAddress);
 
