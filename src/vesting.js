@@ -5,6 +5,7 @@ const ContractList = require('./contractRegistry.js')
 const BigNumber = require('bignumber.js')
 const ClientWrapper = require('./client.js')
 const math = require('mathjs');
+
 class TradeLayerManager {
     static instance = null;
 

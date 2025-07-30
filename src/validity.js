@@ -368,6 +368,7 @@ const Validity = {
             params.reason = '';
             params.valid = true;
             params.txid = txid
+            console.log('tagging txid to params obj '+txid +' '+params.txid)
             //console.log('inside validate commit '+JSON.stringify(params))
             if(params.ref){
                 //console.log(params.ref)
@@ -455,6 +456,7 @@ const Validity = {
                let bans = await ClearList.getBanlist()
                 if(bans==null){bans = bannedCountries}
                 const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
+                console.log('sender country info '+JSON.stringify(senderCountryInfo))
                 if(params.propertyId == 1||params.propertyId == 2||params.propertyId == 3||params.propertyId == 4){
                       const isAcc = await ClearList.isAddressInClearlist(3,sender)
                     console.log('sender country info '+JSON.stringify(senderCountryInfo))
@@ -483,7 +485,6 @@ const Validity = {
             if (!pubkeys || pubkeys.length === 0) {
                 params.valid = false;
                 params.reason += "Could not extract pubkey from sender's input.";
-                throw error("Could not extract pubkey from sender's input.")
                 return params;
             }
 
@@ -493,12 +494,15 @@ const Validity = {
                 channelData.channelPubkeys?.A,
                 channelData.channelPubkeys?.B
             ].filter(Boolean);
-            console.log('channel pubkeys '+JSON.stringify(expectedPubkeys))
+            console.log('channel pubkeys '+JSON.stringify(expectedPubkeys)+' '+'sender addr '+sender)
             if(expectedPubkeys.length==2){
-                const chain = Vesting.getChain()
-                const network = Vesting.getTest()
-                const multiA = TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, test)
-                const multiB = TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, test) 
+                const instance = await Vesting.getInstance()
+                const chain = instance.getChain()
+                const isTestnet = instance.getTest()
+                console.log('params for sim multisig '+chain+' '+network)
+                const multiA = await TxUtils.createMultisig(expectedPubkeys[0],expectedPubkeys[1], chain, isTestnet,sender)
+                const multiB = await TxUtils.createMultisig(expectedPubkeys[1],expectedPubkeys[0], chain, isTestnet,sender) 
+                console.log('multiA and B '+multiA+' '+multiB+' '+params.channelAddress)
                 if(multiA!==params.channelAddress&&multiB!==params.channelAddress){
                     params.valid = false;
                     params.reason += "Commiter is not a party to the multisig channel.";

@@ -3,6 +3,7 @@ const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
 const TxUtils = require('./txUtils.js')
 
+
 class Channels {
       // Initialize channelsRegistry as a static property
     static channelsRegistry = new Map();
@@ -406,26 +407,31 @@ class Channels {
         let valid = true;
         let reason = '';
 
-        try {
+        //try {
             const tx = await TxUtils.getRawTransaction(commitTxid);
             const vin = tx.vin[0];  // Always use first input
 
+            console.log('vin '+JSON.stringify(vin)+' '+commitTxid)
             const scriptType = TxUtils.getAddressTypeUniversal(senderAddress);
-            const pubkeys = TxUtils.extractPubkeyByType(vin, scriptType) || [];
-            if (!pubkeys.length) throw new Error('No pubkey found in commit tx');
+            console.log(scriptType)
+            const pubkey = await TxUtils.extractPubkeyByType(vin, scriptType) || [];
+            console.log('TxUtils pubkeys'+JSON.stringify(pubkey))
+            if (pubkey==null) return new Error('No pubkey found in commit tx');
 
             // Store/overwrite pubkey for the column
-            channel.channelPubkeys[column] = pubkeys[0];
+            channel.channelPubkeys[column] = pubkey;
 
             // If both pubkeys are set, validate multisig address
             const pubA = channel.channelPubkeys.A;
             const pubB = channel.channelPubkeys.B;
 
             if (pubA && pubB) {
-                const chain = Vesting.getChain();
-                const network = Vesting.getTest();
-                const multisig1 = await TxUtils.createMultisig(pubA, pubB, chain, network);
-                const multisig2 = await TxUtils.createMultisig(pubB, pubA, chain, network);
+                const Vesting = require('./vesting.js')
+                const instance = await Vesting.getInstance()
+                const chain = instance.getChain();
+                const network = instance.getTest();
+                const multisig1 = await TxUtils.createMultisig(pubA, pubB, chain, isTestnet,senderAddress);
+                const multisig2 = await TxUtils.createMultisig(pubB, pubA, chain, isTestnet,senderAddress);
 
                 if (channel.channel !== multisig1 && channel.channel !== multisig2) {
                     valid = false;
@@ -437,16 +443,16 @@ class Channels {
             // All good
             return { channel, valid, reason };
 
-        } catch (err) {
-            valid = false;
-            reason = err.message;
-            return { channel, valid, reason };
-        }
+        //} catch (err) {
+        //    valid = false;
+        //    reason = err.message;
+        //    return { channel, valid, reason };
+        //}
     }
 
 
     static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid){
-        console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight)
+        console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight+ txid)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
           }
@@ -476,12 +482,14 @@ class Channels {
             cpAddress = channel.participants.B
         }
         let channelColumn = Channels.predictColumnForAddress(channel, senderAddress, cpAddress)
+        console.log('about to handle pubkeys '+JSON.stringify(channel)+' '+senderAddress+' '+cpAddress)
         const { channel: updatedChannel, valid, reason } = await Channels.handleChannelPubkey(channel, channelColumn, senderAddress, txid);
         if (!valid) {
             console.log('DISPLACED COMMIT USURPER')
             return
         }
         channel = updatedChannel
+        console.log('channel after handle pubkeys '+JSON.stringify(channel))
         channel = Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress);
         const participants = channel.participants;
         channelColumn =
@@ -527,7 +535,7 @@ class Channels {
         // Save the updated channel information
         this.channelsRegistry.set(channelAddress,channel)
         await this.saveChannelsRegistry();
-
+        return channel
         console.log(`Committed ${tokenAmount} of propertyId ${propertyId} to ${channelColumn} in channel for ${senderAddress}`);
     }
 

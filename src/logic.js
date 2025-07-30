@@ -59,6 +59,7 @@ const Logic = {
                 await Logic.tradeTokenForUTXO(params.senderAddress, params.satsPaymentAddress, params.propertyId, params.amount, params.columnA, params.satsExpected, params.tokenDeliveryAddress, params.satsReceived, params.price, params.paymentPercent, params.tagWithdraw, params.block, params.txid);
                 break;
             case 4:
+                console.log('in the commit case '+params.txid)
                 await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block, params.txid);
                 break;
             case 5:
@@ -113,7 +114,7 @@ const Logic = {
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
                 break;        
             case 22:
-                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.pay, params.payRefAddress, params.block);
+                await Logic.transfer(params.senderAddress, params.toChannelAddress, params.propertyId, params.amount, params.isColumnA, params.pay, params.payRefAddress, params.block,params.txid);
                 break;
             case 23:
                 await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block,params.txid);
@@ -489,13 +490,13 @@ const Logic = {
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
-       console.log('commiting tokens '+tokenAmount+' '+block)
+       
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
 
         // Add tokens to the channel's balance
         await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
-
+        console.log('commiting tokens '+tokenAmount+' '+block+' '+txid)
         // Determine which column (A or B) to assign the tokens in the channel registry
         await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid);
 
@@ -912,17 +913,21 @@ const Logic = {
 	},
 
 
-	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, pay, payRefAddress, block) {
+	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, pay, payRefAddress, block,txid) {
         let fromChannel = await Channels.getChannel(fromChannelAddress);
        
         console.log(`To channel ${toChannelAddress} not found. Adding to registry.`);
-        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount, false, '', block);
+        await Channels.recordCommitToChannel(toChannelAddress, fromChannelAddress, propertyId, amount, false, '', block,txid);
         let toChannel = await Channels.getChannel(toChannelAddress);   
-
+        console.log(JSON.stringify(toChannel))
         // Determine the correct column to deduct from in the fromChannel
         const fromColumn = isColumnA ? 'A' : 'B';
-        console.log(JSON.stringify(fromChannel),fromColumn, isColumnA, amount, fromChannel[fromColumn][propertyId] )
-        const channelColumn = Channels.assignColumnBasedOnAddress(toChannelAddress, fromChannelAddress);
+        let channelColumn = ' '
+        if(toChannel.participants.A==fromChannel.participants[fromColumn]){
+            channelColumn = 'A'
+        }else if (toChannel.participants.B==fromChannel.participants[fromColumn]){
+            channelColumn = 'B'
+        }
         // Check if the fromChannel has enough balance
 
         // Assign columns in the toChannel based on the address
@@ -932,7 +937,6 @@ const Logic = {
         fromChannel[fromColumn][propertyId] -= amount;
          // Assign the commit address based on pay status
         if (pay && payRefAddress) {
-
                 // If pay is true and payRefAddress is provided, set it as the commit address
                 toChannel.participants[channelColumn] = payRefAddress;
                 console.log(`Setting commit address in toChannel ${channelColumn} as payRefAddress: ${payRefAddress}`);

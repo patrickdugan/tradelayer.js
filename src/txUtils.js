@@ -40,7 +40,7 @@ const TxUtils = {
         }
     },
 
-    async getAddressTypeUniversal(address) {
+    getAddressTypeUniversal(address) {
         console.log('address in get type '+address)
         // Bitcoin
         if (address.startsWith('1')) return 'p2pkh';             // BTC legacy
@@ -74,17 +74,18 @@ const TxUtils = {
                 const asm = vin.scriptSig.asm.split(' ');
                 const pubkeyHex = asm[asm.length - 1];
                 if (/^[0-9a-fA-F]{66}$/.test(pubkeyHex) || /^[0-9a-fA-F]{130}$/.test(pubkeyHex)) {
-                    return [pubkeyHex];
+                    return pubkeyHex;
                 }
             }
         }
 
         // P2WPKH (native segwit)
         if (scriptType === 'p2wpkh') {
+            console.log('witness '+JSON.stringify(vin.txinwitness))
             if (vin.txinwitness && vin.txinwitness.length > 1) {
                 const pubkeyHex = vin.txinwitness[1];
                 if (/^[0-9a-fA-F]{66}$/.test(pubkeyHex) || /^[0-9a-fA-F]{130}$/.test(pubkeyHex)) {
-                    return [pubkeyHex];
+                    return pubkeyHex;
                 }
             }
         }
@@ -1197,23 +1198,105 @@ async createRedeemTransaction(thisAddress, params) {
     }
 },
 
-createMultisigAddress(pubKey1, pubKey2, coin = 'ltc', network = 'mainnet') {
-    let bitcore, netParam;
+createMultisig(pubKey1, pubKey2, coin = 'ltc', isTestnet, address = '') {
+    const kind = TxUtils.inferChannelAddrType(address);
+    console.log('coin/net '+coin+' '+network)
+    coin = coin.toLowerCase();
+    // --- Setup network params ---
+    let params
     if (coin === 'btc') {
-        bitcore = require('bitcore-lib'); // Bitcoin
-        netParam = (network === 'testnet') ? bitcore.Networks.testnet : bitcore.Networks.mainnet;
+        isTestnet = (network === 'testnet');
+        params = isTestnet
+            ? require('bitcoinjs-lib').networks.testnet
+            : require('bitcoinjs-lib').networks.bitcoin;
     } else if (coin === 'ltc') {
-        bitcore = require('bitcore-lib-ltc'); // Litecoin
-        netParam = (network === 'testnet') ? bitcore.Networks.testnet : bitcore.Networks.livenet;
+        isTestnet = (network === 'testnet');
+        params = isTestnet
+            ? {
+                messagePrefix: '\x19Litecoin Signed Message:\n',
+                bech32: 'tltc',
+                bip32: { public: 0x043587cf, private: 0x04358394 },
+                pubKeyHash: 0x6f,
+                scriptHash: 0x3a,
+                wif: 0xef,
+            }
+            : {
+                messagePrefix: '\x19Litecoin Signed Message:\n',
+                bech32: 'ltc',
+                bip32: { public: 0x019da462, private: 0x019d9cfe },
+                pubKeyHash: 0x30,
+                scriptHash: 0x32,
+                wif: 0xb0,
+            };
     } else {
-        throw new Error("Unsupported coin");
+        throw new Error("Unsupported coin type: " + coin);
     }
-    const publicKeys = [
-        new bitcore.PublicKey(pubKey1),
-        new bitcore.PublicKey(pubKey2)
-    ];
-    const multisig = new bitcore.Address(publicKeys, 2, netParam); // 2-of-2
-    return multisig.toString();
+
+    // --- Bech32 native SegWit multisig ---
+    if (kind === 'p2wsh') {
+        const lib = require('bitcoinjs-lib');
+        const pubkeys = [
+            Buffer.from(pubKey1, 'hex'),
+            Buffer.from(pubKey2, 'hex')
+        ];
+        const p2ms = lib.payments.p2ms({ m: 2, pubkeys, network: params });
+        const p2wsh = lib.payments.p2wsh({ redeem: p2ms, network: params });
+        return p2wsh.address;
+    }
+
+    // --- P2SH legacy multisig ---
+    else if (kind === 'p2sh-main' || kind === 'p2sh-test') {
+        if (coin === 'btc') {
+            const bitcore = require('bitcore-lib');
+            const netParam = isTestnet ? bitcore.Networks.testnet : bitcore.Networks.mainnet;
+            const publicKeys = [
+                new bitcore.PublicKey(pubKey1),
+                new bitcore.PublicKey(pubKey2)
+            ];
+            const multisig = new bitcore.Address(publicKeys, 2, netParam);
+            return multisig.toString(); // 3... or 2...
+        } else if (coin === 'ltc') {
+            const litecore = require('bitcore-lib-ltc');
+            const netParam = isTestnet ? litecore.Networks.testnet : litecore.Networks.livenet;
+            const publicKeys = [
+                new litecore.PublicKey(pubKey1),
+                new litecore.PublicKey(pubKey2)
+            ];
+            const multisig = new litecore.Address(publicKeys, 2, netParam);
+            return multisig.toString(); // M..., Q...
+        }
+    }
+
+    // --- Unknown address type ---
+    else {
+        throw new Error("Unknown or unsupported address type for channel: " + address);
+    }
+},
+
+// Infer channel address *format* so you can derive the same type when rebuilding multisig.
+// Returns: 'p2wsh' | 'p2sh-main' | 'p2sh-test' | 'unknown'
+inferChannelAddrType(addr) {
+  console.log('inside addr type', addr);
+  const a = String(addr || '').trim();
+  const lower = a.toLowerCase();
+
+  // Bech32 / Bech32m (SegWit) for BTC + LTC (we treat all bech32 channels as P2WSH for your multisig)
+  // BTC mainnet: bc1..., BTC testnet: tb1..., LTC mainnet: ltc1..., LTC testnet: tltc1...
+  if (
+    lower.startsWith('bc1')  || lower.startsWith('tb1') ||
+    lower.startsWith('ltc1') || lower.startsWith('tltc1')
+  ) {
+    return 'p2wsh';
+  }
+
+  // Base58 P2SH (legacy multisig)
+  // BTC mainnet: 3..., LTC mainnet: M... (many libs also accept 3... for LTC)
+  if (/^[3M]/.test(a)) return 'p2sh-main';
+
+  // BTC testnet: 2..., LTC testnet (older style): Q...
+  if (/^[2Q]/.test(a)) return 'p2sh-test';
+
+  return 'unknown';
 },
 
 async findSuitableUTXO(address, minAmount) {
