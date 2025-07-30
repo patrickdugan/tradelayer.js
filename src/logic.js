@@ -912,7 +912,6 @@ const Logic = {
             return
 	},
 
-
 	async transfer(fromChannelAddress, toChannelAddress, propertyId, amount, isColumnA, pay, payRefAddress, block,txid) {
         let fromChannel = await Channels.getChannel(fromChannelAddress);
        
@@ -1215,7 +1214,7 @@ const Logic = {
 	},
 
 
-     createOptionChain(seriesId, strikePercentInterval, isEuropeanStyle) {
+    createOptionChain(seriesId, strikePercentInterval, isEuropeanStyle) {
         if (!this.isValidSeriesId(seriesId)) {
             throw new Error('Invalid series ID');
         }

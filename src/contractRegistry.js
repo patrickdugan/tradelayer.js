@@ -624,6 +624,13 @@ static async getAllContractsForCollateral(address, collateralId) {
             if(hasChannel.hasSufficient){
                 await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin',block);
                 await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin',block);
+                await debitInitMarginFromChannel(
+                    channelAddr,
+                    sender,           // address of A or B
+                    collateralPropertyId,
+                    totalInitialMargin,
+                    block
+                );
             }else{
                 if(hasChannel.reason!='undefined'){
                         let shortfallBN = new BigNumber(hasChannel.shortfall)
@@ -633,6 +640,14 @@ static async getAllContractsForCollateral(address, collateralId) {
                         console.log(totalInitialMargin)     
                         await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -channelDebit, 'contractTradeInitMargin',block);
                         await TallyMap.updateBalance(sender, collateralPropertyId, -shortfallBN.toNumber(), 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
+                        await debitInitMarginFromChannel(
+                            channelAddr,
+                            sender,           // address of A or B
+                            collateralPropertyId,
+                            channelDebit,
+                            block
+                        );
+
                 }else{
                     throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
                 }

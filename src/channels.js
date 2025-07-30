@@ -231,6 +231,53 @@ class Channels {
             }
     }
 
+    /**
+     * Debits initial margin from the channel's correct column (A or B) for a property.
+     * Updates the registry and saves the channel state.
+     * 
+     * @param {string} channelId - The channel ID.
+     * @param {string} participantAddr - The participant address (debtor).
+     * @param {number} propertyId - The property to debit (e.g., 1 for TL).
+     * @param {number|string|BigNumber} amount - Amount to debit (positive).
+     * @param {number} block - Block number for logging/audit.
+     * @param {string} [type='debitChannelContractTradeInitMargin'] - For logging/audit.
+     */
+    static async debitInitMarginFromChannel(channelId, participantAddr, propertyId, amount, block, type = 'debitChannelContractTradeInitMargin') {
+        const BigNumber = require('bignumber.js');
+        // 1. Load channel from memory or DB if needed
+        let channel = await this.getChannel(channelId);
+        if (!channel || !channel.participants) {
+            throw new Error(`Channel ${channelId} not found or malformed`);
+        }
+        // 2. Decide column: 'A' or 'B'
+        let column = null;
+        if (channel.participants.A === participantAddr) {
+            column = 'A';
+        } else if (channel.participants.B === participantAddr) {
+            column = 'B';
+        } else {
+            throw new Error(`Participant ${participantAddr} not found in channel ${channelId}`);
+        }
+        // 3. Ensure balances exist (initialize to 0 if undefined)
+        if (!channel[column]) channel[column] = {};
+        if (typeof channel[column][propertyId] !== "number") channel[column][propertyId] = 0;
+        // 4. Check balance
+        let balBN = new BigNumber(channel[column][propertyId]);
+        let amtBN = new BigNumber(amount);
+        if (balBN.lt(amtBN)) {
+            throw new Error(`Insufficient channel balance: ${balBN} < ${amtBN} in ${channelId} ${column} ${propertyId}`);
+        }
+        // 5. Debit the column (8 dp, no underflow)
+        channel[column][propertyId] = balBN.minus(amtBN).decimalPlaces(8).toNumber();
+        // 6. Save back to registry/DB
+        await this.setChannel(channelId, channel);
+
+        // 7. Optional: log to audit trail
+        console.log(`[CHANNEL][${type}] Debited ${amtBN} from ${column}.${propertyId} of channel ${channelId} (addr: ${participantAddr}) at block ${block}`);
+
+        return true;
+    }
+
     static assignColumnBasedOnAddress(channel, newCommitAddress, cpAddress){
         const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);   
         // 1) If the channel isn't initialized yet, fall back to last-character rule
@@ -351,6 +398,8 @@ class Channels {
     // fallback: no assignment possible (shouldn't hit)
     return null;
 }
+
+
 
 
    static bumpColumnAssignment(channel, forceAis, forceBis) {

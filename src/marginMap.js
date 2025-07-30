@@ -679,7 +679,6 @@ class MarginMap {
         return pos;
     }
 
-    
     async realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos, isBuy,contractId,block){
         if (!pos) return new BigNumber(0);
 
