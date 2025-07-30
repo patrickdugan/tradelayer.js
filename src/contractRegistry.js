@@ -7,6 +7,7 @@ const AMMPool = require('./amm.js')
 const VolumeIndex = require('./volumeIndex.js')
 const OracleRegistry = require('./oracle.js')
 const PropertyManager = require('./property.js')
+const Channels = require('./channels.js')
 
 class ContractRegistry {
     constructor() {
@@ -624,7 +625,7 @@ static async getAllContractsForCollateral(address, collateralId) {
             if(hasChannel.hasSufficient){
                 await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin',block);
                 await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin',block);
-                await debitInitMarginFromChannel(
+                await Channels.debitInitMarginFromChannel(
                     channelAddr,
                     sender,           // address of A or B
                     collateralPropertyId,
@@ -640,7 +641,7 @@ static async getAllContractsForCollateral(address, collateralId) {
                         console.log(totalInitialMargin)     
                         await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -channelDebit, 'contractTradeInitMargin',block);
                         await TallyMap.updateBalance(sender, collateralPropertyId, -shortfallBN.toNumber(), 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
-                        await debitInitMarginFromChannel(
+                        await Channels.debitInitMarginFromChannel(
                             channelAddr,
                             sender,           // address of A or B
                             collateralPropertyId,

@@ -95,6 +95,54 @@ class Channels {
         await withdrawalDB.removeAsync({ _id: withdrawalKey });
     }
 
+     /**
+     * Record a channel delta event in the `channelDelta` database.
+     * @param {string} channelId - The channel id/address.
+     * @param {string} column - 'A' or 'B'.
+     * @param {number} propertyId - e.g. 1 for TL.
+     * @param {number} amount - Signed amount (+credit, -debit).
+     * @param {string} type - Type of event (e.g. 'debitInitMargin').
+     * @param {string} participant - Address of the actor (optional).
+     * @param {number} block - Block number.
+     * @param {string} txid - Txid (optional).
+     * @param {string} memo - Memo (optional).
+     */
+    static async recordChannelDelta({
+        channelId,
+        column,
+        propertyId,
+        amount,
+        type,
+        participant = '',
+        block = 0,
+        txid = '',
+        memo = ''
+    }) {
+        const newUuid = uuidv4();
+        const db = await dbInstance.getDatabase('channelDelta');
+        const deltaKey = `${channelId}-${propertyId}-${column}-${block}-${newUuid}`;
+        const delta = {
+            channelId,
+            column,
+            propertyId,
+            amount,
+            type,
+            participant,
+            block,
+            txid,
+            memo,
+            timestamp: Date.now()
+        };
+        console.log('[CHANNEL DELTA]', JSON.stringify(delta));
+
+        try {
+            await db.insertAsync({ _id: deltaKey, data: delta });
+        } catch (error) {
+            console.error('Error saving channelDelta:', error);
+            throw error;
+        }
+    }
+
     // Record a token trade with specific key identifiers
     static async recordTokenTrade(trade, blockHeight, txid) {
         const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;
@@ -232,6 +280,31 @@ class Channels {
     }
 
     /**
+     * Record a participant assignment or change in the channelDelta ledger.
+     *
+     * @param {string} channelId
+     * @param {'A'|'B'} column
+     * @param {string} newParticipant - The address now assigned to the column
+     * @param {number} block - Block height of the change
+     * @param {string} prevParticipant - (Optional) The old participant
+     * @param {string} memo - (Optional) Additional info (e.g. 'assigned on commit')
+     */
+    static async recordParticipantChange(channelId, column, newParticipant, block, prevParticipant = '', memo = '') {
+        await this.recordChannelDelta({
+            channelId,
+            column,
+            propertyId: null, // Not a token move, so leave propertyId empty
+            amount: 0,        // No amount (not a balance change)
+            type: 'participantChange',
+            participant: newParticipant,
+            block,
+            txid: '',
+            memo: memo || `Set participant for ${column} to ${newParticipant}${prevParticipant ? ' (prev: ' + prevParticipant + ')' : ''}`
+        });
+    }
+
+
+    /**
      * Debits initial margin from the channel's correct column (A or B) for a property.
      * Updates the registry and saves the channel state.
      * 
@@ -255,9 +328,7 @@ class Channels {
             column = 'A';
         } else if (channel.participants.B === participantAddr) {
             column = 'B';
-        } else {
-            throw new Error(`Participant ${participantAddr} not found in channel ${channelId}`);
-        }
+        } 
         // 3. Ensure balances exist (initialize to 0 if undefined)
         if (!channel[column]) channel[column] = {};
         if (typeof channel[column][propertyId] !== "number") channel[column][propertyId] = 0;
@@ -270,7 +341,18 @@ class Channels {
         // 5. Debit the column (8 dp, no underflow)
         channel[column][propertyId] = balBN.minus(amtBN).decimalPlaces(8).toNumber();
         // 6. Save back to registry/DB
-        await this.setChannel(channelId, channel);
+        await Channels.setChannel(channelId, channel);
+        await this.recordChannelDelta({
+                channelId,
+                column,
+                propertyId,
+                amount: -amtBN.decimalPlaces(8).toNumber(), // Always negative for debits
+                type,
+                participant: participantAddr,
+                block,
+                txid,
+                memo
+            });
 
         // 7. Optional: log to audit trail
         console.log(`[CHANNEL][${type}] Debited ${amtBN} from ${column}.${propertyId} of channel ${channelId} (addr: ${participantAddr}) at block ${block}`);
@@ -283,6 +365,14 @@ class Channels {
         // 1) If the channel isn't initialized yet, fall back to last-character rule
         if (!channel.participants.A&&!channel.participants.B) {
             channel.participants[column]=newCommitAddress
+            await Channels.recordParticipantChange(
+                channel.channel,      // channelId
+                column,               // 'A' or 'B'
+                newCommitAddress,     // new participant address
+                block,                // current block
+                '',                   // prevParticipant (none yet)
+                'Initial assignment'
+            );
             return channel
         }
 
@@ -292,9 +382,18 @@ class Channels {
         } 
 
         // 3) the cp address is assigned and there's no conflict, includes crowded channel
-        if(channel.participants[column]!==cpAddress&&!channel.participants[column]){
-            channel.participants[column]=newCommitAddress
-            return channel
+        if (channel.participants[column] !== cpAddress && !channel.participants[column]) {
+            const prev = channel.participants[column] || '';
+            channel.participants[column] = newCommitAddress;
+            await Channels.recordParticipantChange(
+                channel.channel,
+                column,
+                newCommitAddress,
+                block,
+                prev,
+                'Assigned via open slot (no conflict)'
+            );
+            return channel;
         }
         
         // 4. Crowded: default spot is already filled, so we need tie-break and bump

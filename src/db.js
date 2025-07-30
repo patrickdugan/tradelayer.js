@@ -46,7 +46,7 @@ class Database {
             'attestations', 'clearing', 'consensus', 'persistence', 'volumeIndex',
             'channels', 'withdrawQueue', 'activations', 'insurance', 'orderBooks',
             'feeCache', 'tradeHistory', 'fundingEvents', 'vaults', 'syntheticTokens',
-            'liquidations', 'scaling'
+            'liquidations', 'scaling','channelDelta'
         ];
 
         categories.forEach(category => {
