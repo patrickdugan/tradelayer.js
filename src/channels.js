@@ -2,7 +2,7 @@ const dbInstance = require('./db.js');
 const TallyMap = require('./tally.js')
 const BigNumber = require('bignumber.js')
 const TxUtils = require('./txUtils.js')
-
+const { v4: uuidv4 } = require('uuid');
 
 class Channels {
       // Initialize channelsRegistry as a static property
@@ -290,7 +290,7 @@ class Channels {
      * @param {string} memo - (Optional) Additional info (e.g. 'assigned on commit')
      */
     static async recordParticipantChange(channelId, column, newParticipant, block, prevParticipant = '', memo = '') {
-        await this.recordChannelDelta({
+        await Channels.recordChannelDelta({
             channelId,
             column,
             propertyId: null, // Not a token move, so leave propertyId empty
@@ -315,7 +315,7 @@ class Channels {
      * @param {number} block - Block number for logging/audit.
      * @param {string} [type='debitChannelContractTradeInitMargin'] - For logging/audit.
      */
-    static async debitInitMarginFromChannel(channelId, participantAddr, propertyId, amount, block, type = 'debitChannelContractTradeInitMargin') {
+    static async debitInitMarginFromChannel(channelId, participantAddr, propertyId, amount, block, type = 'debitChannelContractTradeInitMargin', txid){
         const BigNumber = require('bignumber.js');
         // 1. Load channel from memory or DB if needed
         let channel = await this.getChannel(channelId);
@@ -342,17 +342,17 @@ class Channels {
         channel[column][propertyId] = balBN.minus(amtBN).decimalPlaces(8).toNumber();
         // 6. Save back to registry/DB
         await Channels.setChannel(channelId, channel);
-        await this.recordChannelDelta({
-                channelId,
-                column,
-                propertyId,
-                amount: -amtBN.decimalPlaces(8).toNumber(), // Always negative for debits
-                type,
-                participant: participantAddr,
-                block,
-                txid,
-                memo
-            });
+        await Channels.recordChannelDelta({
+            channelId,
+            column,
+            propertyId,
+            amount: -amtBN.decimalPlaces(8).toNumber(), // Always negative for debits
+            type,
+            participant: participantAddr,
+            block,
+            txid,
+            memo: '' // or whatever memo string you want
+        });
 
         // 7. Optional: log to audit trail
         console.log(`[CHANNEL][${type}] Debited ${amtBN} from ${column}.${propertyId} of channel ${channelId} (addr: ${participantAddr}) at block ${block}`);
@@ -360,7 +360,7 @@ class Channels {
         return true;
     }
 
-    static assignColumnBasedOnAddress(channel, newCommitAddress, cpAddress){
+    static async assignColumnBasedOnAddress(channel, newCommitAddress, cpAddress,block){
         const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);   
         // 1) If the channel isn't initialized yet, fall back to last-character rule
         if (!channel.participants.A&&!channel.participants.B) {
@@ -402,7 +402,8 @@ class Channels {
             return Channels.bumpColumnAssignment(
                 channel,
                 tiebreak.winnerColumn === 'A' ? tiebreak.winner : tiebreak.loser,
-                tiebreak.winnerColumn === 'B' ? tiebreak.winner : tiebreak.loser
+                tiebreak.winnerColumn === 'B' ? tiebreak.winner : tiebreak.loser,
+                block
             );
         }
 
@@ -501,28 +502,28 @@ class Channels {
 
 
 
-   static bumpColumnAssignment(channel, forceAis, forceBis) {
+   static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
 
-        const currentA = channel.participants.A;
-        const currentB = channel.participants.B;
+        const prevA = channel.participants.A;
+        const prevB = channel.participants.B;
 
-        console.log(`[Bump] Current: A=${currentA}, B=${currentB} | Forcing: A=${forceAis}, B=${forceBis}`);
+        console.log(`[Bump] Current: A=${prevA}, B=${prevB} | Forcing: A=${forceAis}, B=${forceBis}`);
 
         // If nothing needs to change, just return
-        if (currentA === forceAis && currentB === forceBis) {
+        if (prevA === forceAis && prevB === forceBis) {
             console.log('[Bump] No swap needed.');
             return channel;
         }
 
         // If they are reversed, SWAP participants and all A/B properties
-        if (currentA === forceBis) {
-            console.log(`[Bump] Swapping A <-> B: ${currentA} <-> ${currentB}`);
+        if (prevA === forceBis) {
+            console.log(`[Bump] Swapping A <-> B: ${prevA} <-> ${prevB}`);
             [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
             channel.A = channel.B;
             channel.B = {};
-        } else if (currentB === forceAis) {
-            console.log(`[Bump] Swapping B <-> A: ${currentB} <-> ${currentA}`);
+        } else if (prevB === forceAis) {
+            console.log(`[Bump] Swapping B <-> A: ${prevB} <-> ${prevA}`);
             [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
             channel.B = channel.A;
             channel.A = {};
@@ -532,6 +533,28 @@ class Channels {
             channel.participants.A = forceAis;
             channel.participants.B = forceBis;
             // You may want to set or reset balances here if needed.
+        }
+
+        // Now emit participantChange deltas only if changed
+        if (channel.participants.A !== prevA) {
+            await this.recordParticipantChange(
+                channel.channel,
+                'A',
+                channel.participants.A,
+                block,
+                prevA,
+                'Rotated (bumpColumnAssignment)'
+            );
+        }
+        if (channel.participants.B !== prevB) {
+            await this.recordParticipantChange(
+                channel.channel,
+                'B',
+                channel.participants.B,
+                block,
+                prevB,
+                'Rotated (bumpColumnAssignment)'
+            );
         }
 
         console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
@@ -638,7 +661,7 @@ class Channels {
         }
         channel = updatedChannel
         console.log('channel after handle pubkeys '+JSON.stringify(channel))
-        channel = Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress);
+        channel = await Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress,blockHeight);
         const participants = channel.participants;
         channelColumn =
           participants.A === senderAddress ? 'A' :
