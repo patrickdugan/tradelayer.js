@@ -369,7 +369,7 @@ const Validity = {
             params.valid = true;
             params.txid = txid
             console.log('tagging txid to params obj '+txid +' '+params.txid)
-            //console.log('inside validate commit '+JSON.stringify(params))
+            console.log('inside validate commit '+JSON.stringify(params))
             if(params.ref){
                 //console.log(params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
@@ -407,6 +407,7 @@ const Validity = {
             }
 
             if (!Validity.isValidNumber(params.amount)) {
+                console.log('invalid amount in commit '+params.amount)
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
@@ -1461,6 +1462,7 @@ const Validity = {
             }
             console.log('finished contract trade params '+params.valid+' '+params.reason)
             return params;
+
         },
 
         // 19: Trade Contract Channel
@@ -1505,6 +1507,7 @@ const Validity = {
 
             const channel = await Channels.getChannel(sender)
             console.log('checking inside validate validateTradeContractChannel '+JSON.stringify(params))
+            console.log('checking channel' +JSON.stringify(channel))
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
             if(commitAddressA==null&&commitAddressB==null){
                 params.valid=false
@@ -1532,6 +1535,9 @@ const Validity = {
             console.log('calling get contract Info in validate channel trade'+params.block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
             const collateralPropertyId = contractDetails.collateralPropertyId
+            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
+            let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
+         
             if(!contractDetails){
                 params.valid=false
                 params.reason = "ContractId not found"
@@ -1543,9 +1549,6 @@ const Validity = {
             const balanceA = channel.A[collateralIdString]
             const balanceB = channel.B[collateralIdString]
             console.log('checking our channel info is correct: A'+balanceA+' B '+balanceB+' commitAddrA '+commitAddressA+' commitAddrB '+commitAddressB)
-            const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
-            
-            let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
             
             const tallyA = await TallyMap.getTally(commitAddressA, collateralPropertyId);
             const tallyB = await TallyMap.getTally(commitAddressB, collateralPropertyId);
@@ -1559,20 +1562,46 @@ const Validity = {
             let AIsSeller
             let isBuyerReducingPosition 
             let isSellerReducingPosition 
+            console.log('columnA is what now?' +params.columnAIsSeller)
+            console.log('positions '+JSON.stringify(existingPositionA))
+            console.log('positions cont. '+JSON.stringify(existingPositionB))
             if(params.columnAIsSeller===true||params.columnAIsSeller===1||params.columnAIsSeller==="1"){
                 AIsSeller=true
-                isBuyerReducingPosition= Boolean(existingPositionB.contracts > 0);
-                isSellerReducingPosition = Boolean(existingPositionA.contracts<0)
+                isBuyerReducingPosition= Boolean(existingPositionB.contracts < 0);
+                isSellerReducingPosition = Boolean(existingPositionA.contracts>0)
+                console.log('setting reduce flags '+AIsSeller+' '+isBuyerReducingPosition+' '+isSellerReducingPosition)
             }else{
                 AIsSeller=false
-                isBuyerReducingPosition= Boolean(existingPositionA.contracts > 0);
-                isSellerReducingPosition = Boolean(existingPositionB.contracts<0)
+                isBuyerReducingPosition= Boolean(existingPositionA.contracts < 0);
+                isSellerReducingPosition = Boolean(existingPositionB.contracts>0)
+                console.log('setting reduce flags '+AIsSeller+' '+isBuyerReducingPosition+' '+isSellerReducingPosition)
             }
+
+            // --- INITIAL MARGIN CHECKS FOR NON-REDUCING SIDES ---
+            console.log('isBuyerReducingPosition '+isBuyerReducingPosition+' '+balanceA, balanceB, totalInitialMargin)
+            if (!isBuyerReducingPosition&&params.columnAIsSeller) {
+                const res = Validity.hasSufficientChannelMargin(balanceA, totalInitialMargin, "B");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }else if(!isBuyerReducingPosition&&!params.columnAIsSeller){
+                const res = Validity.hasSufficientChannelMargin(balanceA, totalInitialMargin, "A");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; } 
+            }
+            console.log('isSellerReducingPosition '+isSellerReducingPosition+' '+balanceA, balanceB, totalInitialMargin)
+        
+            if (!isSellerReducingPosition&&params.columnAIsSeller) {
+                const res = Validity.hasSufficientChannelMargin(balanceB, totalInitialMargin, "A");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }else if(!isSellerReducingPosition&&!params.columnAIsSeller){
+                const res = Validity.hasSufficientChannelMargin(balanceB, totalInitialMargin, "B");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }
+
 
                         let enoughMargin
             if (isBuyerReducingPosition == false && isSellerReducingPosition == false) {
                 // Check if the sender has enough balance for the initial margin
                 enoughMargin = Boolean((effectiveA >= totalInitialMargin) && (effectiveB >= totalInitialMargin))
+                console.log('enough margin both not reducing '+enoughMargin+' '+effectiveA+' '+effectiveB+' '+totalInitialMargin)
                 if (enoughMargin == false) {
                     console.log('Insufficient balance for initial margin');
                     params.valid = false;
@@ -1638,7 +1667,25 @@ const Validity = {
                 BFlipShort=true
              }
 
-             if((effectiveA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
+             // --- FLIP (CROSS/REVERSAL) MARGIN CHECKS ---
+            if (AFlipLong) {
+                const res = Validity.checkFlipMargin(balanceA, flipLong * initialMarginPerContract, "A", "flipLong");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }
+            if (AFlipShort) {
+                const res = Validity.checkFlipMargin(balanceA, flipShort * initialMarginPerContract, "A", "flipShort");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }
+            if (BFlipLong) {
+                const res = Validity.checkFlipMargin(balanceB, flipLong * initialMarginPerContract, "B", "flipLong");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }
+            if (BFlipShort) {
+                const res = Validity.checkFlipMargin(balanceB, flipShort * initialMarginPerContract, "B", "flipShort");
+                if (!res.valid) { params.valid = false; params.reason += res.reason; return params; }
+            }
+
+            if((effectiveA<(flipLong*initialMarginPerContract)&&AFlipLong==true)
                 ||(effectiveA<(flipShort*initialMarginPerContract)&&AFlipShort==true)
                 ||(effectiveB<(flipLong*initialMarginPerContract)&&BFlipLong==true)
                 ||(effectiveB<(flipShort*initialMarginPerContract)&&BFlipShort==true)){
@@ -1689,6 +1736,28 @@ const Validity = {
 
             return params;
         },
+
+        hasSufficientChannelMargin(balance, required, label) {
+            if (balance < required) {
+                return {
+                    valid: false,
+                    reason: `Insufficient channel balance in ${label} (need ${required}, found ${balance}); `
+                };
+            }
+            return { valid: true, reason: '' };
+        },
+
+        checkFlipMargin(balance, required, label, flipType) {
+            if (required > 0 && balance < required) {
+                return {
+                    valid: false,
+                    reason: `Insufficient channel balance in ${label} for ${flipType} (need ${required}, found ${balance}); `
+                };
+            }
+            return { valid: true, reason: '' };
+        },
+
+
 
         // 20: Trade Tokens Channel
         validateTradeTokensChannel: async (sender, params, txid) => {
@@ -1781,9 +1850,25 @@ const Validity = {
             let propertyIdDesiredString = params.propertyIdDesired.toString()
             let sufficientOffered 
             let sufficientDesired
+
+           
             if(params.columnAIsOfferer==true){
                 balanceA = channel.A[propertyIdOfferedString]
                 balanceB = channel.B[propertyIdDesiredString]
+                
+                if (balanceA < totalInitialMargin) {
+                    params.valid = false;
+                    params.reason += `Insufficient channel balance in A (need ${totalInitialMargin}, found ${balanceA}); `;
+                }
+                if (balanceB < totalInitialMargin) {
+                    params.valid = false;
+                    params.reason += `Insufficient channel balance in B (need ${totalInitialMargin}, found ${balanceB}); `;
+                }
+                if (!params.valid) {
+                    console.log('Rejecting for insufficient channel column balance: ' + JSON.stringify(params));
+                    return params;
+                }
+
                 const hasSufficientA = TallyMap.hasSufficientChannel(sender,params.propertyIdOffered,params.amountOffered)
                 const hasSufficientB = TallyMap.hasSufficientChannel(sender,params.propertyIdDesired,params.amountDesired)
 
@@ -1800,6 +1885,19 @@ const Validity = {
             }else if(params.columnAIsOfferer==false){
                 balanceA = channel.A[propertyIdOfferedString]
                 balanceB = channel.B[propertyIdDesiredString]
+
+                if (balanceA < totalInitialMargin) {
+                    params.valid = false;
+                    params.reason += `Insufficient channel balance in A (need ${totalInitialMargin}, found ${balanceA}); `;
+                }
+                if (balanceB < totalInitialMargin) {
+                    params.valid = false;
+                    params.reason += `Insufficient channel balance in B (need ${totalInitialMargin}, found ${balanceB}); `;
+                }
+                if (!params.valid) {
+                    console.log('Rejecting for insufficient channel column balance: ' + JSON.stringify(params));
+                    return params;
+                }
 
                 const hasSufficientA = TallyMap.hasSufficientChannel(sender,params.propertyIdDesired,params.amountDesired)
                 const hasSufficientB = TallyMap.hasSufficientChannel(sender,params.propertyIdOffered,params.amountOffered)

@@ -103,8 +103,8 @@ app.post('/tl_getTransaction', async (req, res) => {
 
 app.post('/tl_getChannelColumn', async (req,res) =>{
     try {
-        const { channelAddress, cpAddress } = req.body;
-        const column = await Channels.assignColumnBasedOnAddress(channelAddress,cpAddress)
+        const { channelAddress, newCommitAddress, cpAddress } = req.body;
+        const column = await Channels.predictColumnForAddress(channelAddress, newCommitAddress, cpAddress)
         res.json(column);
     } catch (error) {
         console.error('Error validating address:', error);

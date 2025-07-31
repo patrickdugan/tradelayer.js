@@ -1099,7 +1099,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     if(match.sellerPosition.address==undefined){
                         match.sellerPosition.address=match.sellOrder.sellerAddress
                     }
-                    //console.log('checking positions '+JSON.stringify(match.buyerPosition)+' '+JSON.stringify(match.sellerPosition))
+                    console.log('checking positions '+JSON.stringify(match.buyerPosition)+' '+JSON.stringify(match.sellerPosition))
                     const isBuyerReducingPosition = Boolean(match.buyerPosition.contracts < 0);
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                    

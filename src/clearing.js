@@ -369,7 +369,7 @@ static async getIndexPrice(contractId, blockHeight) {
             } else {
                 // **For oracle contracts, get the latest oracle price**
                 const oracleId = contractInfo.underlyingOracleId;
-                const latestOracleData = await OracleRegistry.getLatestOracleData(oracleId);
+                const latestOracleData = await OracleRegistry.getOraclePrice(oracleId);
 
                 if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
                     console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
