@@ -698,6 +698,19 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             payEnabled: payEnabled
         };
 
+        await Channels.recordChannelDelta({
+            channelId: channel.channel,
+            column: channelColumn,
+            propertyId,
+            amount: new BigNumber(tokenAmount).decimalPlaces(8).toNumber(), // Always positive for commit
+            type: 'creditCommit',
+            participant: senderAddress,
+            block: blockHeight,
+            txid,
+            memo: 'Commit'
+        });
+
+
         if(payEnabled){        
           channel.clearLists[channelColumn]=clearLists
           channel.payEnabled[channelColumn]

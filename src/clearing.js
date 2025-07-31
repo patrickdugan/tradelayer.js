@@ -191,7 +191,7 @@ class Clearing {
             }
 
             // Get latest index price (Oracle or VolumeIndex)
-            const indexPrice = await ContractRegistry.getIndexPrice(contractId, blockHeight);
+            const indexPrice = await Clearing.getIndexPrice(contractId, blockHeight);
             if (!indexPrice) {
                 //console.warn(`⚠️ No index price available for contract ${contractId}.`);
                 return 0;
@@ -221,6 +221,22 @@ class Clearing {
             return 0;
         }
     }
+
+
+static async getIndexPrice(contractId, blockHeight) {
+    // Load contract info (get from memory, or from DB)
+    const contractInfo = await ContractRegistry.getContractInfo(contractId); // or your method
+
+    // Check for oracle-based contract
+    if (contractInfo.underlyingOracleId !== undefined && contractInfo.underlyingOracleId !== null && !isNaN(contractInfo.underlyingOracleId)) {
+        // Use the oracle price
+        return await Oracle.getOraclePrice(contractInfo.underlyingOracleId, blockHeight);
+    } else {
+        // Use volume index price (for most synthetic/inverse contracts)
+        // If your contract uses notionalPropertyId and collateralPropertyId, use those!
+        return await VolumeIndex.getIndexForBlock(contractId, blockHeight);
+    }
+}
 
     // **Clamp function for funding rate**
     static clampFundingRate(basisPoints) {
