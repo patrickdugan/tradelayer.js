@@ -499,67 +499,73 @@ class Channels {
     return null;
 }
 
+static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
+    if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
 
+    const prevA = channel.participants.A;
+    const prevB = channel.participants.B;
 
+    console.log(`[Bump] Current: A=${prevA}, B=${prevB} | Forcing: A=${forceAis}, B=${forceBis}`);
 
-   static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
-        if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
-
-        const prevA = channel.participants.A;
-        const prevB = channel.participants.B;
-
-        console.log(`[Bump] Current: A=${prevA}, B=${prevB} | Forcing: A=${forceAis}, B=${forceBis}`);
-
-        // If nothing needs to change, just return
-        if (prevA === forceAis && prevB === forceBis) {
-            console.log('[Bump] No swap needed.');
-            return channel;
-        }
-
-        // If they are reversed, SWAP participants and all A/B properties
-        if (prevA === forceBis) {
-            console.log(`[Bump] Swapping A <-> B: ${prevA} <-> ${prevB}`);
-            [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-            channel.A = channel.B;
-            channel.B = {};
-        } else if (prevB === forceAis) {
-            console.log(`[Bump] Swapping B <-> A: ${prevB} <-> ${prevA}`);
-            [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-            channel.B = channel.A;
-            channel.A = {};
-        } else {
-            // Unusual case—total overwrite?
-            console.log(`[Bump] Overwriting participants: A=${forceAis}, B=${forceBis}`);
-            channel.participants.A = forceAis;
-            channel.participants.B = forceBis;
-            // You may want to set or reset balances here if needed.
-        }
-
-        // Now emit participantChange deltas only if changed
-        if (channel.participants.A !== prevA) {
-            await this.recordParticipantChange(
-                channel.channel,
-                'A',
-                channel.participants.A,
-                block,
-                prevA,
-                'Rotated (bumpColumnAssignment)'
-            );
-        }
-        if (channel.participants.B !== prevB) {
-            await this.recordParticipantChange(
-                channel.channel,
-                'B',
-                channel.participants.B,
-                block,
-                prevB,
-                'Rotated (bumpColumnAssignment)'
-            );
-        }
-
-        console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
+    // 1. No change needed
+    if (prevA === forceAis && prevB === forceBis) {
+        console.log('[Bump] No swap needed.');
         return channel;
     }
+
+    // 2. True swap (A <-> B): both participants and all balances
+    if (prevA === forceBis && prevB === forceAis) {
+        console.log(`[Bump] Swapping both participants and balances: A=${prevA}, B=${prevB}`);
+        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+        [channel.A, channel.B] = [channel.B, channel.A];
+    }
+    // 3. Reverse: only participant assignment is reversed, not both
+    else if (prevA === forceBis) {
+        console.log(`[Bump] Swapping A <-> B: ${prevA} <-> ${prevB}`);
+        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+        [channel.A, channel.B] = [channel.B, channel.A];
+    }
+    else if (prevB === forceAis) {
+        console.log(`[Bump] Swapping B <-> A: ${prevB} <-> ${prevA}`);
+        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+        [channel.A, channel.B] = [channel.B, channel.A];
+    }
+    // 4. Total overwrite: forcibly assign new participants, leave balances untouched
+    else {
+        console.log(`[Bump] Overwriting participants: A=${forceAis}, B=${forceBis}`);
+        channel.participants.A = forceAis;
+        channel.participants.B = forceBis;
+        // Optionally, you can reset channel.A and channel.B if this is a "new" channel
+        // channel.A = {};
+        // channel.B = {};
+    }
+
+    // Emit participantChange deltas if changed
+    if (channel.participants.A !== prevA) {
+        await this.recordParticipantChange(
+            channel.channel,
+            'A',
+            channel.participants.A,
+            block,
+            prevA,
+            'Rotated (bumpColumnAssignment)'
+        );
+    }
+    if (channel.participants.B !== prevB) {
+        await this.recordParticipantChange(
+            channel.channel,
+            'B',
+            channel.participants.B,
+            block,
+            prevB,
+            'Rotated (bumpColumnAssignment)'
+        );
+    }
+
+    console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
+    return channel;
+}
+
 
     // New function to process commitments and assign columns
     static async processChannelCommits(tradeChannelManager, channelAddress) {
