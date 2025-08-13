@@ -340,6 +340,155 @@ static async updateVesting(cumulativeVolumeLTC, currentBlockVolumeLTC, cumulativ
 
         return totalBuybackAmount;
     }
+
+	/** ------------------------------
+	 * TLVEST per-trade award model (CommonJS)
+	 * Paste into vesting.js
+	 * ------------------------------ */
+
+	const EPS = 1e-18;
+
+	/** Vesting fraction on a log curve from V0 → V* (in BTC printed volume) */
+	static vestFraction(cumV, V0, Vstar, alpha) {
+	  if (cumV <= V0) return 0;
+	  const num = Math.log(1 + (cumV - V0) / Math.max(alpha, EPS));
+	  const den = Math.log(1 + (Vstar - V0) / Math.max(alpha, EPS));
+	  const v = num / Math.max(den, EPS);
+	  return Math.max(0, Math.min(1, v));
+	}
+
+	/** Geometric projection: sum of next 12 months given current monthly vol and CMGR */
+	static projectNextYearVolumeBTC(monthlyBTC, cmgr) {
+	  if (cmgr <= EPS) return 12 * monthlyBTC;
+	  const r = 1 + cmgr;
+	  return monthlyBTC * ((Math.pow(r, 12) - 1) / cmgr);
+	}
+
+	/** Months needed to reach V* from cumV with monthlyBTC growing at cmgr */
+	static monthsToReach(cumV, Vstar, monthlyBTC, cmgr) {
+	  const remaining = Math.max(0, Vstar - cumV);
+	  if (remaining <= EPS) return 0;
+	  if (monthlyBTC <= EPS) return Infinity;
+	  if (cmgr <= EPS) return Math.ceil(remaining / monthlyBTC);
+	  const r = 1 + cmgr;
+	  // monthlyBTC * (r^n - 1) / (r - 1) >= remaining
+	  const numerator = (remaining * (r - 1)) / monthlyBTC + 1;
+	  if (numerator <= 1) return 0;
+	  const n = Math.log(numerator) / Math.log(r);
+	  return Math.ceil(n);
+	}
+
+	/** Annualize 12-mo CMGR to an annual growth rate */
+	static annualizeFromCMGR(cmgr) {
+	  return Math.pow(1 + cmgr, 12) - 1;
+	}
+
+	/** Discount factor for t months at annual rate r (cont comp) */
+	static discountFactorMonths(rAnnual, months) {
+	  const tYears = months / 12;
+	  return Math.exp(-rAnnual * tYears);
+	}
+
+	/** Optional: compute CMGR from a monthly series (array of numbers) */
+	static cmgrFromSeries(monthlySeries) {
+	  if (!Array.isArray(monthlySeries) || monthlySeries.length < 2) return 0;
+	  // geometric mean of month-over-month ratios
+	  let sumLog = 0, pairs = 0;
+	  for (let i = 1; i < monthlySeries.length; i++) {
+	    const prev = Math.max(monthlySeries[i - 1], EPS);
+	    const cur = Math.max(monthlySeries[i], EPS);
+	    sumLog += Math.log(cur / prev);
+	    pairs++;
+	  }
+	  return Math.exp(sumLog / Math.max(pairs, 1)) - 1; // monthly CMGR
+	}
+
+	/**
+	 * Main: compute TLVEST tokens to award for a single trade.
+	 * Params:
+	 *  - feeRate:            net fee (e.g., 0.000005 for 0.5 bps)
+	 *  - baseRebateShare:    share of fees routed to makers (e.g., 0.40)
+	 *  - vipRebateShare:     extra share for VIP pool (e.g., 0.20) if trade.vip = true
+	 *  - dividendShareOfFees:portion of fees paid to TLVEST holders (e.g., 0.50)
+	 *  - discountRateAnnual: e.g., 0.08 (8%)
+	 *  - priceTLIinBTC:      BTC price of TLI (conversion floor)
+	 *  - vestToTLIRatio:     TLVEST→TLI ratio at full vest (e.g., 1.0)
+	 *  - cumulativeVolumeBTC,current cumulative printed BTC
+	 *  - monthlyVolumeBTC:   current monthly printed BTC
+	 *  - cmgr12:             12-mo CMGR (monthly), e.g., 0.05 = +5%/mo
+	 *  - tlvestEffectiveSupply: current circulating/effective TLVEST for dividend split
+	 *  - vestV0BTC, vestVStarBTC, vestAlpha: vest curve params (e.g., 1e5 → 21e6)
+	 *
+	 * Returns an object with:
+	 *  { tokens, awardValueBTC, pvTokenBTC, vestFractionNow, monthsToFullVest, components:{...} }
+	 */
+	static computeTokensForTrade(trade, params) {
+	  const p = Object.assign({
+	    feeRate: 0.000005,
+	    baseRebateShare: 0.40,
+	    vipRebateShare: 0.20,
+	    dividendShareOfFees: 0.50,
+	    discountRateAnnual: 0.08,
+	    priceTLIinBTC: 0.00001,
+	    vestToTLIRatio: 1.0,
+	    cumulativeVolumeBTC: 1_000_000,
+	    monthlyVolumeBTC: 50_000,
+	    cmgr12: 0.05,
+	    tlvestEffectiveSupply: 10_000_000,
+	    vestV0BTC: 100_000,
+	    vestVStarBTC: 21_000_000,
+	    vestAlpha: 500_000
+	  }, params || {});
+
+	  // BTC budget for this trade’s award (fee-budgeted; safe against wash)
+	  const feeBTC = p.feeRate * trade.notionalBtc;
+	  const awardValueBTC = feeBTC * (p.baseRebateShare + (trade.vip ? p.vipRebateShare : 0));
+
+	  // Growth & projection
+	  const gAnnual = annualizeFromCMGR(p.cmgr12);
+	  const r = Math.max(p.discountRateAnnual, 0.0001);
+	  const gCapped = Math.min(gAnnual, r - 0.01); // keep (r - g) >= 1%
+
+	  const projectedYearVolBTC = projectNextYearVolumeBTC(p.monthlyVolumeBTC, p.cmgr12);
+
+	  // Dividend-discount PV per TLVEST (Gordon)
+	  const feesPerYearBTC = p.feeRate * projectedYearVolBTC;
+	  const dividendPoolBTC = p.dividendShareOfFees * feesPerYearBTC;
+	  const perTokenDividendBTC = dividendPoolBTC / Math.max(p.tlvestEffectiveSupply, 1);
+	  const pvDividendBTC = perTokenDividendBTC / Math.max(r - gCapped, 0.01);
+
+	  // Conversion floor (TLI priced in BTC), discounted by vesting delay
+	  const months = monthsToReach(p.cumulativeVolumeBTC, p.vestVStarBTC, p.monthlyVolumeBTC, p.cmgr12);
+	  const vNow = vestFraction(p.cumulativeVolumeBTC, p.vestV0BTC, p.vestVStarBTC, p.vestAlpha);
+	  const df = discountFactorMonths(r, Math.max(0, months));
+	  const pvConversionBTC = p.priceTLIinBTC * p.vestToTLIRatio * (vNow + (1 - vNow) * df);
+
+	  // Use the higher PV to be conservative on issuance
+	  const pvTokenBTC = Math.max(pvDividendBTC, pvConversionBTC, EPS);
+	  const tokens = awardValueBTC / pvTokenBTC;
+
+	  return {
+	    tokens,
+	    awardValueBTC,
+	    pvTokenBTC,
+	    vestFractionNow: vNow,
+	    monthsToFullVest: months,
+	    components: {
+	      pvDividendBTC,
+	      pvConversionBTC,
+	      gAnnual,
+	      projectedYearVolumeBTC,
+	      perTokenDividendBTC,
+	      feeBTC
+	    }
+	  };
+	}
 }
+
+/** Example helper to compute monthly CMGR from your volume index series
+ * (Pass in your last 12 monthly printed_btc values)
+ */
+// const cmgr12 = cmgrFromSeries(last12MonthsPrintedBTC);
+
 
 module.exports = TradeLayerManager;

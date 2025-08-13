@@ -3,6 +3,49 @@ const Litecoin = require('litecoin');
 const Bitcoin = require('bitcoin');
 const Doge = require('dogecoind-rpc');
 
+// --- ENV bootstrap helpers (safe if .env is missing) ---
+const path = require('path');
+
+function loadDotenvFromKnownLocations() {
+  // lazy-load to avoid hard dependency if dotenv isn't installed yet
+  let dotenv;
+  try { dotenv = require('dotenv'); } catch { return; }
+
+  // 1) repo-style: one level up relative to this file (…/ .env)
+  const repoEnv = path.join(__dirname, '..', '.env');
+  dotenv.config({ path: repoEnv, override: false });
+
+  // 2) fallback: current working directory (.env)
+  dotenv.config({ override: false });
+}
+
+function getRpcBootstrapFromEnv(defaultChain = 'LTC') {
+  loadDotenvFromKnownLocations();
+
+  const env = process.env;
+  const ENV_CHAIN  = (env.CHAIN || '').toUpperCase();
+  const AUTODETECT = (env.AUTODETECT || '1') !== '0'; // AUTODETECT=0 → lock env, skip discovery
+
+  const DEFAULT_PORT = { BTC: 8332, LTC: 9332, DOGE: 22555 };
+  const chain = ['BTC', 'LTC', 'DOGE'].includes(ENV_CHAIN) ? ENV_CHAIN : defaultChain;
+
+  const host = env.RPC_HOST || '127.0.0.1';
+  const user = env.RPC_USER || 'user';
+  const pass = env.RPC_PASS || 'pass';
+  const port = Number(env.RPC_PORT || DEFAULT_PORT[chain]);
+  const timeout = Number(env.TIMEOUT_MS || 60000);
+
+  // If any of CHAIN / RPC_PORT is provided OR AUTODETECT=0, we consider this a "locked" bootstrap.
+  const locked = (!AUTODETECT) || !!env.CHAIN || !!env.RPC_PORT;
+
+  return {
+    // normalized values
+    chain, host, port, user, pass, timeout,
+    // whether the caller should skip autodetect and return immediately
+    locked,
+  };
+}
+
 
 let clientInstance = null;
 
@@ -25,12 +68,28 @@ class ClientWrapper {
       return this.waitForInitialization();  // Wait for ongoing initialization to complete
     }
 
-    this.isInitializing = true; // Set flag to indicate initialization is in progress
+	    this.isInitializing = true; // Set flag to indicate initialization is in progress
 
-    if(!this.client){
-      this.config = { host: '127.0.0.1', port: 18332, user: 'user', pass: 'pass', timeout: 60000 };
-      console.log(this.config)
-      this.client = new Litecoin.Client(this.config);
+	    if(!this.client){
+	     const boot = this.getEnvBootstrap('LTC'); // default LTC; change to 'BTC' if you prefer
+
+	this.config = {
+	  host: boot.host,
+	  port: boot.port,
+	  user: boot.user,
+	  pass: boot.pass,
+	  timeout: boot.timeout,
+	};
+
+	// Build a client immediately using the env-chosen CHAIN (or default)
+	this.chain  = boot.chain;
+	this.client = this._createClientByChain(this.chain);
+
+	// If .env told us to lock (AUTODETECT=0 or CHAIN/RPC_PORT provided), stop here.
+	// (No probing needed; this lets desktop/server scripts fully control startup.)
+	if (boot.locked) {
+	  return this.chain;
+	}
 
       // Wait for the blockchain to finish initial block download and indexing
       let isTest = true
@@ -51,8 +110,8 @@ class ClientWrapper {
       if (!this.chain) throw new Error('Unable to determine blockchain chain.');
 
       this.config.port = isTest 
-        ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 18332)
-        : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 8332);
+        ? (this.chain === 'BTC' ? 18332 : this.chain === 'DOGE' ? 44556 : 19332)
+        : (this.chain === 'BTC' ? 8332 : this.chain === 'DOGE' ? 22555 : 9332);
 
       this.client = this._createClientByChain(this.chain);
       }
@@ -66,6 +125,11 @@ class ClientWrapper {
     }
     return this.chain;  // Return the chain after initialization completes
   }
+
+  // inside your existing class (e.g., RpcClient / whatever it’s named)
+	getEnvBootstrap(defaultChain = 'LTC') {
+  		return getRpcBootstrapFromEnv(defaultChain);
+	}
 
 
 
