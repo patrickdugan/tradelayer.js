@@ -26,7 +26,7 @@ function getRpcBootstrapFromEnv(defaultChain = 'LTC') {
   const ENV_CHAIN  = (env.CHAIN || '').toUpperCase();
   const AUTODETECT = (env.AUTODETECT || '1') !== '0'; // AUTODETECT=0 → lock env, skip discovery
 
-  const DEFAULT_PORT = { BTC: 8332, LTC: 9332, DOGE: 22555 };
+  const DEFAULT_PORT = { BTC: 8332, BTCTEST: 18332, LTC: 9332, LTCTEST: 19332, DOGE: 22555, DOGETEST:44555 };
   const chain = ['BTC', 'LTC', 'DOGE'].includes(ENV_CHAIN) ? ENV_CHAIN : defaultChain;
 
   const host = env.RPC_HOST || '127.0.0.1';
@@ -71,7 +71,7 @@ class ClientWrapper {
 	    this.isInitializing = true; // Set flag to indicate initialization is in progress
 
 	    if(!this.client){
-	     const boot = this.getEnvBootstrap('LTC'); // default LTC; change to 'BTC' if you prefer
+	     const boot = this.getEnvBootstrap('BTC'); // default LTC; change to 'BTC' if you prefer
 
 	this.config = {
 	  host: boot.host,
