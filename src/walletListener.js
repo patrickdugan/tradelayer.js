@@ -446,7 +446,7 @@ app.get('/tl_channelBalanceForCommiter', async (req, res) => {
         if (isNaN(propIdNum)) {
             return res.status(400).json({ error: "contractId must be a number" });
         }
-        const total = await Channels.getChannelBalancesForAddress(address, propertyId)
+        const rows = await Channels.getChannelBalancesForAddress(address, propertyId)
         const total = rows.reduce((s, r) => s + r.amount, 0);
         res.json({ total, rows });
     } catch (error) {

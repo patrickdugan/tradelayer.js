@@ -62,6 +62,35 @@ class Orderbook {
             await orderBooksDB.loadDatabase();
             return
         }
+
+           async saveTrade(tradeRecord) {
+            const tradeDB =await dbInstance.getDatabase('tradeHistory');
+
+            const uuid = uuidv4();
+
+            // Use the key provided in the trade record for storage
+            const tradeId = `${tradeRecord.key}-${uuid}-${tradeRecord.blockHeight}`;
+
+            // Construct the document to be saved
+            const tradeDoc = {
+                _id: tradeId,
+                ...tradeRecord
+            };
+
+            // Save or update the trade record in the database
+            try {
+                await tradeDB.updateAsync(
+                    { _id: tradeId },
+                    tradeDoc,
+                    { upsert: true }
+                );
+                //console.log(`Trade record saved successfully: ${tradeId}`);
+            } catch (error) {
+                //console.error(`Error saving trade record: ${tradeId}`, error);
+                throw error; // Rethrow the error for handling upstream
+            }
+        }
+
                 // Record a token trade with specific key identifiers
         async recordTokenTrade(trade, blockHeight, txid) {
             const tradeRecordKey = `token-${trade.offeredPropertyId}-${trade.desiredPropertyId}`;

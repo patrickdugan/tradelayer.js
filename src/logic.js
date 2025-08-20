@@ -363,8 +363,7 @@ const Logic = {
 	},
 
 
-	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {
-	   
+	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
         const satsExpectedBigNumber = new BigNumber(satsExpected);
@@ -447,14 +446,19 @@ const Logic = {
                 console.log('price 2nd hit '+price+' '+coinAdj+' '+tokenAmount)
             }
             await VolumeIndex.saveVolumeDataById(key,coinAdj.toNumber(),price,block,'UTXO')
-
-             const trade = {
-                    offeredPropertyId: propertyId,
-                    desiredPropertyId: 0,
-                    amountOffered: tokensToDeliver, // or appropriate amount
-                    amountExpected: satsReceived, // or appropriate amount
-                    // other relevant trade details...
-                };
+            
+            const trade = {
+                offeredPropertyId: match.sellOrder.offeredPropertyId,
+                desiredPropertyId: match.buyOrder.desiredPropertyId,
+                amountOffered: match.amountOfTokenA, // or appropriate amount
+                amountExpected: match.amountOfTokenB, // or appropriate amount
+                price: price,
+                takerFee: fee,
+                block: block,
+                buyer: tokenDeliveryAddress,
+                seller: receiverAddress,
+                takerTxId: txid
+            };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
             TallyMap.updateFeeCache(propertyId,fee,1)
