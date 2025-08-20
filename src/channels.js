@@ -50,6 +50,142 @@ class Channels {
         }
     }
 
+    // channels.js (core)
+
+/**
+ * Return all channel balances for a given commit address, optionally filtered by propertyId.
+ * Reads from NeDB collection "channels" where docs look like:
+ * { _id: <channelId>, data: { participants:{A,B}, channel, commits:[...], A:{pid:amt}, B:{pid:amt}, ... } }
+ *
+ * @param {object} deps
+ * @param {string} address                 // commit/trading address to inspect
+ * @param {number|undefined} propertyId    // optional property filter
+ * @returns {Promise<Array<{channel:string, side:'A'|'B', propertyId:number, amount:number, lastCommitmentTime?:number}>>}
+ */
+static async getChannelBalancesForAddress(address, propertyId) {
+  if (!address) throw new Error('address required');
+
+  const channelsDB = await dbInstance.getDatabase('channels');
+  const addr = address.trim();
+  const addrLC = addr.toLowerCase();
+
+  // Allow propertyId to be optional
+  const pidFilter =
+    propertyId === undefined || propertyId === null || propertyId === ''
+      ? null
+      : Number(propertyId);
+
+  if (pidFilter !== null && Number.isNaN(pidFilter)) {
+    throw new Error('propertyId must be a number');
+  }
+
+  // Find channels where we participate or have committed before
+  const entries = await channelsDB.findAsync({
+    $or: [
+      { 'data.participants.A': addr },
+      { 'data.participants.B': addr },
+      { 'data.participants.A': addrLC },
+      { 'data.participants.B': addrLC },
+      { 'data.commits': { $elemMatch: { senderAddress: addr } } },
+      { 'data.commits': { $elemMatch: { senderAddress: addrLC } } }
+    ]
+  });
+
+  const rows = [];
+
+  for (const doc of entries || []) {
+    const data = doc.data || {};
+    const chanId = data.channel || doc._id;
+
+    // Determine our column (A/B)
+    const aAddr = String(data?.participants?.A || '').toLowerCase();
+    const bAddr = String(data?.participants?.B || '').toLowerCase();
+
+    let side = null;
+    if (aAddr && aAddr === addrLC) side = 'A';
+    else if (bAddr && bAddr === addrLC) side = 'B';
+    else {
+      // Fallback: infer from our latest commit or lastUsedColumn
+      const lastMine = [...(data.commits || [])]
+        .reverse()
+        .find(c => String(c.senderAddress || '').toLowerCase() === addrLC);
+      if (lastMine?.columnAssigned === 'A' || lastMine?.columnAssigned === 'B') {
+        side = lastMine.columnAssigned;
+      } else if (data.lastUsedColumn === 'A' || data.lastUsedColumn === 'B') {
+        side = data.lastUsedColumn;
+      }
+    }
+    if (!side) continue;
+
+    // Balances for our column (e.g. data.A = { "5": 0.1, ... })
+    const sideBalances = data[side] || {};
+
+    // Helper to push one row with enriched columns for UI
+    const pushRow = (pid, amt) => {
+      const nPid = Number(pid);
+      const nAmt = Number(amt);
+      if (!isFinite(nAmt) || nAmt <= 0) return;
+      if (pidFilter !== null && nPid !== pidFilter) return;
+
+      rows.push({
+        channel: chanId,                               // channel id/address
+        column: side,                                   // 'A' | 'B' (explicit UI label)
+        side,                                           // keep original key for backwards compat
+        propertyId: nPid,
+        amount: nAmt,
+        // Useful for UI actions (withdraw/transfer) without more queries:
+        participants: {
+          A: data?.participants?.A || '',
+          B: data?.participants?.B || ''
+        },
+        counterparty: side === 'A'
+          ? (data?.participants?.B || '')
+          : (data?.participants?.A || ''),
+        lastCommitmentBlock: data?.lastCommitmentTime ?? null,
+        commitCount: Array.isArray(data?.commits) ? data.commits.length : 0,
+        // did *we* ever mark payEnabled=true in a commit? (handy hint for UI)
+        payEnabled: !!(Array.isArray(data?.commits) && data.commits.some(
+          c => String(c.senderAddress || '').toLowerCase() === addrLC && c.payEnabled === true
+        )),
+        // If you store pubkeys/redeemScript/scriptPubKey, pass them along for immediate actions:
+        channelPubkeys: data?.channelPubkeys || null,
+        redeemScript: data?.redeemScript || null,
+        scriptPubKey: data?.scriptPubKey || null
+      });
+    };
+
+    if (pidFilter !== null) {
+      pushRow(String(pidFilter), sideBalances[String(pidFilter)] || 0);
+    } else {
+      for (const [pid, val] of Object.entries(sideBalances)) {
+        pushRow(pid, val);
+      }
+    }
+  }
+
+  // Largest first looks nice in a table
+  rows.sort((a, b) => b.amount - a.amount);
+  return rows;
+}
+
+
+/** Optional: aggregate sum across channels (for UI footers) */
+static sumBalance(rows) {
+  return rows.reduce((acc, r) => acc + (r.amount || 0), 0);
+}
+
+/** Optional: group by channel -> { [channel]: { [propertyId]: amount } } */
+static toChannelPropMap(rows) {
+  const m = {};
+  for (const r of rows) {
+    if (!m[r.channel]) m[r.channel] = {};
+    m[r.channel][r.propertyId] = (m[r.channel][r.propertyId] || 0) + r.amount;
+  }
+  return m;
+}
+
+
+
     static async loadChannelsRegistry() {
         // Load the channels registry from NeDB
         const channelsDB = await dbInstance.getDatabase('channels');

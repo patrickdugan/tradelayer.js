@@ -3,20 +3,101 @@ const BigNumber = require('bignumber.js');
 
 class TradeHistory {
 
-  async loadTradeHistory(contractId) {
-    let key = { "key": "contract-" + contractId }
-    console.log('key to load trades ' +JSON.stringify(key))
-    return await database.getDatabase('tradeHistory')
+ async loadTradeHistory(contractId) {
+  const stringKey = `contract-${contractId}`;
+  console.log('key to load trades ' + JSON.stringify({ key: stringKey }));
+
+  const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
+
+  // Try single doc per contract
+  const doc = await tradeHistoryDB.findOneAsync({ _id: stringKey });
+  if (doc) {
+    if (Array.isArray(doc.trades)) return doc.trades;
+    if (doc.trade) return [doc.trade];
+    return [doc];
   }
 
-  async getTradeHistoryForAddress(address,contractId) {
-    console.log('about to call load history for contract '+contractId)
-    const tradeHistory = await this.loadTradeHistory(contractId);
-    //console.log('loading the whole trade history for everything ' +JSON.stringify(tradeHistory))
-    return tradeHistory.filter((trade) =>
-      [trade.trade.buyerAddress, trade.trade.sellerAddress].includes(address)
-    );
+  // Legacy fallback: docs with prefix contract-<id>-
+  if (typeof tradeHistoryDB.findAsync === 'function') {
+    const legacyRows = await tradeHistoryDB.findAsync({ _id: { $regex: `^${stringKey}-` } });
+    if (legacyRows && legacyRows.length) {
+      return legacyRows.map(r => r.trade ?? r);
+    }
   }
+
+  // Last resort: filter whole db
+  const all = await database.getDatabase('tradeHistory');
+  return (Array.isArray(all) ? all : [])
+    .filter(r => r?.key === stringKey || String(r?._id || '').startsWith(`${stringKey}-`))
+    .map(r => r.trade ?? r);
+}
+
+async getTradeHistoryForAddress(address, contractId) {
+  console.log('about to call load history for contract ' + contractId);
+  const trades = await this.loadTradeHistory(contractId);
+
+  return trades.filter(t => {
+    const buyer = t?.buyer || t?.buyerAddress || t?.counterpartyAddress;
+    const seller = t?.seller || t?.sellerAddress || t?.liquidatingAddress;
+    return buyer === address || seller === address;
+  });
+}
+
+
+  // Order-independent token pair + address filter
+static async getTokenTradeHistoryForAddress(propertyId1, propertyId2, address) {
+  const tradeDB = await dbInstance.getDatabase('tradeHistory');
+
+  // Support either pair ordering
+  const a = Number(propertyId1);
+  const b = Number(propertyId2);
+  const keys = [`token-${a}-${b}`, `token-${b}-${a}`];
+
+  const addr  = String(address || '');
+  const addrL = addr.toLowerCase();
+
+  const docs = await tradeDB.findAsync({
+    $and: [
+      { key: { $in: keys } },
+      {
+        $or: [
+          { 'trade.buyer': addr },
+          { 'trade.seller': addr },
+          { 'trade.buyer': addrL },
+          { 'trade.seller': addrL },
+        ]
+      }
+    ]
+  });
+
+  return (docs || []).map(d => d.trade);
+}
+
+// Contract + address filter
+static async getContractTradeHistoryForAddress(contractId, address) {
+  const tradeDB = await dbInstance.getDatabase('tradeHistory');
+
+  const key   = `contract-${contractId}`;
+  const addr  = String(address || '');
+  const addrL = addr.toLowerCase();
+
+  const docs = await tradeDB.findAsync({
+    $and: [
+      { key },
+      {
+        $or: [
+          { 'trade.buyer': addr },
+          { 'trade.seller': addr },
+          { 'trade.buyer': addrL },
+          { 'trade.seller': addrL },
+        ]
+      }
+    ]
+  });
+
+  return (docs || []).map(d => d.trade);
+}
+
 
   async getPositionHistoryForContract(address, contractId) {
     //console.log('about to call trade history for contract '+contractId)

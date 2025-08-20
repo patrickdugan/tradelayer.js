@@ -16,7 +16,7 @@ const Channels = require('./channels.js')
 const Types = require('./types.js')
 const ClearList = require('./clearlist.js')
 const Clearing = require('./clearing.js')
-
+const TradeHistory = require('./tradeHistoryManager.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -435,12 +435,42 @@ app.get('/tl_contractPosition', async (req, res) => {
     }
 });
 
+// Get sum of open channel balances for commit address and prop ID
+app.get('/tl_channelBalanceForCommiter', async (req, res) => {
+    try {
+        const { address, propertyId } = req.query;
+        if (!address || !propertyId) {
+            return res.status(400).json({ error: "Missing address or contractId" });
+        }
+        const propIdNum = Number(propertyId);
+        if (isNaN(propIdNum)) {
+            return res.status(400).json({ error: "contractId must be a number" });
+        }
+        const total = await Channels.getChannelBalancesForAddress(address, propertyId)
+        const total = rows.reduce((s, r) => s + r.amount, 0);
+        res.json({ total, rows });
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 
 // Get trade history
 app.get('/tl_tradeHistory', async (req, res) => {
     try {
         const { propertyId1, propertyId2 } = req.query;
-        const tradeHistory = await Orderbook.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2);
+        const tradeHistory = await TradeHistory.getTradeHistoryByPropertyIdPair(propertyId1, propertyId2);
+        console.log('Returning trade history ' + JSON.stringify(tradeHistory));
+        res.json(tradeHistory);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_tokenTradeHistoryForAddress', async (req, res) => {
+    try {
+        const { propertyId1, propertyId2, address } = req.query;
+        const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(propertyId1, propertyId2,address);
         console.log('Returning trade history ' + JSON.stringify(tradeHistory));
         res.json(tradeHistory);
     } catch (error) {
@@ -466,6 +496,26 @@ app.get('/tl_contractTradeHistory', async (req, res) => {
         const { contractId } = req.query;
         const contractTradeHistory = await Orderbook.getContractTradeHistoryByContractId(contractId);
         res.json(contractTradeHistory);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_contractTradeHistoryForAddress', async (req, res) => {
+    try {
+        const { contractId, address } = req.query;
+        const contractTradeHistory = await TradeHistory.getContractTradeHistoryForAddress(contractId,address);
+        res.json(contractTradeHistory);
+    } catch (error) {
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.get('/tl_totalTradeHistoryForAddress', async (req, res) => {
+    try {
+        const { address } = req.query;
+        const totalTradeHistory = await TradeHistory.getTradeHistoryForAddress(address);
+        res.json(totalTradeHistory);
     } catch (error) {
         res.status(500).send('Error: ' + error.message);
     }

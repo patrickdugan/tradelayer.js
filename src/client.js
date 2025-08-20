@@ -71,7 +71,7 @@ class ClientWrapper {
 	    this.isInitializing = true; // Set flag to indicate initialization is in progress
 
 	    if(!this.client){
-	     const boot = this.getEnvBootstrap('BTC'); // default LTC; change to 'BTC' if you prefer
+	     const boot = this.getEnvBootstrap('LTCTEST'); // default LTC; change to 'BTC' if you prefer
 
 	this.config = {
 	  host: boot.host,
