@@ -450,7 +450,7 @@ const Logic = {
                 offeredPropertyId: 0,
                 desiredPropertyId: propertyId,
                 amountOffered: tokenAmount, // or appropriate amount
-                amountExpected: coinAdj, // or appropriate amount
+                amountExpected: coinAdj.toNumber(), // or appropriate amount
                 price: price,
                 takerFee: fee,
                 block: block,

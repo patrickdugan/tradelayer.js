@@ -47,6 +47,8 @@ let lastInitCall = Date.now();
 
 // Initialize Main once ClientWrapper is ready
 app.post('/tl_initmain', async (req, res) => {
+const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1,'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t');
+    console.log('trade history '+JSON.stringify(tradeHistory))
     try {
 
         if(req.wallet){
