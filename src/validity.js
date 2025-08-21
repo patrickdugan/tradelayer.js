@@ -307,9 +307,9 @@ const Validity = {
                 params.reason += 'Invalid property ID; ';
             }
 
-            if (!Validity.isValidNumber(params.amounts)) {
+            if (!Validity.isValidNumber(params.amount)) {
                 params.valid = false;
-                params.reason += 'Invalid or missing amount; ';
+                params.reason += 'Invalid or missing token amount; ';
                 return params;
             }
 

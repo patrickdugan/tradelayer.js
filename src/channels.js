@@ -535,12 +535,15 @@ static toChannelPropMap(rows) {
         // 4. Crowded: default spot is already filled, so we need tie-break and bump
         if(channel.participants[column]==cpAddress||(channel.participants[column] && channel.participants[column] !== newCommitAddress)){
             const tiebreak = Channels.tieBreakerByBackChar(newCommitAddress, cpAddress, column);
-            return Channels.bumpColumnAssignment(
-                channel,
-                tiebreak.winnerColumn === 'A' ? tiebreak.winner : tiebreak.loser,
-                tiebreak.winnerColumn === 'B' ? tiebreak.winner : tiebreak.loser,
-                block
-            );
+           // winner must land on its computed winnerColumn; loser on the other
+          const desiredA = (tiebreak.winnerColumn === 'A') ? tiebreak.winner : tiebreak.loser;
+          const desiredB = (tiebreak.winnerColumn === 'B') ? tiebreak.winner : tiebreak.loser;
+          // If for any reason we can't identify both, keep previous other side (never blank)
+          const prevA = channel.participants.A || '';
+          const prevB = channel.participants.B || '';
+          const forceA = desiredA || prevA;
+          const forceB = desiredB || ((prevA && prevA !== forceA) ? prevA : prevB);
+          return Channels.bumpColumnAssignment(channel, forceA, forceB, block);
         }
 
         console.error(
@@ -549,6 +552,18 @@ static toChannelPropMap(rows) {
             `Incoming commit: ${newCommitAddress}\n` +
             `This should be handled earlier in the logic!`
         );
+    }
+
+    static resolveColumn(channel, addr) {
+      const A = channel?.participants?.A ?? '';
+      const B = channel?.participants?.B ?? '';
+      if (!addr) return null;
+      if (A === addr) return 'A';
+      if (B === addr) return 'B';
+      // single-counterparty fallback
+      if (A && !B && A === addr) return 'A';
+      if (B && !A && B === addr) return 'B';
+      return null;
     }
 
     static assignColumnBasedOnLastCharacter(address, last=1) {
@@ -636,70 +651,76 @@ static toChannelPropMap(rows) {
 }
 
 static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
-    if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
+  if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');
+  if (!channel.participants) channel.participants = { A: '', B: '' };
+  channel.A = channel.A || {};
+  channel.B = channel.B || {};
 
-    const prevA = channel.participants.A;
-    const prevB = channel.participants.B;
+  const prevA = channel.participants.A;
+  const prevB = channel.participants.B;
 
-    console.log(`[Bump] Current: A=${prevA}, B=${prevB} | Forcing: A=${forceAis}, B=${forceBis}`);
+  // Normalize inputs so we never blank a side unintentionally
+  const hasForceA = forceAis !== undefined && forceAis !== null && forceAis !== '';
+  const hasForceB = forceBis !== undefined && forceBis !== null && forceBis !== '';
+  let nextA = hasForceA ? forceAis : (prevA || '');
+  let nextB = hasForceB ? forceBis : (prevB || '');
 
-    // 1. No change needed
-    if (prevA === forceAis && prevB === forceBis) {
-        console.log('[Bump] No swap needed.');
-        return channel;
-    }
+  // Avoid A/B collapsing to the same address when we can preserve distinctness
+  if (nextA && nextA === nextB) {
+    if (prevA && prevA !== nextA) nextB = prevA;
+    else if (prevB && prevB !== nextA) nextB = prevB;
+  }
 
-    // 2. True swap (A <-> B): both participants and all balances
-    if (prevA === forceBis && prevB === forceAis) {
-        console.log(`[Bump] Swapping both participants and balances: A=${prevA}, B=${prevB}`);
-        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-        [channel.A, channel.B] = [channel.B, channel.A];
-    }
-    // 3. Reverse: only participant assignment is reversed, not both
-    else if (prevA === forceBis) {
-        console.log(`[Bump] Swapping A <-> B: ${prevA} <-> ${prevB}`);
-        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-        [channel.A, channel.B] = [channel.B, channel.A];
-    }
-    else if (prevB === forceAis) {
-        console.log(`[Bump] Swapping B <-> A: ${prevB} <-> ${prevA}`);
-        [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
-        [channel.A, channel.B] = [channel.B, channel.A];
-    }
-    // 4. Total overwrite: forcibly assign new participants, leave balances untouched
-    else {
-        console.log(`[Bump] Overwriting participants: A=${forceAis}, B=${forceBis}`);
-        channel.participants.A = forceAis;
-        channel.participants.B = forceBis;
-        // Optionally, you can reset channel.A and channel.B if this is a "new" channel
-        // channel.A = {};
-        // channel.B = {};
-    }
+  console.log(`[Bump] Current: A=${prevA}, B=${prevB} | Forcing(norm): A=${nextA}, B=${nextB}`);
 
-    // Emit participantChange deltas if changed
-    if (channel.participants.A !== prevA) {
-        await this.recordParticipantChange(
-            channel.channel,
-            'A',
-            channel.participants.A,
-            block,
-            prevA,
-            'Rotated (bumpColumnAssignment)'
-        );
-    }
-    if (channel.participants.B !== prevB) {
-        await this.recordParticipantChange(
-            channel.channel,
-            'B',
-            channel.participants.B,
-            block,
-            prevB,
-            'Rotated (bumpColumnAssignment)'
-        );
-    }
-
-    console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
+  // 1) No change needed
+  if (prevA === nextA && prevB === nextB) {
+    console.log('[Bump] No swap needed.');
     return channel;
+  }
+
+  // 2) True swap: desired is exactly the other's current -> swap participants & balances
+  if (prevA === nextB && prevB === nextA) {
+    console.log(`[Bump] Swapping both participants and balances: A=${prevA}, B=${prevB}`);
+    [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+    [channel.A, channel.B] = [channel.B, channel.A];
+  }
+  // 3) One-sided match implies an A<->B swap too (keeps balances aligned with owners)
+  else if (prevA === nextB || prevB === nextA) {
+    console.log(`[Bump] Swapping participants & balances (one-sided match): A=${prevA}, B=${prevB}`);
+    [channel.participants.A, channel.participants.B] = [channel.participants.B, channel.participants.A];
+    [channel.A, channel.B] = [channel.B, channel.A];
+    // After swap, if still not at target, set explicitly without touching balances again
+    if (channel.participants.A !== nextA || channel.participants.B !== nextB) {
+      console.log(`[Bump] Aligning participants post-swap to target: A=${nextA}, B=${nextB}`);
+      channel.participants.A = nextA || channel.participants.A;
+      channel.participants.B = nextB || channel.participants.B;
+    }
+  }
+  // 4) Overwrite: assign both sides explicitly, keep balances on their current sides
+  else {
+    console.log(`[Bump] Overwriting participants: A=${nextA}, B=${nextB}`);
+    channel.participants.A = nextA;
+    channel.participants.B = nextB;
+    // (Optionally) reset balances for a brand-new pairing:
+    // channel.A = {};
+    // channel.B = {};
+  }
+
+  // Emit participantChange deltas if changed
+  if (channel.participants.A !== prevA) {
+    await this.recordParticipantChange(
+      channel.channel, 'A', channel.participants.A, block, prevA, 'Rotated (bumpColumnAssignment)'
+    );
+  }
+  if (channel.participants.B !== prevB) {
+    await this.recordParticipantChange(
+      channel.channel, 'B', channel.participants.B, block, prevB, 'Rotated (bumpColumnAssignment)'
+    );
+  }
+
+  console.log(`[Bump] Result: A=${channel.participants.A}, B=${channel.participants.B}`);
+  return channel;
 }
 
 
@@ -795,6 +816,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             cpAddress = channel.participants.B
         }
         let channelColumn = Channels.predictColumnForAddress(channel, senderAddress, cpAddress)
+        console.log('column prediction '+channelColumn)
         console.log('about to handle pubkeys '+JSON.stringify(channel)+' '+senderAddress+' '+cpAddress)
         const { channel: updatedChannel, valid, reason } = await Channels.handleChannelPubkey(channel, channelColumn, senderAddress, txid);
         if (!valid) {
@@ -805,12 +827,13 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         console.log('channel after handle pubkeys '+JSON.stringify(channel))
         channel = await Channels.assignColumnBasedOnAddress(channel, senderAddress, cpAddress,blockHeight);
         const participants = channel.participants;
-        channelColumn =
-          participants.A === senderAddress ? 'A' :
-          participants.B === senderAddress ? 'B' :
-          null;
-          if(null){return console.log('ERR WITH COMMIT '+senderAddress+' '+channelAddress+' '+blockHeight)}
-        console.log('assinging column in recordCommit' +channelColumn)
+        channelColumn = Channels.resolveColumn(channel, senderAddress);
+        console.log('resolved columen '+channelColumn)
+        // Guard: if we failed to resolve a column, bail safely
+         if (channelColumn == null) {
+            console.log('ERR WITH COMMIT '+senderAddress+' '+channelAddress+' '+blockHeight+' (channelColumn==null)');
+            return;
+          }  console.log('assinging column in recordCommit' +channelColumn)
         // Update the balance in the specified column
         if (!channel[channelColumn][propertyId]) {
             channel[channelColumn][propertyId] = 0;

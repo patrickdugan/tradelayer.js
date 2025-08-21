@@ -91,12 +91,12 @@ const Encode = {
 
     // Encode Trade Token for UTXO Transaction
     encodeTradeTokenForUTXO: (params) => {
-        const amount = new BigNumber(params.amountOffered).times(1e8).toNumber();
+        const amount = new BigNumber(params.amount).times(1e8).toNumber();
         const sats = new BigNumber(params.satsExpected).times(1e8).toNumber();
         const isColoredOutput = params.isColoredOutput ? '1' : '0';
         const payload = [
             params.propertyId.toString(36),
-            params.amount.toString(36),
+            amount.toString(36),
             params.columnA,
             sats.toString(36),
             params.tokenOutput,

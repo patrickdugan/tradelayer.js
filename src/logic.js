@@ -362,7 +362,6 @@ const Logic = {
         return
 	},
 
-
 	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -448,10 +447,10 @@ const Logic = {
             await VolumeIndex.saveVolumeDataById(key,coinAdj.toNumber(),price,block,'UTXO')
             
             const trade = {
-                offeredPropertyId: match.sellOrder.offeredPropertyId,
-                desiredPropertyId: match.buyOrder.desiredPropertyId,
-                amountOffered: match.amountOfTokenA, // or appropriate amount
-                amountExpected: match.amountOfTokenB, // or appropriate amount
+                offeredPropertyId: 0,
+                desiredPropertyId: propertyId,
+                amountOffered: tokenAmount, // or appropriate amount
+                amountExpected: coinAdj, // or appropriate amount
                 price: price,
                 takerFee: fee,
                 block: block,

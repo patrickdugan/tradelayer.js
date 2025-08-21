@@ -1,4 +1,4 @@
-const database = require('./db.js')
+const dbInstance = require('./db.js')
 const BigNumber = require('bignumber.js');
 
 class TradeHistory {
@@ -26,7 +26,7 @@ class TradeHistory {
   }
 
   // Last resort: filter whole db
-  const all = await database.getDatabase('tradeHistory');
+  const all = await dbInstance.getDatabase('tradeHistory');
   return (Array.isArray(all) ? all : [])
     .filter(r => r?.key === stringKey || String(r?._id || '').startsWith(`${stringKey}-`))
     .map(r => r.trade ?? r);
@@ -435,7 +435,7 @@ async calculateLIFOEntry(address, amount, contractId) {
        */
       async save(key, data) {
         try {
-          const db = await database.getDatabase('tradeHistory');
+          const db = await dbInstance.getDatabase('tradeHistory');
           const value = JSON.stringify(data);
 
           console.log(`updating tradeHistoryDB with ${value}`);
