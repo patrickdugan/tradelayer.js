@@ -420,7 +420,7 @@ const Types = {
                 //params = await Validity.validateSmartContractBind(sender, params, block)
                 break;
           default:
-            throw new Error('Unknown transaction type');
+            return new Error('Unknown transaction type');
         }
             return params 
     }

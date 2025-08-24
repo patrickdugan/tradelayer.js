@@ -225,7 +225,13 @@ class TxIndex {
                 }; // '746c' for 'tl'
                 let marker = Buffer.from(markerHex, 'hex').toString();  // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(payloadStart);
-                const payload = Buffer.from(payloadHex, 'hex').toString();
+                const payloadBuff = Buffer.from(payloadHex, 'hex')
+                console.log(marker + ' ' +payloadBuff)
+                if (!this.isPrintableASCII(payloadBuff)) {
+                    console.log('boop')
+                      return null;
+                }
+                const payload = payloadBuff.toString(); 
                 console.log('market data ' +markerHex+' '+marker+' '+payload)
                 if(marker=='tl'){console.log('Pre-decoded and Decoded Payload:', opReturnData + ' ' + payload+ ' decoding the whole thing '+Buffer.from(opReturnData, 'hex').toString())};
                 return { marker, payload , decodedTx};
@@ -238,6 +244,14 @@ class TxIndex {
         } catch (error) {
             //console.error('Error decoding raw transaction:', error);
         }
+    }
+
+
+    static isPrintableASCII(buf) {
+      // Byte-preserving check; no UTF-8 decoding side effects
+      const s = buf.toString('latin1');
+      console.log(s+Boolean(/^[\x20-\x7E]*$/.test(s)))
+      return /^[\x20-\x7E]*$/.test(s); // space..~ only
     }
 
 
