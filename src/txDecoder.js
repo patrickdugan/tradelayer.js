@@ -409,16 +409,28 @@ const Decode = {
     },
 
     // Decode Withdrawal Transaction
-    decodeWithdrawal: (payload) => {
-        const parts = payload.split(',');
-        return {
-            withdrawAll: parts[0] === '1',
-            propertyId: Decode.decodePropertyId(parts[1] || ''),
-            amount: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            column: parts[3] === '1',
-            channelAddress: parts[4] || '',
-        };
+     decodeWithdrawal: (payload, decodedTx) => {
+      const parts = payload.split(',');
+      let channelAddress = '';
+      let ref = false;
+
+      if (parts[4]?.startsWith('ref:')) {
+        const n = parseInt(parts[4].split(':')[1], 10);
+        ref = Number.isFinite(n) ? n : false;
+      } else {
+        channelAddress = parts[4] || '';
+      }
+
+      return {
+        withdrawAll: parts[0] === '1',
+        propertyId: Decode.decodePropertyId(parts[1] || ''),
+        amount: new BigNumber(parts[2] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+        column: parts[3] === '1',
+        channelAddress,
+        ref,
+      };
     },
+
 
     // Decode Transfer Transaction
     decodeTransfer: (payload) => {

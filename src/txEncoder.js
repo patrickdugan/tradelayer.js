@@ -400,7 +400,8 @@ const Encode = {
         const withdrawAll = params.withdrawAll;
         const propertyIds = params.propertyId.toString(36);
         const column = params.column; // 0 is A, 1 is B
-        const payload = [withdrawAll, propertyIds, amounts, column, params.channelAddress].join(',');
+        const channelAddress = params.channelAddress.length > 42 ? `ref:${params.ref || 0}` : params.channelAddress;
+        const payload = [withdrawAll, propertyIds, amounts, column, channelAddress].join(',');
         const type = 21;
         const typeStr = type.toString(36);
         return marker + typeStr + payload;

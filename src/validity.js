@@ -1982,6 +1982,32 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+             if(params.ref){
+                //console.log(params.ref)
+                const outputs = await TxUtils.getTransactionOutputs(txid)
+
+                let matchingOutput = null;
+                //console.log(JSON.stringify(outputs)) 
+                // Loop through the outputs array to find the one with the matching vout
+                for (let i = 0; i < outputs.length; i++) {
+                    //console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
+                    if (outputs[i].vout === Number(params.ref)) {
+                        matchingOutput = outputs[i];
+                        //console.log('match output '+matchingOutput)
+                        break; // Exit loop once the matching output is found
+                    }
+                }
+                
+                if (matchingOutput) {
+                    // Access the matching output's address and satoshis
+                    params.channelAddress = matchingOutput.address;
+                    console.log('params.channelAddress '+params.channelAddress)
+                }else{
+                    params.valid = false
+                    params.reason += "No channel address detectable in payload or ref: output"
+                }
+            }
+
             const isAlreadyActivated = await activationInstance.isTxTypeActive(21);
             if(isAlreadyActivated==false){
                 params.valid=false

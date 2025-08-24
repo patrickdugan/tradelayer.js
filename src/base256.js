@@ -3,48 +3,53 @@ const baseConverter = require('bigint-base-converter');
 // Define the Custom Base 256 Character Set
 const allCharacters = [...Array(65536).keys()].map(i => String.fromCharCode(i));
 const customBase256Chars = allCharacters.filter(
-    char => !/[\s\u0000-\u001F\u007F-\u00A0\u00AD\u2028\u2029]/.test(char)
+  char => !/[\s\u0000-\u001F\u007F-\u00A0\u00AD\u2028\u2029]/.test(char)
 ).slice(0, 256);
 
 // Ensure we have exactly 256 characters
 if (customBase256Chars.length !== 256) {
-    return new Error("Character set must contain exactly 256 unique, usable characters.");
+  throw new Error("Character set must contain exactly 256 unique, usable characters."); // <-- use throw, not return
 }
 
-// Create the converter object for custom Base 256
+const ALPH = customBase256Chars.join('');
+
 const Base256Converter = {
-    // Convert decimal to custom Base 256
-    toBase256(decimalString) {
-        return baseConverter(decimalString, 10, customBase256Chars.join(''));
-    },
+  // Convert decimal (string/BigInt/number) to custom Base 256
+  toBase256(decimalInput) {
+    const decStr = String(decimalInput).replace(/[,\s]/g, '');
+    return baseConverter(decStr, 10, ALPH);
+  },
 
-    // Convert custom Base 256 back to decimal
-    fromBase256(base256String) {
-        return baseConverter(base256String, customBase256Chars.join(''), 10);
-    },
+  // Convert custom Base 256 back to decimal (string)
+  fromBase256(base256String) {
+    const out = baseConverter(base256String, ALPH, 10);
+    // bigint-base-converter returns an array of digits when toBase is numeric
+    return Array.isArray(out) ? out.join('') : String(out);
+  },
 
-    // Convert hex to decimal
-    hexToDecimal(hex) {
-        return BigInt('0x' + hex).toString();
-    },
+  // Hex <-> Decimal helpers
+  hexToDecimal(hex) {
+    // normalize & allow odd-length hex
+    const h = hex.length % 2 ? '0' + hex : hex;
+    return BigInt('0x' + h).toString(10);
+  },
 
-    // Convert decimal to hex
-    decimalToHex(decimalString) {
-        return BigInt(decimalString).toString(16);
-    },
+  decimalToHex(decimalString) {
+    const clean = String(decimalString).replace(/[,\s]/g, '');
+    let hex = BigInt(clean).toString(16);
+    if (hex.length % 2) hex = '0' + hex; // even-length hex
+    return hex;
+  },
 
-    // Convert hex to custom Base 256
-    hexToBase256(hex) {
-        const decimalString = this.hexToDecimal(hex);
-        return this.toBase256(decimalString);
-    },
+  // Hex <-> Base256
+  hexToBase256(hex) {
+    return this.toBase256(this.hexToDecimal(hex));
+  },
 
-    // Convert custom Base 256 back to hex
-    base256ToHex(base256String) {
-        const decimalString = this.fromBase256(base256String);
-        return this.decimalToHex(decimalString);
-    }
+  base256ToHex(base256String) {
+    const dec = this.fromBase256(base256String);
+    return this.decimalToHex(dec);
+  }
 };
 
-// Export the object for use in other modules
 module.exports = Base256Converter;
