@@ -369,7 +369,7 @@ const Logic = {
         const decodedTokenAmountBigNumber = new BigNumber(tokenAmount);
         const tradeHistoryManager = new TradeHistory()
 
-        const tokensToDeliver = tokenAmount
+        const tokensToDeliver = Number(tokenAmount)
             //console.log('values in utxo logic '+tokenAmount+' '+decodedTokenAmountBigNumber+' '+satsExpected+' '+satsExpectedBigNumber+' '+satsReceived+' '+receiverLTCReceivedBigNumber)
                //look at the channel balance where the commited tokens we're selling for LTC exist
         
@@ -428,7 +428,7 @@ const Logic = {
             const feeRateBN = new BigNumber(0.0005)
             const fee = new BigNumber(tokenAmount).times(feeRateBN).decimalPlaces(8).toNumber()
             const netDelivery = new BigNumber(tokensToDeliver).minus(fee).decimalPlaces(8).toNumber()
-            if(tagWithdraw!=null&&typeof tagWithdraw==string ){
+            if(tagWithdraw!=null&&typeof tagWithdraw==="string" ){
                 await TallyMap.updateChannelBalance(tokenDeliveryAddress,propertyId,netDelivery,'UTXOTokenTradeCredit',block)
                 await Channels.recordCommitToChannel(tokenDeliveryAddress, tagWithdraw, propertyId, tokenAmount, false, null, block)
             }else{
@@ -440,11 +440,17 @@ const Logic = {
             console.log('saving volume in volume Index '+key+' '+satsReceived)
             const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
             console.log(' price in UTXO '+price)
-            if(isNaN(price)){
-                price = coinAdj.div(tokenAmount).decimalPlaces(8).toNumber()
-                console.log('price 2nd hit '+price+' '+coinAdj+' '+tokenAmount)
+            if (!Number.isFinite(Number(price))) {
+                price = coinAdj.div(tokenAmount).decimalPlaces(8).toNumber();
             }
-            await VolumeIndex.saveVolumeDataById(key,coinAdj.toNumber(),price,block,'UTXO')
+
+            await VolumeIndex.saveVolumeDataById(
+                key,
+                tokenAmount,
+                coinAdj.toNumber(),
+                price,
+                block,
+                'UTXO')
             
             const trade = {
                 offeredPropertyId: 0,
@@ -844,8 +850,16 @@ const Logic = {
         let matches = []
         matches.push(match)
 	    // Trade the contract within a channel
+        const contractLTCValue = VolumeIndex.getContractUnitLTCValue(contractId)
+        const totalContractsLTCValue = new BigNumber(contractLTCValue).times(amount).decimalPlaces(8).toNumber()
         await orderbook.processContractMatches(matches,block,true)
-        await VolumeIndex.saveVolumeDataById(contractId,amount,price,block,'contract')
+        await VolumeIndex.saveVolumeDataById(
+            contractId,
+            amount,
+            totalContractsLTCValue,
+            price,
+            block,
+            'contract')
 
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
         return
@@ -904,7 +918,15 @@ const Logic = {
 		    // Update balances in the channel columns and commitment addresses
         console.log('about to process token match in channel '+JSON.stringify(matches),block)
 		await orderbook.processTokenMatches(matches, block, txid,true)
-        await VolumeIndex.saveVolumeDataById(key,{amountOffered,amountDesired},tradePrice,block,'token')
+        const ltcValueOfToken = VolumeIndex.getTokenPriceInLTC(desiredPropertyId)
+        const ltcValueOfTokens = new BigNumber(ltcValueOfToken).times(amountdesired).decimalPlaces(8).toNumber()
+        await VolumeIndex.saveVolumeDataById(
+            key,
+            amountOffered,
+            ltcValueOfTokens,
+            tradePrice,
+            block,
+            'token')
 
 		    return `Trade executed in channel ${channelAddress}`;
 	},

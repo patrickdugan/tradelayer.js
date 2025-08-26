@@ -36,6 +36,34 @@ class ContractRegistry {
         }
     }
 
+// contractRegistry.js (add somewhere in the class or attach to the instance)
+    static async lookupInverseNativeByNotionalPid(basePid) {
+      const all = await module.exports.getAllContracts(); // returns docs.map(doc.data)
+      const matches = [];
+
+      for (const meta of all) {
+        if (!meta || typeof meta !== 'object') continue;
+        const cid = meta.contractId ?? meta.seriesId ?? meta.id;
+        if (!cid) continue;
+
+        const inverse = await module.exports.isInverse(cid);
+        const native  = await module.exports.isNativeContract(cid);
+        if (!inverse || !native) continue;
+
+        // match the underlying property we’re hedging
+        if (Number(meta.notionalPropertyId) !== Number(basePid)) continue;
+
+        matches.push({
+          contractId: cid,
+          seriesId: cid,
+          symbol: meta.symbol || meta.ticker || meta.name || `contract-${cid}`,
+          notionalPropertyId: Number(meta.notionalPropertyId),
+          // notional per contract is accessible via getNotionalValue(contractId, mark)
+          // but we return meta here and compute with the live mark later
+        });
+      }
+      return matches;
+    }
 
     static async isDuplicateNativeContract(collateralPropertyId, onChainDataPair, notionalPropertyId) {
             try {

@@ -90,7 +90,7 @@ class VolumeIndex {
         // Attempt to fetch the VWAP price from the database
         const base = await db.getDatabase('volumeIndex')
         const vwapData = await base.findOneAsync({ _id: `0-${tokenId}` });
-        
+        console.log('get token LTC price '+JSON.stringify(vwapData))
         if (vwapData && vwapData.value && vwapData.value.price) {
             return vwapData.value.price;
         }
@@ -98,6 +98,86 @@ class VolumeIndex {
         // If VWAP price is not available, return a default low value
         return 0.001; // Minimum price
     }
+
+
+  /**
+   * Normalize ContractRegistry.getContractInfo(contractId) into a flat shape.
+   * Accepts either { data: {...} } or a flat object.
+   */
+  static async _normalizeContractInfo(contractId) {
+    const raw = await Contracts.getContractInfo(contractId);
+    const d = (raw && raw.data) ? raw.data : (raw || {});
+
+    return {
+      contractId: d.id ?? raw?.id ?? contractId,
+      ticker: d.ticker,
+      native: !!d.native,
+      inverse: !!d.inverse,
+      // definitive fields from your sample
+      notionalPropertyId: d.notionalPropertyId ?? 0, // 0 => LTC
+      notionalValue: Number(d.notionalValue ?? 1),
+      collateralPropertyId: d.collateralPropertyId,
+      leverage: Number(d.leverage ?? 1) || 1,
+      onChainData: Array.isArray(d.onChainData) ? d.onChainData : [],
+    };
+  }
+
+  /**
+   * LTC value per 1 contract unit:
+   *   ltcPerContract = (notionalValue * price(notionalPropertyId in LTC)) / leverage
+   * Handles inverse/native the same, since notional is explicit in (value, property).
+   */
+  static async getContractUnitLTCValue(contractId) {
+    try {
+      const c = await this._normalizeContractInfo(contractId);
+
+      // Price for the notional token in LTC
+      let tokenPriceInLTC = 1;
+      if (!(c.notionalPropertyId === 0 || c.notionalPropertyId === '0' || c.notionalPropertyId === 'LTC')) {
+        tokenPriceInLTC = await this.getTokenPriceInLTC(c.notionalPropertyId);
+      }
+
+      const notionalLTC = c.notionalValue * Number(tokenPriceInLTC || 0);
+      if (!Number.isFinite(notionalLTC) || notionalLTC <= 0) return 0;
+
+      const ltcPerContract = notionalLTC / (c.leverage || 1);
+      return Number(ltcPerContract.toFixed(8));
+    } catch (e) {
+      console.error('getContractUnitLTCValue error', e);
+      return 0;
+    }
+  }
+
+  /**
+   * Debug/telemetry variant with all the inputs broken out.
+   */
+  static async getContractUnitLTCValueDetails(contractId) {
+    const c = await this._normalizeContractInfo(contractId);
+
+    let tokenPriceInLTC = 1;
+    if (!(c.notionalPropertyId === 0 || c.notionalPropertyId === '0' || c.notionalPropertyId === 'LTC')) {
+      tokenPriceInLTC = await this.getTokenPriceInLTC(c.notionalPropertyId);
+    }
+
+    const notionalLTC = c.notionalValue * Number(tokenPriceInLTC || 0);
+    const ltcPerContract = Number.isFinite(notionalLTC) && c.leverage
+      ? Number((notionalLTC / c.leverage).toFixed(8))
+      : 0;
+
+    return {
+      contractId: c.contractId,
+      ticker: c.ticker,
+      inverse: c.inverse,
+      native: c.native,
+      notionalPropertyId: c.notionalPropertyId,
+      notionalValue: c.notionalValue,
+      leverage: c.leverage,
+      tokenPriceInLTC: Number(tokenPriceInLTC || 0),
+      notionalLTC: Number(notionalLTC.toFixed(8)),
+      ltcPerContract,
+      collateralPropertyId: c.collateralPropertyId,
+    };
+  }
 
 
     /**

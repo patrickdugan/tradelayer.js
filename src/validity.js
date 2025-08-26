@@ -280,7 +280,7 @@ const Validity = {
 
             return params
         },
-
+       
         // 3: Trade Token for UTXO
         validateTradeTokenForUTXO: async (sender, params, txid,outputs) => {
             params.reason = '';
@@ -338,13 +338,28 @@ const Validity = {
                 return
             }
 
+            const outs = (Array.isArray(outputs) && outputs.length) ? outputs : await TxUtils.getTransactionOutputs(txid);
+
+            // Find sats paid to the intended recipient
+            let sats = 0;
+            if (Number.isInteger(params.payToAddress)) {
+              const paymentOut = outs[params.payToAddress]
+              sats += paymentOut.satoshis
+            }else{
+                params.valid = true
+                params.reason += 'missing payToAddress, defaulting to 1'
+                params.payToAddress=1
+                params.satsReceived = outs[1]
+            }
+            params.satsReceived= sats
+
             // Validate the payToAddress corresponds to the correct vOut
                 const satsExpectedFloat = new BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
                 params.price = new BigNumber(satsExpectedFloat).dividedBy(params.amount).decimalPlaces(8).toNumber()
-                if (params.satsDelivered < satsExpectedFloat) { // convert satsExpected to LTC
+                if (params.satsReceived < satsExpectedFloat) { // convert satsExpected to LTC
                     params.valid = true;
-                    params.reason += `Received LTC (${params.satsDelivered}) is less than expected; `;
-                    params.paymentPercent = new BigNumber(params.satsDelivered).dividedBy(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
+                    params.reason += `Received LTC (${params.satsRecieved}) is less than expected; `;
+                    params.paymentPercent = new BigNumber(params.satsRecieved).dividedBy(params.satsRecieved).dividedBy(100000000).decimalPlaces(8).toNumber()
                 }else{
                     params.paymentPercent=100
                 }
