@@ -6,7 +6,7 @@ const encoder = require('../src/txEncoder.js');
 
 const clientConfig = {
     host: '127.0.0.1',
-    port: 18332, // Testnet RPC port
+    port: 19332, // Testnet RPC port
     user: 'user',
     pass: 'pass',
     timeout: 10000
@@ -73,11 +73,11 @@ const series = 5;
             onChainData: '',
             notionalPropertyId: 0,
             notionalValue: 1,
-            collateralPropertyId: 5,
+            collateralPropertyId: 's1-1',
             leverage: leverage,
             expiryPeriod: expiryPeriod,
             series: series,
-            inverse: false,
+            inverse: true,
             fee: false
         }
 

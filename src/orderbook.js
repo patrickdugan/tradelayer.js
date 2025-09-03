@@ -1625,14 +1625,21 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                         //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
-                    console.log('about to call UTXOEquivalentVolume '+perContractNotional)
-                    const UTXOEquivalentVolume = await VolumeIndex.getUTXOEquivalentVolume(match.sellOrder.contractId,match.sellOrder.amount, 'contract', collateralPropertyId, perContractNotional,isInverse,match.tradePrice)
-                    console.log('ltc volume '+UTXOEquivalentVolume)
-                    if(channel==false){
-                       await VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,UTXOEquivalentVolume,match.tradePrice,currentBlockHeight,'onChainContract')
-                    }else{
-                       await VolumeIndex.saveVolumeDataById(match.sellOrder.contractId,match.sellOrder.amount,UTXOEquivalentVolume,match.tradePrice,currentBlockHeight,'channelContract')
+
+                    const contractLTCValue = await VolumeIndex.getContractUnitLTCValue(trade.contractId)
+                    const totalContractsLTCValue = new BigNumber(contractLTCValue).times(trade.amount).decimalPlaces(8).toNumber()
+                    if (!Number.isFinite(Number(totalContractsLTCValue))) {
+                      throw new Error(`${contractLTCValue} ${trade.amount}`);
                     }
+                    console.log('contract LTC Value '+contractLTCValue)
+                    if(contractLTCValue==0){throw new Error()}
+      await VolumeIndex.saveVolumeDataById(
+                        trade.contractId,
+                        trade.amount,
+                        totalContractsLTCValue,
+                        trade.price,
+                        trade.block,
+                        'contract')
 
                      //see if the trade qualifies for increased Liquidity Reward
                     var qualifiesBasicLiqReward = await this.evaluateBasicLiquidityReward(match,channel,true)

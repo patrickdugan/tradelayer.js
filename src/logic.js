@@ -850,16 +850,7 @@ const Logic = {
         let matches = []
         matches.push(match)
 	    // Trade the contract within a channel
-        const contractLTCValue = VolumeIndex.getContractUnitLTCValue(contractId)
-        const totalContractsLTCValue = new BigNumber(contractLTCValue).times(amount).decimalPlaces(8).toNumber()
         await orderbook.processContractMatches(matches,block,true)
-        await VolumeIndex.saveVolumeDataById(
-            contractId,
-            amount,
-            totalContractsLTCValue,
-            price,
-            block,
-            'contract')
 
 	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
         return

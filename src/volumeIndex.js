@@ -57,34 +57,45 @@ class VolumeIndex {
             return volumeInLTC
         }
     }
+static async updateCumulativeVolumes(volume, type, id, block) {
+  // load existing totals, guard nulls
 
-    static async updateCumulativeVolumes(volume, type, id, block) {
-            let {globalCumulativeVolume, ltcPairTotalVolume } = await this.getCumulativeVolumes()
-            // Assuming the volume is directly in LTC
-            let BNGlobal = new BigNumber(globalCumulativeVolume)
-            let BNltc = new BigNumber(ltcPairTotalVolume)
-            globalCumulativeVolume = new BigNumber(volume).plus(BNGlobal).decimalPlaces(8).toNumber();
+  const base = await db.getDatabase('volumeIndex');
+  const globalDoc = await base.findOneAsync({ _id: 'globalCumulativeVolume' }) || { value: { globalCumulativeVolume: 0 }};
+  const ltcDoc    = await base.findOneAsync({ _id: 'ltcPairCumulativeVolume' }) || { value: { ltcPairTotalVolume: 0 }};
 
-            if(type=="UTXO"){
-                ltcPairTotalVolume += new BigNumber(volume).plus(BNltc).decimalPlaces(8).toNumber();
-            }
-            // Assuming volume is in LTC
-        console.log('saving cum-LTC volume '+ltcPairTotalVolume)
-            const base = await db.getDatabase('volumeIndex')
-            await base.updateAsync(
-                { _id: 'ltcPairCumulativeVolume' },
-                { value: {ltcPairTotalVolume:ltcPairTotalVolume, block: block }},
-                { upsert: true }
-            );
-        
-        console.log('saving global cum. volume '+globalCumulativeVolume)
-        await base.updateAsync(
-            {   _id: 'globalCumulativeVolume'},
-            { value: {globalCumulativeVolume:globalCumulativeVolume, block:block }},
-            { upsert: true }
-        );
-        return
-    }
+  const globalCumulativeVolume = globalDoc.value.globalCumulativeVolume
+  const ltcPairTotalVolume = ltcDoc.value.ltcPairTotalVolume
+
+  console.log('inside updateCumulativeVolumes '+JSON.stringify(globalDoc)+' '+JSON.stringify(ltcDoc))
+  const BNGlobal = new BigNumber(globalCumulativeVolume || 0);
+  const BNltc   = new BigNumber(ltcPairTotalVolume || 0);
+  const BNVol   = new BigNumber(volume || 0);
+
+  // global always increments
+  const newGlobal = BNVol.plus(BNGlobal).decimalPlaces(8).toNumber();
+
+  // ltc pair increments only if type === "UTXO"
+  let newLtcPair = BNltc.toNumber();
+  if (type === "UTXO") {
+    newLtcPair = BNVol.plus(BNltc).decimalPlaces(8).toNumber();
+  }
+
+    await base.updateAsync(
+      { _id: 'ltcPairCumulativeVolume' },
+      { _id: 'ltcPairCumulativeVolume', value: { ltcPairTotalVolume: newLtcPair, block } },
+      { upsert: true }
+    );
+
+    await base.updateAsync(
+      { _id: 'globalCumulativeVolume' },
+      { _id: 'globalCumulativeVolume', value: { globalCumulativeVolume: newGlobal, block } },
+      { upsert: true }
+    );
+
+  return;
+}
+
 
     static async getTokenPriceInLTC(tokenId) {
         // Attempt to fetch the VWAP price from the database
@@ -105,6 +116,7 @@ class VolumeIndex {
    * Accepts either { data: {...} } or a flat object.
    */
   static async _normalizeContractInfo(contractId) {
+    const Contracts = require('./contractRegistry.js')
     const raw = await Contracts.getContractInfo(contractId);
     const d = (raw && raw.data) ? raw.data : (raw || {});
 
@@ -141,6 +153,7 @@ class VolumeIndex {
       if (!Number.isFinite(notionalLTC) || notionalLTC <= 0) return 0;
 
       const ltcPerContract = notionalLTC / (c.leverage || 1);
+    console.log('inside LTC contract value '+ltcPerContract.toFixed(8)+' '+notionalLTC+' '+c.leverage)
       return Number(ltcPerContract.toFixed(8));
     } catch (e) {
       console.error('getContractUnitLTCValue error', e);
@@ -160,23 +173,13 @@ class VolumeIndex {
     }
 
     const notionalLTC = c.notionalValue * Number(tokenPriceInLTC || 0);
+    console.log('inside get contract unit LTC Value '+notionalLTC+' '+JSON.stringify(c))
     const ltcPerContract = Number.isFinite(notionalLTC) && c.leverage
       ? Number((notionalLTC / c.leverage).toFixed(8))
       : 0;
 
-    return {
-      contractId: c.contractId,
-      ticker: c.ticker,
-      inverse: c.inverse,
-      native: c.native,
-      notionalPropertyId: c.notionalPropertyId,
-      notionalValue: c.notionalValue,
-      leverage: c.leverage,
-      tokenPriceInLTC: Number(tokenPriceInLTC || 0),
-      notionalLTC: Number(notionalLTC.toFixed(8)),
-      ltcPerContract,
-      collateralPropertyId: c.collateralPropertyId,
-    };
+      if(ltcPerContract==0){throw new Error()}
+    return ltcPerContract
   }
 
 
@@ -208,67 +211,51 @@ class VolumeIndex {
             return null;
         }
     }
+static async getCumulativeVolumes(block) {
+  const base = await db.getDatabase('volumeIndex');
 
-    static async getCumulativeVolumes(block) {
-        let globalCumulativeVolume = 0
-        let contractCumulativeVolume = 0
-        let ltcPairTotalVolume = 0
-        // Check if globalCumulativeVolume and ltcPairTotalVolume are defined and not zero
-           try {
-                const base = await db.getDatabase('volumeIndex')
-                    const globalCumulativeVolumeFromDB = await base.findOneAsync({ 
-                        _id: 'globalCumulativeVolume',
-                        'value.block':  { $lt: block }  // Filter for the specific block
-                    });
-                    if (globalCumulativeVolumeFromDB){
+  // Default values
+  let globalCumulativeVolume = 0;
+  let contractCumulativeVolume = 0;
+  let ltcPairTotalVolume = 0;
 
-            // Sort by block in descending order and take the highest
-                    const sortedData = globalCumulativeVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
-                    const latestEntry = sortedData[0];
-                    globalCumulativeVolume = latestEntry.value.globalCumulativeVolume
-                }
-            } catch (error) {
-                console.error('Error fetching global cumulative volume:', error);
-                // Handle or log the error as needed
-            }
-
-            try {
-                const base = await db.getDatabase('volumeIndex')
-                const contractCumulativeVolumeFromDB = await base.findOneAsync({ _id: 'contractCumulativeVolume', 'value.block': { $lt: block } });
-                if (contractCumulativeVolumeFromDB) {
-            // Sort by block in descending order and take the highest
-                    const sortedData = contractCumulativeVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
-                    const latestEntry = sortedData[0];
-                    contractCumulativeVolume = latestEntry.value.contractCumulativeVolume
-                }
-            } catch (error) {
-                console.error('Error fetching global cumulative volume:', error);
-                // Handle or log the error as needed
-            }
-
-            try {
-                const base = await db.getDatabase('volumeIndex')
-                const ltcPairTotalVolumeFromDB = await base.findOneAsync({ _id: 'ltcPairCumulativeVolume','value.block': block  });
-                if (ltcPairTotalVolumeFromDB) {
-            // Sort by block in descending order and take the highest
-                    const sortedData = ltcPairTotalVolumeFromDB.sort((a, b) => b.value.block - a.value.block);
-                    const latestEntry = sortedData[0];
-                    ltcPairTotalVolume = latestEntry.value.ltcPairTotalVolume
-                }     
-            } catch (error) {
-                console.error('Error fetching LTC pair total volume:', error);
-                // Handle or log the error as needed
-            }
-        
-
-        // Return an object containing the cumulative volume data
-        return {
-            globalCumulativeVolume: globalCumulativeVolume,
-            ltcPairTotalVolume: ltcPairTotalVolume,
-            contractCumulativeVolume: contractCumulativeVolume
-            // Add other cumulative volume variables here if needed
-        };
+  try {
+    const globalDocs = await base.findAsync({ _id: 'globalCumulativeVolume', 'value.block': { $lt: block } });
+    if (Array.isArray(globalDocs) && globalDocs.length) {
+      globalDocs.sort((a, b) => b.value.block - a.value.block);
+      globalCumulativeVolume = globalDocs[0].value.globalCumulativeVolume || 0;
     }
+  } catch (err) {
+    console.error("Error fetching global cumulative volume:", err);
+  }
+
+  try {
+    const contractDocs = await base.findAsync({ _id: 'contractCumulativeVolume', 'value.block': { $lt: block } });
+    if (Array.isArray(contractDocs) && contractDocs.length) {
+      contractDocs.sort((a, b) => b.value.block - a.value.block);
+      contractCumulativeVolume = contractDocs[0].value.contractCumulativeVolume || 0;
+    }
+  } catch (err) {
+    console.error("Error fetching contract cumulative volume:", err);
+  }
+
+  try {
+    const ltcDocs = await base.findAsync({ _id: 'ltcPairCumulativeVolume', 'value.block': { $lt: block } });
+    if (Array.isArray(ltcDocs) && ltcDocs.length) {
+      ltcDocs.sort((a, b) => b.value.block - a.value.block);
+      ltcPairTotalVolume = ltcDocs[0].value.ltcPairTotalVolume || 0;
+    }
+  } catch (err) {
+    console.error("Error fetching LTC pair total volume:", err);
+  }
+
+  return {
+    globalCumulativeVolume,
+    ltcPairTotalVolume,
+    contractCumulativeVolume,
+  };
+}
+
 
     static async getBlockVolumes(blockHeight) {
         try {

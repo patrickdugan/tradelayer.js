@@ -118,6 +118,45 @@ class MarginMap {
         return allPositions;
     }
 
+    async readPosition(seriesId, address) {
+      const sid = Number(seriesId);
+      if (Number.isNaN(sid)) {
+        throw new Error(`Invalid seriesId: ${seriesId}`);
+      }
+      if (!address) {
+        throw new Error(`Address required`);
+      }
+      const marginDB = await db.getDatabase('marginMaps');
+      // 1) Try to load the single doc keyed by {"seriesId":sid}
+      const idKey = JSON.stringify({ seriesId: sid });
+      let doc = await marginDB.findOneAsync({ _id: idKey });
+
+      if (!doc) {
+        // fallback: get latest for this seriesId
+        const candidates = await marginDB.findAsync({ 'key.seriesId': sid });
+        if (!candidates || candidates.length === 0) return null;
+        candidates.sort((a, b) => (Number(b.block) || 0) - (Number(a.block) || 0));
+        doc = candidates[0];
+      }
+
+      if (!doc || !doc.value) return null;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(doc.value);
+      } catch (e) {
+        console.error('Failed to parse marginMap value', e);
+        return null;
+      }
+
+      for (const [addr, pos] of parsed) {
+        if (addr === address) {
+          return pos;
+        }
+      }
+      return null;
+    }
+
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin,block) {
         console.log('setting initial margin '+sender, contractId, totalInitialMargin)

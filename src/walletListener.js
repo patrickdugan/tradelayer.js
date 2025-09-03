@@ -17,7 +17,7 @@ const Types = require('./types.js')
 const ClearList = require('./clearlist.js')
 const Clearing = require('./clearing.js')
 const TradeHistory = require('./tradeHistoryManager.js')
-const VolumeIndex = require('./VolumeIndex.js')
+const VolumeIndex = require('./volumeIndex.js')
 const db = require('./db.js')
 
 let isInitialized = false; // A flag to track the initialization status
@@ -469,29 +469,6 @@ function parsePropertyKey(raw) {
   return { mode: 'mint', basePid: n };
 }
 
-async function readSeriesMarginMap(marginDB, seriesId) {
-  const sid = Number(seriesId);
-  const idKey = JSON.stringify({ seriesId: sid });
-
-  // 1) Fast path: single doc stored under _id === '{"seriesId":<sid>}'
-  let doc = await marginDB.findOneAsync({ _id: idKey });
-  if (doc) return parseValue(doc);
-
-  // 2) Fallback: multiple docs per seriesId (e.g., different blocks) — get all and pick latest
-  const candidates = await marginDB.findAsync({
-    $or: [
-      { 'key.seriesId': sid },   // if you stored a nested key object
-      { seriesId: sid },         // if you flattened the seriesId field
-      { _id: new RegExp(`"seriesId":\\s*${sid}`) } // last resort: match stringified _id
-    ]
-  });
-
-  if (!candidates || candidates.length === 0) return null;
-
-  // Prefer the one with the highest block number, if present
-  candidates.sort((a, b) => (Number(b.block) || 0) - (Number(a.block) || 0));
-  return parseValue(candidates[0]);
-}
 
 function parseValue(doc) {
   // Your samples look like: { _id, block, value: "<JSON string>" }
@@ -506,57 +483,40 @@ function parseValue(doc) {
 
 app.get('/tl_getMaxSynth', async (req, res) => {
   try {
-    const { address, propertyId } = req.query;
-    if (!address || !propertyId) {
+    const { address, propId } = req.query;
+    if (!address || !propId) {
       return res.status(400).json({ error: 'address and propertyId are required' });
     }
 
-    const { mode, basePid, contractId: redeemCid, synthKey } = parsePropertyKey(propertyId);
-    const marginDB = db.getDatabase('marginMaps');
+    const { mode, basePid, contractId: redeemCid, synthKey } = parsePropertyKey(propId);
 
     // list candidate contracts for this base property (inverse + native)
     let candidates = await ContractRegistry.lookupInverseNativeByNotionalPid(basePid);
-
-    // redeem: constrain to the one embedded in s<pid>-<cid>
     if (mode === 'redeem') {
       candidates = candidates.filter(c => Number(c.contractId) === Number(redeemCid));
     }
 
-    // price of the base token in LTC (for info/optional collateral math)
     const tokenPriceLTC = await VolumeIndex.getTokenPriceInLTC(basePid).catch(() => null);
 
     const eligible = [];
     for (const c of candidates) {
-      // pull this series’ margin map and find the address row
-      const arr = await readSeriesMarginMap(marginDB, c.seriesId);
-      let pos = null;
-      if (Array.isArray(arr)) {
-        for (const [addr, p] of arr) {
-          if (addr === address) { pos = p; break; }
-        }
-      }
+    const map = await MarginMap.getInstance(c.seriesId)
+
+      // read position for this address in this contract’s series
+      const pos = await map.readPosition(c.seriesId, address); // 👈 new helper
+
       const contracts = Number(pos?.contracts || 0);
       const shortContracts = contracts < 0 ? -contracts : 0;
 
-      // find a mark for per-contract notional value
       const mark = Number(pos?.lastMark) || (tokenPriceLTC || 0);
 
-      // per-contract notional units for this contract *at the mark*
       let notionalPerContract = 0;
       if (shortContracts > 0 && mark > 0) {
         const nv = await ContractRegistry.getNotionalValue(c.contractId, mark);
-        // native+inverse branch in your code computes notionalValue = (notional / mark),
-        // which is the base-asset units per 1 contract at this mark.
         notionalPerContract = Number(nv?.notionalValue || 0);
       }
 
       const maxByPositionUnits = shortContracts * notionalPerContract;
-
-      // OPTIONAL: if you want to limit by available collateral in this series,
-      // you can do something like this (super conservative):
-      // const margin = Number(pos?.margin || 0);
-      // const maxByCollateralUnits = tokenPriceLTC ? (margin / tokenPriceLTC) : Infinity;
-      // const maxUnits = Math.min(maxByPositionUnits, maxByCollateralUnits);
 
       eligible.push({
         contractId: c.contractId,
@@ -570,10 +530,6 @@ app.get('/tl_getMaxSynth', async (req, res) => {
         maxMintUnits: maxByPositionUnits,
       });
     }
-
-    // OPTIONAL redeem max (if you want it here):
-    // const balances = await TallyMap.getInstance().getAddressBalances(address);
-    // const synthBalance = ... // depends on how you key s<pid>-<cid> in balances
 
     res.json({
       mode,

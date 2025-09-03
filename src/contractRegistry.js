@@ -38,20 +38,23 @@ class ContractRegistry {
 
 // contractRegistry.js (add somewhere in the class or attach to the instance)
     static async lookupInverseNativeByNotionalPid(basePid) {
-      const all = await module.exports.getAllContracts(); // returns docs.map(doc.data)
+      const all = await ContractRegistry.getAllContracts(); // returns docs.map(doc.data)
       const matches = [];
+
+      console.log('all contracts '+JSON.stringify(all))
 
       for (const meta of all) {
         if (!meta || typeof meta !== 'object') continue;
-        const cid = meta.contractId ?? meta.seriesId ?? meta.id;
+        const cid = meta.id;
         if (!cid) continue;
 
-        const inverse = await module.exports.isInverse(cid);
-        const native  = await module.exports.isNativeContract(cid);
+        const inverse = await ContractRegistry.isInverse(cid);
+        const native  = await ContractRegistry.isNativeContract(cid);
+        console.log('inverse, native? '+inverse+' '+native)
         if (!inverse || !native) continue;
 
         // match the underlying property we’re hedging
-        if (Number(meta.notionalPropertyId) !== Number(basePid)) continue;
+        if (Number(meta.collateralPropertyId) !== Number(basePid)) continue;
 
         matches.push({
           contractId: cid,
