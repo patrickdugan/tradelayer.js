@@ -508,7 +508,10 @@ app.get('/tl_getMaxSynth', async (req, res) => {
       const contracts = Number(pos?.contracts || 0);
       const shortContracts = contracts < 0 ? -contracts : 0;
 
-      const mark = Number(pos?.lastMark) || (tokenPriceLTC || 0);
+        let mark = Number(pos?.lastMark);
+      if (!mark || mark <= 0) {
+        mark = tokenPriceLTC || 0;
+      }
 
       let notionalPerContract = 0;
       if (shortContracts > 0 && mark > 0) {

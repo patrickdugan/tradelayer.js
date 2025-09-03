@@ -46,6 +46,7 @@ async getTradeHistoryForAddress(address, contractId) {
 
   // Order-independent token pair + address filter
 static async getTokenTradeHistoryForAddress(propertyId1, propertyId2, address) {
+  try{
   const tradeDB = await dbInstance.getDatabase('tradeHistory');
 
   // Support either pair ordering
@@ -71,6 +72,9 @@ static async getTokenTradeHistoryForAddress(propertyId1, propertyId2, address) {
   });
 
   return (docs || []).map(d => d.trade);
+  }catch{
+    return "error in trade manager"
+  }
 }
 
 // Contract + address filter
