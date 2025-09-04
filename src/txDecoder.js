@@ -477,13 +477,16 @@ const Decode = {
         };
     },
 
-    // Decode Mint Synthetic Transaction
+   // Decode Mint Synthetic Transaction
     decodeMintSynthetic: (payload) => {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             contractId: parseInt(parts[1] || '0', 36),
-            amount: parseInt(parts[2] || '0', 36),
+            amount: new BigNumber(parts[2] || '0', 36)
+                .div(1e8)
+                .decimalPlaces(8, BigNumber.ROUND_DOWN)
+                .toNumber(),
         };
     },
 
@@ -493,7 +496,10 @@ const Decode = {
         return {
             propertyId: parseInt(parts[0] || '0', 36),
             contractId: parseInt(parts[1] || '0', 36),
-            amount: parseInt(parts[2] || '0', 36),
+            amount: new BigNumber(parts[2] || '0', 36)
+                .div(1e8)
+                .decimalPlaces(8, BigNumber.ROUND_DOWN)
+                .toNumber(),
         };
     },
 

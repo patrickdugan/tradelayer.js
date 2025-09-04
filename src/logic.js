@@ -1080,7 +1080,7 @@ const Logic = {
             this.removeContract(contractId);
         },
 
-		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, contracts, margin,) {
+		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, contracts, margin) {
 		    // Check if it's the first instance of this synthetic token
 		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
             const propertyManager = PropertyManager.getInstance()
@@ -1099,7 +1099,7 @@ const Logic = {
             const contractInfo = await ContractRegistry.getContractInfo(contractId)
 		    // Issue the synthetic token
 		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
-            let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin)
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin,block)
 
             //console.log('calculating adjustment to grossRequired '+grossRequired+' '+contractsAndMargin.excess+' '+contractsAndMargin.margin)
             grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()

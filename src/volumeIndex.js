@@ -191,26 +191,40 @@ static async updateCumulativeVolumes(volume, type, id, block) {
      */
     static async getLastPrice(tokenPair, blockHeight) {
         try {
-            // Query to find the document with the token pair and block height <= specified block height
-            const query = {
-                _id: tokenPair
-            };
+            const base = await db.getDatabase('volumeIndex');
+            console.log('inside get last price ' + blockHeight);
 
-            console.log('inside get last price ' +blockHeight)
-            const base = await db.getDatabase('volumeIndex')
-            const tokenData = await base.findOneAsync(query);
+            // Try direct pair first
+            const direct = await base.findOneAsync({ _id: tokenPair });
 
-            if (!tokenData || !tokenData.value) {
-                console.error(`No data found for token pair: ${tokenPair} at or below block height ${blockHeight}`);
-                return null;
+            if (direct && direct.value && direct.value.price) {
+                return direct.value.price;
             }
 
-            return tokenData.value.price;
+            // If not found, try the inverse pair
+            const [a, b] = tokenPair.split('-');
+            const inversePair = `${b}-${a}`;
+            const inverse = await base.findOneAsync({ _id: inversePair });
+
+            if (inverse && inverse.value && inverse.value.price) {
+                // invert the price for the obverse pair
+                const inverted = new BigNumber(1).div(inverse.value.price).toNumber();
+                console.log(
+                    `Using inverse pair ${inversePair}, original tokenPair ${tokenPair}, inverted price=${inverted}`
+                );
+                return inverted;
+            }
+
+            console.error(
+                `No data found for token pair: ${tokenPair} or its inverse at or below block height ${blockHeight}`
+            );
+            return null;
         } catch (error) {
             console.error('Error fetching last price:', error);
             return null;
         }
     }
+
 static async getCumulativeVolumes(block) {
   const base = await db.getDatabase('volumeIndex');
 

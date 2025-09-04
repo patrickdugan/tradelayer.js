@@ -120,7 +120,7 @@ class SynthRegistry {
 
         // Ensure the database queries are awaited properly
         const base = await db.getDatabase('vaults')
-        const vaultsData = await base.findAsync({});
+        const vaultsData = await base.findOneAsync({});
         //console.log('Vaults Data:', Array.isArray(vaultsData) ? vaultsData.length : 0, 'items');
         
         if (Array.isArray(vaultsData) && vaultsData.length > 0) {
@@ -131,7 +131,8 @@ class SynthRegistry {
             console.log('No vaults found or vaultsData is not an array.');
         }
 
-        const syntheticTokensData = await db.getDatabase('syntheticTokens').findAsync({});
+        const syntheticTokensBase = await db.getDatabase('syntheticTokens')
+        const syntheticTokensData= syntheticTokensBase.findOneAsync({});
         //console.log('Synthetic Tokens Data:', Array.isArray(syntheticTokensData) ? syntheticTokensData.length : 0, 'items');
         
         if (Array.isArray(syntheticTokensData) && syntheticTokensData.length > 0) {

@@ -2345,7 +2345,7 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with linear contracts'
         }
-        if(contractInfo.issuer.native==false){
+        if(contractInfo.native==false){
                 params.valid=false
                 params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
         }
@@ -2358,9 +2358,9 @@ const Validity = {
         let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
         console.log('validating mint '+grossNotional+' '+params.amount+' '+position.contracts+' '+notionalValue)
                
-        if(params.amount>grossNotional){
-                if(grossNotional<=-1){
-                    params.amount = BigNumber(grossNotional).decimalPlaces(0).toNumber()
+        if(params.amount>Math.abs(grossNotional)){
+                if(grossNotional<=0){
+                    params.amount = BigNumber(grossNotional).decimalPlaces(8).toNumber()
                     params.reason += 'insufficient contracts to hedge total, minting based on available contracts'        
                 }else{
                     params.valid=false
@@ -2369,6 +2369,10 @@ const Validity = {
         }
         // Ensure the sender has sufficient balance of the underlying property
         const markPrice = await VolumeIndex.getLastPrice(tokenPair, params.block)
+        if(!markPrice){
+            params.valid=false
+            params.reason+= 'cannot identify price to value the mint'
+        }
         const initMargin = await ContractRegistry.getInitialMargin(params.contractId, markPrice)
         let totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
         let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).abs().toNumber()
