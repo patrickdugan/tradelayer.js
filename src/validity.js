@@ -2302,103 +2302,179 @@ const Validity = {
             return params;
         },
 
-
-    // 24: Mint Synthetic
+      // 24: Mint Synthetic
     validateMintSynthetic: async (sender, params, txid) => {
         params.reason = '';
         params.valid = true;
-        console.log(JSON.stringify(params))
+        console.log(JSON.stringify(params));
 
-         const roundedAmount = Math.floor(params.amount);
+        // User input → round down
+        const roundedAmount = BigNumber(params.amount)
+            .decimalPlaces(0, BigNumber.ROUND_DOWN)
+            .toNumber();
 
         const isAlreadyActivated = await activationInstance.isTxTypeActive(24);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
-            }
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated ';
+        }
 
-            const is = await Validity.isActivated(params.block,txid,24)
-            console.log(is)
-            if (!is) {
-                params.valid = false;
-                params.reason = 'Transaction type activated after tx';
-            }
+        const is = await Validity.isActivated(params.block, txid, 24);
+        console.log(is);
+        if (!is) {
+            params.valid = false;
+            params.reason = 'Transaction type activated after tx';
+        }
 
-    // Check if the rounded amount is still >= 1
         if (roundedAmount < 1) {
-            params.valid=false
-            params.reason += 'Amount less than one'
+            params.valid = false;
+            params.reason += 'Amount less than one';
         }
 
-        params.amount = roundedAmount
-        // Check if the synthetic token can be minted (valid property IDs, sufficient balance, etc.)
+        params.amount = roundedAmount;
+
         const contractInfo = await ContractRegistry.getContractInfo(params.contractId);
-        if(!contractInfo||contractInfo==null){
-            params.valid=false
-            params.reason += "hedge contract not found"
-            return params
+        if (!contractInfo) {
+            params.valid = false;
+            params.reason += "hedge contract not found";
+            return params;
         }
-        const tokenPair = contractInfo.onChainData[0][0]+'-'+contractInfo.onChainData[0][1]
-        const collateralPropertyId = contractInfo.collateralPropertyId
-        const notionalValue = contractInfo.notionalValue
-        if(contractInfo.inverse==false){
-                params.valid=false
-                params.reason += 'Cannot mint synthetics with linear contracts'
+
+        const tokenPair = contractInfo.onChainData[0][0] + '-' + contractInfo.onChainData[0][1];
+        const collateralPropertyId = contractInfo.collateralPropertyId;
+        const notionalValue = contractInfo.notionalValue;
+
+        if (!contractInfo.inverse) {
+            params.valid = false;
+            params.reason += 'Cannot mint synthetics with linear contracts';
         }
-        if(contractInfo.native==false){
-                params.valid=false
-                params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power'
+        if (!contractInfo.native) {
+            params.valid = false;
+            params.reason += 'Cannot mint synthetics with oracle contracts... no one man should have all that power';
         }
-        const marginMap = await MarginMap.getInstance(params.contractId)
-        const position = await marginMap.getPositionForAddress(sender, params.contractId)
-        if(position.contracts==null||!position.contracts){
-            params.valid=false
-            params.reason += 'Null contracts cannot hedge a mint'
+
+        const marginMap = await MarginMap.getInstance(params.contractId);
+        const position = await marginMap.getPositionForAddress(sender, params.contractId);
+        if (!position.contracts) {
+            params.valid = false;
+            params.reason += 'Null contracts cannot hedge a mint';
         }
-        let grossNotional = BigNumber(position.contracts).times(notionalValue).decimalPlaces(8).toNumber()
-        console.log('validating mint '+grossNotional+' '+params.amount+' '+position.contracts+' '+notionalValue)
-               
-        if(params.amount>Math.abs(grossNotional)){
-                if(grossNotional<=0){
-                    params.amount = BigNumber(grossNotional).decimalPlaces(8).toNumber()
-                    params.reason += 'insufficient contracts to hedge total, minting based on available contracts'        
-                }else{
-                    params.valid=false
-                    params.reason += 'insufficient contracts to hedge the amount requested'
-                }        
+
+        let grossNotional = BigNumber(position.contracts)
+            .times(notionalValue)
+            .decimalPlaces(8, BigNumber.ROUND_DOWN) // hedge cap conservative
+            .toNumber();
+
+        console.log(
+            'validating mint ' +
+                grossNotional +
+                ' ' +
+                params.amount +
+                ' ' +
+                position.contracts +
+                ' ' +
+                notionalValue
+        );
+
+        if (params.amount > Math.abs(grossNotional)) {
+            if (grossNotional <= 0) {
+                params.amount = BigNumber(Math.abs(grossNotional))
+                    .decimalPlaces(8, BigNumber.ROUND_DOWN) // cap down
+                    .toNumber();
+                params.reason +=
+                    'insufficient contracts to hedge total, minting based on available contracts';
+            } else {
+                params.valid = false;
+                params.reason += 'insufficient contracts to hedge the amount requested';
+            }
         }
-        // Ensure the sender has sufficient balance of the underlying property
-        const markPrice = await VolumeIndex.getLastPrice(tokenPair, params.block)
-        if(!markPrice){
-            params.valid=false
-            params.reason+= 'cannot identify price to value the mint'
+
+        const markPrice = await VolumeIndex.getLastPrice(tokenPair, params.block);
+        if (!markPrice) {
+            params.valid = false;
+            params.reason += 'cannot identify price to value the mint';
         }
-        const initMargin = await ContractRegistry.getInitialMargin(params.contractId, markPrice)
-        let totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
-        let grossRequired = BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).abs().toNumber()
-        const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, grossRequired);
-        console.log(hasSufficientBalance.hasSufficient+' '+grossRequired)
-        if(hasSufficientBalance.hasSufficient==false){
-            if(hasSufficientBalance.available>=initMargin){
-                let newAmount = BigNumber(hasSufficientBalance.available).dividedBy(initMargin).decimalPlaces(0).toNumber()
-                if(newAmount<=params.amount){
-                    params.amount = newAmount
-                    totalMargin = BigNumber(initMargin).times(params.amount).decimalPlaces(8).toNumber()
-                    grossRequired= BigNumber(params.amount).times(notionalValue).dividedBy(markPrice).minus(totalMargin).decimalPlaces(8).toNumber()
-                    params.reason += 'insufficient collateral to mint total, minting based on available collateral' 
-                }else{
-                    params.reason += 'insufficient collateral to mint total, minting based on available collateral capped at contracts'
+             
+        // 1. Figure the target synthetic value at avgPrice
+        const targetValue = BigNumber(params.amount)
+          .times(notionalValue)
+          .div(position.avgPrice)   // avg entry, not mark
+          .decimalPlaces(8, BigNumber.ROUND_UP);
+
+        // 2. Work out the pro-rata margin slice
+        const posContracts = Math.abs(position.contracts);
+        let marginSlice = 0;
+        if (posContracts > 0) {
+          marginSlice = BigNumber(position.margin)
+            .times(params.amount)
+            .div(posContracts)
+            .decimalPlaces(8, BigNumber.ROUND_DOWN);
+        }
+
+        // 3. Whatever margin covers, reduce avail leg accordingly
+        let grossRequired = targetValue.minus(marginSlice);
+        if (grossRequired.isNegative()) grossRequired = new BigNumber(0);
+
+        // 4. Store rounded numbers
+        params.margin       = marginSlice.toNumber();
+        params.grossRequired = grossRequired.toNumber();
+
+
+        const hasSufficientBalance = await TallyMap.hasSufficientBalance(
+            sender,
+            collateralPropertyId,
+            grossRequired
+        );
+        console.log(hasSufficientBalance.hasSufficient + ' ' + grossRequired);
+
+        if (hasSufficientBalance.hasSufficient == false) {
+            if (hasSufficientBalance.available >= initMargin) {
+                let newAmount = BigNumber(hasSufficientBalance.available)
+                    .dividedBy(initMargin)
+                    .decimalPlaces(0, BigNumber.ROUND_DOWN) // safe cap
+                    .toNumber();
+
+                if (newAmount <= params.amount) {
+                    params.amount = newAmount;
+                    totalMargin = BigNumber(initMargin)
+                        .times(params.amount)
+                        .decimalPlaces(8, BigNumber.ROUND_UP)
+                        .toNumber();
+                    grossRequired = BigNumber(params.amount)
+                        .times(notionalValue)
+                        .dividedBy(markPrice)
+                        .minus(totalMargin)
+                        .decimalPlaces(8, BigNumber.ROUND_UP)
+                        .toNumber();
+                    params.reason +=
+                        'insufficient collateral to mint total, minting based on available collateral';
+                } else {
+                    params.reason +=
+                        'insufficient collateral to mint total, minting based on available collateral capped at contracts';
                 }
             }
-                params.valid=false
-                params.reason += 'insufficient collateral to create a 1x hedge position'
+            params.valid = false;
+            params.reason += 'insufficient collateral to create a 1x hedge position';
         }
-        params.grossRequired = grossRequired
-        params.margin = totalMargin
-        console.log('about to calculate contracts ' +params.amount+' '+notionalValue + ' '+BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0).toNumber())
-        params.contracts = BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0).toNumber()
 
-        return params
+        params.grossRequired = grossRequired;
+        params.margin = totalMargin;
+
+        console.log(
+            'about to calculate contracts ' +
+                params.amount +
+                ' ' +
+                notionalValue +
+                ' ' +
+                BigNumber(params.amount).dividedBy(notionalValue).decimalPlaces(0, BigNumber.ROUND_DOWN).toNumber()
+        );
+
+        params.contracts = BigNumber(params.amount)
+            .dividedBy(notionalValue)
+            .decimalPlaces(0, BigNumber.ROUND_DOWN) // conservative
+            .toNumber();
+
+        return params;
     },
 
     // 25: Redeem Synthetic

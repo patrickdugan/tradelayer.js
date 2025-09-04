@@ -1080,51 +1080,79 @@ const Logic = {
             this.removeContract(contractId);
         },
 
-		async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, contracts, margin) {
-		    // Check if it's the first instance of this synthetic token
-		    const syntheticTokenId = `s-${propertyId}-${contractId}`;
-            const propertyManager = PropertyManager.getInstance()
-            if(amount<0){
-                amount = Math.abs(amount)
-            }
-            if(margin<0){
-                margin = Math.abs(margin)
-            }
+		
+        // Mint Synthetic execution
+        async mintSynthetic(address, propertyId, contractId, amount, block, grossRequired, contracts, margin) {
+            const syntheticTokenId = `s-${propertyId}-${contractId}`;
+            const propertyManager = PropertyManager.getInstance();
 
-            const marginMap = await MarginMap.getInstance(contractId)
-            let propertyInfo = await PropertyManager.getPropertyData(propertyId)
-            let ticker = propertyInfo.ticker
-            let synthTicker = 's'+ticker+'-'+contractId
-            //console.log('fetched collateral ticker in mint synthetic '+ticker)
-            const contractInfo = await ContractRegistry.getContractInfo(contractId)
-		    // Issue the synthetic token
-		    await propertyManager.addProperty(syntheticTokenId, synthTicker, amount, 'Synthetic',contractInfo.whitelist,syntheticTokenId,null);
-            let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin,block)
+            // Clamp values symmetrically
+            amount = BigNumber(Math.abs(amount)).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(); // minted synth
+            margin = BigNumber(Math.abs(margin)).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(); // credited margin
 
-            //console.log('calculating adjustment to grossRequired '+grossRequired+' '+contractsAndMargin.excess+' '+contractsAndMargin.margin)
-            grossRequired = BigNumber(grossRequired).plus(contractsAndMargin.excess).decimalPlaces(8).toNumber()
-            //console.log('about to issue amount '+amount)
-            await TallyMap.updateBalance(address, syntheticTokenId,amount,0,0,0,'issueSynth',block)
-            await TallyMap.updateBalance(address, propertyId,-grossRequired,0,-contractsAndMargin.margin,0,'issueSynth',block)
-            
-            let exists = await SynthRegistry.exists(syntheticTokenId)
+            const marginMap = await MarginMap.getInstance(contractId);
+            let propertyInfo = await PropertyManager.getPropertyData(propertyId);
+            let ticker = propertyInfo.ticker;
+            let synthTicker = 's' + ticker + '-' + contractId;
+            const contractInfo = await ContractRegistry.getContractInfo(contractId);
+
+            await propertyManager.addProperty(
+                syntheticTokenId,
+                synthTicker,
+                amount,
+                'Synthetic',
+                contractInfo.whitelist,
+                syntheticTokenId,
+                null
+            );
+
+            let contractsAndMargin = await marginMap.moveMarginAndContractsForMint(
+                address,
+                propertyId,
+                contractId,
+                contracts,
+                margin,
+                block
+            );
+
+            grossRequired = BigNumber(grossRequired)
+                .plus(contractsAndMargin.excess)
+                .decimalPlaces(8, BigNumber.ROUND_UP) // debit side
+                .toNumber();
+
+            await TallyMap.updateBalance(
+                address,
+                syntheticTokenId,
+                BigNumber(amount).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), // credit side
+                0,0,0,'issueSynth',block
+            );
+
+            await TallyMap.updateBalance(
+                address,
+                propertyId,
+                BigNumber(-grossRequired).decimalPlaces(8, BigNumber.ROUND_UP).toNumber(), // debit side
+                0,
+                BigNumber(-contractsAndMargin.margin).decimalPlaces(8, BigNumber.ROUND_UP).toNumber(), // debit side
+                0,
+                'issueSynth',block
+            );
+
+            let exists = await SynthRegistry.exists(syntheticTokenId);
 
             if (!exists) {
-                console.log('creating new synth '+syntheticTokenId)
+                console.log('creating new synth ' + syntheticTokenId);
                 await SynthRegistry.createVault(propertyId, contractId);
                 await SynthRegistry.registerSyntheticToken(syntheticTokenId, contractId, propertyId);
-                console.log('about to update new vault'+syntheticTokenId+' '+contractsAndMargin+' '+amount)
-                await SynthRegistry.updateVault(syntheticTokenId,contractsAndMargin,amount, grossRequired)
+                console.log('about to update new vault ' + syntheticTokenId + ' ' + contractsAndMargin + ' ' + amount);
+                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin, amount, grossRequired);
             } else {
-                console.log('about to update existing vault'+syntheticTokenId+' '+contractsAndMargin+' '+amount)
-                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin,amount, grossRequired);
+                console.log('about to update existing vault ' + syntheticTokenId + ' ' + contractsAndMargin + ' ' + amount);
+                await SynthRegistry.updateVault(syntheticTokenId, contractsAndMargin, amount, grossRequired);
             }
-            
-		    // Log the minting of the synthetic token
-		    console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
 
-            return
-		},
+            console.log(`Minted ${amount} of synthetic token ${syntheticTokenId}`);
+            return;
+        },
 
 		async redeemSynthetic(address, propertyId, contractId, amount,block) {
 		    

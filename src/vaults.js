@@ -2,6 +2,7 @@ const db = require('./db.js');
 const PropertyManager = require('./property.js');
 const ContractsRegistry = require('./contractRegistry.js');
 const MarginMap = require('./marginMap');
+const BigNumber = require('bignumber.js') 
 
 class SynthRegistry {
     static vaults;
@@ -27,6 +28,44 @@ class SynthRegistry {
         await this.saveVault(vaultId);
         return vaultId;
     }
+
+    static async getTotalBalanceForProperty(propertyId) {
+        await this.initializeIfNeeded();
+
+        let total = BigNumber(0);
+
+        for (const [vaultId, vault] of this.vaults.entries()) {
+            const parts = vaultId.split("-");
+            if (parts.length < 3) continue; // sanity check
+            const pid = parseInt(parts[1]); // propertyId is first number
+            if (pid !== propertyId) continue;
+
+            // Count margin + available as locked collateral
+            const vaultBal = BigNumber(vault.margin || 0).plus(vault.available || 0);
+            total = total.plus(vaultBal);
+        }
+
+        return total.decimalPlaces(8);
+    }
+
+    static async getTotalOutstandingForProperty(propertyId) {
+        await this.initializeIfNeeded();
+
+        let total = BigNumber(0);
+
+        for (const [vaultId, vault] of this.vaults.entries()) {
+            const parts = vaultId.split("-");
+            if (parts.length < 3) continue;
+            const pid = parseInt(parts[1]); // propertyId is first number
+            if (pid !== propertyId) continue;
+
+            // Outstanding = minted synthetic tokens tied to this property
+            total = total.plus(vault.outstanding || 0);
+        }
+
+        return total.decimalPlaces(8);
+    }
+
 
     // Update the amount in a vault
     static async updateVault(vaultId, contractsAndMargin,amount,grossRequired) {
@@ -94,7 +133,7 @@ class SynthRegistry {
 
     // Persist vault data to the database
     static async saveVault(vaultId, vault) {
-                await this.initializeIfNeeded();
+        await this.initializeIfNeeded();
         const vaultDB = await db.getDatabase('vaults');
         await vaultDB.updateAsync(
             { _id: vaultId },

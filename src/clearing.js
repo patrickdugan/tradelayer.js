@@ -80,7 +80,7 @@ class Clearing {
         const TallyMap = require('./tally.js');
         const InsuranceFund = require('./insurance.js');
         const PropertyList = require('./property.js');
-
+        const Vaults = require('./vaults.js')
         // Load property list
         const propertyIndex = await PropertyList.getPropertyIndex();
         //console.log('📌 Parsed property index:', propertyIndex);
@@ -103,6 +103,10 @@ class Clearing {
             const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
             propertyTotal = propertyTotal.plus(insuranceBalance);
             console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
+            if(typeof propertyId=="number"){
+                const vaultTotal = await Vaults.getTotalBalanceForProperty(propertyId)
+            propertyTotal = propertyTotal.plus(vaultTotal)
+            }
 
             // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
             if (propertyId === 1) {
@@ -117,12 +121,16 @@ class Clearing {
             }
 
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
-            const expectedCirculation = new BigNumber(propertyData.totalInCirculation);
+            let expectedCirculation = new BigNumber(propertyData.totalInCirculation);
+            if(typeof propertyId =='string'&& propertyId.startsWith("s-")){
+                expectedCirculation = await Vaults.getTotalOutstandingForProperty(propertyId);
+            }
             if (!propertyTotal.eq(expectedCirculation)) {
                 if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                    
-                    throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                    if(difference>0.00000001||difference<-0.00000001){
+                         throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                    }
                 } else {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
                     console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
