@@ -52,19 +52,27 @@ class SynthRegistry {
         await this.initializeIfNeeded();
 
         let total = BigNumber(0);
+        const isStringId = typeof propertyId === "string" && propertyId.startsWith("s-");
 
         for (const [vaultId, vault] of this.vaults.entries()) {
             const parts = vaultId.split("-");
             if (parts.length < 3) continue;
-            const pid = parseInt(parts[1]); // propertyId is first number
-            if (pid !== propertyId) continue;
 
-            // Outstanding = minted synthetic tokens tied to this property
+            if (isStringId) {
+                // Direct match (e.g. propertyId = "s-1-1")
+                if (vaultId !== propertyId) continue;
+            } else {
+                // Numeric match on collateral ID (e.g. propertyId = 1)
+                const pid = parseInt(parts[1], 10);
+                if (pid !== propertyId) continue;
+            }
+
             total = total.plus(vault.outstanding || 0);
         }
 
         return total.decimalPlaces(8);
     }
+
 
 
     // Update the amount in a vault
