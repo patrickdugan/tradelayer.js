@@ -2457,9 +2457,6 @@ const Validity = {
             params.reason += 'insufficient collateral to create a 1x hedge position';
         }
 
-        params.grossRequired = grossRequired;
-        params.margin = totalMargin;
-
         console.log(
             'about to calculate contracts ' +
                 params.amount +
