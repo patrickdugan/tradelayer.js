@@ -827,7 +827,7 @@ const Logic = {
       channelAddress,
       block,
       txid,
-      columnAIsMaker // ← pass from caller
+      columnAIsMaker 
     ) {
       const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
       const orderbook = await Orderbook.getOrderbookInstance(contractId);
@@ -836,7 +836,6 @@ const Logic = {
       const initMarginBN = new BigNumber(initMarginPerContract);
       const amountBN = new BigNumber(amount);
       const marginUsed = amountBN.times(initMarginBN).toNumber();
-
       let buyerAddress, sellerAddress;
       if (columnAIsSeller) {
         sellerAddress = commitAddressA;
@@ -849,11 +848,10 @@ const Logic = {
       const isInverse = ContractRegistry.isInverse(contractId);
 
       // Figure out maker/taker roles based on columnAIsMaker
-      // If Column A is maker:
-      //   - When Column A is seller → sellerMaker = true
-      //   - When Column A is buyer  → buyerMaker = true
-      const sellerMaker = columnAIsSeller && columnAIsMaker;
-      const buyerMaker = !columnAIsSeller && columnAIsMaker;
+    const sellerMaker = columnAIsSeller ? !!columnAIsMaker : !columnAIsMaker;
+    const buyerMaker  = columnAIsSeller ? !columnAIsMaker  : !!columnAIsMaker;
+
+      console.log('flags in trade logic '+sellerMaker+' '+buyerMaker+' '+columnAIsSeller+' '+columnAIsMaker)
 
       const sellOrder = {
         contractId,

@@ -766,6 +766,7 @@ async estimateLiquidation(liquidationOrder) {
         counterpartyOrders // List of actual matched counterparties
     };
 }
+
 async matchContractOrders(orderBook) {
   // Base condition: if there are no buy or sell orders, return an empty match array.
   if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
@@ -1239,32 +1240,32 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     let buyerFee = new BigNumber(this.calculateFee(match.buyOrder.amount,match.sellOrder.maker,match.buyOrder.maker,isInverse,
 						true, match.tradePrice, notionalValue,channel ));
 
-					let sellerFee = new BigNumber(this.calculateFee(match.sellOrder.amount,match.buyOrder.maker,match.sellOrder.maker,isInverse,
+					let sellerFee = new BigNumber(this.calculateFee(match.sellOrder.amount,match.sellOrder.maker,match.buyOrder.maker,isInverse,
 					    false,match.tradePrice,notionalValue,channel));
-
+					console.log('seller/buyer fee '+sellerFee+' '+buyerFee)
 					// Buyer side: only push taker/on-chain positive fees
-					if (buyerFee.isGreaterThan(0)) {
+					if (buyerFee.isGreaterThan(0)&&sellerFee.isLessThan(0)) {
 					  const feeToCache = buyerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  console.log('buyer fee to cache '+feeToCache)
 					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.buyOrder.contractId);
 					}
 
 					// Seller side: same treatment
-					if (sellerFee.isGreaterThan(0)) {
+					if (sellerFee.isGreaterThan(0)&&buyerFee.isLessThan(0)) {
 					  const feeToCache = sellerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  console.log('seller fee to cache '+feeToCache)
 					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.sellOrder.contractId);
 					}
 
-					// Negative fees = rebates → don’t debit to feeCache
-					if (buyerFee.isLessThan(0)) {
-					  console.log(`Maker rebate (buyer): ${buyerFee.toFixed()}`);
-					}
-					if (sellerFee.isLessThan(0)) {
-					  console.log(`Maker rebate (seller): ${sellerFee.toFixed()}`);
+					if(buyerFee.isGreaterThan(0)&&sellerFee.isGreaterThan(0)){
+					  await TallyMap.updateFeeCache(collateralPropertyId, sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId);
+					  await TallyMap.updateFeeCache(collateralPropertyId, buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId);
 					}
 
                     //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                    
                     let feeInfo = await this.locateFee(match, reserveBalanceA, reserveBalanceB,collateralPropertyId,buyerFee, sellerFee, isBuyerReducingPosition, isSellerReducingPosition,currentBlockHeight)         
+                   
                     //now we have a block of ugly code that should be refactored into functions, reuses code for mis-matched margin in moveCollateralToMargin
                     //the purpose of which is to handle flipping positions long to short or visa versa
                     const isBuyerFlippingPosition =  Boolean((match.buyOrder.amount>Math.abs(match.buyerPosition.contracts))&&match.buyerPosition.contracts<0)
@@ -1472,8 +1473,8 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     const trade = {
                         buyerPosition: match.buyerPosition,
                         sellerPosition: match.sellerPosition,
-                        buyerFee: buyerFee,
-                        sellerFee: sellerFee,
+                        buyerFee: buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+                        sellerFee: sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
                         contractId: match.sellOrder.contractId,
                         amount: match.sellOrder.amount,
                         price: match.tradePrice,
@@ -1682,64 +1683,77 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     trades.push(trade)                     
             }
              return trades
-        }
-
-        calculateFee(amount,sellMaker,buyMaker,isInverse,
-		  isBuyer,lastMark,notionalValue,channel){
+		        }
+		/**
+		 * calculateFee
+		 * - Positive result  => taker fee (debit)
+		 * - Negative result  => maker rebate (credit)
+		 *
+		 * Inputs:
+		 *  amount:           trade size (contracts or units)
+		 *  columnAIsSeller:  bool
+		 *  columnAIsMaker:   bool | undefined  (legacy tx may omit)
+		 *  isInverse:        bool
+		 *  isBuyer:          bool  (this side is the buyer?)
+		 *  lastMark:         price used to value notional
+		 *  notionalValue:    contract notional
+		 *  channel:          bool (true = off-chain channel => fees ÷ 10)
+		 */
+		calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
 		  const BNnotionalValue = new BigNumber(notionalValue);
-		  const BNlastMark = new BigNumber(lastMark);
-		  const BNamount = new BigNumber(amount);
+		  const BNlastMark      = new BigNumber(lastMark);
+		  const BNamount        = new BigNumber(amount);
 
-		  // Generic base fee for given bps
-		  const baseFee = (bps) => {
-		    if (isInverse) {
-		      return new BigNumber(bps)
-		        .times(BNnotionalValue)
-		        .dividedBy(BNlastMark)
-		        .times(BNamount);
+		  const baseFee = (bps) =>
+		    isInverse
+		      ? new BigNumber(bps).times(BNnotionalValue).div(BNlastMark).times(BNamount)
+		      : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(BNamount);
+
+		  let takerRate = new BigNumber(0.0005);    // +5 bps
+		  let makerRate = new BigNumber(-0.00025);  // –2.5 bps
+		  if (channel === true) {
+		    takerRate = takerRate.div(10);          // +0.5 bps
+		    makerRate = makerRate.div(10);          // –0.25 bps
+		  }
+
+		  console.log('calculate fee '+buyMaker+' '+sellMaker+' '+channel+' '+takerRate+' '+makerRate)
+
+		  // Defensive normalization: if both false, assign one maker/taker to avoid double-billing or double-rebating
+		  if (!sellMaker && !buyMaker) {
+		    if (isBuyer) {
+		      // treat seller as maker for buyer's perspective; buyer = taker
+		      return baseFee(takerRate).decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
 		    } else {
-		      return new BigNumber(lastMark)
-		        .dividedBy(BNnotionalValue)
-		        .times(bps)
-		        .times(BNamount);
+		      // for seller's perspective; seller = taker
+		      return baseFee(takerRate).decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
 		    }
-		  };
+		  }
 
-		  	let fee = new BigNumber(0);
-
-		  	let takerRate = new BigNumber(0.0005);    // +5 bps baseline
-			let makerRate = new BigNumber(-0.00025);  // –2.5 bps rebate baseline
-
-			if (channel === true) {
-			  // Off-chain channel → divide fee schedule by 10
-			  takerRate = takerRate.div(10); // 0.00005
-			  makerRate = makerRate.div(10); // -0.000025
-			}	
-
-		  // Seller maker, buyer taker
 		  if (sellMaker && !buyMaker) {
-		    if (isBuyer) {
-		      fee = baseFee(takerRate);         // buyer = taker
-		    } else {
-		      fee = baseFee(makerRate);         // seller = maker rebate
-		    }
-		    return fee.decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
+		    return (isBuyer ? baseFee(takerRate) : baseFee(makerRate))
+		      .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
 		  }
 
-		  // Buyer maker, seller taker
 		  if (!sellMaker && buyMaker) {
-		    if (isBuyer) {
-		      fee = baseFee(makerRate);         // buyer = maker rebate
-		    } else {
-		      fee = baseFee(takerRate);         // seller = taker
-		    }
-		    return fee.decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
+		    return (isBuyer ? baseFee(makerRate) : baseFee(takerRate))
+		      .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
 		  }
 
-		  // If both sides flagged maker=false (shouldn’t happen)
+		  // Both true should never happen; neutralize
 		  return 0;
 		}
 
+		resolveMaker(columnAIsSeller, columnAIsMaker) {
+		  const makerIsA = (columnAIsMaker === true)
+		    ? true
+		    : (columnAIsMaker === false)
+		      ? false
+		      : !columnAIsSeller;          // inference for legacy tx
+		  return {
+		    sellerMaker: columnAIsSeller && makerIsA,
+		    buyerMaker:  !columnAIsSeller && makerIsA,
+		  };
+		}
 
   async locateFee(
 		  match,
@@ -1820,6 +1834,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
 		    } else {
 		      console.warn('⚠️ Buyer fee could not be debited from any source.');
 		    }
+
 		  }
 
 		  // -------- SELLER SIDE --------
@@ -1870,8 +1885,6 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
 		  console.log('✅ [locateFee] Fee sources determined:', JSON.stringify(feeInfo, null, 2));
 		  return feeInfo;
 		}
-
-
 
 
 async processContractMatchesShort(matches, currentBlockHeight, channel) {
