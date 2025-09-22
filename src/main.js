@@ -734,24 +734,28 @@ class Main {
 
 
     /*middle part of real-time mode processed new tx */
+    /* middle part of real-time mode processed new tx */
     async blockHandlerMid(txData, blockHeight) {
-        try {
-            if(txData.length>=1){
-                console.log('tx Data for block '+blockHeight + 'txData'+JSON.stringify(txData))
-                 await this.processTx(txData,blockHeight)
-                 this.saveMaxProcessedHeight(blockHeight) 
+        let didWork = false;
 
+        try {
+            if (txData && txData.length > 0) {
+                console.log('tx Data for block ' + blockHeight + ' txData ' + JSON.stringify(txData));
+                await this.processTx(txData, blockHeight);
+                this.saveMaxProcessedHeight(blockHeight);
+                didWork = true;
             }
-           //console.log('about to call construct consensus in block '+blockHeight)
-           
             console.log(`Processed block ${blockHeight} successfully...`);
         } catch (error) {
             console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
         }
-           const blob = await Clearing.clearingFunction(blockHeight);
 
-        return null 
-        //console.log('processed ' + blockHash)
+        // Only run clearing if the block actually had TL work
+        if (didWork) {
+            await Clearing.clearingFunction(blockHeight, /*skip=*/false);
+        } 
+        // Return the block number, not null
+        return blockHeight;
     }
 
     /*here's where we finish a block processing in real-time mode, handling anything that is done after
