@@ -91,7 +91,7 @@ class Clearing {
 
             // ✅ 1️⃣ Fetch total balance from TallyMap
             const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
-            //console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
+            console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
             propertyTotal = propertyTotal.plus(tallyTotal);
 
             // ✅ 2️⃣ Add feeCache balance
@@ -105,7 +105,8 @@ class Clearing {
             console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
             if(typeof propertyId=="number"){
                 const vaultTotal = await Vaults.getTotalBalanceForProperty(propertyId)
-            propertyTotal = propertyTotal.plus(vaultTotal)
+                console.log('vaultTotal '+vaultTotal)
+                propertyTotal = propertyTotal.plus(vaultTotal)
             }
 
             // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
@@ -123,10 +124,12 @@ class Clearing {
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
             let expectedCirculation = new BigNumber(propertyData.totalInCirculation);
             if(typeof propertyId =='string'&& propertyId.startsWith("s-")){
+
                 expectedCirculation = await Vaults.getTotalOutstandingForProperty(propertyId);
+                console.log('vault diversion ')
             }
-            if (!propertyTotal.eq(expectedCirculation)) {
-                if (!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)) {
+            if(!propertyTotal.eq(expectedCirculation)){
+                if(!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
                     if(difference>0.00000001||difference<-0.00000001){
                          throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);

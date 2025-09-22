@@ -105,10 +105,10 @@ const Logic = {
                 await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.sell, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop);
                 break;
             case 19:
-                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid);
+                await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid,params.columnAIsMaker);
                 break;
             case 20:
-                await Logic.tradeTokensChannel(params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountDesired, params.expiryBlock, params.columnAIsOfferer, params.senderAddress, params.block,params.txid);
+                await Logic.tradeTokensChannel(params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountDesired, params.expiryBlock, params.columnAIsOfferer, params.senderAddress, params.block,params.txid,params.columnAIsMaker);
                 break;
             case 21:
                 await Logic.withdrawal(params.withdrawAll, params.channelAddress, params.propertyId, params.amount, params.senderAddress, params.block, params.columnIsB);
@@ -817,110 +817,178 @@ const Logic = {
         return
 	},
 
-    async tradeContractChannel(contractId, price, amount, columnAIsSeller, expiryBlock, insurance, channelAddress, block, txid) {
-        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
-        const orderbook = await Orderbook.getOrderbookInstance(contractId)
-        const initMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
-        const initMarginBN= new BigNumber(initMarginPerContract)
-        const amountBN = new BigNumber(amount)
-        const marginUsed = amountBN.times(initMarginBN).toNumber()
-        let buyerAddress
-        let sellerAddress
-        if(columnAIsSeller){
-            sellerAddress=commitAddressA
-            buyerAddress=commitAddressB
-        }else{
-            sellerAddress=commitAddressB
-            buyerAddress=commitAddressA
-        }
-        let sellSide = false
-        let buySide = true
-        const isInverse = ContractRegistry.isInverse(contractId)
-        const sellOrder = { contractId, amount, price, block, sellSide, marginUsed, sellerAddress, txid };
-        const buyOrder = { contractId, amount, price, block, buySide, marginUsed, buyerAddress, txid };
+    async tradeContractChannel(
+      contractId,
+      price,
+      amount,
+      columnAIsSeller,
+      expiryBlock,
+      insurance,
+      channelAddress,
+      block,
+      txid,
+      columnAIsMaker // ← pass from caller
+    ) {
+      const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+      const orderbook = await Orderbook.getOrderbookInstance(contractId);
 
-        let match = { 
-                        sellOrder,
-                        buyOrder,
-                        price,
-                        channelAddress: channelAddress,
-                        tradePrice: price,
-                        txid: txid 
-                    }
-        let matches = []
-        matches.push(match)
-	    // Trade the contract within a channel
-        await orderbook.processContractMatches(matches,block,true)
+      const initMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
+      const initMarginBN = new BigNumber(initMarginPerContract);
+      const amountBN = new BigNumber(amount);
+      const marginUsed = amountBN.times(initMarginBN).toNumber();
 
-	    console.log(`Traded contract ${contractId} in channel with price ${price} and amount ${amount}`);
-        return
-	},
+      let buyerAddress, sellerAddress;
+      if (columnAIsSeller) {
+        sellerAddress = commitAddressA;
+        buyerAddress = commitAddressB;
+      } else {
+        sellerAddress = commitAddressB;
+        buyerAddress = commitAddressA;
+      }
 
-	async tradeTokensChannel(offeredPropertyId, desiredPropertyId, amountOffered, amountDesired, expiryBlock, columnAIsOfferer, channelAddress, block, txid){
+      const isInverse = ContractRegistry.isInverse(contractId);
 
-        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
-        console.log('inside tokens channel '+commitAddressA+' '+commitAddressB+' channel addr '+channelAddress)
-        const key = `${offeredPropertyId}-${desiredPropertyId}`
-        const orderbook = await Orderbook.getOrderbookInstance(key)
-        let buyerAddress
-        let sellerAddress
-        if(columnAIsOfferer){
-             sellerAddres=commitAddressA
-            buyerAddress=commitAddressB
-        }else{
-            sellerAddres=commitAddressB
-            buyerAddress=commitAddressA
-           
-        }
+      // Figure out maker/taker roles based on columnAIsMaker
+      // If Column A is maker:
+      //   - When Column A is seller → sellerMaker = true
+      //   - When Column A is buyer  → buyerMaker = true
+      const sellerMaker = columnAIsSeller && columnAIsMaker;
+      const buyerMaker = !columnAIsSeller && columnAIsMaker;
 
-        const sellOrder = {
-            offeredPropertyId:offeredPropertyId,
-            desiredPropertyId:desiredPropertyId,
-            amountOffered:amountOffered,
-            amountExpected:amountDesired,
-            blockTime: block,
-            sender: sellerAddress
-        };
+      const sellOrder = {
+        contractId,
+        amount,
+        price,
+        block,
+        sellSide: true,
+        marginUsed,
+        sellerAddress,
+        txid,
+        maker: sellerMaker // ← attach flag
+      };
 
-        const buyOrder = {
-            offeredPropertyId:offeredPropertyId,
-            desiredPropertyId:desiredPropertyId,
-            amountOffered:amountOffered,
-            amountExpected:amountDesired,
-            blockTime: block,
-            sender: buyerAddress
-        };
+      const buyOrder = {
+        contractId,
+        amount,
+        price,
+        block,
+        buySide: true,
+        marginUsed,
+        buyerAddress,
+        txid,
+        maker: buyerMaker // ← attach flag
+      };
 
-        const amountOfferedBN = new BigNumber(amountOffered);
-        const amountDesiredBN = new BigNumber(amountDesired);
+      const match = {
+        sellOrder,
+        buyOrder,
+        price,
+        channelAddress,
+        tradePrice: price,
+        txid
+      };
 
-        // Calculate tradePrice
-        const tradePrice = amountOfferedBN.dividedBy(amountDesiredBN);
+      const matches = [match];
 
-        let match = {sellOrder: sellOrder, buyOrder: buyOrder, 
-                    amountOfTokenA: amountOfferedBN.toNumber(), 
-                    amountOfTokenB: amountDesiredBN.toNumber(),
-                    tradePrice: tradePrice.toNumber(),
-                    channel: channelAddress 
-                    }
-        let matches = []
-        matches.push(match)
+      // Trade the contract within a channel
+      await orderbook.processContractMatches(matches, block, true);
 
-		    // Update balances in the channel columns and commitment addresses
-        console.log('about to process token match in channel '+JSON.stringify(matches),block)
-		await orderbook.processTokenMatches(matches, block, txid,true)
-        const ltcValueOfToken = VolumeIndex.getTokenPriceInLTC(desiredPropertyId)
-        const ltcValueOfTokens = new BigNumber(ltcValueOfToken).times(amountdesired).decimalPlaces(8).toNumber()
-        await VolumeIndex.saveVolumeDataById(
-            key,
-            amountOffered,
-            ltcValueOfTokens,
-            tradePrice,
-            block,
-            'token')
+      console.log(
+        `Traded contract ${contractId} in channel with price ${price} and amount ${amount}. SellerMaker=${sellerMaker}, BuyerMaker=${buyerMaker}`
+      );
 
-		    return `Trade executed in channel ${channelAddress}`;
-	},
+      return;
+    },
+    
+    async tradeTokensChannel(
+      offeredPropertyId,
+      desiredPropertyId,
+      amountOffered,
+      amountDesired,
+      expiryBlock,
+      columnAIsOfferer,   // true if Column A is the one offering
+      channelAddress,
+      block,
+      txid,
+      columnAIsMaker      // new param: true if Column A was the maker
+    ) {
+      const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+      console.log('inside tokens channel', commitAddressA, commitAddressB, 'channel addr', channelAddress);
+
+      const key = `${offeredPropertyId}-${desiredPropertyId}`;
+      const orderbook = await Orderbook.getOrderbookInstance(key);
+
+      let buyerAddress, sellerAddress;
+      if (columnAIsOfferer) {
+        sellerAddress = commitAddressA;
+        buyerAddress = commitAddressB;
+      } else {
+        sellerAddress = commitAddressB;
+        buyerAddress = commitAddressA;
+      }
+
+      // Maker assignment
+      const sellerMaker = columnAIsOfferer && columnAIsMaker;
+      const buyerMaker = !columnAIsOfferer && columnAIsMaker;
+
+      const sellOrder = {
+        offeredPropertyId,
+        desiredPropertyId,
+        amountOffered,
+        amountExpected: amountDesired,
+        blockTime: block,
+        sender: sellerAddress,
+        maker: sellerMaker  // attach maker flag
+      };
+
+      const buyOrder = {
+        offeredPropertyId,
+        desiredPropertyId,
+        amountOffered,
+        amountExpected: amountDesired,
+        blockTime: block,
+        sender: buyerAddress,
+        maker: buyerMaker   // attach maker flag
+      };
+
+      const amountOfferedBN = new BigNumber(amountOffered);
+      const amountDesiredBN = new BigNumber(amountDesired);
+
+      const tradePrice = amountOfferedBN.dividedBy(amountDesiredBN);
+
+      const match = {
+        sellOrder,
+        buyOrder,
+        amountOfTokenA: amountOfferedBN.toNumber(),
+        amountOfTokenB: amountDesiredBN.toNumber(),
+        tradePrice: tradePrice.toNumber(),
+        channel: channelAddress
+      };
+
+      const matches = [match];
+
+      // Update balances in the channel columns and commitment addresses
+      console.log('about to process token match in channel', JSON.stringify(matches), block);
+      await orderbook.processTokenMatches(matches, block, txid, true);
+
+      const ltcValueOfToken = VolumeIndex.getTokenPriceInLTC(desiredPropertyId);
+      const ltcValueOfTokens = new BigNumber(ltcValueOfToken)
+        .times(amountDesiredBN)
+        .decimalPlaces(8)
+        .toNumber();
+
+      await VolumeIndex.saveVolumeDataById(
+        key,
+        amountOffered,
+        ltcValueOfTokens,
+        tradePrice,
+        block,
+        'token'
+      );
+
+      return `Trade executed in channel ${channelAddress}`;
+    },
+
 
 	withdrawal(withdrawAll, channelAddress, propertyId, amount, sender, block, columnIsB) {
 		    const channel = Channels.getChannel(channelAddress);

@@ -390,6 +390,7 @@ const Decode = {
             columnAIsSeller: parts[3] === '1',
             expiryBlock: parseInt(parts[4] || '0', 36),
             insurance: parts[5] === '1',
+            columnAIsMaker: parts[6] === '1'
         };
     },
 
@@ -403,8 +404,9 @@ const Decode = {
             amountDesired: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             columnAIsOfferer: parts[4] === '1',
             expiryBlock: parseInt(parts[5] || '0', 36),
-            Id1ColoredOutput: parts[6]=== '1',
-            Id2ColoredOutput: parts[7]=== '1'
+            columnAIsMaker: parts[6] === '1',
+            Id1ColoredOutput: parts[7]=== '1',
+            Id2ColoredOutput: parts[8]=== '1'
         };
     },
 

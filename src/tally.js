@@ -226,7 +226,6 @@ class TallyMap {
                     const reserved = new BigNumber(balance.reserved || 0);
                     const margin = new BigNumber(balance.margin || 0);
                     const channel = new BigNumber(balance.channelBalance || 0);
-
                     if (available.isNaN() || reserved.isNaN() || margin.isNaN() || channel.isNaN()) {
                         console.error(`🚨 NaN detected in balance calculation for property ${propertyKey}`, {
                             available: available.toFixed(),

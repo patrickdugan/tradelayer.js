@@ -1236,11 +1236,31 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                    
                     console.log('about to calc fee '+match.buyOrder.amount+' '+match.sellOrder.maker+' '+match.buyOrder.maker+' '+isInverse+' '+match.tradePrice+' '+notionalValue+' '+channel)
-                    let buyerFee = this.calculateFee(match.buyOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,true, match.tradePrice,notionalValue, channel)
-                    let sellerFee = this.calculateFee(match.sellOrder.amount, match.sellOrder.maker,match.buyOrder.maker,isInverse,false,match.tradePrice,notionalValue, channel)
+                    let buyerFee = new BigNumber(this.calculateFee(match.buyOrder.amount,match.sellOrder.maker,match.buyOrder.maker,isInverse,
+						true, match.tradePrice, notionalValue,channel ));
 
-                    await TallyMap.updateFeeCache(collateralPropertyId,buyerFee,match.buyOrder.contractId)
-                    await TallyMap.updateFeeCache(collateralPropertyId,sellerFee,match.buyOrder.contractId)
+					let sellerFee = new BigNumber(this.calculateFee(match.sellOrder.amount,match.buyOrder.maker,match.sellOrder.maker,isInverse,
+					    false,match.tradePrice,notionalValue,channel));
+
+					// Buyer side: only push taker/on-chain positive fees
+					if (buyerFee.isGreaterThan(0)) {
+					  const feeToCache = buyerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.buyOrder.contractId);
+					}
+
+					// Seller side: same treatment
+					if (sellerFee.isGreaterThan(0)) {
+					  const feeToCache = sellerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.sellOrder.contractId);
+					}
+
+					// Negative fees = rebates → don’t debit to feeCache
+					if (buyerFee.isLessThan(0)) {
+					  console.log(`Maker rebate (buyer): ${buyerFee.toFixed()}`);
+					}
+					if (sellerFee.isLessThan(0)) {
+					  console.log(`Maker rebate (seller): ${sellerFee.toFixed()}`);
+					}
 
                     //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
                    
@@ -1633,7 +1653,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                     }
                     console.log('contract LTC Value '+contractLTCValue)
                     if(contractLTCValue==0){throw new Error()}
-      await VolumeIndex.saveVolumeDataById(
+      			await VolumeIndex.saveVolumeDataById(
                         trade.contractId,
                         trade.amount,
                         totalContractsLTCValue,
@@ -1664,161 +1684,193 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
              return trades
         }
 
-        calculateFee(amount, sellMaker,buyMaker,isInverse,isBuyer,lastMark, notionalValue, channel){
-                let fee = 0
-                let BNnotionalValue=new BigNumber(notionalValue)
-                let BNlastMark = new BigNumber(lastMark)
-                let BNamount = new BigNumber(amount)
+        calculateFee(amount,sellMaker,buyMaker,isInverse,
+		  isBuyer,lastMark,notionalValue,channel){
+		  const BNnotionalValue = new BigNumber(notionalValue);
+		  const BNlastMark = new BigNumber(lastMark);
+		  const BNamount = new BigNumber(amount);
 
-                console.log('inside calc fee ' +lastMark+' '+notionalValue)
-              if((sellMaker==false&&buyMaker==false)||channel==true){
-                        if(isInverse) {
-                            fee = new BigNumber(0.000025)
-                                .times(BNnotionalValue)
-                                .dividedBy(BNlastMark)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                        } else {
-                            fee = new BigNumber(lastMark)
-                                .dividedBy(BNnotionalValue)
-                                .times(0.000025)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                        }
-                        return fee    
-                }else if(sellMaker==true&&buyMaker==false){
-                    if(isInverse) {
-                            fee = new BigNumber(0.00005)
-                                .times(BNnotionalValue)
-                                .dividedBy(BNlastMark)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                            if(isBuyer==true){
-                                return fee
-                            }
-                        } else {
-                            fee = new BigNumber(lastMark)
-                                .dividedBy(BNnotionalValue)
-                                .times(0.00005)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                        }  
-                        if(isBuyer==true){
-                                return fee
-                        }else{
-                            return 0
-                        } 
-                }else if(sellMaker==false&&buyMaker==true){
-                    if(isInverse) {
-                            fee = new BigNumber(0.00005)
-                                .times(BNnotionalValue)
-                                .dividedBy(BNlastMark)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                    } else {
-                            fee = new BigNumber(lastMark)
-                                .dividedBy(BNnotionalValue)
-                                .times(0.00005)
-                                .times(BNamount)
-                                .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-                    }    
-                    if(isBuyer==false){
-                                return fee
-                        }else{
-                            return 0
-                    } 
-                }
-        }
+		  // Generic base fee for given bps
+		  const baseFee = (bps) => {
+		    if (isInverse) {
+		      return new BigNumber(bps)
+		        .times(BNnotionalValue)
+		        .dividedBy(BNlastMark)
+		        .times(BNamount);
+		    } else {
+		      return new BigNumber(lastMark)
+		        .dividedBy(BNnotionalValue)
+		        .times(bps)
+		        .times(BNamount);
+		    }
+		  };
+
+		  	let fee = new BigNumber(0);
+
+		  	let takerRate = new BigNumber(0.0005);    // +5 bps baseline
+			let makerRate = new BigNumber(-0.00025);  // –2.5 bps rebate baseline
+
+			if (channel === true) {
+			  // Off-chain channel → divide fee schedule by 10
+			  takerRate = takerRate.div(10); // 0.00005
+			  makerRate = makerRate.div(10); // -0.000025
+			}	
+
+		  // Seller maker, buyer taker
+		  if (sellMaker && !buyMaker) {
+		    if (isBuyer) {
+		      fee = baseFee(takerRate);         // buyer = taker
+		    } else {
+		      fee = baseFee(makerRate);         // seller = maker rebate
+		    }
+		    return fee.decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
+		  }
+
+		  // Buyer maker, seller taker
+		  if (!sellMaker && buyMaker) {
+		    if (isBuyer) {
+		      fee = baseFee(makerRate);         // buyer = maker rebate
+		    } else {
+		      fee = baseFee(takerRate);         // seller = taker
+		    }
+		    return fee.decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
+		  }
+
+		  // If both sides flagged maker=false (shouldn’t happen)
+		  return 0;
+		}
+
 
   async locateFee(
-    match,
-    reserveBalanceA,
-    reserveBalanceB,
-    collateralPropertyId,
-    buyerFee,
-    sellerFee,
-    isBuyerReducingPosition,
-    isSellerReducingPosition,
-    block,
-    isLiq
-) {
-    const TallyMap = require('./tally.js');
-    const MarginMap = require('./marginMap.js');
-    const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
+		  match,
+		  reserveBalanceA,
+		  reserveBalanceB,
+		  collateralPropertyId,
+		  buyerFee,                  // signed: >0 taker debit, <0 maker rebate
+		  sellerFee,                 // signed: >0 taker debit, <0 maker rebate
+		  isBuyerReducingPosition,
+		  isSellerReducingPosition,
+		  block,
+		  isLiq,
+		  cacheAdd = 0               // ⬅️ sum of feeCache writes for this match (Number), default 0
+		) {
+		  const TallyMap = require('./tally.js');
+		  const MarginMap = require('./marginMap.js');
+		  const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
 
-    let buyFeeFromMargin = false;
-    let buyFeeFromReserve = false;
-    let buyFeeFromAvailable = false;
-    let sellFeeFromMargin = false;
-    let sellFeeFromReserve = false;
-    let sellFeeFromAvailable = false;
+		  const RD = BigNumber.ROUND_DOWN;
+		  buyerFee  = new BigNumber(buyerFee).decimalPlaces(8, RD).toNumber();
+		  sellerFee = new BigNumber(sellerFee).decimalPlaces(8, RD).toNumber();
+		  cacheAdd  = new BigNumber(cacheAdd).decimalPlaces(8, RD).toNumber();
 
-    const feeInfo = {
-        sellFeeFromAvailable,
-        sellFeeFromReserve,
-        sellFeeFromMargin,
-        buyFeeFromAvailable,
-        buyFeeFromReserve,
-        buyFeeFromMargin,
-        sellerFee,
-        buyerFee,
-    };
+		  let buyFeeFromMargin = false;
+		  let buyFeeFromReserve = false;
+		  let buyFeeFromAvailable = false;
+		  let sellFeeFromMargin = false;
+		  let sellFeeFromReserve = false;
+		  let sellFeeFromAvailable = false;
 
-    console.log('🔍 [locateFee] Checking balances to apply fees...');
-    console.log('🧾 Buyer fee:', buyerFee, ', Seller fee:', sellerFee, ', Property:', collateralPropertyId);
+		  const feeInfo = {
+		    sellFeeFromAvailable,
+		    sellFeeFromReserve,
+		    sellFeeFromMargin,
+		    buyFeeFromAvailable,
+		    buyFeeFromReserve,
+		    buyFeeFromMargin,
+		    sellerFee,
+		    buyerFee,
+		  };
 
-    const buyerAddr = match.buyOrder.buyerAddress;
-    const sellerAddr = match.sellOrder.sellerAddress;
-    const txid = match.txid || `contract-fee-${block}`; // 💡 Default txid fallback
+		  console.log('🔍 [locateFee] Checking balances to apply fees...');
+		  console.log('🧾 Buyer fee:', buyerFee, ', Seller fee:', sellerFee, ', Property:', collateralPropertyId);
 
-    let buyerAvail = await TallyMap.hasSufficientBalance(buyerAddr, collateralPropertyId, buyerFee);
-    let sellerAvail = await TallyMap.hasSufficientBalance(sellerAddr, collateralPropertyId, sellerFee);
-    let buyerReserve = await TallyMap.hasSufficientReserve(buyerAddr, collateralPropertyId, buyerFee);
-    let sellerReserve = await TallyMap.hasSufficientReserve(sellerAddr, collateralPropertyId, sellerFee);
-    let buyerMargin = await TallyMap.hasSufficientMargin(buyerAddr, collateralPropertyId, buyerFee);
-    let sellerMargin = await TallyMap.hasSufficientMargin(sellerAddr, collateralPropertyId, sellerFee);
+		  const buyerAddr = match.buyOrder.buyerAddress;
+		  const sellerAddr = match.sellOrder.sellerAddress;
+		  const txid = match.txid || `contract-fee-${block}`;
 
-    buyerAvail = buyerAvail.hasSufficient;
-    sellerAvail = sellerAvail.hasSufficient;
-    buyerReserve = buyerReserve.hasSufficient;
-    sellerReserve = sellerReserve.hasSufficient;
-    buyerMargin = buyerMargin.hasSufficient;
-    sellerMargin = sellerMargin.hasSufficient;
+		  // -------- BUYER SIDE --------
+		  if (buyerFee < 0) {
+		    // Negative = rebate → always credit
+		    await TallyMap.updateBalance(
+		      buyerAddr, collateralPropertyId,
+		      -buyerFee, 0, 0, 0, 'contractFeeRebate', block, txid
+		    );
+		    feeInfo.buyFeeFromAvailable = true;
+		    console.log('💚 Credited buyer rebate (available):', new BigNumber(-buyerFee).toFixed(8));
+		  } else if (buyerFee > 0) {
+		    // Positive = debit → sufficiency gates
+		    let buyerAvail   = (await TallyMap.hasSufficientBalance(buyerAddr, collateralPropertyId, buyerFee)).hasSufficient;
+		    let buyerReserve = (await TallyMap.hasSufficientReserve(buyerAddr, collateralPropertyId, buyerFee)).hasSufficient;
+		    let buyerMargin  = (await TallyMap.hasSufficientMargin(buyerAddr, collateralPropertyId, buyerFee)).hasSufficient;
 
-    console.log(`🧾 Buyer available: ${buyerAvail}, reserve: ${buyerReserve}, margin: ${buyerMargin}`);
-    console.log(`🧾 Seller available: ${sellerAvail}, reserve: ${sellerReserve}, margin: ${sellerMargin}`);
+		    console.log(`🧾 Buyer available: ${buyerAvail}, reserve: ${buyerReserve}, margin: ${buyerMargin}`);
 
-    if (buyerAvail) {
-        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, -buyerFee, 0, 0, 0, 'contractFee', block, txid);
-        feeInfo.buyFeeFromAvailable = true;
-        console.log('💰 Buyer fee from available');
-    } else if (buyerReserve) {
-        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, -buyerFee, 0, 0, 'contractFee', block, txid);
-        feeInfo.buyFeeFromReserve = true;
-        console.log('💰 Buyer fee from reserve');
-    } else if (buyerMargin) {
-        await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, 0, -buyerFee, 0, 'contractFee', block, txid);
-        feeInfo.buyFeeFromMargin = true;
-        console.log('💰 Buyer fee from margin');
-    }
+		    if (buyerAvail) {
+		      await TallyMap.updateBalance(buyerAddr, collateralPropertyId, -buyerFee, 0, 0, 0, 'contractFee', block, txid);
+		      feeInfo.buyFeeFromAvailable = true;
+		      console.log('💰 Buyer fee from available');
+		    } else if (buyerReserve) {
+		      await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, -buyerFee, 0, 0, 'contractFee', block, txid);
+		      feeInfo.buyFeeFromReserve = true;
+		      console.log('💰 Buyer fee from reserve');
+		    } else if (buyerMargin) {
+		      await TallyMap.updateBalance(buyerAddr, collateralPropertyId, 0, 0, -buyerFee, 0, 'contractFee', block, txid);
+		      feeInfo.buyFeeFromMargin = true;
+		      console.log('💰 Buyer fee from margin');
+		    } else {
+		      console.warn('⚠️ Buyer fee could not be debited from any source.');
+		    }
+		  }
 
-    if (sellerAvail) {
-        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, -sellerFee, 0, 0, 0, 'contractFee', block, txid);
-        feeInfo.sellFeeFromAvailable = true;
-        console.log('💰 Seller fee from available');
-    } else if (sellerReserve) {
-        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, -sellerFee, 0, 0, 'contractFee', block, txid);
-        feeInfo.sellFeeFromReserve = true;
-        console.log('💰 Seller fee from reserve');
-    } else if (sellerMargin) {
-        await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, 0, -sellerFee, 0, 'contractFee', block, txid);
-        feeInfo.sellFeeFromMargin = true;
-        console.log('💰 Seller fee from margin');
-    }
+		  // -------- SELLER SIDE --------
+		  if (sellerFee < 0) {
+		    await TallyMap.updateBalance(
+		      sellerAddr, collateralPropertyId,
+		      -sellerFee, 0, 0, 0, 'contractFeeRebate', block, txid
+		    );
+		    feeInfo.sellFeeFromAvailable = true;
+		    console.log('💚 Credited seller rebate (available):', new BigNumber(-sellerFee).toFixed(8));
+		  } else if (sellerFee > 0) {
+		    let sellerAvail   = (await TallyMap.hasSufficientBalance(sellerAddr, collateralPropertyId, sellerFee)).hasSufficient;
+		    let sellerReserve = (await TallyMap.hasSufficientReserve(sellerAddr, collateralPropertyId, sellerFee)).hasSufficient;
+		    let sellerMargin  = (await TallyMap.hasSufficientMargin(sellerAddr, collateralPropertyId, sellerFee)).hasSufficient;
 
-    console.log('✅ [locateFee] Fee sources determined:', JSON.stringify(feeInfo, null, 2));
-    return feeInfo;
-}
+		    console.log(`🧾 Seller available: ${sellerAvail}, reserve: ${sellerReserve}, margin: ${sellerMargin}`);
+
+		    if (sellerAvail) {
+		      await TallyMap.updateBalance(sellerAddr, collateralPropertyId, -sellerFee, 0, 0, 0, 'contractFee', block, txid);
+		      feeInfo.sellFeeFromAvailable = true;
+		      console.log('💰 Seller fee from available');
+		    } else if (sellerReserve) {
+		      await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, -sellerFee, 0, 0, 'contractFee', block, txid);
+		      feeInfo.sellFeeFromReserve = true;
+		      console.log('💰 Seller fee from reserve');
+		    } else if (sellerMargin) {
+		      await TallyMap.updateBalance(sellerAddr, collateralPropertyId, 0, 0, -sellerFee, 0, 'contractFee', block, txid);
+		      feeInfo.sellFeeFromMargin = true;
+		      console.log('💰 Seller fee from margin');
+		    } else {
+		      console.warn('⚠️ Seller fee could not be debited from any source.');
+		    }
+		  }
+
+		  // -------- Reconciliation log (per match) --------
+		  const takerPos = new BigNumber(Math.max(buyerFee, 0)).plus(Math.max(sellerFee, 0)).decimalPlaces(8, RD);
+		  const makerNeg = new BigNumber(Math.max(-buyerFee, 0)).plus(Math.max(-sellerFee, 0)).decimalPlaces(8, RD);
+		  const cacheBN  = new BigNumber(cacheAdd).decimalPlaces(8, RD);
+		  const net      = takerPos.negated().plus(makerNeg).plus(cacheBN).decimalPlaces(8, RD);
+
+		  console.log('[recon]',
+		    'takerPos=', takerPos.toFixed(),
+		    'makerNeg=', makerNeg.toFixed(),
+		    'cacheAdd=', cacheBN.toFixed(),
+		    'net=', net.toFixed()
+		  );
+
+		  console.log('✅ [locateFee] Fee sources determined:', JSON.stringify(feeInfo, null, 2));
+		  return feeInfo;
+		}
+
 
 
 

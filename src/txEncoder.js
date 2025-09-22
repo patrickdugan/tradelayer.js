@@ -369,6 +369,7 @@ const Encode = {
             params.columnAIsSeller ? '1' : '0',
             params.expiryBlock.toString(36),
             params.insurance ? '1' : '0',
+            params.columnAIsMaker ? '1' : '0'
         ];
         const type = 19;
         const typeStr = type.toString(36);
@@ -386,6 +387,7 @@ const Encode = {
             amountDesired.toString(36),
             params.columnAIsOfferer ? '1' : '0',
             params.expiryBlock.toString(36),
+            params.columnAIsMaker ? '1' : '0',
             params.Id1ColoredOutput ? '1' : '0',
             params.Id2ColoredOutput ? '1' : '0'
         ];
