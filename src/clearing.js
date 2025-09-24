@@ -1156,6 +1156,87 @@ static async extractCounterpartyPositions(matches, deleveragedPositions, marginM
   return deleveragedPositions;
 }
 
+
+/**
+ * Settle all options expiring at or before currentBlock for a given series.
+ * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
+ */
+async function settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
+  const mm = await MarginMap.getInstance(seriesId);
+  const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
+  if (!seriesInfo) return;
+  const collateralPropertyId = seriesInfo.collateralPropertyId;
+
+  const expTickers = await mm.getExpiringTickersUpTo(currentBlockHeight);
+  if (!expTickers.length) return;
+
+  // For each address with positions
+  for (const [address, pos] of mm.margins.entries()) {
+    if (!pos || !pos.options) continue;
+
+    for (const ticker of expTickers) {
+      const optPos = pos.options[ticker];
+      if (!optPos) continue;
+
+      const qty = Number(optPos.contracts || 0);
+      if (!qty) {
+        // remove the empty slot to keep map clean
+        delete pos.options[ticker];
+        continue;
+      }
+
+      const meta = Options.parseTicker(ticker);
+      if (!meta) continue;
+
+      // Intrinsic payoff at settlement
+      const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
+      const cash = iv * Math.abs(qty); // per-contract * absolute qty
+
+      // Long options receive; short options pay
+      const availableDelta = qty > 0 ? +cash : -cash;
+
+      // Free any margin previously held on this option leg
+      const marginHeld = Number(optPos.margin || 0);
+      const marginDelta = marginHeld ? -marginHeld : 0;
+
+      // Tally: available +/- intrinsic; margin -= marginHeld
+      await TallyMap.updateBalance(
+        address,
+        collateralPropertyId,
+        availableDelta, // availableChange
+        0,              // reservedChange
+        marginDelta,    // marginChange
+        0,              // vestingChange
+        'optionExpire',
+        currentBlockHeight,
+        txid
+      );
+
+      // Remove the option sub-position from the blob
+      delete pos.options[ticker];
+
+      // Record margin map delta
+      await mm.recordMarginMapDelta(
+        address,
+        ticker,
+        0,                 // position after (expired → closed)
+        -qty,              // delta contracts to flat
+        iv,                // settled at intrinsic (for audit)
+        0,                 // uPNL delta
+        marginHeld ? -marginHeld : 0, // margin freed
+        'optionExpire',
+        currentBlockHeight
+      );
+    }
+
+    // Save back the mutated blob
+    mm.margins.set(address, pos);
+  }
+
+  // Global index cleanup (remove those expiries)
+  await mm.cleanupExpiredTickersUpTo(currentBlockHeight);
+}
+
 static getLatestPositionByAddress(trades, address) {
   // Loop backwards since later trades are more recent
   for (let i = trades.length - 1; i >= 0; i--) {

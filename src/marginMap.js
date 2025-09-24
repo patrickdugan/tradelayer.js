@@ -8,6 +8,9 @@ class MarginMap {
     constructor(seriesId) {
         this.seriesId = seriesId;
         this.margins = new Map();
+        if (!this.expiryIndex)   this.expiryIndex   = new Map();
+        if (!this.tickerExpiry)  this.tickerExpiry  = new Map();
+        if (!this.optionOI)      this.optionOI      = new Map();
     }
 
     static async getInstance(contractId) {
@@ -602,6 +605,79 @@ class MarginMap {
 
             return { contracts: contractShort, margin: marginToReturn, available: availToReturn, excess: excess, rPNL: accountingPNL, reduction:reduction };
         }
+
+                /**
+         * Internal: update OI and expiry index when an option pos opens/closes for any address.
+         * beforeQty: previous signed qty for this address
+         * afterQty:  new signed qty for this address
+         * tickerMeta: Options.parseTicker(ticker)
+         */
+        _touchExpiryIndex(beforeQty, afterQty, ticker, tickerMeta) {
+          if (!tickerMeta || !tickerMeta.expiryBlock) return;
+
+          const wasZero = (Number(beforeQty) || 0) === 0;
+          const isZero  = (Number(afterQty)  || 0) === 0;
+
+          if (wasZero && !isZero) {
+            // transition 0 -> nonzero: increment OI and ensure indexed
+            const oi = (this.optionOI.get(ticker) || 0) + 1;
+            this.optionOI.set(ticker, oi);
+
+            if (!this.tickerExpiry.has(ticker)) {
+              this.tickerExpiry.set(ticker, tickerMeta.expiryBlock);
+              const set = this.expiryIndex.get(tickerMeta.expiryBlock) || new Set();
+              set.add(ticker);
+              this.expiryIndex.set(tickerMeta.expiryBlock, set);
+            }
+          } else if (!wasZero && isZero) {
+            // transition nonzero -> 0: decrement OI; remove ticker from index if OI hits 0
+            const oi = Math.max(0, (this.optionOI.get(ticker) || 0) - 1);
+            if (oi === 0) {
+              this.optionOI.delete(ticker);
+              const exp = this.tickerExpiry.get(ticker);
+              if (exp != null) {
+                const set = this.expiryIndex.get(exp);
+                if (set) {
+                  set.delete(ticker);
+                  if (set.size === 0) this.expiryIndex.delete(exp);
+                  else this.expiryIndex.set(exp, set);
+                }
+              }
+              this.tickerExpiry.delete(ticker);
+            } else {
+              this.optionOI.set(ticker, oi);
+            }
+          }
+        }
+
+    /**
+     * Return a flat array of tickers with expiry <= blockHeight.
+     */
+    async getExpiringTickersUpTo(blockHeight) {
+      const out = [];
+      for (const [exp, set] of this.expiryIndex.entries()) {
+        if (Number(exp) <= Number(blockHeight)) {
+          for (const t of set) out.push(t);
+        }
+      }
+      return out;
+    }
+
+    /**
+     * Remove all index entries with expiry <= blockHeight (call AFTER you process them).
+     */
+    async cleanupExpiredTickersUpTo(blockHeight) {
+      for (const [exp, set] of Array.from(this.expiryIndex.entries())) {
+        if (Number(exp) <= Number(blockHeight)) {
+          this.expiryIndex.delete(exp);
+          for (const t of set) {
+            this.tickerExpiry.delete(t);
+            this.optionOI.delete(t); // safe: OI should be zero after settlement
+          }
+        }
+      }
+    }
+
         
     calculateMarginRequirement(contracts, price, inverse) {
         
@@ -939,6 +1015,10 @@ class MarginMap {
       const px    = Number(tradePrice) || 0;
       const before = Number(optPos.contracts) || 0;
       const after  = before + delta;
+
+
+      const meta = Options.parseTicker(fullTicker);
+      this._touchExpiryIndex(this, before, after, fullTicker, meta);
 
       // compute reduce/flip characteristics (for avgPrice update only)
       const beforeSign = Math.sign(before);
