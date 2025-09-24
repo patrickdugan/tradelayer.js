@@ -40,13 +40,12 @@ class Database {
         const folderName = chain.toLowerCase()+'-'+test
         const dbPath = path.join(__dirname, '..', 'nedb-data', folderName);
         this.path=dbPath
-        const categories = [
-            'txIndex', 'propertyList', 'oracleList', 'oracleData', 'contractList',
-            'tallyMap', 'tallyMapDelta', 'marginMapDelta', 'marginMaps', 'clearlists',
-            'attestations', 'clearing', 'consensus', 'persistence', 'volumeIndex',
-            'channels', 'withdrawQueue', 'activations', 'insurance', 'orderBooks',
-            'feeCache', 'tradeHistory', 'fundingEvents', 'vaults', 'syntheticTokens',
-            'liquidations', 'scaling','channelDelta'
+        const categories = ['ammRegistry', 'ammState','txIndex', 'propertyList', 
+        'oracleList', 'oracleData', 'contractList','tallyMap', 'tallyMapDelta', 
+        'marginMapDelta', 'marginMaps', 'clearlists','attestations', 'clearing', 
+        'consensus', 'persistence','volumeIndex','channels', 'withdrawQueue', 
+        'activations', 'insurance','orderBooks','feeCache', 'tradeHistory', 
+        'fundingEvents', 'vaults','syntheticTokens','liquidations', 'scaling','channelDelta'
         ];
 
         categories.forEach(category => {

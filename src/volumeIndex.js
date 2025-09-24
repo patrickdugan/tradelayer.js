@@ -57,6 +57,7 @@ class VolumeIndex {
             return volumeInLTC
         }
     }
+
 static async updateCumulativeVolumes(volume, type, id, block) {
   // load existing totals, guard nulls
 
@@ -109,6 +110,41 @@ static async updateCumulativeVolumes(volume, type, id, block) {
         // If VWAP price is not available, return a default low value
         return 0.001; // Minimum price
     }
+
+  static async calculateVolIndex(lookbackBlocks = 14400) {
+    const base = await db.getDatabase('volumeIndex');
+    const docs = await base.findAsync({}).sort({ 'value.blockHeight': -1 }).limit(lookbackBlocks);
+
+    if (!docs || docs.length < 2) {
+        return 0;
+    }
+
+    // Collect log returns
+    let prices = docs.map(d => d.value.price).filter(p => p > 0);
+    let logReturns = [];
+    for (let i = 1; i < prices.length; i++) {
+        logReturns.push(Math.log(prices[i] / prices[i-1]));
+    }
+
+    // Standard deviation of log returns
+    const mean = logReturns.reduce((a,b) => a+b, 0) / logReturns.length;
+    const variance = logReturns.reduce((a,b) => a + Math.pow(b-mean,2), 0) / (logReturns.length-1);
+    const stdev = Math.sqrt(variance);
+
+    // Annualize (assuming 144 blocks ≈ 1 day)
+    const blocksPerYear = 144 * 365;
+    const volIndex = stdev * Math.sqrt(blocksPerYear);
+
+    // Save volIndex in db
+    await base.updateAsync(
+        { _id: 'volIndex' },
+        { _id: 'volIndex', value: { vol: volIndex, updatedAt: Date.now() } },
+        { upsert: true }
+    );
+
+    return volIndex;
+}
+
 
 
   /**

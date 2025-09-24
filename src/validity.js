@@ -17,6 +17,7 @@ const Vesting = require('./vesting.js')
 const Scaling = require('./scaling.js')
 //const whiteLists = require('./whitelists.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
+const OptionsEngine = require('./options.js');
 
 const Validity = {
 
@@ -928,85 +929,81 @@ const Validity = {
 
 
         // 10: AMM Pool Attestation
-        validateAMMPool: async (sender, params, txid) => {
-            params.reason = '';
-            params.valid = true;
+   
+    async validateAMMPool(sender, params, txid) {
+        params.reason = '';
+        params.valid = true;
 
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(10);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
-            }
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(10);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated ';
+        }
 
-            if (!Validity.isValidNumber(params.amount)||!Validity.isValidNumber(params.amount2)) {
+        if (!Validity.isValidNumber(params.amount) || !Validity.isValidNumber(params.amount2)) {
+            params.valid = false;
+            params.reason += 'Invalid or missing amount; ';
+            return params;
+        }
+
+        const isActive = await Validity.isActivated(params.block, txid, 10);
+        if (!isActive) {
+            params.valid = false;
+            params.reason = 'Transaction type activated after tx';
+        }
+
+        if (typeof params.targetAddress !== 'string') {
+            params.valid = false;
+            params.reason += 'Invalid target address; ';
+        }
+
+        const propertyData1 = await PropertyList.getPropertyData(params.id);
+        const propertyData2 = await PropertyList.getPropertyData(params.id2);
+        if (propertyData1 === 2 || propertyData1 === 3 || propertyData2 === 2 || propertyData2 === 3) {
+            params.valid = false;
+            params.reason = "Cannot trade vesting tokens";
+        }
+
+        // Whitelist validation
+        const senderWhitelists = [].concat(propertyData1.whitelistId || []);
+        const desiredLists = [].concat(propertyData2.whitelistId || []);
+
+        for (const whitelistId of senderWhitelists) {
+            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+            if (!whitelisted) {
                 params.valid = false;
-                params.reason += 'Invalid or missing amount; ';
-                return params;
+                params.reason += `Sender address not in clearlist for offered token ${whitelistId}; `;
             }
-            const admin = activationInstance.getAdmin()
-            console.log('admin '+admin)
-            if(sender!=admin){
-                let bans = await ClearList.getBanlist()
-                if(bans==null){bans = bannedCountries}
-                const senderCountryInfo = await ClearList.getCountryCodeByAddress(sender);
-                if(params.Id1 == 1||params.Id1 == 2||params.Id1 == 3||params.propertyIdDesired == 4||params.Id2 == 1||params.Id2 == 2||params.Id2 == 3||params.Id2 == 4){
-                    if (!senderCountryInfo || bans.includes(senderCountryInfo.countryCode)) {
-                        params.valid = false;
-                        params.reason += 'Sender cannot handle TL or TLI from a banned country or lacking country code attestation';
-                    }
-                }
-            }
-
-            const is = await Validity.isActivated(params.block,txid,10)
-            console.log(is)
-            if (!is) {
+        }
+        for (const whitelistId of desiredLists) {
+            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+            if (!whitelisted) {
                 params.valid = false;
-                params.reason = 'Transaction type activated after tx';
+                params.reason += `Trader address not in clearlist ${whitelistId}; `;
             }
+        }
 
-            if (!(typeof params.targetAddress === 'string')) {
+        // Optional new params
+        if (params.strategyBlob) {
+            try {
+                JSON.parse(params.strategyBlob);
+            } catch {
                 params.valid = false;
-                params.reason += 'Invalid target address; ';
+                params.reason += 'Invalid strategyBlob JSON; ';
             }
+        }
+        if (params.optionsMaker && !Number.isInteger(params.optionsMaker)) {
+            params.valid = false;
+            params.reason += 'optionsMaker must be integer; ';
+        }
+        if (params.optionsTaker && !Number.isInteger(params.optionsTaker)) {
+            params.valid = false;
+            params.reason += 'optionsTaker must be integer; ';
+        }
 
-            const propertyData1 = await PropertyList.getPropertyData(params.id)
-            const propertyData2 = await PropertyList.getPropertyData(params.id2)
+        return params;
+    }
 
-             if(propertyData1==2||propertyData1==3||propertyData2==2||propertyData2==3){
-                params.valid=false
-                params.reason="Cannot trade vesting tokens"
-            }
-                    // Whitelist validation logic
-            const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
-            const desiredLists = Array.isArray(propertyData2.whitelistId) ? propertyData2.whitelistId : [propertyData2.whitelistId];
-
-            var passes1 = false
-            for (const whitelistId of senderWhitelists) {
-                const senderWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-                if (senderWhitelisted) {
-                    passes1 = true
-                }
-            }
-            if(passes1){
-                    params.valid = false;
-                    params.reason += `Sender address not listed in clearlist for offered token ${whitelistId}; `;
-            }
-             
-            var passes2 = false
-
-            for (const whitelistId of desiredLists) {
-                const recipientWhitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-                if (recipientWhitelisted) {
-                    passes2 = true
-                }
-            }
-            if(passes2){
-                    params.valid = false;
-                    params.reason += `Trader address not listed in clearlist ${whitelistId}; `;
-            }
-
-               return params;
-        },
 
         // 11: Grant Managed Token
         validateGrantManagedToken: async (sender, params, txid) => {
@@ -2530,23 +2527,147 @@ const Validity = {
     },
 
     // 26: Pay to Tokens
-    validatePayToTokens: (params, tallyMap) => {
-        // Ensure the sender has sufficient balance of the property used for payment
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
-        // Additional checks can be implemented based on the specific rules of Pay to Tokens transactions
+        validatePayToTokens: (params, tallyMap) => {
+            // Ensure the sender has sufficient balance of the property used for payment
+            const hasSufficientBalance = tallyMap.hasSufficientBalance(params.senderAddress, params.propertyIdUsed, params.amount);
+            // Additional checks can be implemented based on the specific rules of Pay to Tokens transactions
 
-        return hasSufficientBalance.hasSufficient;
-    },
+            return hasSufficientBalance.hasSufficient;
+        },
+                  
+        validateOptionTrade: async (sender, params, txid) => {
+          params.reason = '';
+          params.valid = true;
 
-        // 27: Create Option Chain
-    validateCreateOptionChain: (params, contractRegistry) => {
-        // Check if the series ID is valid
-        const isValidSeriesId = contractRegistry.isValidSeriesId(params.contractSeriesId);
-        // Check if the strike interval and other parameters are valid
-        const isValidParams = contractRegistry.isValidOptionChainParams(params.strikeInterval, params.europeanStyle);
+          // --- Parse primary & combo ---
+          const tA = OptionsEngine.parseTicker(params.contractId);
+          if (!tA) { params.valid=false; params.reason+='Invalid primary ticker; '; return params; }
+          let tB = null;
+          if (params.comboTicker) {
+            tB = OptionsEngine.parseTicker(params.comboTicker);
+            if (!tB) { params.valid=false; params.reason+='Invalid combo ticker; '; return params; }
+          }
 
-        return isValidSeriesId && isValidParams;
-    },
+          // --- Series existence ---
+          const seriesInfo = await ContractRegistry.getContractInfo(tA.seriesId);
+          if (!seriesInfo) { params.valid=false; params.reason+='Option series not found; '; return params; }
+          const collateralPropertyId = seriesInfo.collateralPropertyId;
+          const inverse = !!seriesInfo.inverse;
+
+          // --- Channel & commit addrs ---
+          const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+          if (!commitAddressA && !commitAddressB) {
+            params.valid=false; params.reason+='Tx sender is not a channel address; '; return params;
+          }
+
+          // --- Balances for margin checks ---
+          const channel = await Channels.getChannel(sender);
+          const balanceA = channel.A[collateralPropertyId] || 0;
+          const balanceB = channel.B[collateralPropertyId] || 0;
+          const tallyA = await TallyMap.getTally(commitAddressA, collateralPropertyId);
+          const tallyB = await TallyMap.getTally(commitAddressB, collateralPropertyId);
+          const effectiveA = balanceA + (tallyA?.available || 0);
+          const effectiveB = balanceB + (tallyB?.available || 0);
+
+          // --- Margin requirement (spreads w/ premium adj; naked otherwise) ---
+          let requiredMargin = 0;
+
+          if (params.comboTicker && params.comboAmount) {
+            const qty = Math.min(Number(params.amount||0), Number(params.comboAmount||0));
+
+            // width via strike difference; inverse-safe using your estimatePNL
+            const loss = estimatePNL(qty, tA.strike, tB.strike, inverse, seriesInfo.notionalValue);
+            requiredMargin = Math.abs(loss);
+
+            // premium adjustment (credit reduces margin; debit = margin)
+            const leg1Premium = Number(params.price || 0) * Number(params.amount || 0);
+            const leg2Premium = Number(params.comboPrice || 0) * Number(params.comboAmount || 0);
+            const netPremium  = leg1Premium - leg2Premium;
+
+            if (netPremium > 0) {
+              requiredMargin = Math.max(0, requiredMargin - netPremium);
+            } else {
+              requiredMargin = Math.abs(netPremium);
+            }
+
+            const leftover = Math.abs(Number(params.amount||0) - Number(params.comboAmount||0));
+            if (leftover > 0) {
+              requiredMargin += (Number(tA.strike||0) / 10) * leftover; // naked leftover rule
+            }
+          } else {
+            requiredMargin = (Number(tA.strike||0) / 10) * Number(params.amount||0);
+          }
+
+          // --- Reduce/Flip & rPNL (per side) for the OPTION ticker itself ---
+          const mm = await MarginMap.getInstance(tA.seriesId);
+
+          // Find who is seller/buyer in *this* tx by your columnA flag
+          const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+          const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
+          const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
+
+          // Load existing option positions under the specific ticker string
+          const sellerBlob = mm.margins.get(sellerAddr) || {};
+          const buyerBlob  = mm.margins.get(buyerAddr)  || {};
+          const sellerOpt  = (sellerBlob.options && sellerBlob.options[params.contractId]) || { contracts: 0, avgPrice: 0 };
+          const buyerOpt   = (buyerBlob.options  && buyerBlob.options[params.contractId])  || { contracts: 0, avgPrice: 0 };
+
+          // Signed trade deltas: SELL => negative, BUY => positive
+          const primaryDelta = (params.side === 'BUY') ? Number(params.amount||0) : -Number(params.amount||0);
+
+          // Seller side reduce/flip on seller's book (delta is negative if seller is selling)
+          const sellerDelta = -Math.abs(Number(params.amount||0));
+          const sellerRF = OptionsEngine.computeReduceFlip(Number(sellerOpt.contracts||0), sellerDelta);
+
+          // Buyer side reduce/flip on buyer's book (delta is positive if buyer is buying)
+          const buyerDelta = +Math.abs(Number(params.amount||0));
+          const buyerRF = OptionsEngine.computeReduceFlip(Number(buyerOpt.contracts||0), buyerDelta);
+
+          params.sellerReducing = sellerRF.closedQty > 0;
+          params.buyerReducing  = buyerRF.closedQty  > 0;
+          params.closedContractsSeller = sellerRF.closedQty || 0;
+          params.closedContractsBuyer  = buyerRF.closedQty  || 0;
+
+          // rPNL = (tradePx - avgPx)*qty for long reduce; (avgPx - tradePx)*qty for short reduce
+          const tradePx = Number(params.price || 0);
+          params.rpnlSeller = OptionsEngine.rpnlForClose(sellerRF.exSide, sellerRF.closedQty, tradePx, sellerOpt.avgPrice);
+          params.rpnlBuyer  = OptionsEngine.rpnlForClose(buyerRF.exSide,  buyerRF.closedQty,  tradePx, buyerOpt.avgPrice);
+
+          // --- Balance check with requiredMargin (credit) ---
+          params.creditMargin = requiredMargin; // expose to logic.js
+
+          if (effectiveA < requiredMargin && effectiveB < requiredMargin) {
+            params.valid = false;
+            params.reason += 'Insufficient collateral for option margin; ';
+          }
+
+          // --- Expiry guard ---
+          if (params.blockHeight && params.blockHeight >= tA.expiryBlock) {
+            params.valid = false;
+            params.reason += 'Option already expired; ';
+          }
+
+          return params;
+        },
+
+        parseTicker(tickerStr) {
+            if (!tickerStr || typeof tickerStr !== 'string') return null;
+            const parts = tickerStr.split('-');
+            if (parts.length < 3) return null;
+
+            const seriesId = parts[0];
+            const expiryBlock = parseInt(parts[1], 10);
+            const type = parts[2] === 'C' ? 'Call' : parts[2] === 'P' ? 'Put' : null;
+            const strike = parts[3] ? parseFloat(parts[3]) : null;
+
+            return {
+                seriesId,
+                expiryBlock,
+                type,
+                strike,
+                raw: tickerStr
+            };
+        },
 
     // 28: Trade Bai Urbun
     validateTradeBaiUrbun: (params, channelRegistry, baiUrbunRegistry) => {

@@ -3,7 +3,7 @@ const ContractRegistry = require('./contractRegistry.js');
 const db = require('./db.js')
 const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
-
+const Options = require('./options.js');
 const MarginMap = require('./marginMap.js')
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
@@ -1311,6 +1311,54 @@ static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, i
         //}
     }
 
+    /**
+     * Summarize options for an address under a given series (for liquidation offsets).
+     * Returns:
+     *   {
+     *     premiumMTM,   // mark-to-model value of options (can be +/-) at current spot
+     *     intrinsicNet, // net intrinsic (>=0 longs, <=0 shorts aggregated)
+     *     maintNaked    // maintenance add-on for naked shorts (padding for triggers)
+     *   }
+     */
+    async computeOptionAdjustments(seriesId, address, spot, currentBlockHeight, blocksPerDay) {
+      const mm = await MarginMap.getInstance(seriesId);
+      const pos = mm.margins.get(address) || {};
+      const optionsBag = pos.options || {};
+      const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
+      // If you store a vol index on the series, grab it; else fallback conservatively
+      const volAnnual = Number(seriesInfo?.volAnnual || 0); // e.g. 0.6 means 60% annualized
+      const bpd = Math.max(1, Number(blocksPerDay || 144));
+      let premiumMTM = 0;
+      let intrinsicNet = 0;
+      let maintNaked = 0;
+
+      for (const [ticker, o] of Object.entries(optionsBag)) {
+        const meta = Options.parseTicker(ticker);
+        if (!meta) continue;
+
+        const blocksToExp = Math.max(0, Number(meta.expiryBlock || 0) - Number(currentBlockHeight || 0));
+        const daysToExpiry = blocksToExp / bpd;
+
+        // qty is signed: >0 long options, <0 short options
+        const qty = Number(o.contracts || 0);
+        if (!qty) continue;
+
+        // MTM premium approximation (treating options as assets for equity)
+        const px = Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry);
+        premiumMTM += px * qty;
+
+        // Intrinsic (floor/ceiling) can be used as an extra conservative cushion
+        const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
+        intrinsicNet += iv * qty;
+
+        // Naked maintenance padding for shorts only (10× rule via helper)
+        if (qty < 0) {
+          maintNaked += Options.nakedMaintenance(meta.type, Number(meta.strike || 0), Number(spot || 0)) * Math.abs(qty);
+        }
+      }
+
+      return { premiumMTM, intrinsicNet, maintNaked };
+    }
 
     static async auditSettlementTasks(blockHeight, positions) {
         try {

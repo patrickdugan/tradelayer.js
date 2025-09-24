@@ -857,9 +857,9 @@ class MarginMap {
                      console.log('inside settlePNL ' +lastMark+' '+price+' '+contracts)
                     let lastMarkBN = new BigNumber(lastMark)
                     console.log('settlePNL: lastMarkBN', lastMarkBN.toString(), typeof lastMarkBN)
-console.log('settlePNL: priceBN', priceBN.toString(), typeof priceBN)
-console.log('settlePNL: contractsBN', contractsBN.toString(), typeof contractsBN)
-console.log('settlePNL: notionalValueBN', notionalValueBN.toString(), typeof notionalValueBN)
+                    console.log('settlePNL: priceBN', priceBN.toString(), typeof priceBN)
+                    console.log('settlePNL: contractsBN', contractsBN.toString(), typeof contractsBN)
+                    console.log('settlePNL: notionalValueBN', notionalValueBN.toString(), typeof notionalValueBN)
 
                 pnl = one.dividedBy(lastMarkBN).minus(one.dividedBy(priceBN))
                 .times(contractsBN)
@@ -879,6 +879,173 @@ console.log('settlePNL: notionalValueBN', notionalValueBN.toString(), typeof not
                   
                 return pnl.decimalPlaces(8).toNumber();
         }
+
+    /**
+     * Estimate PnL between two prices for a given position.
+     * Pure function: no side effects, no margin map mutations.
+     *
+     * @param {number} contracts - number of contracts (+long / -short)
+     * @param {number} entryPrice - entry/mark price
+     * @param {number} exitPrice  - settlement/strike price
+     * @param {boolean} inverse   - contract type (true if inverse, false if linear)
+     * @param {number} notional   - notional value per contract
+     * @returns {number} estimated PnL in collateral units
+     */
+    estimatePNL(contracts, entryPrice, exitPrice, inverse, notional) {
+        const contractsBN = new BigNumber(contracts);
+        const entryBN = new BigNumber(entryPrice);
+        const exitBN = new BigNumber(exitPrice);
+        const notionalBN = new BigNumber(notional || 1);
+
+        let pnl;
+
+        if (!inverse) {
+            // Linear contract: PnL = (exit - entry) * contracts
+            pnl = exitBN.minus(entryBN).times(contractsBN);
+        } else {
+            // Inverse contract:
+            // PnL = (1/entry - 1/exit) * contracts * notional
+            const one = new BigNumber(1);
+            pnl = one.div(entryBN).minus(one.div(exitBN))
+                  .times(contractsBN)
+                  .times(notionalBN);
+        }
+
+        return pnl.decimalPlaces(8).toNumber();
+    }
+
+
+    // === marginMap.js ===
+    async applyOptionTrade(address, fullTicker, signedQty, tradePrice, blockHeight, creditMargin){
+      // fetch or init the series-level blob for this address
+      let pos = this.margins.get(address);
+      if (!pos) {
+        pos = {
+          address,
+          contractId: this.seriesId || null, // series scope
+          contracts: 0,         // perp/futures core (untouched here)
+          avgPrice: 0,          // perp/futures core (untouched here)
+          unrealizedPNL: 0,     // perp/futures core (untouched here)
+          margin: 0,            // series-level margin bucket (optional)
+          options: {}           // per-option map
+        };
+      }
+      if (!pos.options) pos.options = {};
+
+      // fetch or init this specific option sub-position
+      let optPos = pos.options[fullTicker] || { contracts: 0, avgPrice: 0, margin: 0 };
+
+      const delta = Number(signedQty) || 0;
+      const px    = Number(tradePrice) || 0;
+      const before = Number(optPos.contracts) || 0;
+      const after  = before + delta;
+
+      // compute reduce/flip characteristics (for avgPrice update only)
+      const beforeSign = Math.sign(before);
+      const afterSign  = Math.sign(after);
+      const isFlip     = (before !== 0 && delta !== 0 && beforeSign !== Math.sign(delta) && Math.abs(delta) > Math.abs(before));
+
+      // update avgPrice:
+      // - if same sign or opening from flat → weighted average
+      // - if crossing to exactly zero → avg=0
+      // - if flip to opposite sign → reset avg to trade price for the leftover
+      if (after === 0) {
+        optPos.avgPrice = 0;
+      } else if (!isFlip && (before === 0 || beforeSign === afterSign)) {
+        // weighted average only when growing in same direction or opening
+        const numer = (before * optPos.avgPrice) + (delta * px);
+        optPos.avgPrice = numer / after;
+      } else {
+        // flip: new side takes the trade price as new avg
+        optPos.avgPrice = px;
+      }
+
+      // update signed contracts
+      optPos.contracts = after;
+
+      // margin: accumulate package credit if provided (seller side handled upstream)
+      optPos.margin = Number(optPos.margin || 0) + Number(creditMargin || 0);
+
+      // persist back
+      pos.options[fullTicker] = optPos;
+      this.margins.set(address, pos);
+
+      // record delta
+      await this.recordMarginMapDelta(
+        address,
+        fullTicker,
+        after,               // position after
+        delta,               // contracts delta
+        px,                  // trade price
+        0,                   // uPNL delta (none here)
+        Number(creditMargin || 0), // margin delta
+        'optionTrade',
+        blockHeight
+      );
+
+      // return the updated sub-position (and some useful derived info if caller wants it)
+      const closedQty = (before !== 0 && Math.sign(before) !== Math.sign(delta))
+        ? Math.min(Math.abs(before), Math.abs(delta))
+        : 0;
+      const flipQty = (before !== 0 && Math.sign(before) !== Math.sign(delta) && Math.abs(delta) > Math.abs(before))
+        ? (Math.abs(delta) - Math.abs(before))
+        : 0;
+
+      return {
+        contracts: optPos.contracts,
+        avgPrice: optPos.avgPrice,
+        margin: optPos.margin,
+        closedQty,
+        flipQty
+      };
+    }
+
+/**
+ * Approximate liquidation price with option protection.
+ * - For LONG underlying exposure: long puts cap downside → liqPrice = min(baseLiq, maxProtectStrike)
+ * - For SHORT underlying: long calls cap upside → liqPrice = max(baseLiq, minProtectStrike)
+ * Assumes hybrid series blob: pos.options[ticker] exists.
+ *
+ * @param {string} address
+ * @param {number} baseLiqPrice   // your existing calcLiquidation result (perps/futures only)
+ * @param {number} spot
+ * @param {number} currentBlock
+ * @returns {number} adjustedLiq
+ */
+    async calcLiquidationWithOptions(address, baseLiqPrice, spot, currentBlock) {
+      const pos = this.margins.get(address) || {};
+      const optionsBag = pos.options || {};
+      if (!optionsBag || !Object.keys(optionsBag).length) return baseLiqPrice;
+
+      // Determine net underlying side from your top-level series fields
+      const netContracts = Number(pos.contracts || 0); // + long, - short
+      if (netContracts === 0) return baseLiqPrice;
+
+      let protectiveStrikes = [];
+
+      for (const [ticker, o] of Object.entries(optionsBag)) {
+        const meta = Options.parseTicker(ticker);
+        if (!meta) continue;
+        const qty = Number(o.contracts || 0);
+        if (qty <= 0) continue; // protection only from LONG options
+        // Only options that protect the direction matter
+        if (netContracts > 0 && meta.type === 'Put') protectiveStrikes.push(Number(meta.strike || 0));
+        if (netContracts < 0 && meta.type === 'Call') protectiveStrikes.push(Number(meta.strike || 0));
+      }
+
+      if (protectiveStrikes.length === 0) return baseLiqPrice;
+
+      if (netContracts > 0) {
+        // Long underlying: puts protect → lowest liq can’t fall below the highest protective strike
+        const floor = Math.max(...protectiveStrikes);
+        return Math.min(baseLiqPrice, floor);
+      } else {
+        // Short underlying: calls protect → highest liq can’t rise above the lowest protective strike
+        const cap = Math.min(...protectiveStrikes);
+        return Math.max(baseLiqPrice, cap);
+      }
+    }
+
 
     async updateMargin(address, contractId, newMargin, block,position) {
         console.log(`Updating margin for ${address} on contract ${contractId} to ${newMargin}`);

@@ -33,7 +33,7 @@ const BigNumber = require('bignumber.js')
 const VolumeIndex = require('./volumeIndex.js')
 const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
-
+const OptionsEngine = require('./options.js');
 
 // logic.js
 const Logic = {
@@ -129,7 +129,7 @@ const Logic = {
                 await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount, params.block);
                 break;
             case 27:
-                await Logic.createOptionChain(params.seriesId, params.strikePercentInterval, params.isEuropeanStyle, params.block);
+                await processOptionTrade(sender, params, txid);
                 break;
             case 28:
                 await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock, params.block);
@@ -1324,63 +1324,146 @@ const Logic = {
 	    await tallyMap.save(currentBlockHeight); // Replace currentBlockHeight with actual block height
 	},
 
+    // inside logic.j
 
-    createOptionChain(seriesId, strikePercentInterval, isEuropeanStyle) {
-        if (!this.isValidSeriesId(seriesId)) {
-            throw new Error('Invalid series ID');
-        }
+    async processOptionTrade(sender, params, txid){
+  // Validate first (also populates creditMargin, reduce/flip flags, rPNL, closed sizes)
+  const res = await Validity.validateOptionTrade(sender, params, txid);
+  if (!res.valid) return res;
 
-        // Assuming you have a method to get the expiry intervals and other necessary data for a series
-        const seriesData = this.getSeriesData(seriesId);
-        const optionChain = [];
+  const tMeta = OptionsEngine.parseTicker(params.contractId);
+  const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
+  const collateralPropertyId = seriesInfo.collateralPropertyId;
 
-        seriesData.expiryIntervals.forEach(expiryInterval => {
-            // Calculate strike prices based on the strikePercentInterval and underlying asset price
-            const strikePrices = this.calculateStrikePrices(seriesData.underlyingAssetPrice, strikePercentInterval);
+  // Resolve commits
+  const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+  const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+  const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
+  const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
 
-            strikePrices.forEach(strikePrice => {
-                // Generate contract IDs for both Put and Call options
-                const putContractId = `${seriesId}-${expiryInterval}-P-${strikePrice}`;
-                const callContractId = `${seriesId}-${expiryInterval}-C-${strikePrice}`;
+  // 1) Premium transfer (buyer -> seller), if present
+  if (Number(params.netPremium||0) !== 0) {
+    const np = Number(params.netPremium);
+    // buyer pays (available -)
+    await TallyMap.updateBalance(
+      buyerAddr, collateralPropertyId,
+      -np, 0, 0, 0,
+      'optionPremiumPay', params.blockHeight, txid
+    );
+    // seller receives (available +)
+    await TallyMap.updateBalance(
+      sellerAddr, collateralPropertyId,
+      +np, 0, 0, 0,
+      'optionPremiumReceive', params.blockHeight, txid
+    );
+  }
 
-                optionChain.push({
-                    contractId: putContractId,
-                    type: 'Put',
-                    strikePrice: strikePrice,
-                    expiryBlockHeight: expiryInterval,
-                    isEuropeanStyle: isEuropeanStyle
-                });
+  // 2) Margin moves on seller
+  // - If reducing: free margin and realize PnL into available
+  // - Else opening/adding: lock margin (available -> margin)
+  const credit = Number(params.creditMargin || 0);
 
-                optionChain.push({
-                    contractId: callContractId,
-                    type: 'Call',
-                    strikePrice: strikePrice,
-                    expiryBlockHeight: expiryInterval,
-                    isEuropeanStyle: isEuropeanStyle
-                });
-            });
-        });
+  if (params.sellerReducing) {
+    const r = Number(params.rpnlSeller || 0);
+    await TallyMap.updateBalance(
+      sellerAddr, collateralPropertyId,
+      r,           // availableChange (realized PnL)
+      0,
+      -credit,     // marginChange (unlock)
+      0,
+      'optionReduceSeller', params.blockHeight, txid
+    );
+  } else if (credit > 0) {
+    await TallyMap.updateBalance(
+      sellerAddr, collateralPropertyId,
+      -credit, 0, +credit, 0,
+      'optionMarginLock', params.blockHeight, txid
+    );
+  }
 
-        // Optionally, register these contracts in your system's registry
-        // this.registerOptionContracts(optionChain);
+  // 3) Buyer reduce (rare but allowed if they were short and are buying to cover)
+  if (params.buyerReducing) {
+    const r = Number(params.rpnlBuyer || 0);
+    // buyer realized PnL goes to available; if they had margin locked (short), also unlock proportional credit
+    await TallyMap.updateBalance(
+      buyerAddr, collateralPropertyId,
+      r, 0, 0, 0, // we’re not adjusting buyer margin here (credit is seller’s requirement)
+      'optionReduceBuyer', params.blockHeight, txid
+    );
+  }
 
-        return optionChain;
-    },
+  // 4) Record positions into margin map (hybrid, nested by ticker)
+  const mm = await MarginMap.getInstance(tMeta.seriesId);
+  await mm.applyOptionTrade(
+    sellerAddr,              // we write positions for both sides below
+    params.contractId,
+    -Math.abs(params.amount || 0), // seller delta negative (short if SELL)
+    params.price,
+    params.blockHeight,
+    credit
+  );
+  await mm.applyOptionTrade(
+    buyerAddr,
+    params.contractId,
+    +Math.abs(params.amount || 0), // buyer delta positive
+    params.price,
+    params.blockHeight,
+    0 // buyer doesn’t post credit margin in our model
+  );
 
-    // Helper function to calculate strike prices
-    calculateStrikePrices(assetPrice, percentInterval) {
-        // Logic to calculate an array of strike prices based on the asset price and percentage interval
-        // For simplicity, let's say we generate a fixed number of strike prices above and below the asset price
-        const strikePrices = [];
-        const numStrikes = 5; // Number of strike prices above and below the current price
+  // 5) Combo leg: if it’s an option, do same; if it’s a perp/future, route to contract trade
+  if (params.comboTicker && params.comboAmount) {
+    const cMeta = OptionsEngine.parseTicker(params.comboTicker);
+    if (cMeta && cMeta.type) {
+      // Option combo leg: mirror deltas (typically opposite side)
+      await mm.applyOptionTrade(
+        sellerAddr,
+        params.comboTicker,
+        -(Math.abs(params.comboAmount||0)), // seller side consistent
+        params.comboPrice || 0,
+        params.blockHeight,
+        0 // margin included in credit for the package already
+      );
+      await mm.applyOptionTrade(
+        buyerAddr,
+        params.comboTicker,
+        +(Math.abs(params.comboAmount||0)),
+        params.comboPrice || 0,
+        params.blockHeight,
+        0
+      );
+    } else {
+      // Perp/future combo leg → use existing contract trade pathway
+      await tradeContractChannel(sender, {
+        contractId: params.comboTicker,
+        amount: params.comboAmount,
+        price: params.comboPrice || 0,
+        columnAIsSeller: params.columnAIsSeller,
+        expiryBlock: params.expiryBlock,
+        isMaker: params.isMaker,
+        blockHeight: params.blockHeight
+      }, txid);
+    }
+  }
 
-        for (let i = -numStrikes; i <= numStrikes; i++) {
-            const strikePrice = assetPrice * (1 + (i * percentInterval / 100));
-            strikePrices.push(strikePrice);
-        }
+  // 6) (Optional) Persist trade history w/ rPNL fields for auditing
+  if (typeof TradeHistory?.recordTrade === 'function') {
+    await TradeHistory.recordTrade(
+      sellerAddr, params.contractId,
+      -Math.abs(params.amount||0), params.price,
+      Number(params.rpnlSeller||0),
+      params.blockHeight, txid
+    );
+    await TradeHistory.recordTrade(
+      buyerAddr, params.contractId,
+      +Math.abs(params.amount||0), params.price,
+      Number(params.rpnlBuyer||0),
+      params.blockHeight, txid
+    );
+  }
 
-        return strikePrices;
-    },
+  return res;
+};
 
 	async tradeBaiUrbun(tallyMap, marginMap, channelRegistry, channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercentage, price, amount, expiryBlock, tradeExpiryBlock) {
 	    // Validate inputs and check balances

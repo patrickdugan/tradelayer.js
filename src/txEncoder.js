@@ -476,12 +476,23 @@ const Encode = {
     },
 
     // Encode Create Option Chain Transaction
-    encodeCreateOptionChain: (params) => {
+    encodeOptionTrade: (params) => {
+        // params: { ticker, price, amount, seller, expiryBlock, isMaker, comboTicker?, comboPrice?, comboAmount? }
         const payload = [
-            params.contractSeriesId.toString(36),
-            params.strikePercentInterval.toString(36),
-            params.europeanStyle ? '1' : '0',
+            params.contractId,
+            Encode.encodeAmount(params.price).toString(36),
+            params.amount.toString(36),
+            params.columnAIsSeller,
+            params.expiryBlock.toString(36),
+            params.columnAIsMaker ? '1' : '0'
         ];
+
+        if (params.comboTicker && params.comboAmount) {
+            payload.push(params.comboTicker);
+            payload.push(Encode.encodeAmount(params.comboPrice).toString(36));
+            payload.push(params.comboAmount.toString(36));
+        }
+
         const type = 27;
         const typeStr = type.toString(36);
         return marker + typeStr + payload.join(',');
