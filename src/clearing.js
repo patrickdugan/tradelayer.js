@@ -1156,12 +1156,11 @@ static async extractCounterpartyPositions(matches, deleveragedPositions, marginM
   return deleveragedPositions;
 }
 
-
 /**
  * Settle all options expiring at or before currentBlock for a given series.
  * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
  */
-async function settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
+static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
   const mm = await MarginMap.getInstance(seriesId);
   const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
   if (!seriesInfo) return;

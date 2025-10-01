@@ -1463,7 +1463,7 @@ const Logic = {
   }
 
   return res;
-};
+},
 
 	async tradeBaiUrbun(tallyMap, marginMap, channelRegistry, channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercentage, price, amount, expiryBlock, tradeExpiryBlock) {
 	    // Validate inputs and check balances

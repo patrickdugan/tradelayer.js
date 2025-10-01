@@ -1002,7 +1002,7 @@ const Validity = {
         }
 
         return params;
-    }
+    },
 
 
         // 11: Grant Managed Token

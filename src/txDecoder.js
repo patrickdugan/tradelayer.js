@@ -478,9 +478,9 @@ const Decode = {
             txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
             txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
             markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
-            close: parts[3] === '1'
-            columnAIsSeller: parts[4]=== '1'
-            columnAIsMaker: parts[5]==='1'
+            close: parts[3] === '1',
+            columnAIsSeller: parts[4]=== '1',
+            columnAIsMaker: parts[5]==='1',
             macroBatch: parts[6] ==='1'
             // Boolean flag for closing trade
         };
@@ -541,7 +541,7 @@ const Decode = {
     }
 
     return result;
-}
+},
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };
