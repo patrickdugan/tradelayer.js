@@ -482,138 +482,219 @@ class Orderbook {
         return { orderBook: orderBookCopy, matches: matches };
     }
 
+    async processTokenMatches(matches, blockHeight, txid, channel) {
+      if (!Array.isArray(matches) || matches.length === 0) {
+        console.log('No valid matches to process');
+        return;
+      }
 
-    async processTokenMatches(matches, blockHeight, txid) {
-        if (!Array.isArray(matches) || matches.length === 0) {
-            console.log('No valid matches to process')
-            return;
+      // If it’s a channel fill, divert to channel handler and return early
+      if (channel) {
+        await this.processTokenChannelTrades(matches, blockHeight, txid);
+        return;
+      }
+
+      for (const match of matches) {
+        if (!match.sellOrder || !match.buyOrder) {
+          console.error('Invalid match object:', match);
+          continue;
         }
 
-        for (const match of matches) {
-            if (!match.sellOrder || !match.buyOrder) {
-                console.error('Invalid match object:', match)
-                continue;
-            }
+        const sellOrderAddress = match.sellOrder.senderAddress;
+        const buyOrderAddress  = match.buyOrder.senderAddress;
+        const sellOrderPropertyId = match.sellOrder.offeredPropertyId;   // Token A
+        const buyOrderPropertyId  = match.buyOrder.desiredPropertyId;    // Token B
 
-            const sellOrderAddress = match.sellOrder.senderAddress;
-            const buyOrderAddress = match.buyOrder.senderAddress;
-            const sellOrderPropertyId = match.sellOrder.offeredPropertyId;
-            const buyOrderPropertyId = match.buyOrder.desiredPropertyId;
-
-            if (match.sellOrder.blockTime < blockHeight) {
-                match.sellOrder.isNew = false
-                match.buyOrder.isNew = true
-            } else if (match.sellOrder.blockTime == match.buyOrder.blockTime) {
-                match.sellOrder.isNew = true
-                match.buyOrder.isNew = true
-            } else {
-                match.buyOrder.isNew = false
-                match.sellOrder.isNew = true
-            }
-
-            let takerFee, makerRebate, sellOrderAmountChange, buyOrderAmountChange = 0
-            let amountToTradeA = new BigNumber(match.amountOfTokenA)
-            let amountToTradeB = new BigNumber(match.amountOfTokenB)
-
-            if (txid == "5049a4ac9c8dd3f19278b780135eeb7900b0771e6b9829044900f9fb656b976a") {
-                console.log('looking into the problematic tx' + JSON.stringify(match) + 'times ' + match.sellOrder.blockTime + ' ' + match.buyOrder.blockTime)
-            }
-            console.log('amountTo Trade A and B ' + amountToTradeA + ' ' + amountToTradeB + ' ' + 'match values ' + match.amountOfTokenA + ' ' + match.amountOfTokenB)
-            // Determine order roles and calculate fees
-            if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
-                match.sellOrder.orderRole = 'maker';
-                match.buyOrder.orderRole = 'taker';
-                takerFee = amountToTradeB.times(0.0002)
-                console.log('taker fee ' + takerFee)
-                makerRebate = takerFee.div(2)
-                console.log('maker fee ' + makerRebate)
-                takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                console.log(' actual taker fee ' + takerFee)
-                await tallyMap.updateFees(buyOrderPropertyId, takerFee.toNumber())
-                console.log('about to calculate this supposed NaN ' + match.amountOfTokenA + ' ' + new BigNumber(match.amountOfTokenA) + ' ' + new BigNumber(match.amountOfTokenA).plus(makerRebate) + ' ' + new BigNumber(match.amountToTradeA).plus(makerRebate).toNumber)
-                sellOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
-                console.log('sell order amount change ' + sellOrderAmountChange)
-                buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber()
-
-            } else if (match.buyOrder.blockTime < match.sellOrder.blockTime) {
-                match.buyOrder.orderRole = 'maker';
-                match.sellOrder.orderRole = 'taker';
-                takerFee = amountToTradeA.times(0.0002)
-                makerRebate = takerFee.div(2)
-                takerFee = takerFee.div(2) //accounting for the half of the taker fee that goes to the maker
-                await tallyMap.updateFees(sellOrderPropertyId, takerFee.toNumber())
-                buyOrderAmountChange = new BigNumber(match.amountOfTokenA).plus(makerRebate).toNumber()
-                sellOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFee).toNumber()
-            } else if (match.buyOrder.blockTime == match.sellOrder.blockTime) {
-                match.buyOrder.orderRole = 'split';
-                match.sellOrder.orderRole = 'split';
-                var takerFeeA = amountToTradeA.times(0.0001)
-                var takerFeeB = amountToTradeB.times(0.0001)
-                await tallyMap.updateFees(buyOrderPropertyId, takerFeeA.toNumber())
-                await tallyMap.updateFees(sellOrderPropertyId, takerFeeB.toNumber())
-                sellOrderAmountChange = new BigNumber(match.amountOfTokenA).minus(takerFeeA).toNumber()
-                buyOrderAmountChange = new BigNumber(match.amountOfTokenB).minus(takerFeeB).toNumber()
-            }
-
-            // Debit the traded amount from the seller's reserve 
-            await tallyMap.updateBalance(
-                match.sellOrder.senderAddress,
-                match.sellOrder.offeredPropertyId,
-                0,  // Credit traded amount of Token B to available
-                -match.amountOfTokenA, // Debit the same amount from reserve
-                0, 0, true, false, false, txid
-            )
-            //and credit the opposite consideration to available
-
-            await tallyMap.updateBalance(
-                match.sellOrder.senderAddress,
-                match.sellOrder.desiredPropertyId,
-                match.amountOfTokenB,  // Credit traded amount of Token B to available
-                0, // Debit the same amount from reserve
-                0, 0, true, false, false, txid
-            )
-
-            // Update balance for the buyer
-            // Debit the traded amount from the buyer's reserve and credit it to available
-            await tallyMap.updateBalance(
-                match.buyOrder.senderAddress,
-                match.buyOrder.offeredPropertyId,
-                0,  // Credit traded amount of Token B to available
-                -match.amountOfTokenB, // Debit the same amount from reserve
-                0, 0, true, false, false, txid
-            )
-
-            await tallyMap.updateBalance(
-                match.buyOrder.senderAddress,
-                match.buyOrder.desiredPropertyId,
-                match.amountOfTokenA,  // Credit traded amount of Token B to available
-                0, // Debit the same amount from reserve
-                0, 0, true, false, false, txid
-            )
-
-            // Construct a trade object for recording
-            const trade = {
-                offeredPropertyId: match.sellOrder.offeredPropertyId,
-                desiredPropertyId: match.buyOrder.desiredPropertyId,
-                amountOffered: match.amountOfTokenA, // or appropriate amount
-                amountExpected: match.amountOfTokenB, // or appropriate amount
-                price: match.tradePrice,
-                buyerRole: match.buyOrder.orderRole,
-                sellerRole: match.sellOrder.orderRole,
-                takerFee: takerFee,
-                makerFee: makerFee,
-                block: blockHeight,
-                buyer: match.buyOrder.senderAddress,
-                seller: match.sellOrder.senderAddress,
-                takerTxId: txid
-            };
-
-            // Record the token trade
-            await this.recordTokenTrade(trade, blockHeight, txid)
-
+        // Tag maker/taker by time (stable, deterministic)
+        if (match.sellOrder.blockTime < match.buyOrder.blockTime) {
+          match.sellOrder.orderRole = 'maker';
+          match.buyOrder.orderRole  = 'taker';
+        } else if (match.buyOrder.blockTime < match.sellOrder.blockTime) {
+          match.buyOrder.orderRole  = 'maker';
+          match.sellOrder.orderRole = 'taker';
+        } else {
+          match.buyOrder.orderRole  = 'split';
+          match.sellOrder.orderRole = 'split';
         }
+
+        const amountToTradeA = new BigNumber(match.amountOfTokenA); // seller gives A
+        const amountToTradeB = new BigNumber(match.amountOfTokenB); // buyer gives B
+
+        let takerFee = new BigNumber(0);
+        let makerRebate = new BigNumber(0);
+
+        // Fees: 2 bps taker; 50% rebate to maker (1 bp); 1 bp retained as exchange fee.
+        if (match.sellOrder.orderRole === 'maker' && match.buyOrder.orderRole === 'taker') {
+          // taker pays in the asset they are giving (Token B here)
+          takerFee    = amountToTradeB.times(0.0002);
+          makerRebate = takerFee.div(2);
+          takerFee    = takerFee.div(2); // actual paid net by taker after rebate to maker
+
+          // Spot-fee accrual in B (contractId = null → revenues to Property 1 investors)
+          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null);
+
+          // Apply maker rebate to maker’s received asset (they receive B)
+          const sellOrderAmountChange = amountToTradeB.plus(makerRebate).decimalPlaces(8);
+          const buyOrderAmountChange  = amountToTradeA.minus(new BigNumber(0)); // taker receives A without a fee on A side
+
+          // Seller (maker): -A reserve, +B available (+ rebate)
+          await tallyMap.updateBalance(
+            sellOrderAddress, sellOrderPropertyId,
+            0, amountToTradeA.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            sellOrderAddress, buyOrderPropertyId,
+            sellOrderAmountChange.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          // Buyer (taker): -B reserve, +A available
+          await tallyMap.updateBalance(
+            buyOrderAddress, buyOrderPropertyId,
+            0, amountToTradeB.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            buyOrderAddress, sellOrderPropertyId,
+            amountToTradeA.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          // Record trade
+          await this.recordTokenTrade({
+            offeredPropertyId: sellOrderPropertyId,
+            desiredPropertyId: buyOrderPropertyId,
+            amountOffered: amountToTradeA.toNumber(),
+            amountExpected: amountToTradeB.toNumber(),
+            price: match.tradePrice,
+            buyerRole: match.buyOrder.orderRole,
+            sellerRole: match.sellOrder.orderRole,
+            takerFee: takerFee.toNumber(),
+            makerRebate: makerRebate.toNumber(),
+            block: blockHeight,
+            buyer: buyOrderAddress,
+            seller: sellOrderAddress,
+            takerTxId: txid
+          }, blockHeight, txid);
+
+        } else if (match.buyOrder.orderRole === 'maker' && match.sellOrder.orderRole === 'taker') {
+          // taker pays in the asset they are giving (Token A here)
+          takerFee    = amountToTradeA.times(0.0002);
+          makerRebate = takerFee.div(2);
+          takerFee    = takerFee.div(2);
+
+          // Spot-fee accrual in A (contractId = null)
+          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null);
+
+          // Apply maker rebate to maker’s received asset (maker receives A here)
+          const buyOrderAmountChange  = amountToTradeA.plus(makerRebate).decimalPlaces(8);
+          const sellOrderAmountChange = amountToTradeB.minus(new BigNumber(0));
+
+          // Seller (taker): -A reserve, +B available
+          await tallyMap.updateBalance(
+            sellOrderAddress, sellOrderPropertyId,
+            0, amountToTradeA.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            sellOrderAddress, buyOrderPropertyId,
+            amountToTradeB.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          // Buyer (maker): -B reserve, +A available (+ rebate)
+          await tallyMap.updateBalance(
+            buyOrderAddress, buyOrderPropertyId,
+            0, amountToTradeB.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            buyOrderAddress, sellOrderPropertyId,
+            buyOrderAmountChange.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          await this.recordTokenTrade({
+            offeredPropertyId: sellOrderPropertyId,
+            desiredPropertyId: buyOrderPropertyId,
+            amountOffered: amountToTradeA.toNumber(),
+            amountExpected: amountToTradeB.toNumber(),
+            price: match.tradePrice,
+            buyerRole: match.buyOrder.orderRole,
+            sellerRole: match.sellOrder.orderRole,
+            takerFee: takerFee.toNumber(),
+            makerRebate: makerRebate.toNumber(),
+            block: blockHeight,
+            buyer: buyOrderAddress,
+            seller: sellOrderAddress,
+            takerTxId: txid
+          }, blockHeight, txid);
+
+        } else {
+          // split blockTime case: each pays 1bp on the asset they give
+          const takerFeeA = amountToTradeA.times(0.0001).decimalPlaces(8, BigNumber.ROUND_FLOOR);
+          const takerFeeB = amountToTradeB.times(0.0001).decimalPlaces(8, BigNumber.ROUND_FLOOR);
+
+          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber(), null);
+          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber(), null);
+
+          // Seller: -A reserve, +B available (minus its own fee on B? fee is in the asset they GIVE, so no)
+          await tallyMap.updateBalance(
+            sellOrderAddress, sellOrderPropertyId,
+            0, amountToTradeA.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            sellOrderAddress, buyOrderPropertyId,
+            amountToTradeB.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          // Buyer: -B reserve, +A available
+          await tallyMap.updateBalance(
+            buyOrderAddress, buyOrderPropertyId,
+            0, amountToTradeB.negated().toNumber(), 0, 0, true, false, false, txid
+          );
+          await tallyMap.updateBalance(
+            buyOrderAddress, sellOrderPropertyId,
+            amountToTradeA.toNumber(), 0, 0, 0, true, false, false, txid
+          );
+
+          await this.recordTokenTrade({
+            offeredPropertyId: sellOrderPropertyId,
+            desiredPropertyId: buyOrderPropertyId,
+            amountOffered: amountToTradeA.toNumber(),
+            amountExpected: amountToTradeB.toNumber(),
+            price: match.tradePrice,
+            buyerRole: 'split',
+            sellerRole: 'split',
+            takerFee: new BigNumber(takerFeeA).plus(takerFeeB).toNumber(), // total fees collected
+            makerRebate: 0,
+            block: blockHeight,
+            buyer: buyOrderAddress,
+            seller: sellOrderAddress,
+            takerTxId: txid
+          }, blockHeight, txid);
+        }
+      }
     }
-  
+
+    async processTokenChannelTrades(matches, blockHeight, txid) {
+      console.log(`⚡ Processing ${matches.length} channel token matches at block ${blockHeight}`);
+
+      for (const match of matches) {
+        if (!match.sellOrder || !match.buyOrder) continue;
+
+        const sellAddr = match.sellOrder.senderAddress;
+        const buyAddr  = match.buyOrder.senderAddress;
+        const propA = match.sellOrder.offeredPropertyId;   // A
+        const propB = match.buyOrder.desiredPropertyId;    // B
+        const amtA  = new BigNumber(match.amountOfTokenA);
+        const amtB  = new BigNumber(match.amountOfTokenB);
+
+        // TODO: replace below with true channel ledger updates (HTLC/commitment updates, etc.)
+        // For now: same balance updates as spot path, so your economics and fee flow remain consistent.
+
+        // Debit seller reserve A, credit B available
+        await tallyMap.updateBalance(sellAddr, propA, 0, amtA.negated().toNumber(), 0, 0, true, false, /*channel*/ true, txid);
+        await tallyMap.updateBalance(sellAddr, propB, amtB.toNumber(), 0, 0, 0, true, false, /*channel*/ true, txid);
+
+        // Debit buyer reserve B, credit A available
+        await tallyMap.updateBalance(buyAddr, propB, 0, amtB.negated().toNumber(), 0, 0, true, false, /*channel*/ true, txid);
+        await tallyMap.updateBalance(buyAddr, propA, amtA.toNumber(), 0, 0, 0, true, false, /*channel*/ true, txid);
+      }
+    }
 
         async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
             const ContractRegistry = require('./contractRegistry.js')

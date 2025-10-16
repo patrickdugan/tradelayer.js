@@ -680,8 +680,6 @@ class Main {
             }
         }
 
-
-
     async blockHandlerBegin(blockData, blockHeight) {
         try {
             //const blockData = await TxIndex.fetchBlockData(blockHeight);

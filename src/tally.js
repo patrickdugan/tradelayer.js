@@ -587,12 +587,9 @@ static async loadFeeCacheForProperty(id) {
     static async updateFeeCache(propertyId, amount, contractId,stash,spendStash) {
         try {
             const db = await dbInstance.getDatabase('feeCache');
-
             const cacheId = `${propertyId}-${contractId}`;
-
             // ✅ Fetch the existing fee cache entry
             let existingEntry = await db.findOneAsync({ _id: cacheId });
-
             let currentValue = new BigNumber(existingEntry ? existingEntry.value : 0);
             let currentStash = new BigNumber(existingEntry?.stash ?? 0);
 

@@ -435,7 +435,7 @@ static async getIndexPrice(contractId, blockHeight) {
                 // Oracle-based contracts: 50% to contract's insurance fund, 50% to insurance fund 1
                 insuranceAmount = feeAmount.dividedBy(2).decimalPlaces(8, BigNumber.ROUND_DOWN);
                 stashAmount = feeAmount.minus(insuranceAmount).decimalPlaces(8, BigNumber.ROUND_UP); // Ensure remainder goes to stash
-                console.log('stash amount '+stashAmount +' '+stashAmount.toNumber())
+                console.log('stash amount '+stashAmount +' '+stashAmount.toNumber()+' insurance amount '+insuranceAmount)
             } else {
                 // Native contracts: 100% goes to buying property 1
                 buyAmount = feeAmount;
