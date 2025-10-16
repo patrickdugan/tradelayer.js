@@ -584,50 +584,177 @@ static async loadFeeCacheForProperty(id) {
 }
 
     // Method to update fee cache for a property
-    static async updateFeeCache(propertyId, amount, contractId,stash,spendStash) {
-        try {
-            const db = await dbInstance.getDatabase('feeCache');
-            const cacheId = `${propertyId}-${contractId}`;
-            // ✅ Fetch the existing fee cache entry
-            let existingEntry = await db.findOneAsync({ _id: cacheId });
-            let currentValue = new BigNumber(existingEntry ? existingEntry.value : 0);
-            let currentStash = new BigNumber(existingEntry?.stash ?? 0);
+    // tally.js
 
-            if(!stash&&!spendStash){
-                let updatedValue = currentValue.plus(amount).decimalPlaces(8).toNumber();
-                await db.updateAsync(
-                { _id: cacheId },
-                { $set: { value: updatedValue, contract: contractId } }, // Store `value` as a STRING
-                { upsert: true }
-                );
-                  //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);
-            }else if(stash&&!spendStash){
-                //the concept of stash is to maintain state if there is nothing to trade the fee for on the book of 1-<propertyId>
-                
-                let stashBN = new BigNumber(amount).decimalPlaces(8).toNumber()
-                let updatedValue = currentValue.minus(amount).decimalPlaces(8).toNumber()
-                let updatedStash = new BigNumber(currentStash).plus(stashBN).decimalPlaces(8).toNumber()
-                console.log('✅ about to write to feeCache '+amount+' '+currentValue+' '+updatedValue)
-                console.log(updatedStash+' '+currentStash)
-                await db.updateAsync(
-                { _id: cacheId },
-                { $set: { value: updatedValue, contract: contractId, stash: updatedStash } }, // Store `value` as a STRING
-                { upsert: true }
-                );
-                  //console.log(`✅ Updated FeeCache for property ${propertyId}, contract ${contractId} to ${updatedValue}.`);  
-            }else if(stash&&spendStash){
-                let updatedValue = currentStash.minus(amount).decimalPlaces(8).toNumber()
-                console.log('✅ about to write to feeCache '+amount+' '+currentValue+' '+updatedValue)
-                await db.updateAsync(
-                { _id: cacheId },
-                { $set: { value: currentValue, contract: contractId, stash: updatedValue } }, // Store `value` as a STRING
-                { upsert: true }
-                );
-            }
-            
-            } catch (error) {
-            console.error('🚨 Error updating FeeCache:', error);
-            }
+    toSats(x) { return new BigNumber(x).multipliedBy(1e8).integerValue(BigNumber.ROUND_FLOOR); }
+    fromSats(s) { return new BigNumber(s).dividedBy(1e8); }
+
+    static async resolveBlock(explicitBlock) {
+      if (explicitBlock !== undefined && explicitBlock !== null) return explicitBlock;
+      try {
+        const consensus = await dbInstance.getDatabase('consensus');
+        const t = await consensus.findOneAsync({ _id: 'TrackHeight' });
+        const m = await consensus.findOneAsync({ _id: 'MaxProcessedHeight' });
+        return (t && t.value) || (m && m.value) || null;
+      } catch { return null; }
+    }
+
+    static async loadFeeRow(db, cacheId) {
+      const row = await db.findOneAsync({ _id: cacheId });
+      return {
+        value: new BigNumber(row ? row.value || 0 : 0),
+        stash: new BigNumber(row ? row.stash || 0 : 0),
+        contract: row ? row.contract : undefined,
+      };
+    }
+    static async saveFeeRow(db, cacheId, { value, stash, contract }) {
+      await db.updateAsync(
+        { _id: cacheId },
+        {
+          $set: {
+            value: new BigNumber(value).decimalPlaces(8).toNumber(),
+            stash: new BigNumber(stash).decimalPlaces(8).toNumber(),
+            contract: contract,
+          },
+        },
+        { upsert: true }
+      );
+    }
+
+    /**
+     * NEW: accrueFee(propertyId, amount>0, contractId|null, block?)
+     * - spot (contractId == null): 50% to Insurance(Contract 1, Prop 1) now, 50% to VALUE for `${propertyId}-1`
+     * - oracle (non-native): 50% to contract insurance now, remainder to STASH on `${propertyId}-${contractId}`
+     * - native: 100% to VALUE on `${propertyId}-${contractId}`
+     */
+    static async accrueFee(propertyId, amount, contractId, block) {
+      const db = await dbInstance.getDatabase('feeCache');
+      const isSpot = (contractId === null || contractId === undefined);
+      const effectiveContractId = isSpot ? '1' : String(contractId);
+      const cacheId = `${propertyId}-${effectiveContractId}`;
+      const row = await loadFeeRow(db, cacheId);
+
+      const amtBN = new BigNumber(amount).decimalPlaces(8);
+      if (amtBN.lte(0)) return; // accrual must be > 0
+
+      const blk = await resolveBlock(block);
+
+      if (isSpot) {
+        // 50/50 split in integer sats
+        const feeSats = toSats(amtBN);
+        const insuranceSats = feeSats.idiv(2);
+        const valueSats = feeSats.minus(insuranceSats);
+        const insuranceAmt = fromSats(insuranceSats);
+        const valueAmt = fromSats(valueSats);
+
+        try {
+          const insurance = await Insurance.getInstance('1', false);
+          await insurance.deposit('1', insuranceAmt.toNumber(), blk);
+        } catch (e) {
+          console.error('❌ Spot fee insurance deposit failed:', e);
+        }
+
+        await saveFeeRow(db, cacheId, {
+          value: row.value.plus(valueAmt),
+          stash: row.stash,
+          contract: '1',
+        });
+        return;
+      }
+
+      // Contract path
+      const isNative = await ContractRegistry.isNativeContract(effectiveContractId).catch(() => false);
+
+      if (!isNative) {
+        // ORACLE: half to insurance now, exact remainder to STASH
+        const feeSats = toSats(amtBN);
+        const insuranceSats = feeSats.idiv(2);
+        const stashSats = feeSats.minus(insuranceSats);
+        const insuranceAmt = fromSats(insuranceSats);
+        const stashAmt = fromSats(stashSats);
+
+        try {
+          const insurance = await Insurance.getInstance(effectiveContractId, true);
+          await insurance.deposit(propertyId, insuranceAmt.toNumber(), blk);
+        } catch (e) {
+          console.error(`❌ Insurance deposit failed for contract ${effectiveContractId}:`, e);
+        }
+
+        await saveFeeRow(db, cacheId, {
+          value: row.value,                 // value stays for native-only
+          stash: row.stash.plus(stashAmt),  // stash grows until clearing consumes it
+          contract: effectiveContractId,
+        });
+        return;
+      }
+
+      // NATIVE: 100% to VALUE
+      await saveFeeRow(db, cacheId, {
+        value: row.value.plus(amtBN),
+        stash: row.stash,
+        contract: effectiveContractId,
+      });
+    }
+
+    /**
+     * NEW: adjustFeeCache(propertyId, contractId, { valueDelta?, stashDelta? })
+     * - Used by clearing to spend from VALUE/STASH when matching.
+     */
+    static async adjustFeeCache(propertyId, contractId, deltas) {
+      const db = await dbInstance.getDatabase('feeCache');
+      const effectiveContractId = (contractId === null || contractId === undefined) ? '1' : String(contractId);
+      const cacheId = `${propertyId}-${effectiveContractId}`;
+      const row = await loadFeeRow(db, cacheId);
+
+      const valueDelta = new BigNumber(deltas?.valueDelta || 0).decimalPlaces(8);
+      const stashDelta = new BigNumber(deltas?.stashDelta || 0).decimalPlaces(8);
+
+      await saveFeeRow(db, cacheId, {
+        value: row.value.plus(valueDelta),
+        stash: row.stash.plus(stashDelta),
+        contract: effectiveContractId,
+      });
+    }
+
+    /**
+     * BACK-COMPAT WRAPPER: updateFeeCache(propertyId, amount, contractId, stash?, spendStash?, block?)
+     * - DEPRECATED flags: `stash`, `spendStash` are ignored except to route to adjust.
+     * - If `amount > 0` and no flags → accrual
+     * - If `amount < 0` and no flags → consume VALUE by `amount`
+     * - If `stash==true && spendStash==true` → consume STASH by `amount` (clearing should call adjustFeeCache instead)
+     * - If `stash==true && !spendStash` → move VALUE→STASH by `amount` (prefer adjustFeeCache)
+     */
+    static async updateFeeCache(propertyId, amount, contractId, stash, spendStash) {
+      try {
+        const block = arguments.length >= 6 ? arguments[5] : undefined;
+
+        // Route “legacy” usages into the new primitives
+        if (stash === true && spendStash === true) {
+          // spend stash by amount
+          await adjustFeeCache(propertyId, contractId, { stashDelta: new BigNumber(amount).negated() });
+          return;
+        }
+        if (stash === true && spendStash !== true) {
+          // move VALUE -> STASH by amount
+          await adjustFeeCache(propertyId, contractId, { valueDelta: new BigNumber(amount).negated(), stashDelta: new BigNumber(amount) });
+          return;
+        }
+
+        const amtBN = new BigNumber(amount).decimalPlaces(8);
+        if (amtBN.gt(0)) {
+          // pure accrual
+          await accrueFee(propertyId, amtBN, contractId, block);
+          return;
+        }
+        if (amtBN.lt(0)) {
+          // consume VALUE only (stash consumption should be done in clearing via adjustFeeCache)
+          await adjustFeeCache(propertyId, contractId, { valueDelta: amtBN });
+          return;
+        }
+        // amt == 0 → no-op
+      } catch (e) {
+        console.error('🚨 Error in updateFeeCache:', e);
+      }
     }
 
     static async drawOnFeeCache(propertyId) {
