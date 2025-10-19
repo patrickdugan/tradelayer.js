@@ -943,8 +943,8 @@ const Logic = {
       const buyOrder = {
         offeredPropertyId,
         desiredPropertyId,
-        amountOffered,
-        amountExpected: amountDesired,
+        amountOffered: amountDesired,
+        amountExpected: amountOffered,
         blockTime: block,
         sender: buyerAddress,
         maker: buyerMaker   // attach maker flag
