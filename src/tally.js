@@ -839,68 +839,68 @@ static async loadFeeCacheForProperty(id) {
       });
     }
 
-// ---------- 4) drawOnFeeCache (compat shim; pull from VALUE/STASH) ----------
-/**
- * drawOnFeeCache(propertyId, contractId='1', opts?)
- * - Minimal compat: withdraw up to `opts.max` from VALUE first (then STASH if allowStash).
- * - Returns { spent } in token units (8 d.p.).
- */
-static async drawOnFeeCache(propertyId, contractId = '1', opts = {}) {
-  const { max = null, allowStash = false } = opts;
-  const db = await dbInstance.getDatabase('feeCache');
-  const effContractId = (contractId == null) ? '1' : String(contractId);
-  const cacheId = `${propertyId}-${effContractId}`;
-  const row = await TallyMap.loadFeeRow(db, cacheId);
+    // ---------- 4) drawOnFeeCache (compat shim; pull from VALUE/STASH) ----------
+    /**
+     * drawOnFeeCache(propertyId, contractId='1', opts?)
+     * - Minimal compat: withdraw up to `opts.max` from VALUE first (then STASH if allowStash).
+     * - Returns { spent } in token units (8 d.p.).
+     */
+    static async drawOnFeeCache(propertyId, contractId = '1', opts = {}) {
+      const { max = null, allowStash = false } = opts;
+      const db = await dbInstance.getDatabase('feeCache');
+      const effContractId = (contractId == null) ? '1' : String(contractId);
+      const cacheId = `${propertyId}-${effContractId}`;
+      const row = await TallyMap.loadFeeRow(db, cacheId);
 
-  const want = (max == null) ? row.value : BigNumber.min(new BigNumber(max), row.value);
-  if (want.lte(0)) {
-    if (!allowStash) return { spent: new BigNumber(0) };
-    const wantFromStash = (max == null) ? row.stash : BigNumber.min(new BigNumber(max), row.stash);
-    if (wantFromStash.lte(0)) return { spent: new BigNumber(0) };
+      const want = (max == null) ? row.value : BigNumber.min(new BigNumber(max), row.value);
+      if (want.lte(0)) {
+        if (!allowStash) return { spent: new BigNumber(0) };
+        const wantFromStash = (max == null) ? row.stash : BigNumber.min(new BigNumber(max), row.stash);
+        if (wantFromStash.lte(0)) return { spent: new BigNumber(0) };
 
-    // spend from STASH (sat-accurate)
-    const raw = toSatsDecimal(wantFromStash);
-    const sats = raw.integerValue(RD);
-    const spent = fromSats(sats);
+        // spend from STASH (sat-accurate)
+        const raw = toSatsDecimal(wantFromStash);
+        const sats = raw.integerValue(RD);
+        const spent = fromSats(sats);
 
-    await _accumulateDust(db, `adj:${cacheId}:stash`, raw.minus(sats), async ({ wholeSats }) => {
-      const r = await TallyMap.loadFeeRow(db, cacheId);
+        await _accumulateDust(db, `adj:${cacheId}:stash`, raw.minus(sats), async ({ wholeSats }) => {
+          const r = await TallyMap.loadFeeRow(db, cacheId);
+          await TallyMap.saveFeeRow(db, cacheId, {
+            value: r.value,
+            stash: r.stash.plus(fromSats(wholeSats)),
+            contract: effContractId,
+          });
+        });
+
+        await TallyMap.saveFeeRow(db, cacheId, {
+          value: row.value,
+          stash: row.stash.minus(spent),
+          contract: effContractId,
+        });
+        return { spent };
+      }
+
+      // spend from VALUE
+      const raw = toSatsDecimal(want);
+      const sats = raw.integerValue(RD);
+      const spent = fromSats(sats);
+
+      await _accumulateDust(db, `adj:${cacheId}:value`, raw.minus(sats), async ({ wholeSats }) => {
+        const r = await TallyMap.loadFeeRow(db, cacheId);
+        await TallyMap.saveFeeRow(db, cacheId, {
+          value: r.value.plus(fromSats(wholeSats)),
+          stash: r.stash,
+          contract: effContractId,
+        });
+      });
+
       await TallyMap.saveFeeRow(db, cacheId, {
-        value: r.value,
-        stash: r.stash.plus(fromSats(wholeSats)),
+        value: row.value.minus(spent),
+        stash: row.stash,
         contract: effContractId,
       });
-    });
-
-    await TallyMap.saveFeeRow(db, cacheId, {
-      value: row.value,
-      stash: row.stash.minus(spent),
-      contract: effContractId,
-    });
-    return { spent };
-  }
-
-  // spend from VALUE
-  const raw = toSatsDecimal(want);
-  const sats = raw.integerValue(RD);
-  const spent = fromSats(sats);
-
-  await _accumulateDust(db, `adj:${cacheId}:value`, raw.minus(sats), async ({ wholeSats }) => {
-    const r = await TallyMap.loadFeeRow(db, cacheId);
-    await TallyMap.saveFeeRow(db, cacheId, {
-      value: r.value.plus(fromSats(wholeSats)),
-      stash: r.stash,
-      contract: effContractId,
-    });
-  });
-
-  await TallyMap.saveFeeRow(db, cacheId, {
-    value: row.value.minus(spent),
-    stash: row.stash,
-    contract: effContractId,
-  });
-  return { spent };
-}
+      return { spent };
+    }
 
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height
