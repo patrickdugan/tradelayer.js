@@ -5,8 +5,62 @@ const uuid = require('uuid');
 const BigNumber = require('bignumber.js');
 const Insurance = require('./insurance.js')
 
-function toSats(x){ return new BigNumber(x).multipliedBy(1e8).integerValue(BigNumber.ROUND_FLOOR); }
-function fromSats(s) { return new BigNumber(s).dividedBy(1e8); }
+const SATS = new BigNumber(1e8);
+const RD = BigNumber.ROUND_DOWN;
+
+function toSatsDecimal(x) {
+  // raw sats (can be fractional before flooring)
+  return new BigNumber(x).times(SATS);
+}
+function toSats(x) {
+  // integer sats, never creates value
+  return toSatsDecimal(x).integerValue(RD);
+}
+function fromSats(s) {
+  return new BigNumber(s).div(SATS);
+}
+
+    /**
+     * Dust record is per (propertyId, contractId) in feeCache DB.
+     * We store potential fractional sats as a decimal BigNumber "dustSats"
+     * so many <1-sat remainders eventually roll up to whole sats.
+     *
+     * Schema: { dustSats: "decimal-string" }
+     * Key:    `dust::<propertyId>-<contractId>`
+     */
+    async function _loadDust(db, key) {
+      try {
+        const row = await db.get(`dust::${key}`);
+        const dustSats = new BigNumber(row?.dustSats ?? 0);
+        return { dustSats };
+      } catch {
+        return { dustSats: new BigNumber(0) };
+      }
+    }
+
+    async function _saveDust(db, key, dustSats) {
+      await db.put(`dust::${key}`, { dustSats: dustSats.toString() });
+    }
+
+    /**
+     * Accumulate dust (can be fractional sat units). When it reaches ≥ 1 sat,
+     * credit whole sats to Insurance and keep the fractional remainder.
+     *
+     * creditFn({wholeSats}) must deposit exactly `wholeSats` (integer) sats to Insurance.
+     */
+    async function _accumulateDust(db, key, addDustSatsDecimal, creditFn) {
+      if (!addDustSatsDecimal || new BigNumber(addDustSatsDecimal).eq(0)) return;
+
+      const { dustSats } = await _loadDust(db, key);
+      const next = dustSats.plus(addDustSatsDecimal);
+      const whole = next.integerValue(RD);
+      const frac  = next.minus(whole);
+
+      if (whole.gt(0)) {
+        await creditFn({ wholeSats: whole });
+      }
+      await _saveDust(db, key, frac);
+    }
 
 class TallyMap {
     static instance;
@@ -251,11 +305,6 @@ class TallyMap {
         static calculateTotal(balanceObj) {
             return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();
         }
-
-        static roundToEightDecimals(number) {
-            return Math.floor(number * 1e8) / 1e8;
-        }
-
 
         static async setInitializationFlag() {
             const db = await dbInstance.getDatabase('tallyMap');
@@ -623,40 +672,118 @@ static async loadFeeCacheForProperty(id) {
     }
 
     /**
-     * NEW: accrueFee(propertyId, amount>0, contractId|null, block?)
-     * - spot (contractId == null): 50% to Insurance(Contract 1, Prop 1) now, 50% to VALUE for `${propertyId}-1`
-     * - oracle (non-native): 50% to contract insurance now, remainder to STASH on `${propertyId}-${contractId}`
-     * - native: 100% to VALUE on `${propertyId}-${contractId}`
+     * updateFeeCache:
+     * - If contractId is null/undefined or '1' -> SPOT/native-1 revenue path: all -> STASH (your current behavior).
+     * - If non-1 (oracle/deriv) -> 50/50 split in integer sats: half Insurance NOW, half -> STASH.
+     * - All rounding remainders go to dust; dust pays out to Insurance once it reaches ≥1 sat.
+     */
+    static async updateFeeCache(propertyId, amount, contractId /* legacy flags ignored */, _a, _b) {
+      try {
+        const block = arguments.length >= 6 ? arguments[5] : undefined;
+
+        // Work in sats
+        const rawSats = toSatsDecimal(amount);
+        const feeSats = rawSats.integerValue(RD);
+        if (!feeSats.isFinite() || feeSats.lte(0)) return;
+
+        const db = await dbInstance.getDatabase('feeCache');
+        const blk = await TallyMap.resolveBlock(block);
+
+        // Accumulate conversion dust (fractional sat from amount->sats)
+        const convDust = rawSats.minus(feeSats); // [0, 1)
+        const effContractId = (contractId === null || contractId === undefined) ? '1' : String(contractId);
+        const dustKey = `${propertyId}-${effContractId}`;
+
+        await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
+          const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
+          await insurance.deposit(propertyId, fromSats(wholeSats).toNumber(), blk);
+        });
+
+        // SPOT or “1”
+        if (effContractId === '1') {
+          // 100% to STASH, no further splits
+          const cacheId = `${propertyId}-1`;
+          const row = await TallyMap.loadFeeRow(db, cacheId);
+          await TallyMap.saveFeeRow(db, cacheId, {
+            stash: row.stash.plus(fromSats(feeSats)),
+            contract: '1'
+          });
+          return;
+        }
+
+        // CONTRACT (non-1): split sats-exact → half insurance NOW, half to STASH
+        const insuranceSats = feeSats.idiv(2);
+        const stashSats     = feeSats.minus(insuranceSats);
+
+        // If feeSats was odd, 1 sat remainder is already accounted by integer math above.
+        // No extra remainder here other than convDust we already handled.
+
+        // 1) insurance NOW
+        try {
+          const insurance = await Insurance.getInstance(effContractId, true);
+          await insurance.deposit(propertyId, fromSats(insuranceSats).toNumber(), blk);
+        } catch (e) {
+          console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);
+        }
+
+        // 2) stash remainder
+        const cacheId = `${propertyId}-${effContractId}`;
+        const row = await TallyMap.loadFeeRow(db, cacheId);
+        await TallyMap.saveFeeRow(db, cacheId, {
+          stash: row.stash.plus(fromSats(stashSats)),
+          contract: effContractId
+        });
+
+      } catch (e) {
+        console.error('🚨 Error in updateFeeCache:', e);
+      }
+    }
+
+    /**
+     * accrueFee:
+     * - SPOT (contractId null/undefined): 50/50 split in integer sats → half Insurance NOW, half -> VALUE.
+     * - CONTRACT:
+     *    - Native -> 100% to VALUE (no insurance now).
+     *    - Oracle  -> 50/50 split in integer sats → half Insurance NOW, half -> STASH.
+     * - All rounding remainders funnel into dust and later pay to Insurance.
      */
     static async accrueFee(propertyId, amount, contractId, block) {
       const db = await dbInstance.getDatabase('feeCache');
+
+      // Work in sats
+      const rawSats = toSatsDecimal(amount);
+      const feeSats = rawSats.integerValue(RD);
+      if (feeSats.lte(0)) return;
+
       const isSpot = (contractId === null || contractId === undefined);
-      const effectiveContractId = isSpot ? '1' : String(contractId);
-      const cacheId = `${propertyId}-${effectiveContractId}`;
-      const row = await TallyMap.loadFeeRow(db, cacheId);
-
-      const amtBN = new BigNumber(amount).decimalPlaces(8);
-      if (amtBN.lte(0)) return; // accrual must be > 0
-
+      const effContractId = isSpot ? '1' : String(contractId);
+      const cacheId = `${propertyId}-${effContractId}`;
+      const dustKey = cacheId;
       const blk = await TallyMap.resolveBlock(block);
+
+      // Accumulate conversion dust
+      const convDust = rawSats.minus(feeSats); // [0,1)
+      await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
+        const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
+        await insurance.deposit(propertyId, fromSats(wholeSats).toNumber(), blk);
+      });
+
+      const row = await TallyMap.loadFeeRow(db, cacheId);
 
       if (isSpot) {
         // 50/50 split in integer sats
-        const feeSats = toSats(amtBN);
         const insuranceSats = feeSats.idiv(2);
-        const valueSats = feeSats.minus(insuranceSats);
-        const insuranceAmt = fromSats(insuranceSats);
-        const valueAmt = fromSats(valueSats);
+        const valueSats     = feeSats.minus(insuranceSats);
 
         try {
-          const insurance = await Insurance.getInstance('1', false);
-          await insurance.deposit('1', insuranceAmt.toNumber(), blk);
+          const ins = await Insurance.getInstance('1', false);
+          await ins.deposit('1', fromSats(insuranceSats).toNumber(), blk);
         } catch (e) {
           console.error('❌ Spot fee insurance deposit failed:', e);
         }
 
         await TallyMap.saveFeeRow(db, cacheId, {
-          value: row.value.plus(valueAmt),
+          value: row.value.plus(fromSats(valueSats)),
           stash: row.stash,
           contract: '1',
         });
@@ -664,39 +791,34 @@ static async loadFeeCacheForProperty(id) {
       }
 
       // Contract path
-      const isNative = await ContractRegistry.isNativeContract(effectiveContractId).catch(() => false);
-
+      const isNative = await ContractRegistry.isNativeContract(effContractId).catch(() => false);
       if (!isNative) {
         // ORACLE: half to insurance now, exact remainder to STASH
-        const feeSats = toSats(amtBN);
         const insuranceSats = feeSats.idiv(2);
-        const stashSats = feeSats.minus(insuranceSats);
-        const insuranceAmt = fromSats(insuranceSats);
-        const stashAmt = fromSats(stashSats);
+        const stashSats     = feeSats.minus(insuranceSats);
 
         try {
-          const insurance = await Insurance.getInstance(effectiveContractId, true);
-          await insurance.deposit(propertyId, insuranceAmt.toNumber(), blk);
+          const ins = await Insurance.getInstance(effContractId, true);
+          await ins.deposit(propertyId, fromSats(insuranceSats).toNumber(), blk);
         } catch (e) {
-          console.error(`❌ Insurance deposit failed for contract ${effectiveContractId}:`, e);
+          console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);
         }
 
         await TallyMap.saveFeeRow(db, cacheId, {
-          value: row.value,                 // value stays for native-only
-          stash: row.stash.plus(stashAmt),  // stash grows until clearing consumes it
-          contract: effectiveContractId,
+          value: row.value,
+          stash: row.stash.plus(fromSats(stashSats)),
+          contract: effContractId,
         });
         return;
       }
 
       // NATIVE: 100% to VALUE
       await TallyMap.saveFeeRow(db, cacheId, {
-        value: row.value.plus(amtBN),
+        value: row.value.plus(fromSats(feeSats)),
         stash: row.stash,
-        contract: effectiveContractId,
+        contract: effContractId,
       });
     }
-
     /**
      * NEW: adjustFeeCache(propertyId, contractId, { valueDelta?, stashDelta? })
      * - Used by clearing to spend from VALUE/STASH when matching.
@@ -717,92 +839,68 @@ static async loadFeeCacheForProperty(id) {
       });
     }
 
-    /**
-     * BACK-COMPAT WRAPPER: updateFeeCache(propertyId, amount, contractId, stash?, spendStash?, block?)
-     * - DEPRECATED flags: `stash`, `spendStash` are ignored except to route to adjust.
-     * - If `amount > 0` and no flags → accrual
-     * - If `amount < 0` and no flags → consume VALUE by `amount`
-     * - If `stash==true && spendStash==true` → consume STASH by `amount` (clearing should call adjustFeeCache instead)
-     * - If `stash==true && !spendStash` → move VALUE→STASH by `amount` (prefer adjustFeeCache)
-     */   
-    static async updateFeeCache(propertyId, amount, contractId /* legacy flags ignored */, _a, _b) {
-      try {
-        const block = arguments.length >= 6 ? arguments[5] : undefined;
+// ---------- 4) drawOnFeeCache (compat shim; pull from VALUE/STASH) ----------
+/**
+ * drawOnFeeCache(propertyId, contractId='1', opts?)
+ * - Minimal compat: withdraw up to `opts.max` from VALUE first (then STASH if allowStash).
+ * - Returns { spent } in token units (8 d.p.).
+ */
+static async drawOnFeeCache(propertyId, contractId = '1', opts = {}) {
+  const { max = null, allowStash = false } = opts;
+  const db = await dbInstance.getDatabase('feeCache');
+  const effContractId = (contractId == null) ? '1' : String(contractId);
+  const cacheId = `${propertyId}-${effContractId}`;
+  const row = await TallyMap.loadFeeRow(db, cacheId);
 
-        const amtBN = new BigNumber(amount).decimalPlaces(8);
-        if (!amtBN.isFinite() || amtBN.lte(0)) {
-          // accrual-only; negatives/zeros ignored in this refactor
-          return;
-        }
+  const want = (max == null) ? row.value : BigNumber.min(new BigNumber(max), row.value);
+  if (want.lte(0)) {
+    if (!allowStash) return { spent: new BigNumber(0) };
+    const wantFromStash = (max == null) ? row.stash : BigNumber.min(new BigNumber(max), row.stash);
+    if (wantFromStash.lte(0)) return { spent: new BigNumber(0) };
 
-        const db = await dbInstance.getDatabase('feeCache');
+    // spend from STASH (sat-accurate)
+    const raw = toSatsDecimal(wantFromStash);
+    const sats = raw.integerValue(RD);
+    const spent = fromSats(sats);
 
-        // SPOT or native property-1 revenue path
-        const isSpotOrOne = (contractId === null || contractId === undefined || String(contractId) === '1');
-        if (isSpotOrOne) {
-          const cacheId = `${propertyId}-1`;
-          const row = await TallyMap.loadFeeRow(db, cacheId);
-          // everything goes to STASH
-          await TallyMap.saveFeeRow(db, cacheId, { stash: row.stash.plus(amtBN), contract: '1' });
-          return;
-        }
+    await _accumulateDust(db, `adj:${cacheId}:stash`, raw.minus(sats), async ({ wholeSats }) => {
+      const r = await TallyMap.loadFeeRow(db, cacheId);
+      await TallyMap.saveFeeRow(db, cacheId, {
+        value: r.value,
+        stash: r.stash.plus(fromSats(wholeSats)),
+        contract: effContractId,
+      });
+    });
 
-        // CONTRACT path (non-1): split sats-exact → half insurance NOW, half to STASH
-        const effectiveContractId = String(contractId);
-        const feeSats = toSats(amtBN);
-        const insuranceSats = feeSats.idiv(2);
-        const stashSats = feeSats.minus(insuranceSats);
-        const insuranceAmt = fromSats(insuranceSats);
-        const stashAmt = fromSats(stashSats);
+    await TallyMap.saveFeeRow(db, cacheId, {
+      value: row.value,
+      stash: row.stash.minus(spent),
+      contract: effContractId,
+    });
+    return { spent };
+  }
 
-        // 1) deposit half to this contract's insurance now
-        const blk = await TallyMap.resolveBlock(block);
-        try {
-          const isOracle = true; // non-1 contracts here are per your model oracle/derivs; set true to use oracle flavor
-          const insurance = await Insurance.getInstance(effectiveContractId, isOracle);
-          await insurance.deposit(propertyId, insuranceAmt.toNumber(), blk);
-        } catch (e) {
-          console.error(`❌ Insurance deposit failed for contract ${effectiveContractId}:`, e);
-          // optional: accumulate a 'pendingInsurance' side-cache if you want to recover later
-        }
+  // spend from VALUE
+  const raw = toSatsDecimal(want);
+  const sats = raw.integerValue(RD);
+  const spent = fromSats(sats);
 
-        // 2) stash the remainder for buybacks later
-        const cacheId = `${propertyId}-${effectiveContractId}`;
-        const row = await TallyMap.loadFeeRow(db, cacheId);
-        await TallyMap.saveFeeRow(db, cacheId, { stash: row.stash.plus(stashAmt), contract: effectiveContractId });
-      } catch (e) {
-        console.error('🚨 Error in updateFeeCache:', e);
-      }
-    }
+  await _accumulateDust(db, `adj:${cacheId}:value`, raw.minus(sats), async ({ wholeSats }) => {
+    const r = await TallyMap.loadFeeRow(db, cacheId);
+    await TallyMap.saveFeeRow(db, cacheId, {
+      value: r.value.plus(fromSats(wholeSats)),
+      stash: r.stash,
+      contract: effContractId,
+    });
+  });
 
-    static async drawOnFeeCache(propertyId) {
-        await this.loadFeeCacheFromDB();
-
-        if (!this.feeCache.has(propertyId)) {
-            console.log(`No fee cache available for property ID ${propertyId}`);
-            return;
-        }
-
-        const feeAmount = this.feeCache.get(propertyId);
-        if (feeAmount <= 0) {
-            console.log(`Insufficient fee cache for property ID ${propertyId}`);
-            return;
-        }
-
-        // Logic to match with standing sell orders of property ID 1
-        // Adjust this logic based on how you handle order matching
-        // ...
-
-        // Deduct the matched amount from the fee cache
-        this.feeCache.set(propertyId, this.feeCache.get(propertyId) - matchedAmount);
-
-        // Insert the purchased property ID 1 units into the insurance fund
-        // Adjust this logic to match your insurance fund implementation
-        // ...
-
-        // Save the updated fee cache to the database
-        await this.saveFeeCacheToDB();
-    }
+  await TallyMap.saveFeeRow(db, cacheId, {
+    value: row.value.minus(spent),
+    stash: row.stash,
+    contract: effContractId,
+  });
+  return { spent };
+}
 
     async applyDeltasSinceLastHeight(lastHeight) {
         // Retrieve and apply all deltas from lastHeight to the current height

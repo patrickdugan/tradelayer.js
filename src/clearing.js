@@ -133,6 +133,9 @@ class Clearing {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
                     if(difference>0.00000001||difference<-0.00000001){
                          throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                    }else if(difference==-0.00000001){
+                        TallyMap.recordTallyMapDelta('system',block,1,difference,0,0,0,0,0,'salvageDust','')
+                        Insurance.deposit(1,0.00000001,block)
                     }
                 } else {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()

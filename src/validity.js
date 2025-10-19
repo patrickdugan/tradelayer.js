@@ -1769,8 +1769,6 @@ const Validity = {
             return { valid: true, reason: '' };
         },
 
-
-
         // 20: Trade Tokens Channel
         validateTradeTokensChannel: async (sender, params, txid) => {
             params.reason = '';
@@ -1818,6 +1816,11 @@ const Validity = {
                 params.reason += "Cannot trade token against its own type"
             }
 
+            if(params.propertyIdOffered==0||params.propertyIdDesired==0){
+                params.valid=false
+                params.reason += "Should be a UTXO trade"
+            }
+
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
             if(commitAddressA==null&&commitAddressB==null){
                 params.valid=false
@@ -1862,19 +1865,18 @@ const Validity = {
             let propertyIdDesiredString = params.propertyIdDesired.toString()
             let sufficientOffered 
             let sufficientDesired
-
            
             if(params.columnAIsOfferer==true){
                 balanceA = channel.A[propertyIdOfferedString]
                 balanceB = channel.B[propertyIdDesiredString]
                 
-                if (balanceA < totalInitialMargin) {
+                if (balanceA < params.amountOffered) {
                     params.valid = false;
-                    params.reason += `Insufficient channel balance in A (need ${totalInitialMargin}, found ${balanceA}); `;
+                    params.reason += `Insufficient channel balance in A (need ${params.amountOffered}, found ${balanceA}); `;
                 }
-                if (balanceB < totalInitialMargin) {
+                if (balanceB < params.amountDesired) {
                     params.valid = false;
-                    params.reason += `Insufficient channel balance in B (need ${totalInitialMargin}, found ${balanceB}); `;
+                    params.reason += `Insufficient channel balance in B (need ${params.amountDesired}, found ${balanceB}); `;
                 }
                 if (!params.valid) {
                     console.log('Rejecting for insufficient channel column balance: ' + JSON.stringify(params));
@@ -1895,16 +1897,16 @@ const Validity = {
                     params.reason += "Column B has insufficient balance for amountDesired"
                 }
             }else if(params.columnAIsOfferer==false){
-                balanceA = channel.A[propertyIdOfferedString]
-                balanceB = channel.B[propertyIdDesiredString]
+                balanceA = channel.A[propertyIdDesiredString]
+                balanceB = channel.B[propertyIdOfferedString]
 
-                if (balanceA < totalInitialMargin) {
+                if (balanceA < params.amountDesired) {
                     params.valid = false;
-                    params.reason += `Insufficient channel balance in A (need ${totalInitialMargin}, found ${balanceA}); `;
+                    params.reason += `Insufficient channel balance in A (need ${params.amountDesired}, found ${balanceA}); `;
                 }
-                if (balanceB < totalInitialMargin) {
+                if (balanceB < params.amountOffered) {
                     params.valid = false;
-                    params.reason += `Insufficient channel balance in B (need ${totalInitialMargin}, found ${balanceB}); `;
+                    params.reason += `Insufficient channel balance in B (need ${params.amountOffered}, found ${balanceB}); `;
                 }
                 if (!params.valid) {
                     console.log('Rejecting for insufficient channel column balance: ' + JSON.stringify(params));
@@ -1917,13 +1919,13 @@ const Validity = {
                 console.log('validating token channel trade columnB is offerer'+balanceA+' '+balanceB+' '+channel.A+' '+channel.B)
                 console.log('sufficient channel? '+JSON.stringify(hasSufficientA)+' '+JSON.stringify(hasSufficientB))
                
-                if(balanceA<params.amountDesired||!hasSufficientA.hasSufficient){
+                if(balanceA<params.amountOffered||!hasSufficientA.hasSufficient){
                     params.valid=false
-                    params.reason += "Column A has insufficient balance for amountDesired"
+                    params.reason += "Column A has insufficient balance for amountOffered"
                 }
-                if(balanceB<params.amountOffered||!hasSufficientB.hasSufficient){
+                if(balanceB<params.amountDesired||!hasSufficientB.hasSufficient){
                     params.valid=false
-                    params.reason += "Column B has insufficient balance for amountOffered"
+                    params.reason += "Column B has insufficient balance for amountDesired"
                 }
             }
 
