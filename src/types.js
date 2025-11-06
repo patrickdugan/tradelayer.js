@@ -357,11 +357,11 @@ const Types = {
                 params = await Validity.validatePayToTokens(sender, params, txId)
                 break;
             case 27:
-                params = Decode.decodeCreateOptionChain(encodedPayload.substr(index));
+                params = Decode.decodeOptionTrade(encodedPayload.substr(index));
                 params.block=block 
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateCreateOptionChain(sender, params, txId)
+                params = await Validity.validateOptionTrade(sender, params, txId)
                 break;
             case 28:
                 params = Decode.decodeTradeBaiUrbun(encodedPayload.substr(index));
@@ -378,11 +378,11 @@ const Types = {
                 params = await Validity.validateTradeMurabaha(sender, params, txId)
                 break;
             case 30:
-                params = Decode.decodeIssueInvoice(encodedPayload.substr(index));
+                params = Decode.stakeFraudProof(encodedPayload.substr(index));
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateIssueInvoice(sender, params, txId)
+                params = await Validity.validateStake(sender, params, txId)
                 break;    
             case 31:
                 params = Decode.decodeBatchSettlement(encodedPayload.substr(index));

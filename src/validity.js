@@ -2692,7 +2692,7 @@ const Validity = {
     },
 
     // 30: Issue Invoice
-    validateIssueInvoice: (params, invoiceRegistry, tallyMap) => {
+    validateStakeFraudProof: (params, invoiceRegistry, tallyMap) => {
         // Check if the issuer has sufficient balance of the property to receive payment
         const hasSufficientBalance = tallyMap.hasSufficientBalance(params.issuerAddress, params.propertyIdToReceivePayment, params.amount);
         // Validate invoice terms (due date, collateral, etc.)

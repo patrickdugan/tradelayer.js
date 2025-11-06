@@ -31,7 +31,7 @@ const Encode = {
             params.initialAmount?.toString(36) ?? '0',
             params.ticker,
             params.whitelists.map(val => val?.toString(36) ?? '0').join(','),
-            params.managed ? '1' : '0',
+            params.managed ? '1' : '0', //turn into enum
             params.backupAddress,
             params.nft ? '1' : '0',
         ];
@@ -248,6 +248,7 @@ const Encode = {
             params.backupAddress,
             params.whitelists.map(whitelist => whitelist?.toString(36) ?? '0').join(','),
             params.lag?.toString(36) ?? '0',
+            params.enum
         ];
         const type = 13;
         const typeStr = type?.toString(36) ?? '0';
@@ -261,6 +262,7 @@ const Encode = {
             params.propertyid?.toString(36) ?? '0',
             amountGranted?.toString(36) ?? '0',
             params.addressToGrantTo,
+            params?.dlcHash
         ];
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';
@@ -531,7 +533,7 @@ const Encode = {
     },
 
     // Encode Issue Invoice Transaction
-    encodeIssueInvoice: (params) => {
+    encodeStakeFraudProof: (params) => {
         const payload = [
             params.propertyIdToReceivePayment?.toString(36) ?? '0',
             params.amount?.toString(36) ?? '0',
