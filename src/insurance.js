@@ -41,47 +41,53 @@ class InsuranceFund {
     }
 
         /** 💰 Deposit funds into the insurance fund */
-   async deposit(propertyId, amount, block) {
-    await this.loadFromSnapshot(); // Ensure you're always starting from the latest state
+  async deposit(propertyId, amount, block) {
+    // Always load latest state
+    await this.loadFromSnapshot();
 
-    let propertyFound = false;
-
-    for (const balance of this.balances) {
-        if (String(balance.propertyId) === String(propertyId)) {
-            balance.amountAvailable = new BigNumber(balance.amountAvailable || 0)
-                .plus(new BigNumber(amount))
-                .decimalPlaces(8)
-                .toNumber();
-            propertyFound = true;
-            break;
-        }
+    // Normalize and prepare precise inputs
+    const propId = propertyId != null ? propertyId.toString() : "unknown";
+    const amtBN  = new BigNumber(amount || 0);
+    if (!amtBN.isFinite() || amtBN.lte(0)) {
+        console.warn(`⚠️ Ignoring invalid or zero deposit for ${propId}`);
+        return;
     }
 
-    if (!propertyFound) {
-        this.balances.push({
-            propertyId: propertyId.toString(),
-            amountAvailable: new BigNumber(amount).decimalPlaces(8).toNumber()
-        });
+    // Find existing balance (match tolerant to numeric/string)
+    let balance = this.balances.find(b => String(b.propertyId) === propId);
+
+    if (balance) {
+        const before = new BigNumber(balance.amountAvailable || 0);
+        balance.amountAvailable = before
+            .plus(amtBN)
+            .decimalPlaces(8, BigNumber.ROUND_HALF_UP)
+            .toNumber();
+    } else {
+        balance = {
+            propertyId: propId,
+            amountAvailable: amtBN.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber()
+        };
+        this.balances.push(balance);
     }
 
-    console.log(`🏦 Depositing ${amount} into property ${propertyId} on contract ${this.contractSeriesId}`);
+    console.log(`🏦 Depositing ${amtBN.toFixed(8)} into property ${propId} on contract ${this.contractSeriesId}`);
     console.log(`✅ Updated balances:`, this.balances);
 
+    // Log and snapshot
     await this.recordEvent("deposit", {
-        contractId: this.contractSeriesId,
-        propertyId,
-        amount: new BigNumber(amount).decimalPlaces(8).toNumber()
+        contractId: this.contractSeriesId?.toString() ?? "unknown",
+        propertyId: propId,
+        amount: amtBN.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber()
     }, block);
 
-    // Build snapshot explicitly
     const snapshot = {
         balances: this.balances,
-        contractSeriesId: this.contractSeriesId,
+        contractSeriesId: this.contractSeriesId?.toString() ?? "unknown",
         hedgeRatio: this.hedgeRatio,
         block
     };
 
-    await this.saveSnapshot(snapshot); // Pass it directly
+    await this.saveSnapshot(snapshot);
 }
 
 

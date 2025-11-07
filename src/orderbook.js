@@ -531,7 +531,7 @@ class Orderbook {
           takerFee    = takerFee.div(2); // actual paid net by taker after rebate to maker
 
           // Spot-fee accrual in B (contractId = null → revenues to Property 1 investors)
-          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null);
+          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null,blockHeight);
 
           // Apply maker rebate to maker’s received asset (they receive B)
           const sellOrderAmountChange = amountToTradeB.plus(makerRebate).decimalPlaces(8);
@@ -581,7 +581,7 @@ class Orderbook {
           takerFee    = takerFee.div(2);
 
           // Spot-fee accrual in A (contractId = null)
-          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null);
+          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFee.decimalPlaces(8, BigNumber.ROUND_FLOOR).toNumber(), null,blockHeight);
 
           // Apply maker rebate to maker’s received asset (maker receives A here)
           const buyOrderAmountChange  = amountToTradeA.plus(makerRebate).decimalPlaces(8);
@@ -628,8 +628,8 @@ class Orderbook {
           const takerFeeA = amountToTradeA.times(0.0001).decimalPlaces(8, BigNumber.ROUND_FLOOR);
           const takerFeeB = amountToTradeB.times(0.0001).decimalPlaces(8, BigNumber.ROUND_FLOOR);
 
-          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber(), null);
-          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber(), null);
+          await tallyMap.updateFeeCache(buyOrderPropertyId, takerFeeA.toNumber(), null,blockHeight);
+          await tallyMap.updateFeeCache(sellOrderPropertyId, takerFeeB.toNumber(), null,blockHeight);
 
           // Seller: -A reserve, +B available (minus its own fee on B? fee is in the asset they GIVE, so no)
           await tallyMap.updateBalance(
@@ -1328,19 +1328,19 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
 					if (buyerFee.isGreaterThan(0)&&sellerFee.isLessThan(0)) {
 					  const feeToCache = buyerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
 					  console.log('buyer fee to cache '+feeToCache)
-					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.buyOrder.contractId);
+					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.buyOrder.contractId,currentBlockHeight);
 					}
 
 					// Seller side: same treatment
 					if (sellerFee.isGreaterThan(0)&&buyerFee.isLessThan(0)) {
 					  const feeToCache = sellerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
 					  console.log('seller fee to cache '+feeToCache)
-					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.sellOrder.contractId);
+					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.sellOrder.contractId,currentBlockHeight);
 					}
 
 					if(buyerFee.isGreaterThan(0)&&sellerFee.isGreaterThan(0)){
-					  await TallyMap.updateFeeCache(collateralPropertyId, sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId);
-					  await TallyMap.updateFeeCache(collateralPropertyId, buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId);
+					  await TallyMap.updateFeeCache(collateralPropertyId, sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId,currentBlockHeight);
+					  await TallyMap.updateFeeCache(collateralPropertyId, buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId,currentBlockHeight);
 					}
 
                     //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
@@ -1721,7 +1721,7 @@ static async cancelExcessOrders(address, contractId, obForContract, requiredMarg
                                 await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
                             }
                         } 
-                       const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
+                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
                         //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
@@ -1992,7 +1992,7 @@ async processContractMatchesShort(matches, currentBlockHeight, channel) {
     await validateMatch(match);
 
     // 2. Calculate fees & update fee caches.
-    const feeInfo = await calculateFees(match, channel);
+    const feeInfo = await calculateFees(match, channel,currentBlockHeight);
     // 3. Determine if flip logic applies and update collateral.
     const flipData = await handleFlipLogic(match, feeInfo, currentBlockHeight);
     
@@ -2050,7 +2050,7 @@ async validateMatch(match) {
 }
 
 // 2. Calculate fees for the match and update fee caches
-async calculateFees(match, channel) {
+async calculateFees(match, channel,block) {
   // (Assume you have a calculateFee function available.)
   const buyerFee = calculateFee(
     match.buyOrder.amount,
@@ -2072,8 +2072,8 @@ async calculateFees(match, channel) {
     match.notionalValue,
     channel
   );
-  await TallyMap.updateFeeCache(match.collateralPropertyId, buyerFee, match.buyOrder.contractId);
-  await TallyMap.updateFeeCache(match.collateralPropertyId, sellerFee, match.buyOrder.contractId);
+  await TallyMap.updateFeeCache(match.collateralPropertyId, buyerFee, match.buyOrder.contractId,block);
+  await TallyMap.updateFeeCache(match.collateralPropertyId, sellerFee, match.buyOrder.contractId,block);
   
   // Return fee info object. (You can add more properties as needed.)
   return { buyerFee, sellerFee, buyFeeFromMargin: false, sellFeeFromMargin: false };

@@ -44,7 +44,6 @@ const VolumeIndex = require('./volumeIndex.js')
 const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Oracles = require('./oracle.js')
-
 const Activation = require('./activation.js')
 let activation
 
@@ -322,17 +321,15 @@ class Main {
                 this.parseBlock = blockHeight
                 if(blockHeight%10000==1){console.log('parsing towards real-time mode '+blockHeight)}
                 const blockData = txByBlockHeight[blockHeight];
-                const skip = true
+                let skip = true
                 //if(blockHeight%1000){console.log('block consensus processing '+blockHeight)}
                 if (blockData) {
-                    if(blockHeight==3496379||blockHeight==3496378){
-                    //console.log('troubleshooting commit/utxo-trade-combo '+JSON.stringify(blockData)+' '+'now funding part '+JSON.stringify(blockData.fundingTx)+' '+JSON.stringify(blockData.tradeTx))
-                    }
                     // First process funding transactions
                     const skips = await this.processTxSet(blockData.fundingTx, blockHeight);
-
+                    console.log('skips? '+skips)
                     // Then process trade transactions
                     const skips2 = await this.processTxSet(blockData.tradeTx, blockHeight);
+                    console.log('skips 2? '+skips)
                     if((skips+skips2)<(blockData.fundingTx.length+blockData.tradeTx.length)){
                         console.log('skip to my lou my darlin '+skips +' '+skips2+' '+blockData.fundingTx.length+' '+blockData.tradeTx.length)
                         skip=false
@@ -343,9 +340,8 @@ class Main {
                 }
 
                 // Handle cumulative volumes and vesting after each block
-                //console.log('skip block? '+skip)
+                console.log('skip block? '+skip)
                 if(skip==false){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
-                //    console.log('skip block '+blockHeight+' '+skip)
                     const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
                     const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
                     if (thisBlockVolumes.global > 0){
@@ -365,7 +361,7 @@ class Main {
 
                     // Additional processing steps like withdrawal and clearing
                     await Channels.processWithdrawals(blockHeight);
-                    await Clearing.clearingFunction(blockHeight);
+                    await Clearing.clearingFunction(blockHeight,false);
                 }
 
                 maxProcessedHeight = blockHeight;
@@ -450,55 +446,67 @@ class Main {
                     }
                 }
             }
+            return skips
         }
 
 
-        async processTx(txSet, blockHeight){
-            for (const txData of txSet) {
-                        console.log('tx data in real-time'+JSON.stringify(txData))
-                        let txId= txData.txId
-                        if (await Consensus.checkIfTxProcessed(txId)) {
-                            return;
-                        }
+        async processTx(txSet, blockHeight) {
+              let processedAny = false;
 
-                        var payload = txData.payload
+              for (const txData of txSet) {
+                console.log('tx data in real-time' + JSON.stringify(txData));
+                const txId = txData.txId;
 
-                        const marker = 'tl';
-                        const type = parseInt(payload.slice(0, 1).toString(36), 36);
-                        payload = payload.slice(1, payload.length).toString(36);
+                if (await Consensus.checkIfTxProcessed(txId)) {
+                  // We *skip* this tx, but keep going in case there are new ones
+                  continue;
+                }
 
-                        const senderAddress = txData.sender.senderAddress;
-                        const referenceAddress = txData.reference;
-                        const senderUTXO = txData.sender.amount;
-                        const referenceUTXO = txData.reference.amount / COIN;
-                        console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
-                        const decodedParams = await Types.decodePayload(txId, type, marker, payload, senderAddress, referenceAddress, senderUTXO, referenceUTXO,blockHeight);
-                        decodedParams.block = blockHeight;
+                let payload = txData.payload;
+                const marker = 'tl';
 
-                        if (decodedParams.type > 0) {
-                            const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
-                            if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
-                                decodedParams.valid = false;
-                                decodedParams.reason += 'Tx not yet activated despite being otherwise valid ';
-                            } else if ((blockHeight < activationBlock) && (decodedParams.valid == true)) {
-                                decodedParams.valid = false;
-                                decodedParams.reason += 'Tx not yet activated in addition to other invalidity issues ';
-                            }
-                        }
+                const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                payload = payload.slice(1, payload.length).toString(36);
 
-                        if (decodedParams.valid === true) {
-                            await Consensus.markTxAsProcessed(txId, decodedParams);
-                            console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
-                            await Logic.typeSwitch(type, decodedParams);
-                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                        } else {
-                            await Consensus.markTxAsProcessed(txId, decodedParams);
-                            await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
-                            console.log('invalid tx ' + decodedParams.reason);
-                        }
-                    }
-                    return 
-        }
+                const senderAddress    = txData.sender.senderAddress;
+                const referenceAddress = txData.reference;
+                const senderUTXO       = txData.sender.amount;
+                const referenceUTXO    = txData.reference.amount / COIN;
+
+                console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
+
+                const decodedParams = await Types.decodePayload(
+                  txId, type, marker, payload,
+                  senderAddress, referenceAddress,
+                  senderUTXO, referenceUTXO,
+                  blockHeight
+                );
+                decodedParams.block = blockHeight;
+
+                // activation checks as you already have...
+                if (decodedParams.type > 0) {
+                  const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
+                  if (blockHeight < activationBlock) {
+                    decodedParams.valid = false;
+                    decodedParams.reason += 'Tx not yet activated ';
+                  }
+                }
+
+                await Consensus.markTxAsProcessed(txId, decodedParams);
+                await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+
+                if (decodedParams.valid === true) {
+                  processedAny = true;
+                  console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
+                  await Logic.typeSwitch(type, decodedParams);
+                } else {
+                  console.log('invalid tx ' + decodedParams.reason);
+                }
+              }
+
+              return processedAny;
+            }
+
 
     /*originally was an if-logic based switch function but refactoring real-time mode
       it simply is a part of a flow, could be refactored into one function
@@ -732,29 +740,36 @@ class Main {
 
 
     /*middle part of real-time mode processed new tx */
-    /* middle part of real-time mode processed new tx */
     async blockHandlerMid(txData, blockHeight) {
-        let didWork = false;
+            let didWork = false;
 
-        try {
-            if (txData && txData.length > 0) {
-                console.log('tx Data for block ' + blockHeight + ' txData ' + JSON.stringify(txData));
-                await this.processTx(txData, blockHeight);
-                this.saveMaxProcessedHeight(blockHeight);
-                didWork = true;
+            try {
+                if (txData && txData.length > 0) {
+                    console.log(`tx Data for block ${blockHeight} txData ${JSON.stringify(txData)}`);
+                    
+                    // processTx now returns true if any tx was newly processed
+                    didWork = await this.processTx(txData, blockHeight);
+
+                    // Save max height regardless, to persist progress
+                    this.saveMaxProcessedHeight(blockHeight);
+                }
+
+                console.log(`Processed block ${blockHeight} successfully...`);
+            } catch (error) {
+                console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
             }
-            console.log(`Processed block ${blockHeight} successfully...`);
-        } catch (error) {
-            console.error(`Blockhandler Mid Error processing block ${blockHeight}:`, error);
-        }
 
-        // Only run clearing if the block actually had TL work
-        if (didWork) {
-            await Clearing.clearingFunction(blockHeight, /*skip=*/false);
-        } 
-        // Return the block number, not null
-        return blockHeight;
-    }
+            // Run clearing only if there was actual new TL work done
+            if (didWork) {
+                console.log(`[CLEARING] Running for block ${blockHeight} (new TL work detected)`);
+                await Clearing.clearingFunction(blockHeight, /*skip=*/false);
+            } else {
+                console.log(`[CLEARING] Skipped for block ${blockHeight} (no new TL work)`);
+            }
+
+            // Always return block number for chain continuity
+            return blockHeight;
+        }
 
     /*here's where we finish a block processing in real-time mode, handling anything that is done after
     the main tx processing. But since I've stuck the clearing function, channel removal and others in the constructConsensus function

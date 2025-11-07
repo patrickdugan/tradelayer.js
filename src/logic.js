@@ -436,7 +436,7 @@ const Logic = {
             }
             await TallyMap.updateBalance(tokenDeliveryAddress, propertyId, -fee, 0, 0, 0, "utxoFee", block,txid)
             console.log('about to apply fee cache '+propertyId+' '+fee)
-            await TallyMap.updateFeeCache(propertyId,fee,1)
+            await TallyMap.updateFeeCache(propertyId,fee,1,block)
             const key = '0-'+propertyId
             console.log('saving volume in volume Index '+key+' '+satsReceived)
             const coinAdj = new BigNumber(satsReceived).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN)
@@ -467,7 +467,7 @@ const Logic = {
             };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
-            TallyMap.updateFeeCache(propertyId,fee,1)
+            TallyMap.updateFeeCache(propertyId,fee,1,block)
             const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
             const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
             let isTokenListed = false

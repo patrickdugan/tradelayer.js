@@ -169,22 +169,20 @@ static async getChannelBalancesForAddress(address, propertyId) {
 }
 
 
-/** Optional: aggregate sum across channels (for UI footers) */
-static sumBalance(rows) {
-  return rows.reduce((acc, r) => acc + (r.amount || 0), 0);
-}
+    /** Optional: aggregate sum across channels (for UI footers) */
+    static sumBalance(rows) {
+      return rows.reduce((acc, r) => acc + (r.amount || 0), 0);
+    }
 
-/** Optional: group by channel -> { [channel]: { [propertyId]: amount } } */
-static toChannelPropMap(rows) {
-  const m = {};
-  for (const r of rows) {
-    if (!m[r.channel]) m[r.channel] = {};
-    m[r.channel][r.propertyId] = (m[r.channel][r.propertyId] || 0) + r.amount;
-  }
-  return m;
-}
-
-
+    /** Optional: group by channel -> { [channel]: { [propertyId]: amount } } */
+    static toChannelPropMap(rows) {
+      const m = {};
+      for (const r of rows) {
+        if (!m[r.channel]) m[r.channel] = {};
+        m[r.channel][r.propertyId] = (m[r.channel][r.propertyId] || 0) + r.amount;
+      }
+      return m;
+    }
 
     static async loadChannelsRegistry() {
         // Load the channels registry from NeDB
@@ -1060,8 +1058,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       //console.log('in processWithdrawal '+channel[column][propertyId])
-
-      let has = await TallyMap.hasSufficientReserve(channel.channel,propertyId,amount)
+      const TallyLazy = require('./tally.js')
+      let has = await TallyLazy.hasSufficientReserve(channel.channel,propertyId,amount)
       console.log(amount, has.hasSufficient)
       if(has.hasSufficient==false){
          amount-=has.shortfall
@@ -1069,8 +1067,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
       console.log(amount, has.shortfall)
       channel[column][propertyId] -= amount;
       console.log('about to modify tallyMap in processWithdrawal '+channel.channel,propertyId,amount,senderAddress)
-      await TallyMap.updateChannelBalance(channel.channel, propertyId, -amount, 'channelWithdrawalPull',block)
-      await TallyMap.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete',block)
+      await TallyLazy.updateChannelBalance(channel.channel, propertyId, -amount, 'channelWithdrawalPull',block)
+      await TallyLazy.updateBalance(senderAddress,propertyId, amount, 0, 0,0,'channelWithdrawalComplete',block)
       this.channelsRegistry.set(channel.channel, channel);
       return
     }

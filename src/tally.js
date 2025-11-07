@@ -4,6 +4,7 @@ var PropertyList = require('./property.js')
 const uuid = require('uuid');
 const BigNumber = require('bignumber.js');
 const Insurance = require('./insurance.js')
+const Orderbooks = require('./orderbook.js')
 
 const SATS = new BigNumber(1e8);
 const RD = BigNumber.ROUND_DOWN;
@@ -671,62 +672,63 @@ static async loadFeeCacheForProperty(id) {
       );
     }
 
-    /**
+    /*
      * updateFeeCache:
      * - If contractId is null/undefined or '1' -> SPOT/native-1 revenue path: all -> STASH (your current behavior).
      * - If non-1 (oracle/deriv) -> 50/50 split in integer sats: half Insurance NOW, half -> STASH.
      * - All rounding remainders go to dust; dust pays out to Insurance once it reaches ≥1 sat.
      */
-    static async updateFeeCache(propertyId, amount, contractId /* legacy flags ignored */, _a, _b) {
-      try {
-        const block = arguments.length >= 6 ? arguments[5] : undefined;
+    static async updateFeeCache(propertyId, amount, contractId, block) {
+          try {
+            const block = arguments.length >= 6 ? arguments[5] : undefined;
 
-        // Work in sats
-        const rawSats = toSatsDecimal(amount);
-        const feeSats = rawSats.integerValue(RD);
-        if (!feeSats.isFinite() || feeSats.lte(0)) return;
+            const rawSats = toSatsDecimal(amount);            // BigNumber in sats
+            const feeSats = rawSats.integerValue(BigNumber.ROUND_HALF_UP);
+            if (!feeSats.isFinite() || feeSats.lte(0)) return;
 
-        const db = await dbInstance.getDatabase('feeCache');
-        const blk = await TallyMap.resolveBlock(block);
+            const db  = await dbInstance.getDatabase('feeCache');
+            const blk = await TallyMap.resolveBlock(block);
+            const effContractId = (contractId == null) ? '1' : String(contractId);
 
-        // Accumulate conversion dust (fractional sat from amount->sats)
-        const convDust = rawSats.minus(feeSats); // [0, 1)
-        const effContractId = (contractId === null || contractId === undefined) ? '1' : String(contractId);
-        const dustKey = `${propertyId}-${effContractId}`;
+            // --- SPOT / contract 1: all sats -> stash, no dust ---
+            if (effContractId === '1'&&propertyId!=1) {
+                //spot trade, not TL token, 100% to fee cache to buy TL
+              const cacheId = `${propertyId}-1`;
+              const row = await TallyMap.loadFeeRow(db, cacheId);
+              const addTokens = fromSats(feeSats);  // BigNumber in token units, exact 1e-8 steps
+              await TallyMap.saveFeeRow(db, cacheId, {
+                stash: row.stash.plus(addTokens),
+                contract: '1'
+              });
+              return await TallyMap.feeCacheBuy(block);;
+            }else if (effContractId === '1'&&propertyId!=1){
+                //spot trade for TL, 100% to insurance
+                const insurance = await Insurance.getInstance(effContractId, true);
+                  await insurance.deposit(
+                    propertyId,
+                    fromSats(insuranceSats).toFixed(8),   // string, exact scale
+                    blk
+                  );
+              return  
+            }
 
-        await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
-          const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
-          await insurance.deposit(propertyId, fromSats(wholeSats).toNumber(), blk);
-        });
+            // --- CONTRACT (non-1): 50/50 split in integer sats ---
+            const insuranceSats = feeSats.idiv(2);
+            const stashSats     = feeSats.minus(insuranceSats);   // same or +1 if odd
 
-        // SPOT or “1”
-        if (effContractId === '1') {
-          // 100% to STASH, no further splits
-          const cacheId = `${propertyId}-1`;
-          const row = await TallyMap.loadFeeRow(db, cacheId);
-          await TallyMap.saveFeeRow(db, cacheId, {
-            stash: row.stash.plus(fromSats(feeSats)),
-            contract: '1'
-          });
-          return;
-        }
-
-        // CONTRACT (non-1): split sats-exact → half insurance NOW, half to STASH
-        const insuranceSats = feeSats.idiv(2);
-        const stashSats     = feeSats.minus(insuranceSats);
-
-        // If feeSats was odd, 1 sat remainder is already accounted by integer math above.
-        // No extra remainder here other than convDust we already handled.
-
-        // 1) insurance NOW
-        try {
-          const insurance = await Insurance.getInstance(effContractId, true);
-          await insurance.deposit(propertyId, fromSats(insuranceSats).toNumber(), blk);
+            // 1) insurance NOW
+            try {
+              const insurance = await Insurance.getInstance(effContractId, true);
+              await insurance.deposit(
+                propertyId,
+                fromSats(insuranceSats).toFixed(8),   // string, exact scale
+                blk
+              );
         } catch (e) {
           console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);
         }
 
-        // 2) stash remainder
+        // 2) stash
         const cacheId = `${propertyId}-${effContractId}`;
         const row = await TallyMap.loadFeeRow(db, cacheId);
         await TallyMap.saveFeeRow(db, cacheId, {
@@ -734,10 +736,64 @@ static async loadFeeCacheForProperty(id) {
           contract: effContractId
         });
 
+        // 3) run buyback
+        return await TallyMap.feeCacheBuy(block);
+
       } catch (e) {
         console.error('🚨 Error in updateFeeCache:', e);
       }
     }
+
+
+     static async feeCacheBuy(block) {
+          const fees = await TallyMap.loadFeeCacheFromDB();
+          if (!fees || fees.size === 0) return;
+
+          for (const [key, feeData] of fees.entries()) {
+            if (!feeData || !feeData.contract) continue;
+
+            const [property, contractId] = key.split('-');
+            const value = new BigNumber(feeData.value || 0);
+            const stash = new BigNumber(feeData.stash || 0);
+            const total = value.plus(stash);
+            if (total.lte(0)) continue;
+
+            const orderBookKey = `1-${property}`;
+            const orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
+            const ob = orderbook.orderBooks[orderBookKey] || { buy: [], sell: [] };
+            const hasSell = Array.isArray(ob.sell) && ob.sell.length > 0;
+
+            if (!hasSell) continue; // nothing to do this block
+
+            // Place a single buy using total (value + stash)
+            const order = {
+              offeredPropertyId: property,
+              desiredPropertyId: 1,
+              amountOffered: total.toNumber(),
+              amountExpected: 0.00000001,
+              blockTime: block,
+              sender: 'feeCache',
+            };
+            order.price = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
+
+            const reply = await orderbook.insertOrder(order, orderBookKey, false, false);
+
+            // Pre-deduct: set value→0 and spend all stash
+            if (value.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { valueDelta: value.negated() });
+            if (stash.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: stash.negated() });
+
+            const matchResult = await orderbook.matchTokenOrders(reply);
+            if (matchResult.matches && matchResult.matches.length > 0) {
+              await orderbook.processTokenMatches(matchResult.matches, block, null, false);
+            } else {
+              // restore back to stash if no matches (race)
+              if (value.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: value });
+              if (stash.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: stash });
+            }
+
+            await orderbook.saveOrderBook(orderBookKey);
+          }
+        }
 
     /**
      * accrueFee:

@@ -21,11 +21,30 @@ class Clearing {
 
     }
 
-    static async clearingFunction(blockHeight) {
+    static async recordClearingRun(blockHeight, isRealtime) {
+    try {
+        const base = await db.getDatabase('clearing');
+        const entry = {
+            _id: `run-${blockHeight}-${isRealtime ? 'rt' : 'sync'}`,
+            blockHeight,
+            isRealtime,
+            timestamp: Date.now(),
+        };
+        await base.insertAsync(entry);
+        console.log(`Clearing run recorded: block ${blockHeight} (realtime=${isRealtime})`);
+    } catch (error) {
+        console.error('Error recording clearing run:', error);
+        throw error;
+    }
+}
+
+
+    static async clearingFunction(blockHeight,realtime) {
         //console.log(`Starting clearing operations for block ${blockHeight}`);
 
+       //Clearing.recordClearingRun(blockHeight,realtime)
         // 1. Fee Cache Buy
-        await Clearing.feeCacheBuy(blockHeight);
+        //await Clearing.feeCacheBuy(blockHeight);
 
         // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels(blockHeight);
@@ -237,20 +256,20 @@ class Clearing {
     }
 
 
-static async getIndexPrice(contractId, blockHeight) {
-    // Load contract info (get from memory, or from DB)
-    const contractInfo = await ContractRegistry.getContractInfo(contractId); // or your method
+    static async getIndexPrice(contractId, blockHeight) {
+        // Load contract info (get from memory, or from DB)
+        const contractInfo = await ContractRegistry.getContractInfo(contractId); // or your method
 
-    // Check for oracle-based contract
-    if (contractInfo.underlyingOracleId !== undefined && contractInfo.underlyingOracleId !== null && !isNaN(contractInfo.underlyingOracleId)) {
-        // Use the oracle price
-        return await Oracle.getOraclePrice(contractInfo.underlyingOracleId, blockHeight);
-    } else {
-        // Use volume index price (for most synthetic/inverse contracts)
-        // If your contract uses notionalPropertyId and collateralPropertyId, use those!
-        return await VolumeIndex.getIndexForBlock(contractId, blockHeight);
+        // Check for oracle-based contract
+        if (contractInfo.underlyingOracleId !== undefined && contractInfo.underlyingOracleId !== null && !isNaN(contractInfo.underlyingOracleId)) {
+            // Use the oracle price
+            return await Oracle.getOraclePrice(contractInfo.underlyingOracleId, blockHeight);
+        } else {
+            // Use volume index price (for most synthetic/inverse contracts)
+            // If your contract uses notionalPropertyId and collateralPropertyId, use those!
+            return await VolumeIndex.getIndexForBlock(contractId, blockHeight);
+        }
     }
-}
 
     // **Clamp function for funding rate**
     static clampFundingRate(basisPoints) {
@@ -402,56 +421,7 @@ static async getIndexPrice(contractId, blockHeight) {
     }
 
         // Define each of the above methods with corresponding logic based on the C++ functions provided
-        // ...static async feeCacheBuy(block) {
-        static async feeCacheBuy(block) {
-          const fees = await TallyMap.loadFeeCacheFromDB();
-          if (!fees || fees.size === 0) return;
-
-          for (const [key, feeData] of fees.entries()) {
-            if (!feeData || !feeData.contract) continue;
-
-            const [property, contractId] = key.split('-');
-            const value = new BigNumber(feeData.value || 0);
-            const stash = new BigNumber(feeData.stash || 0);
-            const total = value.plus(stash);
-            if (total.lte(0)) continue;
-
-            const orderBookKey = `1-${property}`;
-            const orderbook = await Orderbooks.getOrderbookInstance(orderBookKey);
-            const ob = orderbook.orderBooks[orderBookKey] || { buy: [], sell: [] };
-            const hasSell = Array.isArray(ob.sell) && ob.sell.length > 0;
-
-            if (!hasSell) continue; // nothing to do this block
-
-            // Place a single buy using total (value + stash)
-            const order = {
-              offeredPropertyId: property,
-              desiredPropertyId: 1,
-              amountOffered: total.toNumber(),
-              amountExpected: 0.00000001,
-              blockTime: block,
-              sender: 'feeCache',
-            };
-            order.price = orderbook.calculatePrice(order.amountOffered, order.amountExpected);
-
-            const reply = await orderbook.insertOrder(order, orderBookKey, false, false);
-
-            // Pre-deduct: set value→0 and spend all stash
-            if (value.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { valueDelta: value.negated() });
-            if (stash.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: stash.negated() });
-
-            const matchResult = await orderbook.matchTokenOrders(reply);
-            if (matchResult.matches && matchResult.matches.length > 0) {
-              await orderbook.processTokenMatches(matchResult.matches, block, null, false);
-            } else {
-              // restore back to stash if no matches (race)
-              if (value.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: value });
-              if (stash.gt(0)) await TallyMap.adjustFeeCache(property, contractId, { stashDelta: stash });
-            }
-
-            await orderbook.saveOrderBook(orderBookKey);
-          }
-        }
+        // ...static async feeCacheBuy(block) {  
 
     static async updateAllPositions(blockHeight, contractRegistry) {
       // Fetch all valid contract IDs (adjust this function to your environment)
@@ -532,7 +502,7 @@ static async getIndexPrice(contractId, blockHeight) {
         console.log(`🔄 Reconciling reserved balance for ${address}`);
         const ContractRegistry = require("./contractRegistry.js");
         const TallyMap = require("./tally.js");
-
+        const Orderbooks = require("./orderbook.js")
         const tally = await TallyMap.getTally(address, collateralId);
         const allContracts = await ContractRegistry.getAllContractsForCollateral(address, collateralId);
 
@@ -739,13 +709,14 @@ static async getIndexPrice(contractId, blockHeight) {
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
         let isLiq = [];
         let systemicLoss = 0;
-
+        const Orderbook = require('./orderbook.js')
+        const Tally = require('./tally.js')
         for(let i = 0; i < positions.length; i++){
             let position = positions[i];
-            let orderbook = await Orderbooks.getOrderbookInstance(contractId);
+            let orderbook = await Orderbook.getOrderbookInstance(contractId);
             //if(position.contracts==null){throw new Error()}
             console.log('position before '+JSON.stringify(positions))
-            const tally = await TallyMap.getTally(position.address,collateralId)
+            const tally = await Tally.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
             const liq = 0
             const bank = 0
@@ -762,24 +733,24 @@ static async getIndexPrice(contractId, blockHeight) {
 
             let newPosition = await marginMap.clear(position, position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank);
             if(pnlChange>0){
-                await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
+                await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
             }else{
-                let balance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                let balance = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                 console.log(`Checking balance for ${position.address}:`, balance);
 
                 if(balance.hasSufficient){
-                    await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
+                    await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 }else{
                     const excess = await Clearing.reconcileReserve(position.address,collateralId,blockHeight)
-                    let balance2 = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                    let balance2 = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                     if(balance2.hasSufficient){
-                         await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingAfterRecReserve', blockHeight);
+                         await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingAfterRecReserve', blockHeight);
                     }else if(balance2.shortfall< tally.margin) {
-                            let tallyPartial = await TallyMap.getTally(position.address, collateralId)
+                            let tallyPartial = await Tally.getTally(position.address, collateralId)
                         console.log('STOP - '+balance2.shortfall+' '+tally.margin)                        
-                            await TallyMap.updateBalance(position.address, collateralId, -tallyPartial.available, 0, -balance2.shortfall, 0, 'clearingLossPartialLiq', blockHeight);
+                            await Tally.updateBalance(position.address, collateralId, -tallyPartial.available, 0, -balance2.shortfall, 0, 'clearingLossPartialLiq', blockHeight);
                             await marginMap.updateMargin(position.address, contractId, -balance2.shortfall);
-                            tallyPartial = await TallyMap.getTally(position.address, collateralId)
+                            tallyPartial = await Tally.getTally(position.address, collateralId)
                             if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-balance2.shortfall,notional,blob.thisPrice,false,0,tallyPartial);
                                 if (liquidationResult) {
@@ -797,19 +768,19 @@ static async getIndexPrice(contractId, blockHeight) {
                         } else {
                             console.log('Danger zone! Margin is insufficient:'+pnlChange, balance2.shortfall, tally.margin);
                             let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
-                            let postCancelBalance = await TallyMap.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
+                            let postCancelBalance = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                             const markShortfall = new BigNumber(tally.margin).minus(postCancelBalance.shortfall).decimalPlaces(8).toNumber()
                             console.log('markShortfall '+markShortfall)
                             console.log('post cancel has hasSufficient '+JSON.stringify(postCancelBalance))
                             if(postCancelBalance.hasSufficient){
-                                await TallyMap.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
+                                await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingLossPostCancel', blockHeight);
                                 continue;
                             }else{
                                 console.log('post cancel margin dent '+postCancelBalance.shortfall)
-                                let postCancelTally = await TallyMap.getTally(position.address, collateralId);
+                                let postCancelTally = await Tally.getTally(position.address, collateralId);
                                 console.log('post cancel tally '+JSON.stringify(postCancelTally))
                                 if (Math.abs(postCancelBalance.shortfall) < tally.margin) {
-                                    await TallyMap.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancelPlusMarginDent', blockHeight);
+                                    await Tally.updateBalance(position.address, collateralId, -postCancelTally.available, 0, -postCancelBalance.shortfall, 0, 'clearingLossPostCancelPlusMarginDent', blockHeight);
                                     if (await marginMap.checkMarginMaintainance(position.address, contractId)) {
                                         let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-postCancelBalance.shortfall,notional,blob.thisPrice,false,markShortfall,postCancelTally);
                                         console.log("Before update:", JSON.stringify(positions, null, 2));
@@ -826,10 +797,10 @@ static async getIndexPrice(contractId, blockHeight) {
                                     }
                                     continue;
                                 } else {
-                                    let newTally = await TallyMap.getTally(position.address, collateralId)
+                                    let newTally = await Tally.getTally(position.address, collateralId)
                                     let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "total",null,notional,blob.thisPrice,true,markShortfall,newTally);
-                                    newTally = await TallyMap.getTally(position.address, collateralId)
-                                    await TallyMap.updateBalance(position.address, collateralId, -newTally.available, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
+                                    newTally = await Tally.getTally(position.address, collateralId)
+                                    await Tally.updateBalance(position.address, collateralId, -newTally.available, 0, -newTally.margin, 0, 'remainderLiq', blockHeight);   
                                     console.log("Before update:", JSON.stringify(liquidationResult));
                                     if (liquidationResult) {
                                         if(liquidationResult.counterparties.length>0){
