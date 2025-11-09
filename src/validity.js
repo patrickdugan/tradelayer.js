@@ -1422,7 +1422,7 @@ const Validity = {
                 // Check if the sender has enough balance for the initial margin
                 console.log('about to call hasSufficientBalance in validateTradeContractOnchain '+sender, contractDetails.collateralPropertyId, totalInitialMargin)
                 const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, contractDetails.collateralPropertyId, totalInitialMargin);
-                
+                console.log('need to adjust trade? '+JSON.stringify(hasSufficientBalance))
                 if (hasSufficientBalance.hasSufficient==false) {
                  let contractUndo = BigNumber(hasSufficientBalance.shortfall)
                                     .dividedBy(initialMarginPerContract)

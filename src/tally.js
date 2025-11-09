@@ -701,15 +701,15 @@ static async loadFeeCacheForProperty(id) {
                 contract: '1'
               });
               return await TallyMap.feeCacheBuy(block);;
-            }else if (effContractId === '1'&&propertyId!=1){
+            }else if (effContractId === '1'&&propertyId==1){
                 //spot trade for TL, 100% to insurance
                 const insurance = await Insurance.getInstance(effContractId, true);
                   await insurance.deposit(
                     propertyId,
-                    fromSats(insuranceSats).toFixed(8),   // string, exact scale
+                    fromSats(feeSats).toFixed(8),   // string, exact scale
                     blk
                   );
-              return  
+              return 
             }
 
             // --- CONTRACT (non-1): 50/50 split in integer sats ---

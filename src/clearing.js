@@ -900,6 +900,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     let isFullLiquidation = liquidationType === "total";
     let isPartialLiquidation = liquidationType === "partial";
     console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
+    const Tally = require('./tally.js')
     // Step 1: Generate the liquidation order
     let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
     if(liq === "err:0 contracts"){
@@ -943,7 +944,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
     console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
  
     if(applyDent){
-        await tallyMap.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
+        await Tally.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
     }
     position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
 
@@ -978,7 +979,7 @@ static async handleLiquidation(marginMap, orderbook, tallyMap, position, contrac
         const lossBN = new BigNumber(splat.liquidationLoss);
 
         if(isPartialLiquidation){
-                const yetAnotherTally = await tallyMap.getTally(position.address,collateralId)
+                const yetAnotherTally = await Tally.getTally(position.address,collateralId)
                 const remainingMarginBN = new BigNumber(yetAnotherTally.margin)
                 let adjustedLossBN = lossBN.minus(remainingMarginBN)
                 if(adjustedLossBN.toNumber()<=0){

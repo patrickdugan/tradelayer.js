@@ -425,7 +425,7 @@ const Logic = {
             //So we debit there and then credit them to the token delivery address, which we took in the parsing
             //From the token delivery vOut and analyzing the actual transaction, usually the change address of the LTC spender
             await TallyMap.updateChannelBalance(senderAddress,propertyId,-tokensToDeliver,'UTXOTokenTradeDebit',block)
-            const feeRateBN = new BigNumber(0.0005)
+            const feeRateBN = new BigNumber(0.00005)
             const fee = new BigNumber(tokenAmount).times(feeRateBN).decimalPlaces(8).toNumber()
             const netDelivery = new BigNumber(tokensToDeliver).minus(fee).decimalPlaces(8).toNumber()
             if(tagWithdraw!=null&&typeof tagWithdraw==="string" ){
