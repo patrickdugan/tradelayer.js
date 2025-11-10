@@ -759,124 +759,128 @@ class Orderbook {
         }
     
     async estimateLiquidation(liquidationOrder) {
-        const { contractId, amount, sell, price: liqPrice, address } = liquidationOrder;
-        console.log('est liq ' + sell);
+      const { contractId, amount, sell, price: liqPrice, address } = liquidationOrder;
 
-        const orderBookKey = `${contractId}`;
-        const orderbookData = await this.loadOrderBook(orderBookKey, false);
+      // Load the order book for the given contract
+      const orderBookKey = `${contractId}`;
+      const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
-        let orders = sell ? orderbookData.buy : orderbookData.sell;
-        if (!orders || orders.length === 0) {
-            return {
-                estimatedFillPrice: null,
-                filledSize: 0,
-                partialFillPercent: 0,
-                filled: false,
-                filledBelowLiqPrice: false,
-                partiallyFilledBelowLiqPrice: false,
-                trueBookEmpty: true,
-                remainder: amount,
-                liquidationLoss: 0,
-                trueLiqPrice: null,
-                counterpartyOrders: []
-            };
-        }
+      // Opposite side of the book
+      let sideOrders = sell ? orderbookData?.buy : orderbookData?.sell;
 
-        // ------------------------------------------------------------
-        // ✅ FILTER OUT SELF ORDERS BEFORE SORTING
-        // ------------------------------------------------------------
-        orders = orders.filter(o => o.sender !== address && !o.isLiq);
-
-        if (orders.length === 0) {
-            return {
-                estimatedFillPrice: null,
-                filledSize: 0,
-                partialFillPercent: 0,
-                filled: false,
-                filledBelowLiqPrice: false,
-                partiallyFilledBelowLiqPrice: false,
-                trueBookEmpty: true,
-                remainder: amount,
-                liquidationLoss: 0,
-                trueLiqPrice: null,
-                counterpartyOrders: []
-            };
-        }
-
-        // ------------------------------------------------------------
-        // ✅ SAFELY SORT (NO SELF-LIQUIDITY)
-        // ------------------------------------------------------------
-        orders = sell
-            ? orders.sort((a, b) => b.price - a.price)   // selling → match highest bids
-            : orders.sort((a, b) => a.price - b.price);  // buying → match lowest asks
-
-        let remainingSize = new BigNumber(amount);
-        let totalCost = new BigNumber(0);
-        let filledSize = new BigNumber(0);
-        let filledBelowLiqPrice = false;
-        let partiallyFilledBelowLiqPrice = false;
-        let liquidationLoss = new BigNumber(0);
-        let trueLiqPrice = null;
-        const liqPriceBN = new BigNumber(liqPrice);
-
-        const counterpartyOrders = [];
-
-        for (const o of orders) {
-            if (remainingSize.lte(0)) break;
-
-            const orderPriceBN = new BigNumber(o.price);
-            const fillAmount = BigNumber.min(remainingSize, o.amount);
-            const priceDiff = liqPriceBN.minus(orderPriceBN);
-
-            // ------------------------------------------------------------
-            // ✅ DO NOT MUTATE ORIGINAL ORDERBOOK ENTRY
-            // ------------------------------------------------------------
-            const cp = {
-                ...o,
-                sized: fillAmount.decimalPlaces(8).toNumber()
-            };
-            counterpartyOrders.push(cp);
-
-            totalCost = totalCost.plus(fillAmount.times(o.price));
-            filledSize = filledSize.plus(fillAmount);
-            remainingSize = remainingSize.minus(fillAmount);
-
-            // Below-Liq-Price logic
-            if ((sell && orderPriceBN.lt(liqPriceBN)) ||
-                (!sell && orderPriceBN.gt(liqPriceBN))) {
-
-                filledBelowLiqPrice = true;
-                partiallyFilledBelowLiqPrice = filledSize.gt(0) && filledSize.lt(amount);
-                liquidationLoss = liquidationLoss.plus(fillAmount.times(priceDiff));
-            }
-
-            trueLiqPrice = o.price;
-        }
-
-        const estimatedFillPrice = filledSize.gt(0)
-            ? totalCost.dividedBy(filledSize).toNumber()
-            : null;
-
-        const partialFillPercent = filledSize
-            .dividedBy(amount)
-            .times(100)
-            .toNumber();
-
-        const trueBookEmpty = remainingSize.gt(0);
-
+      if (!Array.isArray(sideOrders) || sideOrders.length === 0) {
         return {
-            estimatedFillPrice,
-            filledSize: filledSize.toNumber(),
-            partialFillPercent,
-            filled: filledSize.gte(amount),    // ✅ fix
-            filledBelowLiqPrice,
-            partiallyFilledBelowLiqPrice,
-            trueBookEmpty,
-            remainder: remainingSize.toNumber(),
-            liquidationLoss: liquidationLoss.decimalPlaces(8).toNumber(),
-            trueLiqPrice,
-            counterpartyOrders
+          estimatedFillPrice: null,
+          filledSize: 0,
+          partialFillPercent: 0,
+          filled: false,
+          filledBelowLiqPrice: false,
+          partiallyFilledBelowLiqPrice: false,
+          trueBookEmpty: true,
+          remainder: Number(amount) || 0,
+          liquidationLoss: 0,
+          trueLiqPrice: null,
+          counterpartyOrders: []
         };
+      }
+
+      // Sort: sell → hit highest bids first; buy → hit lowest asks first
+      sideOrders = sell
+        ? [...sideOrders].sort((a, b) => b.price - a.price)
+        : [...sideOrders].sort((a, b) => a.price - b.price);
+
+      const amtReq   = new BigNumber(amount || 0);
+      const liqBN    = new BigNumber(liqPrice || 0);
+
+      let remaining  = amtReq;
+      let filledSize = new BigNumber(0);
+      let totalCost  = new BigNumber(0);
+      let filledBelowLiqPrice = false;
+      let crossedQty = new BigNumber(0); // how much happened at unfavorable prices (relative to liq)
+      let loss       = new BigNumber(0);
+      let trueLiqPrice = null;
+      const counterpartyOrders = [];
+
+      for (const o of sideOrders) {
+        // Ignore self-liquidity and liquidation-originated orders
+        if (o?.sender === address) continue;
+        if (o?.isLiq) continue;
+
+        if (remaining.lte(0)) break;
+
+        const oPrice = new BigNumber(o.price || 0);
+        const oAmt   = new BigNumber(o.amount || 0);
+        if (oAmt.lte(0)) continue;
+
+        const tradeSize = BigNumber.min(remaining, oAmt);
+        if (tradeSize.lte(0)) continue;
+
+        // Book-keeping
+        totalCost  = totalCost.plus(tradeSize.times(oPrice));
+        filledSize = filledSize.plus(tradeSize);
+        remaining  = remaining.minus(tradeSize);
+        trueLiqPrice = oPrice.toNumber();
+
+        // Loss detection is side-aware:
+        //  - For a SELL (liquidating a long): bad if execution < liqPrice
+        //  - For a BUY  (liquidating a short): bad if execution > liqPrice
+        let bad = false;
+        let perUnitLoss = new BigNumber(0);
+
+        if (sell) {
+          bad = oPrice.lt(liqBN);
+          if (bad) perUnitLoss = liqBN.minus(oPrice);          // positive if below liq
+        } else {
+          bad = oPrice.gt(liqBN);
+          if (bad) perUnitLoss = oPrice.minus(liqBN);          // positive if above liq
+        }
+
+        if (bad) {
+          filledBelowLiqPrice = true;
+          crossedQty = crossedQty.plus(tradeSize);
+          loss = loss.plus(tradeSize.times(perUnitLoss));
+        }
+
+        // Keep a pure snapshot of what we consumed
+        counterpartyOrders.push({
+          txid: o.txid,
+          sender: o.sender,
+          price: oPrice.toNumber(),
+          amount: oAmt.toNumber(),
+          sized: tradeSize.decimalPlaces(8).toNumber(),
+          maker: o.maker === true,
+        });
+      }
+
+      const estFillPrice = filledSize.gt(0)
+        ? totalCost.dividedBy(filledSize).decimalPlaces(8).toNumber()
+        : null;
+
+      const partialFillPercent = amtReq.gt(0)
+        ? filledSize.dividedBy(amtReq).times(100).decimalPlaces(8).toNumber()
+        : 0;
+
+      // Partially-filled-below-liq := some filled AND not all of it was unfavorable
+      const partiallyFilledBelowLiqPrice =
+        filledBelowLiqPrice && crossedQty.gt(0) && crossedQty.lt(filledSize);
+
+      // "trueBookEmpty" means we could NOT fill the entire request with external liquidity
+      const trueBookEmpty = remaining.gt(0);
+      const remainder = BigNumber.max(remaining, 0).decimalPlaces(8).toNumber();
+
+      return {
+        estimatedFillPrice: estFillPrice,
+        filledSize: filledSize.decimalPlaces(8).toNumber(),
+        partialFillPercent,
+        filled: filledSize.gte(amtReq),
+        filledBelowLiqPrice,
+        partiallyFilledBelowLiqPrice,
+        trueBookEmpty,
+        remainder,
+        liquidationLoss: loss.decimalPlaces(8).toNumber(),
+        trueLiqPrice,
+        counterpartyOrders
+      };
     }
 
 
@@ -1327,6 +1331,66 @@ class Orderbook {
 
       return { closed, flipped, newPos };
     }
+
+    async sourceFundsForLoss(fromAddress, collateralPropertyId, requiredAmount, blockHeight) {
+        const TallyMap = require('./tally.js'); // safe to lazy load inside method
+        const ContractRegistry = require('./contractRegistry.js');
+
+        console.log(`💰 Attempting to source ${requiredAmount} for ${fromAddress}`);
+
+        // 1️⃣ Check available
+        let tally = await TallyMap.getTally(fromAddress, collateralPropertyId);
+        if (tally.available >= requiredAmount) {
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, -requiredAmount, 0, 0, 0, 'lossFromAvailable', blockHeight);
+            console.log(`✅ Covered ${requiredAmount} from available`);
+            return { covered: requiredAmount, remaining: 0 };
+        }
+
+        let remaining = requiredAmount;
+        if (tally.available > 0) {
+            remaining -= tally.available;
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, -tally.available, 0, 0, 0, 'lossPartialAvailable', blockHeight);
+            console.log(`⚠️ Used ${tally.available} from available, ${remaining} remaining`);
+        }
+
+        // 2️⃣ Cancel open orders for all contracts to recover reserve
+        console.log('🔄 Cancelling all open orders to reclaim reserve');
+        const allContracts = await ContractRegistry.loadContractSeries();
+        for (const contract of allContracts) {
+            const contractId = contract[1].id;
+            await this.cancelAllOrdersForAddress(fromAddress, contractId, blockHeight, collateralPropertyId);
+        }
+
+        // Refresh tally after cancellation
+        tally = await TallyMap.getTally(fromAddress, collateralPropertyId);
+
+        // 3️⃣ Use margin if available
+        if (remaining > 0 && tally.margin >= remaining) {
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, 0, -remaining, 0, 'lossFromMargin', blockHeight);
+            console.log(`✅ Covered ${remaining} from margin`);
+            return { covered: requiredAmount, remaining: 0 };
+        } else if (remaining > 0 && tally.margin > 0) {
+            remaining -= tally.margin;
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, 0, -tally.margin, 0, 'lossPartialMargin', blockHeight);
+            console.log(`⚠️ Used ${tally.margin} from margin, ${remaining} remaining`);
+        }
+
+        // 4️⃣ Use reserve (if still short)
+        if (remaining > 0 && tally.reserved >= remaining) {
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, -remaining, 0, 0, 'lossFromReserve', blockHeight);
+            console.log(`✅ Covered ${remaining} from reserve`);
+            return { covered: requiredAmount, remaining: 0 };
+        } else if (remaining > 0 && tally.reserved > 0) {
+            remaining -= tally.reserved;
+            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, -tally.reserved, 0, 0, 'lossPartialReserve', blockHeight);
+            console.log(`⚠️ Used ${tally.reserved} from reserve, ${remaining} remaining`);
+        }
+
+        // 5️⃣ Final fallback: Systemic loss
+        console.log(`❌ Unable to cover ${remaining}. Escalating to systemic loss / insurance fund.`);
+        return { covered: requiredAmount - remaining, remaining };
+    }
+
      
     async processContractMatches(matches, currentBlockHeight, channel){
             const TallyMap = require('./tally.js');
@@ -1711,24 +1775,29 @@ class Orderbook {
                         //also if this trade realizes a loss that wipes out all maint. margin that we have to look at available balance and go for that
                         //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
                         //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
-                        let debit = 0
-                        if(settlementPNL<0){
-                            debit = Math.abs(settlementPNL)
+                        let debit = settlementPNL < 0 ? Math.abs(settlementPNL) : 0;
+                        if (debit > 0) {
+                          const recovery = await this.sourceFundsForLoss(
+                            match.buyOrder.buyerAddress,
+                            collateralPropertyId,
+                            debit,
+                            currentBlockHeight
+                          );
+
+                          if (recovery.remaining > 0) {
+                            console.log(`⚠️ Buyer still short ${recovery.remaining}`);
+                            // optional: escalate to insurance/liquidation path
+                          }
+                        } else {
+                          await TallyMap.updateBalance(
+                            match.buyOrder.buyerAddress,
+                            collateralPropertyId,
+                            settlementPNL, 0, 0, 0,
+                            'contractTradeSettlement',
+                            currentBlockHeight
+                          );
                         }
-                        const sufficient = await TallyMap.hasSufficientBalance(match.buyOrder.buyerAddress,collateralPropertyId,debit)
-                        if(reduction.mode!='maint'&&sufficient.hasSufficient){
-                            await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0/*-settlementPNL*/, 0, 'contractTradeSettlement',currentBlockHeight);
-                        }else if(!sufficient.hasSufficient){
-                            const sufficientMargin = await TallyMap.hasSufficientMargin(match.buyOrder.buyerAddress,collateralPropertyId,debit) 
-                            if(sufficientMargin.hasSufficient){
-                                await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
-                            }
-                        } 
-                        if(reduction.mode=='shortfall'){
-                            //check the address available balance for the neg. balance
-                            //if there's enough in available then do a tallyMap shuffle
-                            //otherwise go to insurance or maybe post a system loss at the bankruptcy price and see if it can get cleared before tapping the ins. fund
-                        }
+
 
                         
                         const savePNLParams = {height:currentBlockHeight, contractId:match.buyOrder.contractId, accountingPNL: match.buyerPosition.realizedPNL, isBuyer: true, 
@@ -1769,20 +1838,27 @@ class Orderbook {
                         //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
                         //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
                         //unusual edge case but we're covering it here 'maint'
-                        let debit = 0
-                        if(settlementPNL<0){
-                            debit = Math.abs(settlementPNL)
+                        let debit = settlementPNL < 0 ? Math.abs(settlementPNL) : 0;
+                        if (debit > 0) {
+                          const recovery = await this.sourceFundsForLoss(
+                            match.sellOrder.sellerAddress,
+                            collateralPropertyId,
+                            debit,
+                            currentBlockHeight
+                          );
+
+                          if (recovery.remaining > 0) {
+                            console.log(`⚠️ Seller still short ${recovery.remaining}`);
+                          }
+                        } else {
+                          await TallyMap.updateBalance(
+                            match.sellOrder.sellerAddress,
+                            collateralPropertyId,
+                            settlementPNL, 0, 0, 0,
+                            'contractTradeSettlement',
+                            currentBlockHeight
+                          );
                         }
-                        const sufficient = await TallyMap.hasSufficientBalance(match.sellOrder.sellerAddress,collateralPropertyId,debit)
-                        console.log('debit '+debit +' '+settlementPNL+ ' '+JSON.stringify(sufficient))
-                        if(reduction.mode!='maint'&&sufficient.hasSufficient){
-                            await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, /*accountingPNL*/settlementPNL, 0, 0, 0, 'contractTradeSettlement',currentBlockHeight);
-                        }else if(!sufficient.hasSufficient){
-                            let again = await TallyMap.hasSufficientMargin(match.sellOrder.sellerAddress,collateralPropertyId,debit)            
-                            if(again.hasSufficient){
-                                await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -debit, 0, 'contractTradeMarginSettlement',currentBlockHeight)
-                            }
-                        } 
                         const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
@@ -1826,7 +1902,7 @@ class Orderbook {
                     trades.push(trade)                     
             }
              return trades
-		        }
+		}
 		/**
 		 * calculateFee
 		 * - Positive result  => taker fee (debit)

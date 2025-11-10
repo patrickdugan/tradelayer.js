@@ -824,443 +824,447 @@ class Clearing {
         return { positions, isLiq, systemicLoss };
     }
 
-static flattenMark(positions) {
-  positions.forEach(pos => {
-    if (pos.contracts === 0) {
-      pos.lastMark = null;
+    static flattenMark(positions) {
+      positions.forEach(pos => {
+        if (pos.contracts === 0) {
+          pos.lastMark = null;
+        }
+      });
+      return positions;
     }
-  });
-  return positions;
-}
 
-// Make sure BigNumber is imported:
-// const BigNumber = require("bignumber.js");
-static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse){
-  // We'll use feePercent = 0 and high internal precision
-  const feePercent = new BigNumber(0);
-  const PRECISION = 30; // high precision for internal calculations
+    // Make sure BigNumber is imported:
+    // const BigNumber = require("bignumber.js");
+    static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse){
+      // We'll use feePercent = 0 and high internal precision
+      const feePercent = new BigNumber(0);
+      const PRECISION = 30; // high precision for internal calculations
 
-  const BNMark = new BigNumber(markPrice);
-  const BNSystemicLoss = new BigNumber(systemicLoss);
-  const BNContracts = new BigNumber(contracts);
-  const BNNotional = new BigNumber(notional);
+      const BNMark = new BigNumber(markPrice);
+      const BNSystemicLoss = new BigNumber(systemicLoss);
+      const BNContracts = new BigNumber(contracts);
+      const BNNotional = new BigNumber(notional);
 
-  if (!inverse) {
-    let baseLiqPrice;
-    if (BNContracts.gt(0)) {
-      // For long positions:
-      // liqPrice = markPrice - (systemicLoss / (contracts * notional))
-      baseLiqPrice = BNMark.minus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
-      // Fee adjustment is trivial with feePercent 0, so just return with high precision:
-      console.log('baseLiq price >0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
-      return baseLiqPrice.decimalPlaces(PRECISION);
-    } else if (BNContracts.lt(0)) {
-      // For short positions:
-      // liqPrice = markPrice + (systemicLoss / (|contracts| * notional))
-      baseLiqPrice = BNMark.plus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
-      console.log('baseLiq price <0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
-      return baseLiqPrice.decimalPlaces(PRECISION);
-    }
-    return null;
-  } else {
-    let baseLiqPrice;
-    if (BNContracts.gt(0)) {
-      // Inverse Long:
-      // 1/liqPrice = 1/markPrice + (systemicLoss / (contracts * notional))
-      const invLiq = new BigNumber(1).dividedBy(BNMark)
-                      .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
-      baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-      return baseLiqPrice.decimalPlaces(PRECISION);
-    } else if (BNContracts.lt(0)) {
-      // Inverse Short:
-      // 1/liqPrice = 1/markPrice - (systemicLoss / (|contracts| * notional))
-      const invLiq = new BigNumber(1).dividedBy(BNMark)
-                      .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
-      baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-      return baseLiqPrice.decimalPlaces(PRECISION);
-    }
-    return null;
-  }
-}
-
-
-static updatePositions(positions, updatedCounterparties) {
-    //console.log('updated counterparties '+JSON.stringify(updatedCounterparties))
-    if(!updatedCounterparties){return positions}
-    const counterpartyMap = new Map(updatedCounterparties.map(pos => [pos.address, pos]));
-
-    return positions.map(pos => 
-        counterpartyMap.has(pos.address) 
-            ? { ...pos, ...counterpartyMap.get(pos.address) }  // Merge updated counterparty data
-            : pos  // Keep the original position if no update
-    );
-}
-
-static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional, markPrice,applyDent, markShortfall,tally){
-    let isFullLiquidation = liquidationType === "total";
-    let isPartialLiquidation = liquidationType === "partial";
-    console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
-    const Tally = require('./tally.js')
-    // Step 1: Generate the liquidation order
-    let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
-    if(liq === "err:0 contracts"){
-        console.log("No contracts to liquidate.");
+      if (!inverse) {
+        let baseLiqPrice;
+        if (BNContracts.gt(0)) {
+          // For long positions:
+          // liqPrice = markPrice - (systemicLoss / (contracts * notional))
+          baseLiqPrice = BNMark.minus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
+          // Fee adjustment is trivial with feePercent 0, so just return with high precision:
+          console.log('baseLiq price >0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
+          return baseLiqPrice.decimalPlaces(PRECISION);
+        } else if (BNContracts.lt(0)) {
+          // For short positions:
+          // liqPrice = markPrice + (systemicLoss / (|contracts| * notional))
+          baseLiqPrice = BNMark.plus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
+          console.log('baseLiq price <0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
+          return baseLiqPrice.decimalPlaces(PRECISION);
+        }
         return null;
+      } else {
+        let baseLiqPrice;
+        if (BNContracts.gt(0)) {
+          // Inverse Long:
+          // 1/liqPrice = 1/markPrice + (systemicLoss / (contracts * notional))
+          const invLiq = new BigNumber(1).dividedBy(BNMark)
+                          .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
+          baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
+          return baseLiqPrice.decimalPlaces(PRECISION);
+        } else if (BNContracts.lt(0)) {
+          // Inverse Short:
+          // 1/liqPrice = 1/markPrice - (systemicLoss / (|contracts| * notional))
+          const invLiq = new BigNumber(1).dividedBy(BNMark)
+                          .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
+          baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
+          return baseLiqPrice.decimalPlaces(PRECISION);
+        }
+        return null;
+      }
     }
-    // Step 2: Estimate liquidation impact on the orderbook
-    let splat = await orderbook.estimateLiquidation(liq);
-    if(!markShortfall){markShortfall=0}
-    console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
-    let delevPrice = Clearing.computeLiquidationPriceFromLoss(markPrice, markShortfall, position.contracts, notional, inverse)     
-    console.log('delev price '+delevPrice)
-    /*if(markShortfall==0){
-        delevPrice = liq.price
-    }*/
-    // Adjust liquidation size based on actual matches
-    liq.amount = splat.filledSize;
-    liq.price = splat.trueLiqPrice
-    if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
-        liq.price=splat.trueLiqPrice
-        if(isPartialLiquidation&&((splat.estimatedFillPrice<liq.bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>liq.bankruptcyPrice&&liq.sell==false))){
-            isFullLiquidation==true
-            isPartialLiquidation==false
-            liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
+
+
+    static updatePositions(positions, updatedCounterparties) {
+        //console.log('updated counterparties '+JSON.stringify(updatedCounterparties))
+        if(!updatedCounterparties){return positions}
+        const counterpartyMap = new Map(updatedCounterparties.map(pos => [pos.address, pos]));
+
+        return positions.map(pos => 
+            counterpartyMap.has(pos.address) 
+                ? { ...pos, ...counterpartyMap.get(pos.address) }  // Merge updated counterparty data
+                : pos  // Keep the original position if no update
+        );
+    }
+
+    static async handleLiquidation(marginMap, orderbook, tallyMap, position, contractId, blockHeight, inverse, collateralId, liquidationType, marginDent, notional, markPrice,applyDent, markShortfall,tally){
+        let isFullLiquidation = liquidationType === "total";
+        let isPartialLiquidation = liquidationType === "partial";
+        console.log(`Handling ${liquidationType} liquidation for ${position.address} on contract ${contractId}`);
+        const Tally = require('./tally.js')
+        // Step 1: Generate the liquidation order
+        let liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
+        if(liq === "err:0 contracts"){
+            console.log("No contracts to liquidate.");
+            return null;
+        }
+        // Step 2: Estimate liquidation impact on the orderbook
+        let splat = await orderbook.estimateLiquidation(liq);
+        if(!markShortfall){markShortfall=0}
+        console.log(`🛑 Liquidation Order: ${JSON.stringify(liq)}, Orderbook Response: ${JSON.stringify(splat)}`);
+        let delevPrice = Clearing.computeLiquidationPriceFromLoss(markPrice, markShortfall, position.contracts, notional, inverse)     
+        console.log('delev price '+delevPrice)
+        /*if(markShortfall==0){
+            delevPrice = liq.price
+        }*/
+        // Adjust liquidation size based on actual matches
+        liq.amount = splat.filledSize;
+        liq.price = splat.trueLiqPrice
+        if(splat.filledBelowLiqPrice||splat.partiallyFilledBelowLiqPrice){
             liq.price=splat.trueLiqPrice
+            if(isPartialLiquidation&&((splat.estimatedFillPrice<liq.bankruptcyPrice&&liq.sell==true)||(splat.estimatedFillPrice>liq.bankruptcyPrice&&liq.sell==false))){
+                isFullLiquidation==true
+                isPartialLiquidation==false
+                liq = await marginMap.generateLiquidationOrder(position, contractId, isFullLiquidation,blockHeight);
+                liq.price=splat.trueLiqPrice
+            }
         }
-    }
-    if(!liq.price){
-        liq.price=liq.bankruptcyPrice
-    }
-
-    let marginReduce = marginDent;
-    if(liquidationType === "total"){
-        marginReduce = tally.margin;
-        console.log('margin reduce equaling total margin '+marginDent+' '+marginReduce+tally.margin)
-        //delevPrice = liq.price
-    }
-
-    const infoBlob = { posMargin: position.margin, reduce: marginReduce, dent: marginDent };
-    // Step 3: Adjust margin & balances
-    console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
- 
-    if(applyDent){
-        await Tally.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
-    }
-    position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
-
-    const orderbookKey= contractId.toString()
-        let orderbookData = orderbook.orderBooks[orderbookKey] || { buy: [], sell: [] };
-        console.log('🛑 liq JSON '+JSON.stringify(liq))    
-        orderbookData = await orderbook.insertOrder(liq, orderbookData, liq.sell, true);
-        console.log('orderbook data '+JSON.stringify(orderbookData))
-        let matchResult = await orderbook.matchContractOrders(orderbookData);
-        console.log('match Result '+matchResult.matches.length+' '+JSON.stringify(matchResult))
-        let trade = []
-        if (matchResult.matches.length > 0) {
-            console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
-            trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
-            console.log('trade result '+JSON.stringify(trade))
-            await orderbook.saveOrderBook(matchResult.orderBook,orderbookKey);
-        }
-    //position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight,true);
-    let systemicLoss = new BigNumber(0);
-    let caseLabel = "";
-    let result = {counterparties:[]};
-
-    console.log('about to remove deleveraged contracts from liq addr '+JSON.stringify(position)+' '+splat.remainder)
-    console.log('liquidation trades and positions '+JSON.stringify(trade))
-    let refreshedPosition = Clearing.getLatestPositionByAddress(trade, position.address)
-    if(trade.length==0){refreshedPosition=position}
-    console.log('refreshed position '+JSON.stringify(refreshedPosition))
-    
-    // Step 4: Handle different liquidation scenarios
-    if(!splat.filled){
-        const remainder = splat.remainder;
-        const lossBN = new BigNumber(splat.liquidationLoss);
-
-        if(isPartialLiquidation){
-                const yetAnotherTally = await Tally.getTally(position.address,collateralId)
-                const remainingMarginBN = new BigNumber(yetAnotherTally.margin)
-                let adjustedLossBN = lossBN.minus(remainingMarginBN)
-                if(adjustedLossBN.toNumber()<=0){
-                    adjustedLossBN=0
-                    console.log('about to apply additional liq slippage on partial liq '+splat.liquidationLoss)
-                }
-                systemicLoss = systemicLoss.plus(adjustedLossBN).decimalPlaces(8);
-                console.log('confirming sys loss has been zeroed '+systemicLoss.toNumber())
-        }else if(isFullLiquidation){
-            systemicLoss = systemicLoss.plus(lossBN).decimalPlaces(8);
+        if(!liq.price){
+            liq.price=liq.bankruptcyPrice
         }
 
-        if(splat.partiallyFilledBelowLiqPrice){
-            caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight,markPrice,collateralId);
-        }else if(splat.filledBelowLiqPrice && splat.remainder === 0){
-            caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
-        }else if (splat.filledBelowLiqPrice && splat.remainder > 0){
-            caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
-            console.log(caseLabel);
-            console.log('remainder in case 4 '+remainder)
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
-        } else if(splat.trueBookEmpty){
-            caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
-            console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + markPrice);
-            result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
+        let marginReduce = marginDent;
+        if(liquidationType === "total"){
+            marginReduce = tally.margin;
+            console.log('margin reduce equaling total margin '+marginDent+' '+marginReduce+tally.margin)
+            //delevPrice = liq.price
         }
-        console.log('result from delev '+JSON.stringify(result))
-    } 
 
-    position = await marginMap.updateContractBalances(position.address, splat.remainder, liq.price, !liq.sell, refreshedPosition, inverse, true, false, contractId, true, blockHeight);
-
-    console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
-    const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId) 
-    console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
-    infoBlob.systemicLoss = systemicLoss
-
-    // Step 5: Save liquidation results
-    await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
-       //await Clearing.getTotalTokenBalances(blockHeight)
-
-    return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: counterparties || [] };
-}
-
-static async extractCounterpartyPositions(matches, deleveragedPositions, marginMap, contractId) {
-  // Create a set to store unique addresses
-  const addresses = new Set();
-
-  // Collect addresses from the matches array (which come from liq order matching)
-  for (const match of matches) {
-    if (match.buyerPosition && match.buyerPosition.address) {
-      addresses.add(match.buyerPosition.address);
-    }
-    if (match.sellerPosition && match.sellerPosition.address) {
-      addresses.add(match.sellerPosition.address);
-    }
-  }
-
-     if (Array.isArray(deleveragedPositions)) {
-      for (const pos of deleveragedPositions) {
-        if (addresses.has(pos.address)) {
-          addresses.delete(pos.address);
+        const infoBlob = { posMargin: position.margin, reduce: marginReduce, dent: marginDent };
+        // Step 3: Adjust margin & balances
+        console.log('🏦 about to update contracts for liq' + position.margin + ' ' + marginReduce + ' ' + JSON.stringify(position)+' '+liquidationType);
+     
+        if(applyDent){
+            await Tally.updateBalance(position.address, collateralId, 0, 0, -marginReduce, 0, "clearingLossApplyDent", blockHeight);
+            position = await marginMap.updateMargin(position.address, contractId, -marginReduce);
+        }else{
+              // In partial-liq flows we already adjusted Tally + marginMap upstream.
+              // Just refresh the latest position so we don't overwrite it.
+              position = await marginMap.getPositionForAddress(position.address, contractId) || position;
         }
-      }
-    }
 
-  // Now build the merged array using the latest DB entry for each address.
+        const orderbookKey= contractId.toString()
+            let orderbookData = orderbook.orderBooks[orderbookKey] || { buy: [], sell: [] };
+            console.log('🛑 liq JSON '+JSON.stringify(liq))    
+            orderbookData = await orderbook.insertOrder(liq, orderbookData, liq.sell, true);
+            console.log('orderbook data '+JSON.stringify(orderbookData))
+            let matchResult = await orderbook.matchContractOrders(orderbookData);
+            console.log('match Result '+matchResult.matches.length+' '+JSON.stringify(matchResult))
+            let trade = []
+            if (matchResult.matches.length > 0) {
+                console.log('🛑 liq matches '+JSON.stringify(matchResult.matches))
+                trade = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+                console.log('trade result '+JSON.stringify(trade))
+                await orderbook.saveOrderBook(matchResult.orderBook,orderbookKey);
+            }
+        //position = await marginMap.updateContractBalances(position.address, liq.amount, liq.price, !liq.sell, position, inverse, true, false, contractId, true, blockHeight,true);
+        let systemicLoss = new BigNumber(0);
+        let caseLabel = "";
+        let result = {counterparties:[]};
 
-  for (const address of addresses) {
-    let updatedPos = await marginMap.getPositionForAddress(address, contractId);
-    // If not found, optionally fallback to the in-memory map:
-    if (!updatedPos && marginMap.margins && typeof marginMap.margins.get === 'function') {
-      updatedPos = marginMap.margins.get(address);
-    }
-    if (updatedPos) {
-      deleveragedPositions.push(updatedPos);
-    }
-  }
+        console.log('about to remove deleveraged contracts from liq addr '+JSON.stringify(position)+' '+splat.remainder)
+        console.log('liquidation trades and positions '+JSON.stringify(trade))
+        let refreshedPosition = Clearing.getLatestPositionByAddress(trade, position.address)
+        if(trade.length==0){refreshedPosition=position}
+        console.log('refreshed position '+JSON.stringify(refreshedPosition))
+        
+        // Step 4: Handle different liquidation scenarios
+        if(!splat.filled){
+            const remainder = splat.remainder;
+            const lossBN = new BigNumber(splat.liquidationLoss);
 
-  return deleveragedPositions;
-}
-
-/**
- * Settle all options expiring at or before currentBlock for a given series.
- * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
- */
-static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
-  const mm = await MarginMap.getInstance(seriesId);
-  const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
-  if (!seriesInfo) return;
-  const collateralPropertyId = seriesInfo.collateralPropertyId;
-
-  const expTickers = await mm.getExpiringTickersUpTo(currentBlockHeight);
-  if (!expTickers.length) return;
-
-  // For each address with positions
-  for (const [address, pos] of mm.margins.entries()) {
-    if (!pos || !pos.options) continue;
-
-    for (const ticker of expTickers) {
-      const optPos = pos.options[ticker];
-      if (!optPos) continue;
-
-      const qty = Number(optPos.contracts || 0);
-      if (!qty) {
-        // remove the empty slot to keep map clean
-        delete pos.options[ticker];
-        continue;
-      }
-
-      const meta = Options.parseTicker(ticker);
-      if (!meta) continue;
-
-      // Intrinsic payoff at settlement
-      const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-      const cash = iv * Math.abs(qty); // per-contract * absolute qty
-
-      // Long options receive; short options pay
-      const availableDelta = qty > 0 ? +cash : -cash;
-
-      // Free any margin previously held on this option leg
-      const marginHeld = Number(optPos.margin || 0);
-      const marginDelta = marginHeld ? -marginHeld : 0;
-
-      // Tally: available +/- intrinsic; margin -= marginHeld
-      await TallyMap.updateBalance(
-        address,
-        collateralPropertyId,
-        availableDelta, // availableChange
-        0,              // reservedChange
-        marginDelta,    // marginChange
-        0,              // vestingChange
-        'optionExpire',
-        currentBlockHeight,
-        txid
-      );
-
-      // Remove the option sub-position from the blob
-      delete pos.options[ticker];
-
-      // Record margin map delta
-      await mm.recordMarginMapDelta(
-        address,
-        ticker,
-        0,                 // position after (expired → closed)
-        -qty,              // delta contracts to flat
-        iv,                // settled at intrinsic (for audit)
-        0,                 // uPNL delta
-        marginHeld ? -marginHeld : 0, // margin freed
-        'optionExpire',
-        currentBlockHeight
-      );
-    }
-
-    // Save back the mutated blob
-    mm.margins.set(address, pos);
-  }
-
-  // Global index cleanup (remove those expiries)
-  await mm.cleanupExpiredTickersUpTo(currentBlockHeight);
-}
-
-static getLatestPositionByAddress(trades, address) {
-  // Loop backwards since later trades are more recent
-  for (let i = trades.length - 1; i >= 0; i--) {
-    const trade = trades[i];
-    // Check buyerPosition first
-    if (trade.buyerPosition && trade.buyerPosition.address === address) {
-      return trade.buyerPosition;
-    }
-    // Check sellerPosition
-    if (trade.sellerPosition && trade.sellerPosition.address === address) {
-      return trade.sellerPosition;
-    }
-  }
-  // If no matching position is found, return null
-  return null;
-}
-
-
-static sortPositionsForPNL(positions, priceDiff) {
-    return positions.sort((a, b) => {
-        if (priceDiff) {
-            // Price is increasing -> Shorts should go first
-            return a.contracts - b.contracts;
-        } else {
-            // Price is decreasing -> Longs should go first
-            return b.contracts - a.contracts;
-        }
-    });
-}
-
-    static async getPriceChange(blockHeight, contractId) {
-        const ContractRegistry = require('./contractRegistry.js');
-        let isOracleContract = await ContractRegistry.isOracleContract(contractId);
-        let oracleId = null;
-        let propertyId1 = null;
-        let propertyId2 = null;
-        let latestData = [];
-
-        if (isOracleContract) {
-            oracleId = await ContractRegistry.getOracleId(contractId);
-            const base = await db.getDatabase('oracleData');
-            latestData = await base.findAsync({ oracleId: oracleId });
-
-        } else {
-            console.log('Inside getPriceChange() for native contract');
-            let info = await ContractRegistry.getContractInfo(contractId);
-            propertyId1 = info?.native?.onChainData?.[0];
-            propertyId2 = info?.native?.onChainData?.[1];
-            
-            if (!propertyId1 || !propertyId2) {
-                console.warn(`No valid properties found for contract ${contractId}`);
-                return { lastPrice: null, thisPrice: null };
+            if(isPartialLiquidation){
+                    const yetAnotherTally = await Tally.getTally(position.address,collateralId)
+                    const remainingMarginBN = new BigNumber(yetAnotherTally.margin)
+                    let adjustedLossBN = lossBN.minus(remainingMarginBN)
+                    if(adjustedLossBN.toNumber()<=0){
+                        adjustedLossBN=0
+                        console.log('about to apply additional liq slippage on partial liq '+splat.liquidationLoss)
+                    }
+                    systemicLoss = systemicLoss.plus(adjustedLossBN).decimalPlaces(8);
+                    console.log('confirming sys loss has been zeroed '+systemicLoss.toNumber())
+            }else if(isFullLiquidation){
+                systemicLoss = systemicLoss.plus(lossBN).decimalPlaces(8);
             }
 
-            latestData = await volumeIndexDB.findAsync({ propertyId1, propertyId2 });
-        }
+            if(splat.partiallyFilledBelowLiqPrice){
+                caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight,markPrice,collateralId);
+            }else if(splat.filledBelowLiqPrice && splat.remainder === 0){
+                caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
+            }else if (splat.filledBelowLiqPrice && splat.remainder > 0){
+                caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
+                console.log(caseLabel);
+                console.log('remainder in case 4 '+remainder)
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
+            } else if(splat.trueBookEmpty){
+                caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
+                console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + markPrice);
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
+            }
+            console.log('result from delev '+JSON.stringify(result))
+        } 
 
-    // Ensure data is an array before sorting
-    const sortedData = Array.isArray(latestData) ? latestData.sort((a, b) => b.blockHeight - a.blockHeight) : [];
-    if (sortedData.length === 0) {
-        console.warn(`No price data found for contract ${contractId}`);
-        return { lastPrice: null, thisPrice: null };
+        position = await marginMap.updateContractBalances(position.address, splat.remainder, liq.price, !liq.sell, refreshedPosition, inverse, true, false, contractId, true, blockHeight);
+
+        console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
+        const counterparties = await Clearing.extractCounterpartyPositions(matchResult.matches,result.counterparties,marginMap,contractId) 
+        console.log('🏦 showing counterparties after merge with trades '+JSON.stringify(counterparties))
+        infoBlob.systemicLoss = systemicLoss
+
+        // Step 5: Save liquidation results
+        await marginMap.saveLiquidationOrders(contractId, position, liq, caseLabel, blockHeight, systemicLoss.toNumber(), splat.remainder, splat.trueLiqPrice, result, infoBlob);
+           //await Clearing.getTotalTokenBalances(blockHeight)
+
+        return { liquidation: liq, systemicLoss: systemicLoss.toNumber(), counterparties: counterparties || [] };
     }
 
-    // Get latest and previous prices
-    const latestBlockData = sortedData[0]; // Most recent entry
-    const currentMarkPrice = latestBlockData?.data?.price || null;
-    const previousMarkPrice = sortedData.length > 1 ? sortedData[1]?.data?.price : null;
+    static async extractCounterpartyPositions(matches, deleveragedPositions, marginMap, contractId) {
+      // Create a set to store unique addresses
+      const addresses = new Set();
 
-    console.log(`Checking mark price: Current=${currentMarkPrice}, Previous=${previousMarkPrice}`);
-    
-    return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
-}
+      // Collect addresses from the matches array (which come from liq order matching)
+      for (const match of matches) {
+        if (match.buyerPosition && match.buyerPosition.address) {
+          addresses.add(match.buyerPosition.address);
+        }
+        if (match.sellerPosition && match.sellerPosition.address) {
+          addresses.add(match.sellerPosition.address);
+        }
+      }
 
-static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
-  const priceBN = new BigNumber(currentMarkPrice);
-  const notionalValueBN = new BigNumber(notionalValue);
-  
-  // Determine the number of "new" contracts for this block.
-  const newPosBN = new BigNumber(position.newPosThisBlock || 0);
-  const totalContractsBN = new BigNumber(position.contracts);
-  const oldContractsBN = totalContractsBN.minus(newPosBN);
+         if (Array.isArray(deleveragedPositions)) {
+          for (const pos of deleveragedPositions) {
+            if (addresses.has(pos.address)) {
+              addresses.delete(pos.address);
+            }
+          }
+        }
 
-  let pnl;
-  console.log('inside calc pnl '+currentMarkPrice+' '+notionalValue+' '+previousMarkPrice+' '+inverse+' '+position.newPosThisBlock+' '+position.contracts)
-  if (!inverse) {
-    // Linear contracts:
-    // For old contracts, baseline = previousMarkPrice.
-    // For new contracts, baseline = position.avgPrice (set at the trade time).
-    const oldBaselineBN = new BigNumber(previousMarkPrice);
-    // If avgPrice is not defined, fallback to previousMarkPrice.
-    const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
-    
-    const pnlOld = priceBN.minus(oldBaselineBN).times(oldContractsBN).times(notionalValueBN);
-    const pnlNew = priceBN.minus(newBaselineBN).times(newPosBN).times(notionalValueBN);
-    pnl = pnlOld.plus(pnlNew);
-    console.log('old and new '+pnlOld.toNumber()+' '+pnlNew.toNumber())
-  } else {
-    // Inverse contracts:
-    // For old contracts, baseline = previousMarkPrice.
-    // For new contracts, baseline = position.avgPrice.
-    const oldBaselineBN = new BigNumber(previousMarkPrice);
-    const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
-    
-    const pnlOld = new BigNumber(1).dividedBy(oldBaselineBN)
-                    .minus(new BigNumber(1).dividedBy(priceBN))
-                    .times(oldContractsBN)
-                    .times(notionalValueBN);
-    const pnlNew = new BigNumber(1).dividedBy(newBaselineBN)
-                    .minus(new BigNumber(1).dividedBy(priceBN))
-                    .times(newPosBN)
-                    .times(notionalValueBN);
-    pnl = pnlOld.plus(pnlNew);
+      // Now build the merged array using the latest DB entry for each address.
 
-  console.log('Calculated PnL change:', pnl.toFixed(8)+' '+pnlOld+' '+pnlNew);
-  }
+      for (const address of addresses) {
+        let updatedPos = await marginMap.getPositionForAddress(address, contractId);
+        // If not found, optionally fallback to the in-memory map:
+        if (!updatedPos && marginMap.margins && typeof marginMap.margins.get === 'function') {
+          updatedPos = marginMap.margins.get(address);
+        }
+        if (updatedPos) {
+          deleveragedPositions.push(updatedPos);
+        }
+      }
 
-  return pnl.decimalPlaces(8).toNumber();
-}
+      return deleveragedPositions;
+    }
+
+    /**
+     * Settle all options expiring at or before currentBlock for a given series.
+     * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
+     */
+    static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
+      const mm = await MarginMap.getInstance(seriesId);
+      const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
+      if (!seriesInfo) return;
+      const collateralPropertyId = seriesInfo.collateralPropertyId;
+
+      const expTickers = await mm.getExpiringTickersUpTo(currentBlockHeight);
+      if (!expTickers.length) return;
+
+      // For each address with positions
+      for (const [address, pos] of mm.margins.entries()) {
+        if (!pos || !pos.options) continue;
+
+        for (const ticker of expTickers) {
+          const optPos = pos.options[ticker];
+          if (!optPos) continue;
+
+          const qty = Number(optPos.contracts || 0);
+          if (!qty) {
+            // remove the empty slot to keep map clean
+            delete pos.options[ticker];
+            continue;
+          }
+
+          const meta = Options.parseTicker(ticker);
+          if (!meta) continue;
+
+          // Intrinsic payoff at settlement
+          const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
+          const cash = iv * Math.abs(qty); // per-contract * absolute qty
+
+          // Long options receive; short options pay
+          const availableDelta = qty > 0 ? +cash : -cash;
+
+          // Free any margin previously held on this option leg
+          const marginHeld = Number(optPos.margin || 0);
+          const marginDelta = marginHeld ? -marginHeld : 0;
+
+          // Tally: available +/- intrinsic; margin -= marginHeld
+          await TallyMap.updateBalance(
+            address,
+            collateralPropertyId,
+            availableDelta, // availableChange
+            0,              // reservedChange
+            marginDelta,    // marginChange
+            0,              // vestingChange
+            'optionExpire',
+            currentBlockHeight,
+            txid
+          );
+
+          // Remove the option sub-position from the blob
+          delete pos.options[ticker];
+
+          // Record margin map delta
+          await mm.recordMarginMapDelta(
+            address,
+            ticker,
+            0,                 // position after (expired → closed)
+            -qty,              // delta contracts to flat
+            iv,                // settled at intrinsic (for audit)
+            0,                 // uPNL delta
+            marginHeld ? -marginHeld : 0, // margin freed
+            'optionExpire',
+            currentBlockHeight
+          );
+        }
+
+        // Save back the mutated blob
+        mm.margins.set(address, pos);
+      }
+
+      // Global index cleanup (remove those expiries)
+      await mm.cleanupExpiredTickersUpTo(currentBlockHeight);
+    }
+
+    static getLatestPositionByAddress(trades, address) {
+      // Loop backwards since later trades are more recent
+      for (let i = trades.length - 1; i >= 0; i--) {
+        const trade = trades[i];
+        // Check buyerPosition first
+        if (trade.buyerPosition && trade.buyerPosition.address === address) {
+          return trade.buyerPosition;
+        }
+        // Check sellerPosition
+        if (trade.sellerPosition && trade.sellerPosition.address === address) {
+          return trade.sellerPosition;
+        }
+      }
+      // If no matching position is found, return null
+      return null;
+    }
+
+
+    static sortPositionsForPNL(positions, priceDiff) {
+        return positions.sort((a, b) => {
+            if (priceDiff) {
+                // Price is increasing -> Shorts should go first
+                return a.contracts - b.contracts;
+            } else {
+                // Price is decreasing -> Longs should go first
+                return b.contracts - a.contracts;
+            }
+        });
+    }
+
+        static async getPriceChange(blockHeight, contractId) {
+            const ContractRegistry = require('./contractRegistry.js');
+            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
+            let oracleId = null;
+            let propertyId1 = null;
+            let propertyId2 = null;
+            let latestData = [];
+
+            if (isOracleContract) {
+                oracleId = await ContractRegistry.getOracleId(contractId);
+                const base = await db.getDatabase('oracleData');
+                latestData = await base.findAsync({ oracleId: oracleId });
+
+            } else {
+                console.log('Inside getPriceChange() for native contract');
+                let info = await ContractRegistry.getContractInfo(contractId);
+                propertyId1 = info?.native?.onChainData?.[0];
+                propertyId2 = info?.native?.onChainData?.[1];
+                
+                if (!propertyId1 || !propertyId2) {
+                    console.warn(`No valid properties found for contract ${contractId}`);
+                    return { lastPrice: null, thisPrice: null };
+                }
+
+                latestData = await volumeIndexDB.findAsync({ propertyId1, propertyId2 });
+            }
+
+        // Ensure data is an array before sorting
+        const sortedData = Array.isArray(latestData) ? latestData.sort((a, b) => b.blockHeight - a.blockHeight) : [];
+        if (sortedData.length === 0) {
+            console.warn(`No price data found for contract ${contractId}`);
+            return { lastPrice: null, thisPrice: null };
+        }
+
+        // Get latest and previous prices
+        const latestBlockData = sortedData[0]; // Most recent entry
+        const currentMarkPrice = latestBlockData?.data?.price || null;
+        const previousMarkPrice = sortedData.length > 1 ? sortedData[1]?.data?.price : null;
+
+        console.log(`Checking mark price: Current=${currentMarkPrice}, Previous=${previousMarkPrice}`);
+        
+        return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
+    }
+
+    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
+      const priceBN = new BigNumber(currentMarkPrice);
+      const notionalValueBN = new BigNumber(notionalValue);
+      
+      // Determine the number of "new" contracts for this block.
+      const newPosBN = new BigNumber(position.newPosThisBlock || 0);
+      const totalContractsBN = new BigNumber(position.contracts);
+      const oldContractsBN = totalContractsBN.minus(newPosBN);
+
+      let pnl;
+      console.log('inside calc pnl '+currentMarkPrice+' '+notionalValue+' '+previousMarkPrice+' '+inverse+' '+position.newPosThisBlock+' '+position.contracts)
+      if (!inverse) {
+        // Linear contracts:
+        // For old contracts, baseline = previousMarkPrice.
+        // For new contracts, baseline = position.avgPrice (set at the trade time).
+        const oldBaselineBN = new BigNumber(previousMarkPrice);
+        // If avgPrice is not defined, fallback to previousMarkPrice.
+        const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
+        
+        const pnlOld = priceBN.minus(oldBaselineBN).times(oldContractsBN).times(notionalValueBN);
+        const pnlNew = priceBN.minus(newBaselineBN).times(newPosBN).times(notionalValueBN);
+        pnl = pnlOld.plus(pnlNew);
+        console.log('old and new '+pnlOld.toNumber()+' '+pnlNew.toNumber())
+      } else {
+        // Inverse contracts:
+        // For old contracts, baseline = previousMarkPrice.
+        // For new contracts, baseline = position.avgPrice.
+        const oldBaselineBN = new BigNumber(previousMarkPrice);
+        const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
+        
+        const pnlOld = new BigNumber(1).dividedBy(oldBaselineBN)
+                        .minus(new BigNumber(1).dividedBy(priceBN))
+                        .times(oldContractsBN)
+                        .times(notionalValueBN);
+        const pnlNew = new BigNumber(1).dividedBy(newBaselineBN)
+                        .minus(new BigNumber(1).dividedBy(priceBN))
+                        .times(newPosBN)
+                        .times(notionalValueBN);
+        pnl = pnlOld.plus(pnlNew);
+
+      console.log('Calculated PnL change:', pnl.toFixed(8)+' '+pnlOld+' '+pnlNew);
+      }
+
+      return pnl.decimalPlaces(8).toNumber();
+    }
 
 
     static async getBalance(holderAddress) {
