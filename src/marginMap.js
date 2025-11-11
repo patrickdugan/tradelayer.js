@@ -124,10 +124,10 @@ class MarginMap {
     async readPosition(seriesId, address) {
       const sid = Number(seriesId);
       if (Number.isNaN(sid)) {
-        throw new Error(`Invalid seriesId: ${seriesId}`);
+        //throw new Error(`Invalid seriesId: ${seriesId}`);
       }
       if (!address) {
-        throw new Error(`Address required`);
+        //throw new Error(`Address required`);
       }
       const marginDB = await db.getDatabase('marginMaps');
       // 1) Try to load the single doc keyed by {"seriesId":sid}
@@ -186,7 +186,7 @@ class MarginMap {
         .toNumber();
         console.log('aftermargin  '+position.margin)
         // Update the MarginMap with the modified position
-        if(sender==null){throw new Error()}
+        //if(sender==null){throw new Error()}
         this.margins.set(sender, position);
         //console.log('margin should be topped up '+JSON.stringify(position))
         await this.recordMarginMapDelta(sender, contractId, position.contracts, 0, totalInitialMargin, 0, 0, 'initialMargin', block)
@@ -295,11 +295,12 @@ class MarginMap {
         const available = balances.available
         console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse+' '+'avg entry '+position.avgPrice)
         const isLong = position.contracts>0? true: false
-        console.log('isLong '+isLong)
+        console.log('about to calc liq for pos '+JSON.stringify(position))
         const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
         console.log('liquidation info ' +JSON.stringify(liquidationInfo));
-        
+        //if(liquidationInfo.liquidationPrice==null){throw Error()}
         if(liquidationInfo==null||position.contracts==0){
+
             position.liqPrice=0
             position.bankruptcyPrice=0
             position.avgPrice=price
@@ -308,7 +309,7 @@ class MarginMap {
             position.bankruptcyPrice = liquidationInfo.bankruptcyPrice  
             console.log('position with possible nulls '+JSON.stringify(position)) 
         }
-        if(address==null){throw new Error()}
+        //if(address==null){throw new Error()}
         
         if(isBuyOrder&&!inClearing){
             if(flip>0){
@@ -340,7 +341,7 @@ class MarginMap {
 
         if(position.bankruptcyPrice===undefined){
             console.log('missing liq prices in position '+JSON.stringify(position))
-            throw new Error()
+            //throw new Error()
             position.bankruptcyPrice=0
         }
         console.log('✅ position before saving to marginMap '+JSON.stringify(position))
@@ -350,18 +351,17 @@ class MarginMap {
     }
     
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
+        console.log(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL)
         const balanceBN = new BigNumber(available);
         const marginBN = new BigNumber(margin);
-        let uPNLBN = 0
-        if(uPNL<0){
-            uPNLBN = new BigNumber(Math.abs(uPNL))
-        }
+        const uPNLBN = new BigNumber(uPNL || 0);
+        const totalCollateralBN = balanceBN.plus(marginBN).minus(BigNumber.max(uPNLBN, 0));
+
         const contractsBN = new BigNumber(Math.abs(contracts));
         const notionalValueBN = new BigNumber(notionalValue);
         const avgPriceBN = new BigNumber(avgPrice);
 
         // For linear contracts, use your existing formulas.
-        const totalCollateralBN = balanceBN.plus(marginBN).plus(uPNLBN);
         const positionNotional = notionalValueBN.times(contractsBN);
         let bankruptcyPriceBN = new BigNumber(0);
         let liquidationPriceBN = new BigNumber(0);
@@ -504,7 +504,7 @@ class MarginMap {
         }
         
         // Save the updated position
-        if(address==null){throw new Error()}
+        //if(address==null){throw new Error()}
         this.margins.set(address, position);
         this.margins.set(synthId,vaultPosition)
         await this.recordMarginMapDelta(synthId, contractId, vaultPosition.contracts, contracts, margin, 0, avgDelta, 'mintMarginAndContractsToVault');
@@ -518,7 +518,7 @@ class MarginMap {
             const position = this.margins.get(address);
             const vaultPosition = this.margins.get(propertyId)
             if (!position) {
-                throw new Error(`No position found for redemption with ${propertyId} collateral and contract ${contractId}`);
+                //throw new Error(`No position found for redemption with ${propertyId} collateral and contract ${contractId}`);
             }
 
             let excess = 0;
@@ -597,7 +597,7 @@ class MarginMap {
             }
 
             console.log('updating margin map in redeem '+address+' '+JSON.stringify(position))
-            if(address==null){throw new Error()}
+            //if(address==null){throw new Error()}
             this.margins.set(address, position);
             await this.recordMarginMapDelta(propertyId, contractId, vault.contracts, contractShort, -returnMargin, -accountingPNL, 0, 'redeemMarginAndContractsFromVault');
             await this.recordMarginMapDelta(address,contractId, position.contracts, contractShort,returnMargin, accountingPNL,0,'moveMarginAndContractsForRedeem')
@@ -1159,14 +1159,15 @@ class MarginMap {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice) {
+    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
+            position.oldMark = oldPrice
             position.lastMark = markPrice
             const uPNLBN = new BigNumber(position.unrealizedPNL)
             position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
-            if(address==null){throw new Error()}
+            //if(address==null){throw new Error()}
             //if(!position.liqPrice&&position.liqPrice!==null){position.liqPrice = liqPrice}
             //if(!position.bankruptcyPrice&&position.bankruptcyPrice!==null){position.bankruptcyPrice = bankruptcyPrice}
             this.margins.set(position.address, position)

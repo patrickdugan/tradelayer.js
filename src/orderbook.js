@@ -1332,65 +1332,81 @@ class Orderbook {
       return { closed, flipped, newPos };
     }
 
-    async sourceFundsForLoss(fromAddress, collateralPropertyId, requiredAmount, blockHeight) {
-        const TallyMap = require('./tally.js'); // safe to lazy load inside method
-        const ContractRegistry = require('./contractRegistry.js');
+    async sourceFundsForLoss(address, propertyId, lossAmount, contractId, obForContract) {
+        const TallyMap = require('./tally.js');
 
-        console.log(`💰 Attempting to source ${requiredAmount} for ${fromAddress}`);
-
-        // 1️⃣ Check available
-        let tally = await TallyMap.getTally(fromAddress, collateralPropertyId);
-        if (tally.available >= requiredAmount) {
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, -requiredAmount, 0, 0, 0, 'lossFromAvailable', blockHeight);
-            console.log(`✅ Covered ${requiredAmount} from available`);
-            return { covered: requiredAmount, remaining: 0 };
+        const tally = await TallyMap.getTally(address, propertyId);
+        if (!tally) {
+            return { hasSufficient: false, reason: 'undefined tally', remaining: lossAmount };
         }
 
-        let remaining = requiredAmount;
-        if (tally.available > 0) {
-            remaining -= tally.available;
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, -tally.available, 0, 0, 0, 'lossPartialAvailable', blockHeight);
-            console.log(`⚠️ Used ${tally.available} from available, ${remaining} remaining`);
+        let remaining = new BigNumber(lossAmount);
+        const breakdown = { fromAvailable: 0, fromMarginCap: 0, fromReserve: 0, fromMarginFinal: 0 };
+
+        console.log(`🔍 Starting loss sourcing for ${address}, need ${remaining.toFixed(8)}`);
+
+        // 1️⃣ Available balance
+        const availUse = BigNumber.min(remaining, tally.available || 0);
+        if (availUse.gt(0)) {
+            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available');
+            breakdown.fromAvailable = availUse.toNumber();
+            remaining = remaining.minus(availUse);
         }
 
-        // 2️⃣ Cancel open orders for all contracts to recover reserve
-        console.log('🔄 Cancelling all open orders to reclaim reserve');
-        const allContracts = await ContractRegistry.loadContractSeries();
-        for (const contract of allContracts) {
-            const contractId = contract[1].id;
-            await this.cancelAllOrdersForAddress(fromAddress, contractId, blockHeight, collateralPropertyId);
+        // 2️⃣ 49% of margin
+        if (remaining.gt(0)) {
+            const marginCap = new BigNumber(tally.margin || 0).multipliedBy(0.49);
+            const marginUse = BigNumber.min(remaining, marginCap);
+            if (marginUse.gt(0)) {
+                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap');
+                breakdown.fromMarginCap = marginUse.toNumber();
+                remaining = remaining.minus(marginUse);
+            }
         }
 
-        // Refresh tally after cancellation
-        tally = await TallyMap.getTally(fromAddress, collateralPropertyId);
+        // 3️⃣ Try freeing reserve first if needed
+        if (remaining.gt(0)) {
+            const reserveAvail = new BigNumber(tally.reserved || 0);
+            if (reserveAvail.lt(remaining)) {
+                const deficit = remaining.minus(reserveAvail);
+                console.log(`⚠️ Attempting to free ${deficit.toFixed(8)} from cancelled orders`);
+                await TallyMap.cancelExcessOrders(address, contractId, obForContract, deficit);
+            }
 
-        // 3️⃣ Use margin if available
-        if (remaining > 0 && tally.margin >= remaining) {
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, 0, -remaining, 0, 'lossFromMargin', blockHeight);
-            console.log(`✅ Covered ${remaining} from margin`);
-            return { covered: requiredAmount, remaining: 0 };
-        } else if (remaining > 0 && tally.margin > 0) {
-            remaining -= tally.margin;
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, 0, -tally.margin, 0, 'lossPartialMargin', blockHeight);
-            console.log(`⚠️ Used ${tally.margin} from margin, ${remaining} remaining`);
+            const afterCancelTally = await TallyMap.getTally(address, propertyId);
+            const reserveUse = BigNumber.min(remaining, afterCancelTally.reserved || 0);
+            if (reserveUse.gt(0)) {
+                await TallyMap.updateBalance(address, propertyId, 0, -reserveUse, 0, 0, 'loss_from_reserve');
+                breakdown.fromReserve = reserveUse.toNumber();
+                remaining = remaining.minus(reserveUse);
+            }
+
+            // 4️⃣ Remaining margin (final recourse)
+            if (remaining.gt(0)) {
+                const marginLeft = new BigNumber(afterCancelTally.margin || 0);
+                const marginUse2 = BigNumber.min(remaining, marginLeft);
+                if (marginUse2.gt(0)) {
+                    await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse2, 0, 'loss_from_margin_final');
+                    breakdown.fromMarginFinal = marginUse2.toNumber();
+                    remaining = remaining.minus(marginUse2);
+                }
+            }
         }
 
-        // 4️⃣ Use reserve (if still short)
-        if (remaining > 0 && tally.reserved >= remaining) {
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, -remaining, 0, 0, 'lossFromReserve', blockHeight);
-            console.log(`✅ Covered ${remaining} from reserve`);
-            return { covered: requiredAmount, remaining: 0 };
-        } else if (remaining > 0 && tally.reserved > 0) {
-            remaining -= tally.reserved;
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, 0, -tally.reserved, 0, 0, 'lossPartialReserve', blockHeight);
-            console.log(`⚠️ Used ${tally.reserved} from reserve, ${remaining} remaining`);
-        }
+        const success = remaining.lte(0);
+        remaining.decimalPlaces(8).toNumber();
+        const reason = success ? '' : 'Insufficient total balance after all buckets';
 
-        // 5️⃣ Final fallback: Systemic loss
-        console.log(`❌ Unable to cover ${remaining}. Escalating to systemic loss / insurance fund.`);
-        return { covered: requiredAmount - remaining, remaining };
+        console.log(`📊 Loss sourcing result for ${address}:`, { success, remaining, breakdown });
+
+        return {
+            hasSufficient: success,
+            reason,
+            remaining,
+            totalUsed: lossAmount - remaining,
+            breakdown
+        };
     }
-
      
     async processContractMatches(matches, currentBlockHeight, channel){
             const TallyMap = require('./tally.js');
@@ -1723,12 +1739,16 @@ class Orderbook {
                     console.log(lastMark)  
                     let buyerMark = lastMark
                     let sellerMark = lastMark
-                    if(match.buyerPosition.lastMark!==lastMark&&match.buyerPosition.lastMark){
+                    if((match.buyerPosition.lastMark!==lastMark&&match.buyerPosition.lastMark)&&!match.buyOrder.liq){
                         buyerMark = match.buyerPosition.lastMark
+                    }else if(match.buyOrder.liq){
+                        buyerMark = match.buyerPosition.oldMark
                     }
-                    if(match.sellerPosition.lastMark!==lastMark&&match.sellerPosition.lastMark){
+                    if((match.sellerPosition.lastMark!==lastMark&&match.sellerPosition.lastMark)&&!match.sellOrder.liq){
                         sellerMark = match.sellerPosition.lastMark
-                    }    
+                    }else if(match.sellOrder.liq){
+                        sellerMark = match.sellerPosition.oldMark
+                    }  
 
                     console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
