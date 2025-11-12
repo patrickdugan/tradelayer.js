@@ -733,7 +733,7 @@ class Clearing {
 
             let newPosition = await marginMap.clear(position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank,blob.lastPrice);
             if (pnlChange > 0){
-              const reviewPos = await marginMap.readPosition(position.address,contractId);
+              const reviewPos = await marginMap.getPositionForAddress(position.address,contractId);
 
               // Compare value-wise, not by reference.
               const sameContracts = reviewPos.contracts === position.contracts;
@@ -971,7 +971,7 @@ class Clearing {
         }else{
               // In partial-liq flows we already adjusted Tally + marginMap upstream.
               // Just refresh the latest position so we don't overwrite it.
-              position = await marginMap.readPosition(position.address, contractId) || position;
+              position = await marginMap.getPositionForAddress(position.address, contractId) || position;
         }
 
         const orderbookKey= contractId.toString()
@@ -1077,7 +1077,7 @@ class Clearing {
       // Now build the merged array using the latest DB entry for each address.
 
       for (const address of addresses) {
-        let updatedPos = await marginMap.readPosition(address, contractId);
+        let updatedPos = await marginMap.getPositionForAddress(address, contractId);
         // If not found, optionally fallback to the in-memory map:
         if (!updatedPos && marginMap.margins && typeof marginMap.margins.get === 'function') {
           updatedPos = marginMap.margins.get(address);

@@ -121,7 +121,7 @@ class MarginMap {
         return allPositions;
     }
 
-    async readPosition(address,seriesId) {
+    /*async readPosition(address,seriesId) {
       const sid = Number(seriesId);
       if (Number.isNaN(sid)) {
         //throw new Error(`Invalid seriesId: ${seriesId}`);
@@ -154,12 +154,12 @@ class MarginMap {
 
       for (const [addr, pos] of parsed) {
         if (addr === address) {
-          console.log('what readPosition returns '+addr +' '+JSON.stringify(pos)+' '+JSON.stringify(parsed))
+          console.log('what getPositionForAddress returns '+addr +' '+JSON.stringify(pos)+' '+JSON.stringify(parsed))
           return pos;
         }
       }
       return null;
-    }
+    }*/
 
 // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin,block) {
@@ -1161,7 +1161,8 @@ class MarginMap {
     }
 
     async clear(address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
-            const position = await this.readPosition(address,contractId)
+            const position = await this.getPositionForAddress(address,contractId)
+            console.log('position before clear '+JSON.stringify(position))
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
@@ -1432,7 +1433,7 @@ class MarginMap {
         console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
         const ContractRegistry= require('./contractRegistry.js')
  
-        let position = await this.readPosition(address, contractId);
+        let position = await this.getPositionForAddress(address, contractId);
         const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
         const collateral = await ContractRegistry.getCollateralId(contractId)    
         if (!position) return;
@@ -1553,7 +1554,7 @@ async calculateNetExposure(address, collateralId) {
 
     for (let contract of allContracts) {
         const marginMap = await MarginMap.getInstance(contract.contractId);
-        const position = await marginMap.readPosition(address, contract.contractId);
+        const position = await marginMap.getPositionForAddress(address, contract.contractId);
         if (position) {
             netExposure = netExposure.plus(position.contracts);
         }
@@ -1566,7 +1567,7 @@ async executeDeleveraging(address, contractId, size, side, liqPrice,block) {
     console.log(`Executing deleveraging: ${address} ${size} contracts at ${liqPrice}`);
     
     const marginMap = await MarginMap.getInstance(contractId);
-    let position = await marginMap.readPosition(address, contractId);
+    let position = await marginMap.getPositionForAddress(address, contractId);
 
     if (!position) return;
 
@@ -1670,7 +1671,7 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
         return false; // No positions require liquidation
     }
 
-async readPosition(address, contractId) {
+async getPositionForAddress(address, contractId) {
     // This expects your loader to return { margins: array } 
     // where margins is like: [ [address, {contracts: ...}], ... ]
 
@@ -1689,20 +1690,27 @@ async readPosition(address, contractId) {
     }
 
     // Fallback for Bech32 (case-insensitive)
-    if (address.startsWith('ltc1') || address.startsWith('tltc1')) {
+    // Bech32-insensitive match for BTC + LTC mainnet/testnet
+    if (
+        address.startsWith('ltc1') || address.startsWith('tltc1') ||
+        address.startsWith('bc1')  || address.startsWith('tb1')
+    ) {
         for (const [addr, pos] of arr) {
-            if (addr.toLowerCase() === address.toLowerCase()) {
-                console.log("[DEBUG] Found Bech32 (lowercase) match:", addr);
+            const lowerAddr = addr.toLowerCase();
+            const lowerInput = address.toLowerCase();
+            if (lowerAddr === lowerInput) {
+                console.log("[DEBUG] Found Bech32 (BTC/LTC lowercase) match:", addr);
+                if (!pos.address) pos.address = addr;
                 return pos;
             }
         }
     }
 
+
     // Still not found
     console.log("[DEBUG] Address not found in margin map for contractId", contractId);
     return { contracts: 0, margin: 0, unrealizedPNL: 0 };
 }
-
 
     async getMarketPrice(contract) {
         let marketPrice;
