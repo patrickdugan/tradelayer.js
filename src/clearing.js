@@ -730,7 +730,7 @@ class Clearing {
             let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
             position.newPosThisBlock=0
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
-
+            await marginMap.writePositionToMap(contractId, position) // persist the full object
             let newPosition = await marginMap.clear(position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank,blob.lastPrice);
             if (pnlChange > 0){
               const reviewPos = await marginMap.getPositionForAddress(position.address,contractId);
@@ -764,12 +764,13 @@ class Clearing {
                     await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 }else{
                     const excess = await Clearing.reconcileReserve(position.address,collateralId,blockHeight)
+                    console.log('excess returned '+excess)
                     let balance2 = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                     if(balance2.hasSufficient){
                          await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearingAfterRecReserve', blockHeight);
                     }else if(balance2.shortfall< tally.margin) {
                             let tallyPartial = await Tally.getTally(position.address, collateralId)
-                        console.log('STOP - '+balance2.shortfall+' '+tally.margin)                        
+                            console.log('STOP - '+balance2.shortfall+' '+tally.margin)                        
                             await Tally.updateBalance(position.address, collateralId, -tallyPartial.available, 0, -balance2.shortfall, 0, 'clearingLossPartialLiq', blockHeight);
                             await marginMap.updateMargin(position.address, contractId, -balance2.shortfall);
                             tallyPartial = await Tally.getTally(position.address, collateralId)
@@ -787,7 +788,7 @@ class Clearing {
                                     systemicLoss += liquidationResult.systemicLoss;
                                 }
                             }
-                        } else {
+                    } else {
                             console.log('Danger zone! Margin is insufficient:'+pnlChange, balance2.shortfall, tally.margin);
                             let cancelledOrders = await orderbook.cancelAllOrdersForAddress(position.address, contractId, blockHeight, collateralId);
                             let postCancelBalance = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));

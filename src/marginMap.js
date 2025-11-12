@@ -121,6 +121,43 @@ class MarginMap {
         return allPositions;
     }
 
+    async writePositionToMap(contractId, position) {
+      try {
+        const key = JSON.stringify({ seriesId: contractId });
+        const marginMapsDB = await db.getDatabase('marginMaps');
+
+        // Load existing doc (if any)
+        const existing = await marginMapsDB.findOneAsync({ _id: key });
+
+        let map;
+        if (existing) {
+          const parsedValue = JSON.parse(existing.value);
+          map = new Map(parsedValue);
+        } else {
+          map = new Map();
+        }
+
+        // Update sender’s position
+        map.set(position.address, position);
+
+        // Serialize and save
+        const doc = {
+          _id: key,
+          value: JSON.stringify(Array.from(map.entries())),
+          updatedAt: new Date().toISOString()
+        };
+
+        await marginMapsDB.updateAsync({ _id: key }, doc, { upsert: true });
+
+        console.log(`📝 Saved position for ${position.address} in contract ${contractId}`);
+        return true;
+      } catch (err) {
+        console.error('❌ Error writing position to map:', err);
+        return false;
+      }
+    }
+
+
     /*async readPosition(address,seriesId) {
       const sid = Number(seriesId);
       if (Number.isNaN(sid)) {

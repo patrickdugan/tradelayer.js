@@ -2777,63 +2777,61 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
             // Return the details of the cancelled orders
             return cancelledOrders;
         }
+async cancelAllOrdersForAddress(fromAddress, key, block, collateralPropertyId) {
+    const TallyMap = require('./tally.js');
+    const ContractRegistry = require('./contractRegistry.js');
+    
+    console.log(`\n🛑 Cancelling all contract ${key} orders for ${fromAddress}`);
 
-    async cancelAllOrdersForAddress(fromAddress, key, block, collateralPropertyId) {
-        const TallyMap = require('./tally.js');
-        const ContractRegistry = require('./contractRegistry.js');
-        
-        console.log(`\n🛑 Cancelling all contract ${key} orders for ${fromAddress}`);
+    let orderBook = await this.loadOrderBook(key, fromAddress);
+    if (!Array.isArray(orderBook.buy)) orderBook.buy = [];
+    if (!Array.isArray(orderBook.sell)) orderBook.sell = [];
 
-        // Load the correct order book
-        //let orderBook = this.orderBooks[key]; // Correctly get the order book
-        //if (!orderBook) {
-            //console.log('cant find locally loading book from db');
-            let orderBook = await this.loadOrderBook(key, fromAddress);
-        //}
+    let cancelledOrders = [];
+    let returnFromReserve = 0;
 
-        // Ensure `buy` and `sell` arrays exist but avoid overwriting
-        if (!Array.isArray(orderBook.buy)) orderBook.buy = [];
-        if (!Array.isArray(orderBook.sell)) orderBook.sell = [];
+    // Helper for shared cancel logic
+    const filterFn = (side) => (order) => {
+        const isMine = order.sender === fromAddress;
+        const isReduce = !order.initMargin || order.initMargin <= 0;
 
-        let cancelledOrders = [];
-        let returnFromReserve = 0;
-
-        // Cancel Buy Orders
-        orderBook.buy = orderBook.buy.filter(order => {
-            console.log('in buy cancel filter '+order.sender+' '+fromAddress)
-            if (order.sender === fromAddress) {
-                cancelledOrders.push(order);
-                returnFromReserve += order.initMargin || 0;
-                return false; // Remove this order
+        if (isMine) {
+            if (isReduce) {
+                console.log(`⚠️ Skipping reduce-only ${side} order ${order.txid}`);
+                return true; // Keep reduce orders
             }
-            return true; // Keep order
-        });
-
-        // Cancel Sell Orders
-        orderBook.sell = orderBook.sell.filter(order => {
-        console.log('in sell cancel filter '+order.sender+' '+fromAddress)
-            if (order.sender === fromAddress) {
-                cancelledOrders.push(order);
-                returnFromReserve += order.initMargin || 0;
-                return false; // Remove this order
-            }
-            return true; // Keep order
-        });
-
-        console.log(`✅ Cancelled ${cancelledOrders.length} orders for ${fromAddress}. Returning ${returnFromReserve} to reserve.`);
-        console.log(JSON.stringify(cancelledOrders))
-        // Save the updated order book
-        this.orderBooks[key] = orderBook; // Ensure it overwrites, not merges
-        console.log('about to save orderbook '+JSON.stringify(orderBook))
-        await this.saveOrderBook(orderBook, key);
-
-        // Process reserve refunds
-        if (returnFromReserve > 0) {
-            await TallyMap.updateBalance(fromAddress, collateralPropertyId, returnFromReserve, -returnFromReserve, 0, 0, 'contractCancel', block);
+            cancelledOrders.push(order);
+            returnFromReserve += order.initMargin;
+            return false; // Remove non-reduce order
         }
+        return true; // Keep others
+    };
 
-        return cancelledOrders;
+    orderBook.buy = orderBook.buy.filter(filterFn('buy'));
+    orderBook.sell = orderBook.sell.filter(filterFn('sell'));
+
+    console.log(`✅ Cancelled ${cancelledOrders.length} non-reduce orders for ${fromAddress}. Returning ${returnFromReserve} to reserve.`);
+    console.log(JSON.stringify(cancelledOrders, null, 2));
+
+    this.orderBooks[key] = orderBook;
+    await this.saveOrderBook(orderBook, key);
+
+    if (returnFromReserve > 0) {
+        await TallyMap.updateBalance(
+            fromAddress,
+            collateralPropertyId,
+            returnFromReserve,
+            -returnFromReserve,
+            0,
+            0,
+            'contractCancel',
+            block
+        );
     }
+
+    return cancelledOrders;
+}
+
            
         async getOrdersForAddress(address, contractId, offeredPropertyId, desiredPropertyId) {
             const orderbookId = contractId ? contractId.toString() : `${offeredPropertyId}-${desiredPropertyId}`;
