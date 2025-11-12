@@ -121,7 +121,7 @@ class MarginMap {
         return allPositions;
     }
 
-    async readPosition(seriesId, address) {
+    async readPosition(address,seriesId) {
       const sid = Number(seriesId);
       if (Number.isNaN(sid)) {
         //throw new Error(`Invalid seriesId: ${seriesId}`);
@@ -154,6 +154,7 @@ class MarginMap {
 
       for (const [addr, pos] of parsed) {
         if (addr === address) {
+          console.log('what readPosition returns '+addr +' '+JSON.stringify(pos)+' '+JSON.stringify(parsed))
           return pos;
         }
       }
@@ -1159,7 +1160,8 @@ class MarginMap {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
+    async clear(address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
+            const position = await this.readPosition(address,contractId)
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
             }
@@ -1249,112 +1251,113 @@ class MarginMap {
     }
 
     async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice,collateralId) {
-      console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
-             const TallyMap= require('./tally.js')
-      let remainingSize = new BigNumber(unfilledContracts);
-      
-      if(remainingSize.isNaN() || remainingSize.isNegative()){
-        throw new Error(`🔥 Invalid unfilledContracts. Value: ${unfilledContracts}`);
-      }
+          console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
+                 const TallyMap= require('./tally.js')
+          let remainingSize = new BigNumber(unfilledContracts);
+          
+          if(remainingSize.isNaN() || remainingSize.isNegative()){
+            throw new Error(`🔥 Invalid unfilledContracts. Value: ${unfilledContracts}`);
+          }
 
-      // Blob for final report
-      let deleveragingData = {
-        liquidatingAddress: liquidatingAddress || null,
-        contractId: contractId,
-        attemptedDeleverage: remainingSize.toNumber(),
-        totalDeleveraged: 0,
-        counterparties: []
-      };
+          // Blob for final report
+          let deleveragingData = {
+            liquidatingAddress: liquidatingAddress || null,
+            contractId: contractId,
+            attemptedDeleverage: remainingSize.toNumber(),
+            totalDeleveraged: 0,
+            counterparties: []
+          };
 
-      const allPositions = await this.getAllPositions(contractId);
-      console.log(` Found ${allPositions.length} total positions in marginMap.`);
+          const allPositions = await this.getAllPositions(contractId);
+          console.log(` Found ${allPositions.length} total positions in marginMap.`);
 
-      // Filter out all longs vs. shorts
-      let longs = allPositions.filter(p => p.contracts > 0 && p.address !== liquidatingAddress&& p.contracts !==0);
-      let shorts = allPositions.filter(p => p.contracts < 0 && p.address !== liquidatingAddress && p.contracts !==0);
+          // Filter out all longs vs. shorts
+          let longs = allPositions.filter(p => p.contracts > 0 && p.address !== liquidatingAddress&& p.contracts !==0);
+          let shorts = allPositions.filter(p => p.contracts < 0 && p.address !== liquidatingAddress && p.contracts !==0);
 
-      // Sort each side by largest PNL first
-      longs.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
-      shorts.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+          // Sort each side by largest PNL first
+          longs.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+          shorts.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
 
-      console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
+          console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
 
-      // Select counterparties based on side
-      let counterparties = sell ? shorts:longs;
+          // Select counterparties based on side
+          let counterparties = sell ? shorts:longs;
 
-      // Calculate contract differences for more even distribution
-      for(let i = 0; i < counterparties.length; i++){
-        let bigger = counterparties[i];
-        let next = counterparties[i + 1] || { contracts: 0 };
-        counterparties[i].difference = bigger.contracts - next.contracts;
-      }
+          // Calculate contract differences for more even distribution
+          for(let i = 0; i < counterparties.length; i++){
+            let bigger = counterparties[i];
+            let next = counterparties[i + 1] || { contracts: 0 };
+            counterparties[i].difference = bigger.contracts - next.contracts;
+          }
 
-        console.log(`🔎 Checking counterparties...`);
-        console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No counterparties found!");
+            console.log(`🔎 Checking counterparties...`);
+            console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No counterparties found!");
 
-      // Iterate through counterparties for deleveraging
-      for (let pos of counterparties) {
-        if(pos.contracts == 0){continue}
-        let sizeBN = new BigNumber(pos.contracts);    
-        let matchSize = Math.min(pos.difference, remainingSize.toNumber())
+          // Iterate through counterparties for deleveraging
+          for (let pos of counterparties) {
+            if(pos.contracts == 0){continue}
+            let sizeBN = new BigNumber(pos.contracts);    
+            let matchSize = Math.min(pos.difference, remainingSize.toNumber())
 
-        // 🔹 If this is the last counterparty and there's still remaining size, force match
-        if (pos === counterparties[counterparties.length - 1] && remainingSize.gt(0)) {
-            matchSize = remainingSize.toNumber();
+            // 🔹 If this is the last counterparty and there's still remaining size, force match
+            if (pos === counterparties[counterparties.length - 1] && remainingSize.gt(0)) {
+                matchSize = remainingSize.toNumber();
+            }
+
+            console.log(`• Matching: ${pos.address} (${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
+
+            // Ensure matchSize is positive before proceeding
+            if (matchSize > 0) {
+              pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
+                const matchBN = new BigNumber(matchSize)
+
+            await this.clawbackOrClawForward(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
+
+              pos = await this.realizePnl(
+                pos.address,
+                matchSize,
+                liqPrice,
+                pos.avgPrice,
+                isInverse,
+                notional,
+                pos,
+                !sell,
+                contractId
+              );
+
+            console.log('post rPNL pos '+JSON.stringify(pos))
+              // **Construct Trade Object**
+            const trade = {
+                    contractId: contractId,
+                    amount: matchSize,
+                    price: liqPrice,
+                    markPrice: markPrice,
+                    counterpartyAddress: pos.address,
+                    liquidatingAddress: liquidatingAddress,
+                    block: block,
+                    realizedPnL: pos.realizedPNL,
+                    liquidation: true,
+                    deleverage: true
+                };
+
+                // **Record Trade in Trade History**
+                await this.recordContractTrade(trade, block,'','');
+
+              deleveragingData.totalDeleveraged += matchSize;
+              deleveragingData.counterparties.push(pos);
+
+              remainingSize = remainingSize.minus(matchSize);
+              console.log('delev data obj '+JSON.stringify(deleveragingData))
+              if (remainingSize.isZero()) break;
+            }
+
+          if (remainingSize.gt(0)) {
+            console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
+          }
         }
-
-        console.log(`• Matching: ${pos.address} (${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
-
-        // Ensure matchSize is positive before proceeding
-        if (matchSize > 0) {
-          pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
-            const matchBN = new BigNumber(matchSize)
-
-        await this.clawbackOrClawForward(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
-
-          pos = await this.realizePnl(
-            pos.address,
-            matchSize,
-            liqPrice,
-            pos.avgPrice,
-            isInverse,
-            notional,
-            pos,
-            !sell,
-            contractId
-          );
-
-        console.log('post rPNL pos '+JSON.stringify(pos))
-          // **Construct Trade Object**
-        const trade = {
-                contractId: contractId,
-                amount: matchSize,
-                price: liqPrice,
-                markPrice: markPrice,
-                counterpartyAddress: pos.address,
-                liquidatingAddress: liquidatingAddress,
-                block: block,
-                realizedPnL: pos.realizedPNL,
-                liquidation: true
-            };
-
-            // **Record Trade in Trade History**
-            await this.recordContractTrade(trade, block,'','');
-
-          deleveragingData.totalDeleveraged += matchSize;
-          deleveragingData.counterparties.push(pos);
-
-          remainingSize = remainingSize.minus(matchSize);
-          console.log('delev data obj '+JSON.stringify(deleveragingData))
-          if (remainingSize.isZero()) break;
-        }
-
-      if (remainingSize.gt(0)) {
-        console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
-      }
+            return deleveragingData;
     }
-        return deleveragingData;
-}
 
     async clawbackOrClawForward(pos, markPrice, matchSize, notional, liqPrice, collateralId, block, TallyMap, sell, isInverse) {
       // **** New Clawback Logic ****
@@ -1429,7 +1432,7 @@ class MarginMap {
         console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
         const ContractRegistry= require('./contractRegistry.js')
  
-        let position = await this.getPositionForAddress(address, contractId);
+        let position = await this.readPosition(address, contractId);
         const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
         const collateral = await ContractRegistry.getCollateralId(contractId)    
         if (!position) return;
@@ -1550,7 +1553,7 @@ async calculateNetExposure(address, collateralId) {
 
     for (let contract of allContracts) {
         const marginMap = await MarginMap.getInstance(contract.contractId);
-        const position = await marginMap.getPositionForAddress(address, contract.contractId);
+        const position = await marginMap.readPosition(address, contract.contractId);
         if (position) {
             netExposure = netExposure.plus(position.contracts);
         }
@@ -1563,7 +1566,7 @@ async executeDeleveraging(address, contractId, size, side, liqPrice,block) {
     console.log(`Executing deleveraging: ${address} ${size} contracts at ${liqPrice}`);
     
     const marginMap = await MarginMap.getInstance(contractId);
-    let position = await marginMap.getPositionForAddress(address, contractId);
+    let position = await marginMap.readPosition(address, contractId);
 
     if (!position) return;
 
@@ -1667,7 +1670,7 @@ async fetchLiquidationVolume(blockHeight, contractId, mark) {
         return false; // No positions require liquidation
     }
 
-async getPositionForAddress(address, contractId) {
+async readPosition(address, contractId) {
     // This expects your loader to return { margins: array } 
     // where margins is like: [ [address, {contracts: ...}], ... ]
 

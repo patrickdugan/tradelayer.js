@@ -702,7 +702,7 @@ class Orderbook {
             const MarginMap = require('./marginMap.js')
             const marginMap = await MarginMap.loadMarginMap(contractId);
                          // Get the existing position sizes for buyer and seller
-            const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
+            const existingPosition = await marginMap.readPosition(sender, contractId);
             // Determine if the trade reduces the position size for buyer or seller
             const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&sell==false);
             const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && sell==true);
@@ -1450,8 +1450,8 @@ class Orderbook {
                     }
                       //console.log('checking the marginMap for contractId '+ marginMap )
                     // Get the existing position sizes for buyer and seller
-                    match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
-                    match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+                    match.buyerPosition = await marginMap.readPosition(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+                    match.sellerPosition = await marginMap.readPosition(match.sellOrder.sellerAddress, match.buyOrder.contractId);
                     if(match.buyerPosition.address==undefined){
                         match.buyerPosition.address=match.buyOrder.buyerAddress
                     }
@@ -2187,8 +2187,8 @@ async validateMatch(match) {
   }
   // Load the margin map for this contract
   const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
-  match.buyerPosition = await marginMap.getPositionForAddress(match.buyOrder.buyerAddress, match.buyOrder.contractId);
-  match.sellerPosition = await marginMap.getPositionForAddress(match.sellOrder.sellerAddress, match.buyOrder.contractId);
+  match.buyerPosition = await marginMap.readPosition(match.buyOrder.buyerAddress, match.buyOrder.contractId);
+  match.sellerPosition = await marginMap.readPosition(match.sellOrder.sellerAddress, match.buyOrder.contractId);
   if (!match.buyerPosition.address) match.buyerPosition.address = match.buyOrder.buyerAddress;
   if (!match.sellerPosition.address) match.sellerPosition.address = match.sellOrder.sellerAddress;
   

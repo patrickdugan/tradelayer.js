@@ -1393,7 +1393,7 @@ const Validity = {
             const amountBN = new BigNumber(params.amount);
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(amountBN).toNumber();
 
-            const existingPosition = await marginMap.getPositionForAddress(sender, params.contractId);
+            const existingPosition = await marginMap.readPosition(sender, params.contractId);
             console.log('existing position to see if we reduce '+JSON.stringify(existingPosition))
             // Determine if the trade reduces the position size for buyer or seller
             console.log('flag values '+existingPosition.contracts+' '+params.sell)
@@ -1568,8 +1568,8 @@ const Validity = {
             const effectiveB = (balanceB || 0) + (tallyB?.available || 0);
 
             const marginMap = await MarginMap.getInstance(params.contractId)
-            const existingPositionA = await marginMap.getPositionForAddress(commitAddressA, params.contractId);
-            const existingPositionB = await marginMap.getPositionForAddress(commitAddressB, params.contractId);
+            const existingPositionA = await marginMap.readPosition(commitAddressA, params.contractId);
+            const existingPositionB = await marginMap.readPosition(commitAddressB, params.contractId);
             // Determine if the trade reduces the position size for buyer or seller
             let AIsSeller
             let isBuyerReducingPosition 
@@ -2353,7 +2353,7 @@ const Validity = {
         }
 
         const marginMap = await MarginMap.getInstance(params.contractId);
-        const position = await marginMap.getPositionForAddress(sender, params.contractId);
+        const position = await marginMap.readPosition(sender, params.contractId);
         if (!position.contracts) {
             params.valid = false;
             params.reason += 'Null contracts cannot hedge a mint';
@@ -2504,7 +2504,7 @@ const Validity = {
         // Check if the synthetic token can be redeemed (existence, sufficient amount, etc.)
 
         let marginMap= await MarginMap.getInstance(params.contractId)
-        let position = await marginMap.getPositionForAddress(sender, params.contractId)
+        let position = await marginMap.readPosition(sender, params.contractId)
         if(position.contracts>0){
                 params.valid=false
                 params.reason += 'Redemption will close existing longs, move synths to a new address to redeem'
