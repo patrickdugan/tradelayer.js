@@ -1612,11 +1612,16 @@ class Orderbook {
                     const isSellerReducingPosition = Boolean(match.sellerPosition.contracts > 0);
                    
                     console.log('about to calc fee '+match.buyOrder.amount+' '+match.sellOrder.maker+' '+match.buyOrder.maker+' '+isInverse+' '+match.tradePrice+' '+notionalValue+' '+channel)
-                    let buyerFee = new BigNumber(this.calculateFee(match.buyOrder.amount,match.sellOrder.maker,match.buyOrder.maker,isInverse,
-						true, match.tradePrice, notionalValue,channel ));
-
-					let sellerFee = new BigNumber(this.calculateFee(match.sellOrder.amount,match.sellOrder.maker,match.buyOrder.maker,isInverse,
-					    false,match.tradePrice,notionalValue,channel));
+                    const { buyerFee, sellerFee } = this.calculateFee({
+                        amountBuy: match.buyOrder.amount,
+                        amountSell: match.sellOrder.amount,
+                        buyMaker: match.buyOrder.maker,
+                        sellMaker: match.sellOrder.maker,
+                        isInverse,
+                        lastMark: match.tradePrice,
+                        notionalValue,
+                        channel
+                    });
 					console.log('seller/buyer fee '+sellerFee+' '+buyerFee)
 					// Buyer side: only push taker/on-chain positive fees
 					if (buyerFee.isGreaterThan(0)&&sellerFee.isLessThan(0)) {
@@ -2095,59 +2100,91 @@ class Orderbook {
 		 *  notionalValue:    contract notional
 		 *  channel:          bool (true = off-chain channel => fees ÷ 10)
 		 */
-    	calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
-        const BNnotionalValue = new BigNumber(notionalValue);
-        const BNlastMark      = new BigNumber(lastMark);
-        const BNamount        = new BigNumber(amount);
+    	calculateFee({
+            amountBuy,
+            amountSell,
+            buyMaker,
+            sellMaker,
+            isInverse,
+            lastMark,
+            notionalValue,
+            channel
+        }) {
+            const BNnotionalValue = new BigNumber(notionalValue);
+            const BNlastMark      = new BigNumber(lastMark);
+            const BNamountBuy     = new BigNumber(amountBuy);
+            const BNamountSell    = new BigNumber(amountSell);
 
-        // --- fee rate setup ---
-        let takerRate = new BigNumber(0.0005);     // +5 bps
-        let makerRate = new BigNumber(-0.00025);   // –2.5 bps
-        if (channel === true) {
-            takerRate = takerRate.div(10);         // +0.5 bps
-            makerRate = makerRate.div(10);         // –0.25 bps
-        }
+            let takerRate = new BigNumber(0.0005);     // +5 bps
+            let makerRate = new BigNumber(-0.00025);   // –2.5 bps rebate
 
-        const baseFee = (bps) =>
-            isInverse
-                ? new BigNumber(bps).times(BNnotionalValue).div(BNlastMark).times(BNamount)
-                : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(BNamount);
-
-        console.log(
-            `calculateFee → amount=${amount} buyMaker=${buyMaker} sellMaker=${sellMaker} channel=${channel} ` +
-            `takerRate=${takerRate.toFixed()} makerRate=${makerRate.toFixed()}`
-        );
-
-        // --- Decide fee direction ---
-        let rawFeeBN;
-        if (!sellMaker && !buyMaker) {
-            rawFeeBN = baseFee(takerRate);
-        } else if (sellMaker && !buyMaker) {
-            rawFeeBN = (isBuyer ? baseFee(takerRate) : baseFee(makerRate));
-        } else if (!sellMaker && buyMaker) {
-            rawFeeBN = (isBuyer ? baseFee(makerRate) : baseFee(takerRate));
-        } else {
-            return 0; // both maker → undefined → no fee
-        }
-
-        // --- convert to sats ---
-        let feeInSats = rawFeeBN.times(1e8);
-        let sats = feeInSats.integerValue(BigNumber.ROUND_FLOOR); // floor for no minting
-
-        // --- CRITICAL: force EVEN satoshis ---
-        if (!sats.mod(2).isZero()) {
-            if (rawFeeBN.isPositive()) {
-                sats = sats.plus(1);   // taker fee → bump UP to even
-            } else {
-                sats = sats.minus(1);  // maker rebate → bump DOWN to even
+            if (channel === true) {
+                takerRate = takerRate.div(10);         // +0.5 bps
+                makerRate = makerRate.div(10);         // –0.25 bps
             }
+
+            const baseFee = (bps, amt) =>
+                isInverse
+                    ? new BigNumber(bps).times(BNnotionalValue).div(BNlastMark).times(amt)
+                    : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(amt);
+
+            // ----------------------------------------------------------
+            // CASE 1 — Neither side is maker → same-block on-chain match
+            // → apply “half taker” to both: 1.25bps each (split of 2.5bps)
+            // ----------------------------------------------------------
+            if (!buyMaker && !sellMaker) {
+                // full taker fee on buy side
+                let raw = baseFee(takerRate, BNamountBuy).abs();
+
+                let sats = raw.times(1e8).integerValue(BigNumber.ROUND_FLOOR);
+
+                // ensure final total fee is EVEN sats
+                if (!sats.mod(2).isZero()) sats = sats.plus(1);
+
+                // split evenly
+                const half = sats.idiv(2);
+
+                return {
+                    buyerFee:  half.div(1e8),
+                    sellerFee: half.div(1e8)
+                };
+            }
+
+            // ----------------------------------------------------------
+            // CASE 2 — Exactly one maker → normal match
+            // ----------------------------------------------------------
+            const buyerIsTaker = (buyMaker === false);
+            const sellIsTaker  = (sellMaker === false);
+
+            // exactly one of these is taker
+            const takerSide  = buyerIsTaker ? 'buyer' : 'seller';
+            const makerSide  = buyerIsTaker ? 'seller' : 'buyer';
+
+            const takerAmt = buyerIsTaker ? BNamountBuy : BNamountSell;
+
+            // compute taker fee once
+            let rawTaker = baseFee(takerRate, takerAmt).abs();
+
+            let sats = rawTaker.times(1e8).integerValue(BigNumber.ROUND_FLOOR);
+
+            // make sure sats is EVEN → avoids downstream mint / burn
+            if (!sats.mod(2).isZero()) sats = sats.plus(1);
+
+            const makerRebate = sats.negated();
+
+            // package results
+            let buyerFee, sellerFee;
+
+            if (takerSide === 'buyer') {
+                buyerFee  =  sats.div(1e8)
+                sellerFee = makerRebate.div(1e8)
+            } else {
+                buyerFee  = makerRebate.div(1e8)
+                sellerFee =  sats.div(1e8)
+            }
+
+            return { buyerFee, sellerFee };
         }
-
-        // --- back to LTC ---
-        return sats.div(1e8).toNumber();
-    }
-
-
 
 		resolveMaker(columnAIsSeller, columnAIsMaker) {
 		  const makerIsA = (columnAIsMaker === true)
