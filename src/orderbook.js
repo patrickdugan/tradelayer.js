@@ -1620,21 +1620,21 @@ class Orderbook {
 					console.log('seller/buyer fee '+sellerFee+' '+buyerFee)
 					// Buyer side: only push taker/on-chain positive fees
 					if (buyerFee.isGreaterThan(0)&&sellerFee.isLessThan(0)) {
-					  const feeToCache = buyerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  const feeToCache = buyerFee.div(2).toNumber();
 					  console.log('buyer fee to cache '+feeToCache)
 					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.buyOrder.contractId,currentBlockHeight,true);
 					}
 
 					// Seller side: same treatment
 					if (sellerFee.isGreaterThan(0)&&buyerFee.isLessThan(0)) {
-					  const feeToCache = sellerFee.div(2).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+					  const feeToCache = sellerFee.div(2).toNumber();
 					  console.log('seller fee to cache '+feeToCache)
 					  await TallyMap.updateFeeCache(collateralPropertyId, feeToCache, match.sellOrder.contractId,currentBlockHeight,true);
 					}
 
 					if(buyerFee.isGreaterThan(0)&&sellerFee.isGreaterThan(0)){
-					  await TallyMap.updateFeeCache(collateralPropertyId, sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId,currentBlockHeight);
-					  await TallyMap.updateFeeCache(collateralPropertyId, buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(), match.sellOrder.contractId,currentBlockHeight);
+					  await TallyMap.updateFeeCache(collateralPropertyId, sellerFee.toNumber(), match.sellOrder.contractId,currentBlockHeight);
+					  await TallyMap.updateFeeCache(collateralPropertyId, buyerFee.toNumber(), match.sellOrder.contractId,currentBlockHeight);
 					}
 
                     //console.log('reducing? buyer '+isBuyerReducingPosition +' seller '+isSellerReducingPosition+ ' buyer fee '+buyerFee +' seller fee '+sellerFee)
@@ -2095,21 +2095,17 @@ class Orderbook {
 		 *  notionalValue:    contract notional
 		 *  channel:          bool (true = off-chain channel => fees ÷ 10)
 		 */
-     calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
+    	calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
         const BNnotionalValue = new BigNumber(notionalValue);
         const BNlastMark      = new BigNumber(lastMark);
         const BNamount        = new BigNumber(amount);
 
-        // --- satoshi dust flags returned upstream ---
-        let feeDust = 0;      // taker overhang (fee side dust)
-        let rebateDust = 0;   // maker overhang (rebate side dust)
-
         // --- fee rate setup ---
-        let takerRate = new BigNumber(0.0005);    // +5 bps
-        let makerRate = new BigNumber(-0.00025);  // –2.5 bps (rebate)
+        let takerRate = new BigNumber(0.0005);     // +5 bps
+        let makerRate = new BigNumber(-0.00025);   // –2.5 bps
         if (channel === true) {
-            takerRate = takerRate.div(10);        // +0.5 bps
-            makerRate = makerRate.div(10);        // –0.25 bps
+            takerRate = takerRate.div(10);         // +0.5 bps
+            makerRate = makerRate.div(10);         // –0.25 bps
         }
 
         const baseFee = (bps) =>
@@ -2118,11 +2114,11 @@ class Orderbook {
                 : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(BNamount);
 
         console.log(
-            `about to calc fee amount=${amount} buyMaker=${buyMaker} sellMaker=${sellMaker} channel=${channel} ` +
+            `calculateFee → amount=${amount} buyMaker=${buyMaker} sellMaker=${sellMaker} channel=${channel} ` +
             `takerRate=${takerRate.toFixed()} makerRate=${makerRate.toFixed()}`
         );
 
-        // --- NORMALIZATION: if both false, one side is treated as taker ---
+        // --- Decide fee direction ---
         let rawFeeBN;
         if (!sellMaker && !buyMaker) {
             rawFeeBN = baseFee(takerRate);
@@ -2131,37 +2127,26 @@ class Orderbook {
         } else if (!sellMaker && buyMaker) {
             rawFeeBN = (isBuyer ? baseFee(makerRate) : baseFee(takerRate));
         } else {
-            // both maker true → should never occur, neutralize
-            return { fee: new BigNumber(0), feeDust: 0, rebateDust: 0 };
+            return 0; // both maker → undefined → no fee
         }
 
-        // rawFeeBN is in LTC units; now convert to sats
+        // --- convert to sats ---
         let feeInSats = rawFeeBN.times(1e8);
-        const floorSats = feeInSats.integerValue(BigNumber.ROUND_FLOOR);
-        const dust = feeInSats.minus(floorSats);  // fractional sat remainder
+        let sats = feeInSats.integerValue(BigNumber.ROUND_FLOOR); // floor for no minting
 
-        // --- NO MINTING: floor always ---
-        // taker fee (positive)
-        if (rawFeeBN.isPositive()) {
-            if (dust.gt(0)) feeDust = 1;  // protocol gets dust, not trader
-            feeInSats = floorSats;
+        // --- CRITICAL: force EVEN satoshis ---
+        if (!sats.mod(2).isZero()) {
+            if (rawFeeBN.isPositive()) {
+                sats = sats.plus(1);   // taker fee → bump UP to even
+            } else {
+                sats = sats.minus(1);  // maker rebate → bump DOWN to even
+            }
         }
 
-        // maker rebate (negative)
-        else if (rawFeeBN.isNegative()) {
-            if (dust.gt(0)) rebateDust = 1;  // protocol gets dust, not maker
-            feeInSats = floorSats;           // floor gives LESS rebate → safe
-        }
-
-        // convert sats back to LTC
-        const finalFeeBN = feeInSats.div(1e8);
-
-        return {
-            fee: finalFeeBN,
-            feeDust,
-            rebateDust
-        };
+        // --- back to LTC ---
+        return sats.div(1e8).toNumber();
     }
+
 
 
 		resolveMaker(columnAIsSeller, columnAIsMaker) {
@@ -2306,6 +2291,85 @@ class Orderbook {
 		  console.log('✅ [locateFee] Fee sources determined:', JSON.stringify(feeInfo, null, 2));
 		  return feeInfo;
 		}
+
+        /**
+         * Route and cache a matched trade fee (buyer or seller).
+         *
+         * - Does NOT divide fee (full sats only)
+         * - Correctly handles taker-only or dual-taker cases
+         * - No double-splits (updateFeeCache does the only split)
+         * - No misrouting to wrong contract ID
+         *
+         * @param {BigNumber} buyerFeeBN
+         * @param {BigNumber} sellerFeeBN
+         * @param {number} collateralPropertyId
+         * @param {Object} match
+         * @param {number} currentBlockHeight
+         */
+    async routeMatchFees(
+        buyerFeeBN,
+        sellerFeeBN,
+        collateralPropertyId,
+        match,
+        currentBlockHeight
+    ) {
+        // Buyer taker fee (positive buyer, negative seller)
+        if (buyerFeeBN.isGreaterThan(0) && sellerFeeBN.isLessThan(0)) {
+            const feeToCache = buyerFeeBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+
+            console.log("route: buyer taker fee → cache", feeToCache);
+
+            await TallyMap.updateFeeCache(
+                collateralPropertyId,
+                feeToCache,
+                match.buyOrder.contractId,
+                currentBlockHeight,
+                true
+            );
+        }
+
+        // Seller taker fee (positive seller, negative buyer)
+        if (sellerFeeBN.isGreaterThan(0) && buyerFeeBN.isLessThan(0)) {
+            const feeToCache = sellerFeeBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+
+            console.log("route: seller taker fee → cache", feeToCache);
+
+            await TallyMap.updateFeeCache(
+                collateralPropertyId,
+                feeToCache,
+                match.sellOrder.contractId,
+                currentBlockHeight,
+                true
+            );
+        }
+
+        // Both positive → dual taker (rare but valid)
+        if (buyerFeeBN.isGreaterThan(0) && sellerFeeBN.isGreaterThan(0)) {
+            const buyerFeeToCache  = buyerFeeBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+            const sellerFeeToCache = sellerFeeBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+
+            console.log("route: dual taker fee → buyer:", buyerFeeToCache, "seller:", sellerFeeToCache);
+
+            await TallyMap.updateFeeCache(
+                collateralPropertyId,
+                buyerFeeToCache,
+                match.buyOrder.contractId,
+                currentBlockHeight,
+                true
+            );
+
+            await TallyMap.updateFeeCache(
+                collateralPropertyId,
+                sellerFeeToCache,
+                match.sellOrder.contractId,
+                currentBlockHeight,
+                true
+            );
+        }
+
+        // If both negative or both zero → no fee handling required
+    }
+
 
 
 async processContractMatchesShort(matches, currentBlockHeight, channel) {
