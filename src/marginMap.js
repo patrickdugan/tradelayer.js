@@ -288,7 +288,7 @@ class MarginMap {
         console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
         if(position.contracts==null){position.contracts=0}
         if (position.newPosThisBlock === undefined) {
-             position.newPosThisBlock = 0;
+             position.newPosThisBlock = 0; //value intended to protect from replay in clearing
         }
         //const position = this.margins.get(address) || this.initMargin(address, 0, price);
         //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
@@ -367,7 +367,8 @@ class MarginMap {
             console.log('in clearing '+position.newPosThisBlock)
         }
 
-
+        console.log('position before setting to margin '+JSON.stringify(position))
+        console.log('position in RAM before '+[...this.margins]);
         this.margins.set(address, position);  
         let tag = 'updateContractBalances'
         if(inClearing){
@@ -1197,8 +1198,8 @@ class MarginMap {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
-            const position = await this.getPositionForAddress(address,contractId)
+    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
+            //const position = await this.getPositionForAddress(address,contractId)
             console.log('position before clear '+JSON.stringify(position))
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
                 position.unrealizedPNL=0
@@ -1721,6 +1722,7 @@ async getPositionForAddress(address, contractId) {
     // First try exact match
     for (const [addr, pos] of arr) {
         if (addr === address) {
+            if (!pos.address) pos.address = addr;
             console.log("[DEBUG] Found exact match:", addr);
             return pos;
         }

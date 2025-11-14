@@ -4,6 +4,7 @@ const Insurance = require('./insurance.js')
 
 class OracleList {
     static instance = null;
+    static lastOracleUpdateBlock = new Map();
 
     constructor() {
         if (!OracleList.instance) {
@@ -88,8 +89,17 @@ class OracleList {
         return latestDataPoint.data.price;
     }
 
-
     static async publishData(oracleId, price, high, low, close, blockHeight) {
+        const lastBlock = OracleList.lastOracleUpdateBlock.get(oracleId);
+
+        if (lastBlock !== undefined && lastBlock >= blockHeight) {
+            console.log(`⛔ Oracle ${oracleId} already updated at block ${lastBlock}. Skipping block ${blockHeight}.`);
+            return;
+        }
+
+        // mark as updated
+        OracleList.lastOracleUpdateBlock.set(oracleId, blockHeight);
+
         try {
             const instance = OracleList.getInstance();
 

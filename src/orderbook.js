@@ -747,14 +747,14 @@ class Orderbook {
             //console.log('checking orderbook in addcontract order after insert '+JSON.stringify(orderbook))
             // Match orders in the derivative contract order book
             var matchResult = await orderbook.matchContractOrders(orderbookData);
+            console.log('about to save orderbook in contract trade '+orderBookKey)
+            await orderbook.saveOrderBook(matchResult.orderBook,orderBookKey);
+
             if(matchResult.matches !=[]){
                 //console.log('contract match result '+JSON.stringify(matchResult))
                 await orderbook.processContractMatches(matchResult.matches, blockTime, false)
             }
-           
-            console.log('about to save orderbook in contract trade '+orderBookKey)
-                        await orderbook.saveOrderBook(matchResult.orderBook,orderBookKey);
-
+                   
             return matchResult
         }
     
@@ -1021,6 +1021,19 @@ class Orderbook {
         sellOrder.amount = BigNumber(sellOrder.amount).minus(tradeAmount).toNumber();
         buyOrder.amount = BigNumber(buyOrder.amount).minus(tradeAmount).toNumber();
 
+        //  initMargin shrinking
+        if (sellOrder.amount > 0) {
+            sellOrder.initMargin = (
+                initialMarginPerContract * sellOrder.amount
+            ).toFixed(8);
+        }
+
+        if (buyOrder.amount > 0) {
+            buyOrder.initMargin = (
+                initialMarginPerContract * buyOrder.amount
+            ).toFixed(8);
+        }
+
         // Remove fully filled orders from the front of the arrays
         if (sellOrder.amount === 0) {
           orderBook.sell.splice(0, 1);
@@ -1267,8 +1280,102 @@ class Orderbook {
         return orderbook;
     }
 
-    static async cancelExcessOrders(address, contractId, obForContract, requiredMargin) {
+    /**
+     * Attempt to source remaining loss from reserves tied up in *other* contract orderbooks.
+     * 
+     * @param {string} address 
+     * @param {number} propertyId 
+     * @param {BigNumber} remaining 
+     * @param {number} skipContractId 
+     * @param {number} blockHeight 
+     * @returns {Object} { remaining: BigNumber, breakdown: {...} }
+     */
+    static async sourceCrossContractReserve(address, propertyId, remaining, skipContractId, blockHeight) {
+        const TallyMap = require('./tally.js');
+        const ContractRegistry = require('./contractRegistry.js');
+        const Orderbook = require('./orderbook.js');
+
+        const breakdown = { fromCrossReserve: 0 };
+
+        // Load *all* contract IDs
+        let allContracts = [];
+        try {
+            allContracts = await ContractRegistry.getAllContracts();
+            console.log('all contracts? '+JSON.stringify(allContracts))
+        } catch (e) {
+            console.error("⚠️ Could not list all contracts, cross-contract reserve fallback skipped.", e);
+            return { remaining, breakdown };
+        }
+
+        // Snapshot available before cross-contract scavenging
+        const initialTally = await TallyMap.getTally(address, propertyId);
+        let baselineAvail = new BigNumber(initialTally.available || 0);
+
+        console.log(`🔁 Cross-contract scavenging for ${address}, need ${remaining.toFixed(8)}`);
+
+        for (const c of allContracts) {
+            const otherCid = c.id;    // ← extract numeric ID
+            console.log('id and skip '+otherCid +' '+skipContractId)
+            if (!otherCid) continue;
+            if (otherCid === skipContractId) continue;
+
+            console.log(`➡️ Scanning contract ${otherCid} for cancellable orders...`);
+
+            await Orderbook.cancelExcessOrders(
+                address,
+                otherCid,         // now a real number, not [object Object]
+                remaining,
+                propertyId,
+                blockHeight
+            );
+
+            // Tally AFTER cancellation
+            const after = await TallyMap.getTally(address, propertyId);
+            const afterAvail = new BigNumber(after.available || 0);
+
+            // Freed = increase in available
+            let freed = afterAvail.minus(baselineAvail);
+            if (freed.lt(0)) freed = new BigNumber(0);
+
+            const useX = BigNumber.min(remaining, freed);
+
+            if (useX.gt(0)) {
+                console.log(`   ✔ Freed ${useX.toFixed(8)} on contract ${otherCid}`);
+
+                // Debit available to pay the loss
+                await TallyMap.updateBalance(
+                    address,
+                    propertyId,
+                    -useX,
+                    0,
+                    0,
+                    0,
+                    'loss_from_cross_contract_reserve'
+                );
+
+                breakdown.fromCrossReserve += useX.toNumber();
+                remaining = remaining.minus(useX);
+
+                // Update baseline for next iteration
+                baselineAvail = afterAvail.minus(useX);
+            }
+
+            if (remaining.lte(0)) {
+                console.log("🎉 Cross-contract reserve fully covers loss.");
+                break;
+            }
+        }
+
+        return { remaining, breakdown };
+    }
+
+
+    static async cancelExcessOrders(address, contractId, requiredMargin,collateralId,block) {
+        const TallyMap = require('./tally.js')
         let freedMargin = new BigNumber(0);
+        const orderBookKey = `${contractId}`;
+        const orderbook = new Orderbook(contractId);
+        var obForContract = await orderbook.loadOrderBook(orderBookKey,false);
 
         console.log(`🚨 Cancelling excess orders for ${address} on contract ${contractId} to free up ${requiredMargin.toFixed(8)} margin.`);
 
@@ -1287,7 +1394,7 @@ class Orderbook {
                 freedMargin = freedMargin.plus(order.initMargin);
                 obForContract[side].splice(i, 1); // Remove order
 
-                await TallyMap.updateBalance(address, tally.propertyId, order.initMargin, -order.initMargin, 0, 0, 'excessOrderCancellation', tally.block);
+                await TallyMap.updateBalance(address, collateralId, order.initMargin, -order.initMargin, 0, 0, 'excessOrderCancellation', block);
 
                 if (freedMargin.gte(requiredMargin)) {
                     console.log(`✅ Enough margin freed. Stopping cancellations.`);
@@ -1295,6 +1402,8 @@ class Orderbook {
                 }
             }
         }
+
+        await orderbook.saveOrderBook(orderBookKey, obForContract);
 
         console.log(`⚠️ Could not free all required margin. User may still be undercollateralized.`);
     }
@@ -1332,9 +1441,8 @@ class Orderbook {
       return { closed, flipped, newPos };
     }
 
-    async sourceFundsForLoss(address, propertyId, lossAmount, contractId, obForContract) {
-        const TallyMap = require('./tally.js');
-
+    async sourceFundsForLoss(address, propertyId, lossAmount, block, contractId) {
+        const TallyMap = require('./tally.js')
         const tally = await TallyMap.getTally(address, propertyId);
         if (!tally) {
             return { hasSufficient: false, reason: 'undefined tally', remaining: lossAmount };
@@ -1366,32 +1474,72 @@ class Orderbook {
 
         // 3️⃣ Try freeing reserve first if needed
         if (remaining.gt(0)) {
-            const reserveAvail = new BigNumber(tally.reserved || 0);
-            if (reserveAvail.lt(remaining)) {
-                const deficit = remaining.minus(reserveAvail);
-                console.log(`⚠️ Attempting to free ${deficit.toFixed(8)} from cancelled orders`);
-                await TallyMap.cancelExcessOrders(address, contractId, obForContract, deficit);
-            }
+        // Snapshot before we mess with anything
+        const before = await TallyMap.getTally(address, propertyId);
+        const beforeAvail = new BigNumber(before.available || 0);
+        const beforeReserved = new BigNumber(before.reserved || 0);
 
-            const afterCancelTally = await TallyMap.getTally(address, propertyId);
-            const reserveUse = BigNumber.min(remaining, afterCancelTally.reserved || 0);
-            if (reserveUse.gt(0)) {
-                await TallyMap.updateBalance(address, propertyId, 0, -reserveUse, 0, 0, 'loss_from_reserve');
-                breakdown.fromReserve = reserveUse.toNumber();
-                remaining = remaining.minus(reserveUse);
-            }
-
-            // 4️⃣ Remaining margin (final recourse)
-            if (remaining.gt(0)) {
-                const marginLeft = new BigNumber(afterCancelTally.margin || 0);
-                const marginUse2 = BigNumber.min(remaining, marginLeft);
-                if (marginUse2.gt(0)) {
-                    await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse2, 0, 'loss_from_margin_final');
-                    breakdown.fromMarginFinal = marginUse2.toNumber();
-                    remaining = remaining.minus(marginUse2);
-                }
-            }
+        // Always try to cancel up to the shortfall.
+        // cancelExcessOrders should internally clamp to available reserved.
+        if (beforeReserved.gt(0)) {
+                console.log(
+                    `⚠️ Attempting to free up to ${remaining.toFixed(8)} from cancelled orders (reserved=${beforeReserved.toFixed(8)})`
+                );
+                await Orderbook.cancelExcessOrders(address, contractId, remaining, propertyId, block);
         }
+
+        const after = await TallyMap.getTally(address, propertyId);
+        const afterAvail = new BigNumber(after.available || 0);
+        const afterReserved = new BigNumber(after.reserved || 0);
+
+        // Tokens freed from reserve are the *increase* in available
+        // (assuming cancelExcessOrders moves reserved -> available without touching supply)
+        let freedFromReserve = afterAvail.minus(beforeAvail);
+        if (freedFromReserve.lt(0)) {
+            // defensive: shouldn't happen, but don't let it blow things up
+            freedFromReserve = new BigNumber(0);
+        }
+
+        // Only use what we actually freed, and cap by remaining shortfall
+        const reserveUse = BigNumber.min(remaining, freedFromReserve);
+        if (reserveUse.gt(0)) {
+            // This call should *not* create or destroy global supply:
+            // losers lose reserveUse, winners gain reserveUse elsewhere.
+            await TallyMap.updateBalance(
+                address,
+                propertyId,
+                -reserveUse,   // reduce available to pay the loss
+                0,
+                0,
+                0,
+                'loss_from_reserve'
+            );
+            breakdown.fromReserve = (breakdown.fromReserve || 0) + reserveUse.toNumber();
+            remaining = remaining.minus(reserveUse);
+        }
+        console.log('special check '+remaining.toNumber())
+
+        // --- after primary reserve sourcing ---
+        if (remaining.gt(0)) {
+            const x = await Orderbook.sourceCrossContractReserve(
+                address,
+                propertyId,
+                remaining,
+                contractId,   // skip same contract
+                block
+            );
+
+            remaining = x.remaining;
+            breakdown.fromCrossReserve = x.breakdown.fromCrossReserve || 0;
+        }
+
+
+        // At this point:
+        // - available has been reduced by exactly the amount we just freed
+        // - reserved has dropped by cancelExcessOrders
+        // - global (amount+reserved+margin+vesting) stays invariant, except for the
+        //   separate credit to counterparties which should be balancing this debit.
+    }
 
         const success = remaining.lte(0);
         remaining.decimalPlaces(8).toNumber();
@@ -1692,7 +1840,7 @@ class Orderbook {
                     let positions = await marginMap.updateContractBalancesWithMatch(match, channel, buyerClosed,flipLong,sellerClosed,flipShort,currentBlockHeight)
                  
                     const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
-                    console.log(JSON.stringify(match.sellOrder))
+                    //console.log(JSON.stringify(match.sellOrder))
                     const trade = {
                         buyerPosition: match.buyerPosition,
                         sellerPosition: match.sellerPosition,
@@ -1713,7 +1861,8 @@ class Orderbook {
                         flipLong: flipLong,
                         flipShort: flipShort,
                         channel: channel,
-                        liquidation: isLiq
+                        liquidation: isLiq,
+                        remainderLiq: 0
                         // other relevant trade details...
                     };
 
@@ -1727,7 +1876,7 @@ class Orderbook {
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
                     // Determine if the trade reduces the position size for buyer or seller
-                    let lastMark = await ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
+                    /*let lastMark = await ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
                     console.log('LAST MARK '+lastMark+' '+match.buyerPosition.lastMark+' '+match.sellerPosition.lastMark+' '+JSON.stringify(match.buyerPosition))
                     if(lastMark==null){lastMark=trade.price}
                     if(match.buyerPosition.lastMark==null){
@@ -1748,7 +1897,9 @@ class Orderbook {
                         sellerMark = match.sellerPosition.lastMark
                     }else if(match.sellOrder.liq){
                         sellerMark = match.sellerPosition.oldMark
-                    }  
+                    } */
+                    let buyerMark = match.buyerPosition.lastMark//lastMark
+                    let sellerMark = match.sellerPosition.lastMark//lastMark
 
                     console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
@@ -1801,12 +1952,15 @@ class Orderbook {
                             match.buyOrder.buyerAddress,
                             collateralPropertyId,
                             debit,
-                            currentBlockHeight
+                            currentBlockHeight,
+                            trade.contractId
                           );
 
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Buyer still short ${recovery.remaining}`);
                             // optional: escalate to insurance/liquidation path
+                            trade.remainderLiq = recovery.remainder
+
                           }
                         } else {
                           await TallyMap.updateBalance(
@@ -1864,11 +2018,13 @@ class Orderbook {
                             match.sellOrder.sellerAddress,
                             collateralPropertyId,
                             debit,
-                            currentBlockHeight
+                            currentBlockHeight,
+                            trade.contractId
                           );
 
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Seller still short ${recovery.remaining}`);
+                            trade.remainderLiq = recovery.remainder
                           }
                         } else {
                           await TallyMap.updateBalance(
