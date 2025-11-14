@@ -2079,7 +2079,8 @@ class Orderbook {
             }
              return trades
 		}
-		/**
+		
+        /**
 		 * calculateFee
 		 * - Positive result  => taker fee (debit)
 		 * - Negative result  => maker rebate (credit)
@@ -2094,49 +2095,74 @@ class Orderbook {
 		 *  notionalValue:    contract notional
 		 *  channel:          bool (true = off-chain channel => fees ÷ 10)
 		 */
-		calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
-		  const BNnotionalValue = new BigNumber(notionalValue);
-		  const BNlastMark      = new BigNumber(lastMark);
-		  const BNamount        = new BigNumber(amount);
+     calculateFee(amount, sellMaker, buyMaker, isInverse, isBuyer, lastMark, notionalValue, channel) {
+        const BNnotionalValue = new BigNumber(notionalValue);
+        const BNlastMark      = new BigNumber(lastMark);
+        const BNamount        = new BigNumber(amount);
 
-		  const baseFee = (bps) =>
-		    isInverse
-		      ? new BigNumber(bps).times(BNnotionalValue).div(BNlastMark).times(BNamount)
-		      : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(BNamount);
+        // --- satoshi dust flags returned upstream ---
+        let feeDust = 0;      // taker overhang (fee side dust)
+        let rebateDust = 0;   // maker overhang (rebate side dust)
 
-		  let takerRate = new BigNumber(0.0005);    // +5 bps
-		  let makerRate = new BigNumber(-0.00025);  // –2.5 bps
-		  if (channel === true) {
-		    takerRate = takerRate.div(10);          // +0.5 bps
-		    makerRate = makerRate.div(10);          // –0.25 bps
-		  }
+        // --- fee rate setup ---
+        let takerRate = new BigNumber(0.0005);    // +5 bps
+        let makerRate = new BigNumber(-0.00025);  // –2.5 bps (rebate)
+        if (channel === true) {
+            takerRate = takerRate.div(10);        // +0.5 bps
+            makerRate = makerRate.div(10);        // –0.25 bps
+        }
 
-		  console.log('calculate fee '+buyMaker+' '+sellMaker+' '+channel+' '+takerRate+' '+makerRate)
+        const baseFee = (bps) =>
+            isInverse
+                ? new BigNumber(bps).times(BNnotionalValue).div(BNlastMark).times(BNamount)
+                : new BigNumber(bps).times(BNlastMark).div(BNnotionalValue).times(BNamount);
 
-		  // Defensive normalization: if both false, assign one maker/taker to avoid double-billing or double-rebating
-		  if (!sellMaker && !buyMaker) {
-		    if (isBuyer) {
-		      // treat seller as maker for buyer's perspective; buyer = taker
-		      return baseFee(takerRate).decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-		    } else {
-		      // for seller's perspective; seller = taker
-		      return baseFee(takerRate).decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-		    }
-		  }
+        console.log(
+            `about to calc fee amount=${amount} buyMaker=${buyMaker} sellMaker=${sellMaker} channel=${channel} ` +
+            `takerRate=${takerRate.toFixed()} makerRate=${makerRate.toFixed()}`
+        );
 
-		  if (sellMaker && !buyMaker) {
-		    return (isBuyer ? baseFee(takerRate) : baseFee(makerRate))
-		      .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-		  }
+        // --- NORMALIZATION: if both false, one side is treated as taker ---
+        let rawFeeBN;
+        if (!sellMaker && !buyMaker) {
+            rawFeeBN = baseFee(takerRate);
+        } else if (sellMaker && !buyMaker) {
+            rawFeeBN = (isBuyer ? baseFee(takerRate) : baseFee(makerRate));
+        } else if (!sellMaker && buyMaker) {
+            rawFeeBN = (isBuyer ? baseFee(makerRate) : baseFee(takerRate));
+        } else {
+            // both maker true → should never occur, neutralize
+            return { fee: new BigNumber(0), feeDust: 0, rebateDust: 0 };
+        }
 
-		  if (!sellMaker && buyMaker) {
-		    return (isBuyer ? baseFee(makerRate) : baseFee(takerRate))
-		      .decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
-		  }
+        // rawFeeBN is in LTC units; now convert to sats
+        let feeInSats = rawFeeBN.times(1e8);
+        const floorSats = feeInSats.integerValue(BigNumber.ROUND_FLOOR);
+        const dust = feeInSats.minus(floorSats);  // fractional sat remainder
 
-		  // Both true should never happen; neutralize
-		  return 0;
-		}
+        // --- NO MINTING: floor always ---
+        // taker fee (positive)
+        if (rawFeeBN.isPositive()) {
+            if (dust.gt(0)) feeDust = 1;  // protocol gets dust, not trader
+            feeInSats = floorSats;
+        }
+
+        // maker rebate (negative)
+        else if (rawFeeBN.isNegative()) {
+            if (dust.gt(0)) rebateDust = 1;  // protocol gets dust, not maker
+            feeInSats = floorSats;           // floor gives LESS rebate → safe
+        }
+
+        // convert sats back to LTC
+        const finalFeeBN = feeInSats.div(1e8);
+
+        return {
+            fee: finalFeeBN,
+            feeDust,
+            rebateDust
+        };
+    }
+
 
 		resolveMaker(columnAIsSeller, columnAIsMaker) {
 		  const makerIsA = (columnAIsMaker === true)

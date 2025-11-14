@@ -745,14 +745,22 @@ class TallyMap {
             //
             console.log(`DERIVATIVE fee path (contractId != 1)`);
 
-            const insuranceSats = feeSats.idiv(2);
-            const stashSats     = feeSats.minus(insuranceSats);
+            let insuranceSats = feeSats.idiv(2);
+            let stashSats     = feeSats.minus(insuranceSats);
 
             console.log(`insuranceSats=${insuranceSats.toString()}, stashSats=${stashSats.toString()}`);
 
             const dust = feeSats.minus(insuranceSats.plus(stashSats));
             console.log(`dust=${dust.toString()} (should be 0)`);
             
+            if (feeSats.eq(1)&&propertyId==1){
+                insuranceSats = 1
+                stashSats = 0
+            }else if(feeSats.eq(1)&&propertyId!=1){
+                insuranceSats = 0
+                stashSats = 1
+            }
+
             //
             // Insurance write
             //
