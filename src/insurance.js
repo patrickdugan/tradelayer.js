@@ -60,12 +60,12 @@ class InsuranceFund {
             const before = new BigNumber(balance.amountAvailable || 0);
             balance.amountAvailable = before
                 .plus(amtBN)
-                .decimalPlaces(8, BigNumber.ROUND_HALF_UP)
-                .toNumber();
+                .decimalPlaces(8, BigNumber.ROUND_DOWN)
+                .toFixed();
         } else {
             balance = {
                 propertyId: propId,
-                amountAvailable: amtBN.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber()
+                amountAvailable: amtBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toFixed()
             };
             this.balances.push(balance);
         }
@@ -77,7 +77,7 @@ class InsuranceFund {
         await this.recordEvent("deposit", {
             contractId: this.contractSeriesId?.toString() ?? "unknown",
             propertyId: propId,
-            amount: amtBN.decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber()
+            amount: amtBN.decimalPlaces(8, BigNumber.ROUND_DOWN).toFixed()
         }, block);
 
         const snapshot = {
