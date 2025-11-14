@@ -154,7 +154,8 @@ class Clearing {
                          throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
                     }else if(difference==-0.00000001){
                         TallyMap.recordTallyMapDelta('system',block,1,difference,0,0,0,0,0,'salvageDust','')
-                        Insurance.deposit(1,0.00000001,block)
+                        const fund = await InsuranceFund.getInstance(1,false)
+                        await fund.deposit(1,0.00000001,block)
                     }
                 } else {
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
@@ -731,6 +732,7 @@ class Clearing {
         let liquidationData = [];
         let marginMap = await MarginMap.getInstance(contractId);
         let positions = await marginMap.getAllPositions(contractId);
+        console.log('positions before normalization '+JSON.stringify(positions))
         let blob = await Clearing.getPriceChange(blockHeight, contractId);
         await Clearing.normalizePositionMarks(positions, blob.lastPrice, marginMap, contractId,blockHeight);  
 
@@ -743,7 +745,7 @@ class Clearing {
             let position = positions[i];
             let orderbook = await Orderbook.getOrderbookInstance(contractId);
             //if(position.contracts==null){throw new Error()}
-            console.log('position before '+JSON.stringify(positions))
+            console.log('positions before refresh '+JSON.stringify(positions))
             const tally = await Tally.getTally(position.address,collateralId)
             console.log('just checking '+position.address)
             position = await marginMap.getPositionForAddress(position.address, contractId)
@@ -874,7 +876,7 @@ class Clearing {
         positions.lastMark = blob.lastPrice;
         console.log('systemic loss '+systemicLoss)
      
-        await marginMap.saveMarginMap(blockHeight);
+        //await marginMap.saveMarginMap(blockHeight);
         return { positions, isLiq, systemicLoss };
     }
 

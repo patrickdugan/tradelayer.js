@@ -611,31 +611,30 @@ class TallyMap {
         return fees;
     }
 
+    static async loadFeeCacheForProperty(id) {
+        try {
+            const db = await dbInstance.getDatabase('feeCache');
+            const result = await db.findAsync({});
+            console.log('📄 Database contents:', JSON.stringify(result, null, 2));
 
-static async loadFeeCacheForProperty(id) {
-    try {
-        const db = await dbInstance.getDatabase('feeCache');
-        const result = await db.findAsync({});
-        console.log('📄 Database contents:', JSON.stringify(result, null, 2));
+            let total = new BigNumber(0);
 
-        let total = new BigNumber(0);
-
-        for (const doc of result) {
-            if (doc._id.startsWith(`${id}-`)) {
-                const value = new BigNumber(doc.value || 0);
-                const stash = new BigNumber(doc.stash || 0);
-                total = total.plus(value).plus(stash);
-                console.log(`➕ Matched ${doc._id}: value=${value.toFixed()}, stash=${stash.toFixed()}, running total=${total.toFixed()}`);
+            for(const doc of result){
+                if (doc._id.startsWith(`${id}-`)) {
+                    const value = new BigNumber(doc.value || 0);
+                    const stash = new BigNumber(doc.stash || 0);
+                    total = total.plus(value).plus(stash);
+                    console.log(`➕ Matched ${doc._id}: value=${value.toFixed()}, stash=${stash.toFixed()}, running total=${total.toFixed()}`);
+                }
             }
-        }
 
-        console.log(`✅ FeeCache total for property ${id}: ${total.toFixed()}`);
-        return total;
-    } catch (error) {
-        console.error('❌ Error loading fee cache from dbInstance:', error);
-        return new BigNumber(0);
+            console.log(`✅ FeeCache total for property ${id}: ${total.toFixed()}`);
+            return total;
+        } catch (error) {
+            console.error('❌ Error loading fee cache from dbInstance:', error);
+            return new BigNumber(0);
+        }
     }
-}
 
     // Method to update fee cache for a property
     // tally.js

@@ -132,6 +132,7 @@ class MarginMap {
         let map;
         if (existing) {
           const parsedValue = JSON.parse(existing.value);
+          console.log('db instance pre-write in write to position '+JSON.stringify(parsedValue))
           map = new Map(parsedValue);
         } else {
           map = new Map();
@@ -143,10 +144,9 @@ class MarginMap {
         // Serialize and save
         const doc = {
           _id: key,
-          value: JSON.stringify(Array.from(map.entries())),
-          updatedAt: new Date().toISOString()
+          value: JSON.stringify(Array.from(map.entries()))
         };
-
+        console.log('doc to write over marginMap '+JSON.stringify(doc))
         await marginMapsDB.updateAsync({ _id: key }, doc, { upsert: true });
 
         console.log(`📝 Saved position for ${position.address} in contract ${contractId}`);
@@ -156,7 +156,6 @@ class MarginMap {
         return false;
       }
     }
-
 
     /*async readPosition(address,seriesId) {
       const sid = Number(seriesId);
@@ -938,6 +937,7 @@ class MarginMap {
 
     async settlePNL(address, contracts, price, lastMark, contractId, currentBlockHeight,inverse,notional) {
                 const pos = this.margins.get(address);
+                console.log('pos at top of settle '+JSON.stringify(pos))
                 const avgPriceBN = new BigNumber(pos.avgPrice);
                 const priceBN = new BigNumber(price)
                 const contractsBN = new BigNumber(contracts)
@@ -989,8 +989,9 @@ class MarginMap {
                 //pos.margin -= Math.abs(pnl);
                 const uPNLBN = new BigNumber(pos.unrealizedPNL)
                 pos.unrealizedPNL -= uPNLBN.minus(pnl).decimalPlaces(8).toNumber();
+                console.log('pos before save in settle '+JSON.stringify(pos))
                 this.margins.set(pos.address, pos)
-                await this.recordMarginMapDelta(address, contractId, pos.contracts-contracts, contracts, 0, -pnl, 0, 'settlementPNL', currentBlockHeight)
+                await this.recordMarginMapDelta(address, contractId, pos.contracts, contracts, 0, -pnl, 0, 'settlementPNL', currentBlockHeight)
                   
                 return pnl.decimalPlaces(8).toNumber();
         }
@@ -1213,7 +1214,8 @@ class MarginMap {
             //if(!position.bankruptcyPrice&&position.bankruptcyPrice!==null){position.bankruptcyPrice = bankruptcyPrice}
             this.margins.set(position.address, position)
             console.log('set clearing in position '+JSON.stringify(position))
-            await this.saveMarginMap(block)
+            await this.writePositionToMap(contractId, position)
+
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block,markPrice)
             return position
     }
