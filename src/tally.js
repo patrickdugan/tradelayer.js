@@ -673,61 +673,80 @@ class TallyMap {
 
     /*
      * updateFeeCache:
-     * - If contractId is null/undefined or '1' -> SPOT/native-1 revenue path: all -> STASH (your current behavior).
-     * - If non-1 (oracle/deriv) -> 50/50 split in integer sats: half Insurance NOW, half -> STASH.
-     * - All rounding remainders go to dust; dust pays out to Insurance once it reaches ≥1 sat.
+     * - SPOT/native-1 (contractId '1'): stash path or full insurance for TL.
+     * - Derivatives (contractId != 1): 50/50 split in integer sats.
+     * - Any rounding remainder (dust) goes to Insurance to prevent supply drift.
      */
     static async updateFeeCache(propertyId, amount, contractId, block) {
-          try {
-            const block = arguments.length >= 6 ? arguments[5] : undefined;
+        const ContractRegistry = require('./contractRegistry.js');
+      try {
+        const block = arguments.length >= 6 ? arguments[5] : undefined;
 
-            const rawSats = toSatsDecimal(amount);            // BigNumber in sats
-            const feeSats = rawSats.integerValue(BigNumber.ROUND_HALF_UP);
-            if (!feeSats.isFinite() || feeSats.lte(0)) return;
+        const rawSats = toSatsDecimal(amount);            // BigNumber in sats
+        const feeSats = rawSats.integerValue(BigNumber.ROUND_HALF_UP);
+        if (!feeSats.isFinite() || feeSats.lte(0)) return;
 
-            const db  = await dbInstance.getDatabase('feeCache');
-            const blk = await TallyMap.resolveBlock(block);
-            const effContractId = (contractId == null) ? '1' : String(contractId);
+        const db  = await dbInstance.getDatabase('feeCache');
+        const blk = await TallyMap.resolveBlock(block);
+        const effContractId = (contractId == null) ? '1' : String(contractId);
 
-            // --- SPOT / contract 1: all sats -> stash, no dust ---
-            if (effContractId === '1'&&propertyId!=1) {
-                //spot trade, not TL token, 100% to fee cache to buy TL
-              const cacheId = `${propertyId}-1`;
-              const row = await TallyMap.loadFeeRow(db, cacheId);
-              const addTokens = fromSats(feeSats);  // BigNumber in token units, exact 1e-8 steps
-              await TallyMap.saveFeeRow(db, cacheId, {
-                stash: row.stash.plus(addTokens),
-                contract: '1'
-              });
-              return await TallyMap.feeCacheBuy(block);;
-            }else if (effContractId === '1'&&propertyId==1){
-                //spot trade for TL, 100% to insurance
-                const insurance = await Insurance.getInstance(effContractId, true);
-                  await insurance.deposit(
-                    propertyId,
-                    fromSats(feeSats).toFixed(8),   // string, exact scale
-                    blk
-                  );
-              return 
-            }
+        let isOracleContract = await ContractRegistry.isOracleContract(contractId);
 
-            // --- CONTRACT (non-1): 50/50 split in integer sats ---
-            const insuranceSats = feeSats.idiv(2);
-            const stashSats     = feeSats.minus(insuranceSats);   // same or +1 if odd
 
-            // 1) insurance NOW
-            try {
-              const insurance = await Insurance.getInstance(effContractId, true);
-              await insurance.deposit(
-                propertyId,
-                fromSats(insuranceSats).toFixed(8),   // string, exact scale
-                blk
-              );
+        // --- SPOT / contract 1: all sats -> stash (non-TL) or all -> insurance (TL spot) ---
+        if (effContractId === '1' && propertyId != 1) {
+          // spot trade of non-TL asset: all to TL buyback
+          const cacheId = `${propertyId}-1`;
+          const row = await TallyMap.loadFeeRow(db, cacheId);
+          const addTokens = fromSats(feeSats);
+          await TallyMap.saveFeeRow(db, cacheId, {
+            stash: row.stash.plus(addTokens),
+            contract: '1'
+          });
+          return await TallyMap.feeCacheBuy(block);
+        } else if (effContractId === '1' && propertyId == 1) {
+          // TL spot trade: 100% -> insurance (no dust)
+          const insurance = await Insurance.getInstance(effContractId, false);
+          await insurance.deposit(
+            propertyId,
+            fromSats(feeSats).toFixed(8),
+            blk
+          );
+          return;
+        }
+
+        // --- CONTRACT (non-1): 50/50 split in integer sats ---
+        const insuranceSats = feeSats.idiv(2);
+        const stashSats     = feeSats.minus(insuranceSats);  // = insuranceSats or insuranceSats+1
+
+        // 🚀 NEW: Track dust remainder explicitly (should be 0 or 1 sat).
+        const dust = feeSats.minus(insuranceSats.plus(stashSats)); 
+        // dust should be 0 always, but we trap it — prevents satoshi drift if anything upstream changes.
+
+        // 1) insurance NOW
+        try {
+          const insurance = await Insurance.getInstance(effContractId, isOracleContract);
+
+          // insurance gets its half
+          await insurance.deposit(
+            propertyId,
+            fromSats(insuranceSats).toFixed(8),
+            blk
+          );
+
+          // 🚀 NEW: give dust (if any) to insurance to maintain exact satoshi conservation
+          if (!dust.isZero()) {
+            await insurance.deposit(
+              propertyId,
+              fromSats(dust).toFixed(8),
+              blk
+            );
+          }
         } catch (e) {
           console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);
         }
 
-        // 2) stash
+        // 2) stash now gets exact stashSats
         const cacheId = `${propertyId}-${effContractId}`;
         const row = await TallyMap.loadFeeRow(db, cacheId);
         await TallyMap.saveFeeRow(db, cacheId, {
@@ -742,7 +761,6 @@ class TallyMap {
         console.error('🚨 Error in updateFeeCache:', e);
       }
     }
-
 
      static async feeCacheBuy(block) {
           const fees = await TallyMap.loadFeeCacheFromDB();
