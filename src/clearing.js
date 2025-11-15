@@ -132,7 +132,7 @@ class Clearing {
             if (propertyId === 1) {
                 const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
                 propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
-                //console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
+                console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
             }
             if (propertyId === 4) {
                 const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI

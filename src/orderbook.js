@@ -2170,7 +2170,7 @@ class Orderbook {
             // make sure sats is EVEN → avoids downstream mint / burn
             if (!sats.mod(2).isZero()) sats = sats.plus(1);
 
-            const makerRebate = sats.negated();
+            const makerRebate = sats.negated().div(2);
 
             // package results
             let buyerFee, sellerFee;

@@ -338,7 +338,7 @@ class Main {
                         }
                     }
                 }
-
+                if(blockHeight>3950000){skip=false}
                 if(skip==false){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
                     const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
                     const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);

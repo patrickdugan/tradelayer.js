@@ -676,89 +676,142 @@ class TallyMap {
      * - Logs every decision point: spot, TL-spot, derivative, oracle/non-oracle.
      * - Logs sat math: raw, rounded, half-split, dust.
      * - Logs stash/insurance writes with exact integer sats.
-     */
-    static async updateFeeCache(propertyId, amount, contractId, block) {
-        const ContractRegistry = require('./contractRegistry.js');
+     */static async updateFeeCache(propertyId, amount, contractId, block) {
+    const ContractRegistry = require('./contractRegistry.js');
 
-        try {
-            const blockArg = arguments.length >= 6 ? arguments[5] : block;
+    try {
+        const blockArg = arguments.length >= 6 ? arguments[5] : block;
 
-            const rawSats = toSatsDecimal(amount).integerValue(BigNumber.ROUND_FLOOR);
+        console.log(`\n====== updateFeeCache() @ block ${blockArg} ======`);
+        console.log(`INPUT propertyId=${propertyId}, amount=${amount}, contractId=${contractId}`);
 
-            // Because calculateFee always returns even-sats, this should be even:
-            let feeSats = rawSats;
-            if (!feeSats.mod(2).isZero()) {
-                console.log(`⚠ WARN: odd feeSats encountered (${feeSats}), giving +1 sat to stash`);
-                feeSats = feeSats.minus(1);
-            }
+        // Convert → sats
+        let rawSats = toSatsDecimal(amount);
+        console.log(`rawSats (pre-floor) = ${rawSats.toString()}`);
 
-            if (feeSats.lte(0)) return;
+        rawSats = rawSats.integerValue(BigNumber.ROUND_FLOOR);
+        console.log(`rawSats (floored sats) = ${rawSats.toString()}`);
 
-            const db  = await dbInstance.getDatabase('feeCache');
-            const blk = await TallyMap.resolveBlock(blockArg);
-            const effContractId = (contractId == null) ? '1' : String(contractId);
+        // Require even sats (should happen automatically from calculateFee)
+        let feeSats = rawSats;
 
-            const isOracleContract = await ContractRegistry.isOracleContract(contractId);
+        console.log(`feeSats (final even sats) = ${feeSats.toString()}`);
 
-            //
-            // 1) SPOT
-            //
-            if (effContractId === '1' && propertyId != 1) {
-                const cacheId = `${propertyId}-1`;
-                const row = await TallyMap.loadFeeRow(db, cacheId);
+        if (feeSats.lte(0)) {
+            console.log(`EXIT: feeSats <= 0`);
+            return;
+        }
 
-                await TallyMap.saveFeeRow(db, cacheId, {
-                    stash: row.stash.plus(fromSats(feeSats)),
-                    contract: '1'
-                });
+        const db  = await dbInstance.getDatabase('feeCache');
+        const blk = await TallyMap.resolveBlock(blockArg);
+        const effContractId = (contractId == null) ? '1' : String(contractId);
 
-                return await TallyMap.feeCacheBuy(blockArg);
-            }
+        const isOracleContract = await ContractRegistry.isOracleContract(contractId);
+        console.log(`Resolved: effContractId=${effContractId}, isOracle=${isOracleContract}`);
 
-            if (effContractId === '1' && propertyId == 1) {
-                const insurance = await Insurance.getInstance(effContractId, false);
-                await insurance.deposit(propertyId, fromSats(feeSats).toFixed(8), blk);
-                return;
-            }
+        //
+        // 1) SPOT NON-TL
+        //
+        if (effContractId === '1' && propertyId != 1) {
+            const cacheId = `${propertyId}-1`;
+            console.log(`SPOT NON-TL route → stash only → cacheId=${cacheId}`);
 
-            //
-            // 2) DERIVATIVES: exact 50/50 split
-            //
-            let insuranceSats = feeSats.idiv(2);
-            let stashSats     = feeSats.minus(insuranceSats);
+            const row0 = await TallyMap.loadFeeRow(db, cacheId);
+            console.log(`Pre-stash row: stash=${row0.stash.toString()}`);
 
-            // Safety but should never trigger:
-            if (!insuranceSats.plus(stashSats).eq(feeSats)) {
-                stashSats = feeSats.minus(insuranceSats);
-            }
-
-            // Insurance
-            try {
-                const insurance = await Insurance.getInstance(effContractId, isOracleContract);
-                await insurance.deposit(
-                    propertyId,
-                    fromSats(insuranceSats).toFixed(8),
-                    blk
-                );
-            } catch (e) {
-                console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);
-            }
-
-            // Stash
-            const cacheId = `${propertyId}-${effContractId}`;
-            const row = await TallyMap.loadFeeRow(db, cacheId);
+            const addTokens = fromSats(feeSats);
+            console.log(`Adding to stash: +${addTokens.toString()} tokens`);
 
             await TallyMap.saveFeeRow(db, cacheId, {
-                stash: row.stash.plus(fromSats(stashSats)),
-                contract: effContractId
+                stash: row0.stash.plus(addTokens),
+                contract: '1'
             });
 
-            return await TallyMap.feeCacheBuy(blockArg);
+            const row1 = await TallyMap.loadFeeRow(db, cacheId);
+            console.log(`Post-stash row: stash=${row1.stash.toString()}`);
 
-        } catch (e) {
-            console.error('🚨 Error in updateFeeCache:', e);
+            console.log(`→ running buyback`);
+            return await TallyMap.feeCacheBuy(blockArg);
         }
+
+        //
+        // 2) SPOT TL-TOKEN (propertyId==1)
+        //
+        if (effContractId === '1' && propertyId == 1) {
+            console.log(`SPOT TL route → 100% to insurance`);
+
+            const insurance = await Insurance.getInstance(effContractId, false);
+
+            console.log(`insurance.deposit: +${fromSats(feeSats).toFixed(8)} (LTC)`);
+            await insurance.deposit(propertyId, fromSats(feeSats).toFixed(8), blk);
+
+            return;
+        }
+
+        //
+        // 3) DERIVATIVES
+        //
+        console.log(`DERIVATIVES route (contract!=1)`);
+
+        const insuranceSats = feeSats.idiv(2);      // floor
+        const stashSats     = feeSats.minus(insuranceSats); 
+
+        console.log(`50/50 split: insuranceSats=${insuranceSats}, stashSats=${stashSats}`);
+
+        if (!insuranceSats.plus(stashSats).eq(feeSats)) {
+            console.log(`⚠ Split mismatch (summing glitch), fixing stash = fee-insurance`);
+            stashSats = stashSats.minus(1);
+        }
+
+        //
+        // Insurance write
+        //
+        try {
+            console.log(`Insurance deposit: contract=${effContractId}, isOracle=${isOracleContract}`);
+            console.log(`insurance.deposit: +${fromSats(insuranceSats).toFixed(8)} (LTC)`);
+
+            const insurance = await Insurance.getInstance(effContractId, isOracleContract);
+
+            await insurance.deposit(
+                propertyId,
+                fromSats(insuranceSats).toFixed(8),
+                blk
+            );
+        } catch (e) {
+            console.error(`❌ Insurance deposit ERROR for contract ${effContractId}:`, e);
+        }
+
+        //
+        // Stash write
+        //
+        const cacheId = `${propertyId}-${effContractId}`;
+        console.log(`Stash write → cacheId=${cacheId}`);
+
+        const stashRow0 = await TallyMap.loadFeeRow(db, cacheId);
+        console.log(`Pre-stash stash=${stashRow0.stash.toString()}`);
+
+        await TallyMap.saveFeeRow(db, cacheId, {
+            stash: stashRow0.stash.plus(fromSats(stashSats)),
+            contract: effContractId
+        });
+
+        const stashRow1 = await TallyMap.loadFeeRow(db, cacheId);
+        console.log(`Post-stash stash=${stashRow1.stash.toString()}`);
+
+        //
+        // 4) Buyback
+        //
+        console.log(`→ running buyback`);
+        const ret = await TallyMap.feeCacheBuy(blockArg);
+
+        console.log(`====== END updateFeeCache() @ block ${blockArg} ======\n`);
+        return ret;
+
+    } catch (e) {
+        console.error('🚨 Error in updateFeeCache:', e);
     }
+}
+
 
      static async feeCacheBuy(block) {
           const fees = await TallyMap.loadFeeCacheFromDB();

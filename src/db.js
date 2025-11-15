@@ -45,7 +45,8 @@ class Database {
         'marginMapDelta', 'marginMaps', 'clearlists','attestations', 'clearing', 
         'consensus', 'persistence','volumeIndex','channels', 'withdrawQueue', 
         'activations', 'insurance','orderBooks','feeCache', 'tradeHistory', 
-        'fundingEvents', 'vaults','syntheticTokens','liquidations', 'scaling','channelDelta'
+        'fundingEvents', 'vaults','syntheticTokens','liquidations', 'scaling',
+        'channelDelta','iou'
         ];
 
         categories.forEach(category => {
