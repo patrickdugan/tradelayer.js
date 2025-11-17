@@ -7,6 +7,40 @@ const VolumeIndex= require('./volumeIndex.js')
 const Channels = require('./channels.js')
 const ClearList = require('./clearlist.js')
 const Consensus = require('./consensus.js')
+const PnlIou = require('./iou.js')
+
+
+// Helper: rank a single character with "alphabetical then numerical"
+function addressCharRank(ch) {
+    if (!ch) return { group: 2, char: '' }; // missing chars sort last
+    const isDigit = ch >= '0' && ch <= '9';
+    return {
+        group: isDigit ? 1 : 0,      // 0 = letters, 1 = digits, 2 = missing
+        char: ch.toLowerCase()
+    };
+}
+
+// Helper: compare two sender addresses by last, then 2nd-last, then 3rd-last char
+function compareSenderAddresses(a, b) {
+    const aLen = a.length;
+    const bLen = b.length;
+    const aChars = [a[aLen - 1], a[aLen - 2], a[aLen - 3]];
+    const bChars = [b[bLen - 1], b[bLen - 2], b[bLen - 3]];
+
+    for (let i = 0; i < 3; i++) {
+        const ra = addressCharRank(aChars[i]);
+        const rb = addressCharRank(bChars[i]);
+
+        if (ra.group !== rb.group) return ra.group - rb.group;
+        if (ra.char < rb.char) return -1;
+        if (ra.char > rb.char) return 1;
+    }
+
+    // final tie-breaker: full address lexicographically
+    return a.localeCompare(b);
+}
+
+
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -151,6 +185,100 @@ class Orderbook {
                 ? result.decimalPlaces(8, BigNumber.ROUND_UP).toString()
                 : result.decimalPlaces(8, BigNumber.ROUND_DOWN).toString();
         }
+
+                // Ensure we have the global pending queue
+        static _ensurePendingQueue() {
+            if (!this._pendingOnChainOrders) {
+                this._pendingOnChainOrders = []; // [{ kind, orderBookKey, sender, blockHeight, txid, order/params }]
+            }
+            return this._pendingOnChainOrders;
+        }
+
+        // Queue an on-chain token:token order (tx type 5)
+        static async queueOnChainTokenOrder(orderBookKey, sender, order, blockHeight, txid) {
+            const queue = this._ensurePendingQueue();
+            queue.push({
+                kind: 'token',
+                orderBookKey: String(orderBookKey),
+                sender,
+                blockHeight: Number(blockHeight),
+                txid,
+                order
+            });
+        }
+
+        // Queue an on-chain contract order (tx type 18)
+        static async queueOnChainContractOrder(contractId, sender, params, blockHeight, txid) {
+            const queue = this._ensurePendingQueue();
+            queue.push({
+                kind: 'contract',
+                orderBookKey: String(contractId),
+                sender,
+                blockHeight: Number(blockHeight),
+                txid,
+                params
+            });
+        }
+
+        // Replay all queued on-chain orders for this block, in canonical sender order
+        static async processQueuedOnChainOrdersForBlock(blockHeight) {
+            const height = Number(blockHeight);
+            const queue = this._ensurePendingQueue();
+            if (!queue.length) return;
+
+            const remaining = [];
+            const toProcess = [];
+
+            // Partition entries into "this block" and "later blocks"
+            for (const entry of queue) {
+                if (entry.blockHeight === height) {
+                    toProcess.push(entry);
+                } else {
+                    remaining.push(entry);
+                }
+            }
+
+            this._pendingOnChainOrders = remaining;
+            if (!toProcess.length) return;
+
+            // Group by orderBookKey (pairKey or contractId)
+            const grouped = new Map();
+            for (const entry of toProcess) {
+                const key = entry.orderBookKey;
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key).push(entry);
+            }
+
+            // Per-book: sort by canonical sender ordering, then chaingun add*Order
+            for (const [key, entries] of grouped.entries()) {
+                entries.sort((a, b) => compareSenderAddresses(a.sender, b.sender));
+
+                const orderbook = await this.getOrderbookInstance(key);
+
+                for (const entry of entries) {
+                    if (entry.kind === 'token') {
+                        await orderbook.addTokenOrder(entry.order, entry.blockHeight, entry.txid);
+                    } else if (entry.kind === 'contract') {
+                        const p = entry.params;
+                        await orderbook.addContractOrder(
+                            p.contractId,
+                            p.price,
+                            p.amount,
+                            p.sell,
+                            p.insurance,
+                            p.blockTime,
+                            entry.txid,
+                            entry.sender,
+                            p.isLiq,
+                            p.reduce,
+                            p.post,
+                            p.stop
+                        );
+                    }
+                }
+            }
+        }
+
 
         // Adds a token order to the order book
         async addTokenOrder(order, blockHeight, txid) {
@@ -1978,7 +2106,7 @@ class Orderbook {
                         }
 
 
-                        
+                        buyerPnl=settlementPNL       
                         const savePNLParams = {height:currentBlockHeight, contractId:match.buyOrder.contractId, accountingPNL: match.buyerPosition.realizedPNL, isBuyer: true, 
                             address: match.buyOrder.buyerAddress, amount: closedShorts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.buyOrder.buyerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
@@ -2040,6 +2168,7 @@ class Orderbook {
                             currentBlockHeight
                           );
                         }
+                        sellerPnl=settlementPNL 
                         const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
@@ -2079,12 +2208,55 @@ class Orderbook {
                         TallyMap.updateBalance(match.buyOrder.buyerAddress,3,liqRewardBaseline,0,0,0,'enhancedLiquidityReward')
                     }
                     // Save the updated margin map
-                    await marginMap.saveMarginMap(currentBlockHeight);  
+                    await marginMap.saveMarginMap(currentBlockHeight);
+                    const delta = buyerPnl.plus(sellerPnl);
+                    if(delta.gt(0)&&(buyerPnl.gt(0)||sellerPnl.gt(0))){
+                        await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
+                    }
+                    await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negate(), currentBlockHeight)
+                    trade.delta=delta  
                     trades.push(trade)                     
             }
              return trades
 		}
 		
+        async recordTradeDelta (
+            contractId,
+            buyerAddr,
+            sellerAddr,
+            buyerPnl,
+            sellerPnl,
+            delta,
+            blockHeight,
+            mm
+        ) {
+            const totalWinning = BigNumber.sum(
+                buyerPnl.gt(0) ? buyerPnl : 0,
+                sellerPnl.gt(0) ? sellerPnl : 0
+            );
+
+            if (totalWinning.isZero()) {
+                console.warn(`IOU WARNING: positive delta but no winner? delta=${delta}`);
+                return;
+            }
+
+            // Buyer share
+            if (buyerPnl.gt(0)) {
+                const share = delta.times(buyerPnl).div(totalWinning);
+                let pos = await marginMap.getPositionForAddress(buyerAddr, contractId);
+                pos.realizedIOU = (pos.realizedIOU || new BigNumber(0)).plus(share);
+                await marginMap.writePositionToMap(contractId, pos);
+            }
+
+            // Seller share
+            if (sellerPnl.gt(0)) {
+                const share = delta.times(sellerPnl).div(totalWinning);
+                let pos = await marginMap.getPositionForAddress(sellerAddr, contractId);
+                pos.realizedIOU = (pos.realizedIOU || new BigNumber(0)).plus(share);
+                await marginMap.writePositionToMap(contractId, pos);
+            }
+        };
+
         /**
 		 * calculateFee
 		 * - Positive result  => taker fee (debit)

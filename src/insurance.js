@@ -198,7 +198,7 @@ async getPayouts(contractId, startBlock, endBlock) {
  */
      async calcPayout(totalLoss, block) {
       // Convert totalLoss to a BigNumber.
-      const lossBN = new BigNumber(totalLoss);
+      const lossBN = totalLoss;
 
       // Calculate the total available funds in the insurance fund.
       let totalAvailable = new BigNumber(0);
@@ -262,7 +262,7 @@ async getPayouts(contractId, startBlock, endBlock) {
       // Save the updated snapshot to reflect the debited funds.
       await this.saveSnapshot();
 
-      return payoutAmount.decimalPlaces(8).toNumber()
+      return payoutAmount.decimalPlaces(8)
 
     }
 

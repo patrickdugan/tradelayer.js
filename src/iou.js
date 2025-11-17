@@ -54,6 +54,67 @@ class PnlIou {
         return doc;
     }
 
+    static async applyToLosers(
+        contractId,
+        markDelta,         // BigNumber (positive)
+        blockHeight,
+        propertyId
+    ) {
+        const MarginMap = require('./marginMap.js');
+        const mm = await MarginMap.getInstance(contractId);
+
+        let deficit = await this.get(contractId,propertyId);
+
+        if (deficit.gte(0)) return;      // nothing to distribute
+        if (markDelta.lte(0)) return;    // no unfunded profit this block
+
+        // Max we can distribute
+        const payout = BigNumber.min(markDelta, deficit);
+
+        await this.addDelta(contractId, propertyId, payout, blockHeight);
+    };
+
+    static async payOutstandingIous(contractId, propertyId,markDelta, blockHeight) {
+        const MarginMap = require('./marginMap.js');
+        const mm = await MarginMap.getInstance(contractId);
+        const positions = await mm.getAllPositions(contractId);
+
+        let surplus = await this.get(contractId,propertyId);
+
+        if (surplus.lte(0)) return;
+
+        let payout = BigNumber.min(markDelta, surplus);
+
+        // Collect claimants
+        const claimants = positions
+            .filter(p => p.iouClaim && p.iouClaim.gt(0))
+            .map(p => ({ address: p.address, claim: p.iouClaim }));
+
+        if (claimants.length === 0) return;
+
+        const totalClaims = claimants.reduce(
+            (acc, c) => acc.plus(c.claim),
+            new BigNumber(0)
+        );
+
+        // Distribute pro-rata
+        payout = BigNumber.min(totalClaims, surplus);
+
+        for (let c of claimants) {
+            const share = payout.times(c.claim).div(totalClaims);
+            const pos = await mm.getPositionForAddress(c.address, contractId);
+
+            pos.realizedPnL = new BigNumber(pos.realizedPnL || 0).plus(share);
+            pos.iouClaim = pos.iouClaim.minus(share).decimalPlaces(8);
+
+            if (pos.iouClaim.lt(0)) pos.iouClaim = new BigNumber(0);
+
+            await mm.writePositionToMap(contractId, pos);
+        }
+
+        await this.addDelta(contractId, propertyId, payout, blockHeight);
+    };
+
     // -----------------------
     // Get IOU for a (contractId, propertyId)
     // -----------------------
@@ -96,7 +157,7 @@ class PnlIou {
     // -----------------------
     // Clear one contract / property pair
     // -----------------------
-    static async clear(contractId, propertyId) {
+    static async delete(contractId, propertyId) {
         const key = PnlIou.key(contractId, propertyId);
         const db = await PnlIou._db();
         await db.removeAsync({ _id: key }, { multi: false });
@@ -105,7 +166,7 @@ class PnlIou {
     // -----------------------
     // OPTIONAL: Clear all IOUs for a property
     // -----------------------
-    static async clearForProperty(propertyId) {
+    static async deleteForProperty(propertyId) {
         const db = await PnlIou._db();
         await db.removeAsync({ propertyId: Number(propertyId) }, { multi: true });
     }

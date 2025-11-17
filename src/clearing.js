@@ -11,6 +11,7 @@ const Channels = require('./channels.js')
 const PropertyManager = require('./property.js')
 const VolumeIndex = require('./volumeIndex.js')
 const Oracles = require('./oracle.js')
+const PnlIou = require('./iou.js')
 
 class Clearing {
     // ... other methods ...
@@ -57,13 +58,13 @@ class Clearing {
         await Clearing.makeSettlement(blockHeight);
          // Ensure Net Contracts = 0
          const ContractRegistry = require('./contractRegistry.js')
-    //if(ContractRegistry.modFlag){
+    if(ContractRegistry.modFlag){
         const netContracts = await Clearing.verifyNetContracts();
         if (netContracts !== 0) {
             throw new Error(`❌ Clearing failed on block ${blockHeight}: Net contracts imbalance detected: ${netContracts}`);
         }
         ContractRegistry.setModFlag(false) //reset the flag to be set true next time there's a marginMap delta
-    //}
+    }
 
         const TallyMap = require('./tally.js')    
     if(TallyMap.modFlag){
@@ -139,6 +140,8 @@ class Clearing {
                 propertyTotal = propertyTotal.plus(vestingTLI.vesting);
                 //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
             }
+            const propertyInIou = PnlIou.getTotalForProperty(propertyId)
+            propertyTotal= propertyTotal.plus(propertyInIou)
 
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
             let expectedCirculation = new BigNumber(propertyData.totalInCirculation);
@@ -685,13 +688,13 @@ class Clearing {
                 const notionalValue = await ContractRegistry.getNotionalValue(id, newPrice)
                 console.log('notional obj '+JSON.stringify(notionalValue))
                 // Update margin maps based on mark prices and current contract positions
-                let {positions, isLiq, systemicLoss} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue.notionalPerContract); //problem child
+                let {positions, isLiq, systemicLoss, pnlDelta} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue.notionalPerContract); //problem child
                 console.log('is liq '+JSON.stringify(isLiq))
                 console.log('length '+isLiq.length+' '+Boolean(isLiq.length>0))
                  // Perform additional tasks like loss socialization if needed
 
                 if(isLiq.length>0){
-                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,id,newPrice,systemicLoss,collateralId,systemicLoss);
+                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,id,newPrice,systemicLoss,collateralId,pnlDelta);
                 }
             } else {
                 // Skip processing for this contract
@@ -738,9 +741,13 @@ class Clearing {
 
         console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
         let isLiq = [];
-        let systemicLoss = 0;
+        let systemicLoss = new BigNumber(0);
         const Orderbook = require('./orderbook.js')
         const Tally = require('./tally.js')
+        
+        let totalPositivePnl = new BigNumber(0);
+        let totalNegativePnl = new BigNumber(0);
+        
         for(let i = 0; i < positions.length; i++){
             let position = positions[i];
             let orderbook = await Orderbook.getOrderbookInstance(contractId);
@@ -787,8 +794,10 @@ class Clearing {
                 console.log('pnl guard shimmy', pnlChange, 'altChange', altChange);
               }
 
-              await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
+                await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
+                totalPositivePnl.plus(pnlChange)
             }else{
+                totalNegativePnl.plus(pnlChange)
                 let balance = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                 console.log(`Checking balance for ${position.address}:`, balance);
 
@@ -808,7 +817,7 @@ class Clearing {
                             tallyPartial = await Tally.getTally(position.address, collateralId)
                             if (await marginMap.checkMarginMaintainance(position.address, contractId,position)){
                                 let liquidationResult = await Clearing.handleLiquidation(marginMap, orderbook, TallyMap, position, contractId, blockHeight, inverse, collateralId, "partial",-balance2.shortfall,notional,blob.thisPrice,false,0,tallyPartial);
-                                if (liquidationResult) {
+                                if(liquidationResult) {
                                     if(liquidationResult.counterparties.length>0){
                                             console.log(JSON.stringify(liquidationResult.counterparties))
                                             console.log("Before update:", JSON.stringify(positions, null, 2));
@@ -817,7 +826,7 @@ class Clearing {
                                             console.log("After update:", JSON.stringify(positions, null, 2));
                                     }
                                     isLiq.push(liquidationResult.liquidation);
-                                    systemicLoss += liquidationResult.systemicLoss;
+                                    systemicLoss = systemicLoss.plus(liquidationResult.systemicLoss);
                                 }
                             }
                     } else {
@@ -847,7 +856,7 @@ class Clearing {
                                                 console.log("After update:", JSON.stringify(positions, null, 2));
                                             }
                                             isLiq.push(liquidationResult.liquidation);
-                                            systemicLoss += liquidationResult.systemicLoss;
+                                            systemicLoss = systemicLoss.plus(liquidationResult.systemicLoss);
                                         }
                                     }
                                     continue;
@@ -865,7 +874,7 @@ class Clearing {
                                                 console.log("🔄 After update:", JSON.stringify(positions, null, 2));
                                         }
                                         isLiq.push(liquidationResult.liquidation);
-                                        systemicLoss += liquidationResult.systemicLoss;
+                                        systemicLoss = systemicLoss.plus(liquidationResult.systemicLoss);
                                     }
                                 }
                             }
@@ -875,9 +884,17 @@ class Clearing {
             }
         positions.lastMark = blob.lastPrice;
         console.log('systemic loss '+systemicLoss)
+        totalNegativePnl = totalNegativePnl.minus(systemicLoss)
+        // 📏 Compute delta = totalProfit - totalLoss
+        const pnlDelta = totalPositivePnl.minus(totalNegativePnl);
+
+        if (!pnlDelta.isZero()) {
+            console.log(`PnL delta for contract ${contractId} @ block ${blockHeight}: ${pnlDelta.toFixed(8)}`);
+            await PnlIou.addDelta(contractId, collateralId, pnlDelta, blockHeight);
+        }
      
         //await marginMap.saveMarginMap(blockHeight);
-        return { positions, isLiq, systemicLoss };
+        return { positions, isLiq, systemicLoss, pnlDelta};
     }
 
     static flattenMark(positions) {
@@ -1353,20 +1370,30 @@ class Clearing {
         }
     }
 
-    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss,collateralId){
+    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss,collateralId,pnlDelta){        
+            if (pnlDelta.gt(0)) {
+                // ✅ POSITIVE delta: cover it from IOU credit / insurance / fee cache
+                // Here we *do not* touch individual traders; we just reflect the mismatch
+                // into a central sink, e.g. "insurance" address or PnlIou bucket.
+                await PnlIou.applyToLosers(contractId,pnlDelta,blockHeight,collateralId);
+            } else if(pnlDelta.lt(0)){
+                // NEGATIVE delta: extra loss — treat as insurance accrual / reserve top-up
+                await PnlIou.payOutstandingIous(contractId, collateralId, pnlDelta, blockHeight);
+            }
+
        //try {
             // Step 2: Check if insurance fund payout is needed
-            if (Math.abs(totalLoss) > 0) {
+            if (totalLoss.abs().gt(0)) {
                 // Step 3: Apply insurance fund payout
                 const ContractRegistry = require('./contractRegistry.js');
                 let isOracleContract = await ContractRegistry.isOracleContract(contractId);
                 const insurance = await Insurance.getInstance(contractId,isOracleContract)
                 const payout = await insurance.calcPayout(totalLoss, blockHeight);
-                console.log('🏦 insurance payout '+payout)
+                console.log('🏦 insurance payout '+payout.toFixed())
                 // Step 4: Socialize remaining loss if any
-                const remainingLoss = totalLoss - payout;
+                const remainingLoss = totalLoss.minus(payout);
                 console.log('remaining loss '+remainingLoss)
-                if (Math.abs(remainingLoss) > 0) {
+                if (remainingLoss.abs().gt(0)){
                     await Clearing.socializeLoss(contractId, remainingLoss,blockHeight,collateralId);
                 }
             }
@@ -1596,7 +1623,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
         }
 
         // Calculate loss percentage
-        const lossPercentage = new BigNumber(totalLoss).dividedBy(totalUPNL);
+        const lossPercentage = totalLoss.dividedBy(totalUPNL);
 
         console.log(`📊 Total uPNL: ${totalUPNL.toFixed(4)}, Loss Percentage: ${(lossPercentage.times(100)).toFixed(2)}%`);
 
@@ -1605,10 +1632,8 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
             const lossForPosition = new BigNumber(pos.unrealizedPNL).times(lossPercentage).decimalPlaces(8);
 
             console.log(`📉 Reducing ${pos.address} uPNL by ${lossForPosition.toFixed(8)} (original: ${pos.unrealizedPNL})`);
-
             // Adjust uPNL
             pos.unrealizedPNL = new BigNumber(pos.unrealizedPNL).minus(lossForPosition).toNumber();
-
             // Update margin map
             margins.margins.set(pos.address, pos);
             await margins.recordMarginMapDelta(
@@ -1619,7 +1644,7 @@ static async socializeLoss(contractId, totalLoss,block,collateralId) {
                 0,
                 'socializeLoss'
             );
-            TallyMap.updateBalance(pos.address, collateralId,-lossForPosition,0,0,0,'crawback',block,'')
+            TallyMap.updateBalance(pos.address, collateralId,-lossForPosition.toNumber(),0,0,0,'crawback',block,'')
         }
 
         // Save updated margin map
