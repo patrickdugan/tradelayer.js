@@ -497,7 +497,7 @@ class ContractRegistry {
         if (inverse) {
             // For inverse contracts, margin is calculated based on notional value
             console.log('calc. init. margin inverse '+notionalValue+' '+priceBN+' '+leverage)
-            let margin = notionalBN.dividedBy(priceBN).div(leverageBN).decimalPlaces(8).toNumber();
+            let margin = notionalBN.dividedBy(priceBN).div(leverageBN).decimalPlaces(8, BigNumber.ROUND_CEIL).toNumber();
             console.log(margin)
             return margin
         } else {
@@ -642,7 +642,6 @@ class ContractRegistry {
                     throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
                 }
              }
-
         }else if(channel==true){
             let hasChannel = await TallyMap.hasSufficientChannel(channelAddr, collateralPropertyId,totalInitialMargin)
             console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)

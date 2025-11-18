@@ -59,7 +59,7 @@ class Orderbook {
             return orderbook;
         }
 
-        async loadOrderBook(key,addr) {
+        async loadOrderBook(key) {
                 const stringKey = typeof key === 'string' ? key : String(key);
                 const orderBooksDB = await dbInstance.getDatabase('orderBooks');
 
@@ -302,8 +302,10 @@ class Orderbook {
         for (const pairKey of activeDoc.pairs) {
             const queueId = `queue-${pairKey}`;
             const qDoc = await db.findOneAsync({ _id: queueId });
+            console.log('inside process queued '+JSON.stringify(qDoc))
+            console.log('pairKey '+pairKey)
 
-            if (!qDoc || !Array.isArray(qDoc.orders) || qDoc.orders.length === 0) {
+            if(!qDoc || !Array.isArray(qDoc.orders) || qDoc.orders.length === 0){
                 // Nothing queued; ensure the pair doesn't linger in activePairs
                 activePairs = activePairs.filter(k => k !== pairKey);
                 await db.updateAsync(
@@ -319,13 +321,12 @@ class Orderbook {
             const remaining = [];
 
             for (const entry of entries) {
-                if (Number(entry.blockHeight) === height) {
+                if (Number(entry.blockHeight) <= height) {
                     thisBlock.push(entry);
                 } else {
                     remaining.push(entry);
                 }
             }
-
             if (thisBlock.length === 0) {
                 // No work for this block for this pair; maybe shrink queue but keep active if there are future blocks
                 if (remaining.length !== entries.length) {
@@ -345,7 +346,7 @@ class Orderbook {
             thisBlock.sort((a, b) => compareSenderAddresses(a.sender, b.sender));
 
             const orderbook = await Orderbook.getOrderbookInstance(pairKey);
-
+            
             for (const entry of thisBlock) {
                 if (entry.kind === 'token') {
                     await orderbook.addTokenOrder(
@@ -355,7 +356,7 @@ class Orderbook {
                     );
                 } else if (entry.kind === 'contract') {
                     const p = entry.params;
-                    await orderbook.addContractOrder(
+                    const matchResult = await orderbook.addContractOrder(
                         p.contractId,
                         p.price,
                         p.amount,
@@ -367,11 +368,18 @@ class Orderbook {
                         p.isLiq || false,
                         p.reduce,
                         p.post,
-                        p.stop
+                        p.stop,
+                        orderbook
                     );
+                    console.log(' match result '+JSON.stringify(matchResult))
                 }
             }
-
+            var data = await orderbook.loadOrderBook(pairKey)
+            console.log(' asdf '+JSON.stringify(orderbook))
+            console.log(blockHeight)
+            if(blockHeight>3550000){
+                throw Error()
+            }
             // Write back remaining entries for this pair
             await db.updateAsync(
                 { _id: queueId },
@@ -387,6 +395,7 @@ class Orderbook {
 
         // Persist the shrunk activePairs set
         await this._updateActivePairs(activePairs);
+
     }
 
 
@@ -934,7 +943,7 @@ class Orderbook {
       }
     }
 
-        async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
+        async addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop,orderbook) {
             const ContractRegistry = require('./contractRegistry.js')
             const inverse = ContractRegistry.isInverse(contractId)
             const MarginMap = require('./marginMap.js')
@@ -942,14 +951,16 @@ class Orderbook {
                          // Get the existing position sizes for buyer and seller
             const existingPosition = await marginMap.getPositionForAddress(sender, contractId);
             // Determine if the trade reduces the position size for buyer or seller
+            console.log('amount in add contract order '+amount +' '+JSON.stringify(existingPosition))
             const isBuyerReducingPosition = Boolean(existingPosition.contracts > 0 &&sell==false);
             const isSellerReducingPosition = Boolean(existingPosition.contracts < 0 && sell==true);
             let initialReduce = false
-            //console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
+            console.log('adding contract order... existingPosition? '+JSON.stringify(existingPosition)+' reducing position? '+isBuyerReducingPosition + ' '+ isSellerReducingPosition)
+            
             let initMargin = 0
             if(isBuyerReducingPosition==false&&isSellerReducingPosition==false){
                 //we're increasing or creating a new position so locking up init margin in the reserve column on TallyMap
-                //console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
+                console.log('about to call moveCollateralToMargin '+contractId, amount, sender)
                 initMargin = await ContractRegistry.moveCollateralToReserve(sender, contractId, amount, price,blockTime,txid) //first we line up the capital
             }else if(isBuyerReducingPosition||isSellerReducingPosition){
                 initialReduce=true
@@ -973,8 +984,7 @@ class Orderbook {
 
             // The orderBookKey is based on the contractId since it's a derivative contract
             const orderBookKey = `${contractId}`;
-            const orderbook = new Orderbook(contractId);
-            var orderbookData = await orderbook.loadOrderBook(orderBookKey,false);
+             var orderbookData = await orderbook.loadOrderBook(orderBookKey,false);
             // Load the order book for the given contract
         
             // Insert the contract order into the order book
