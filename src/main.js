@@ -46,6 +46,7 @@ const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Oracles = require('./oracle.js')
 const Activation = require('./activation.js')
 const Orderbook = require('./orderbook.js')
+const Persistence = require('./persistence.js');
 let activation
 
 (async () => {
@@ -103,7 +104,7 @@ class Main {
         this.genesisBlock = 600000
         this.parseBlock = 0
         console.log(this.genesisBlock)
-        //this.blockchainPersistence = new Persistence();
+        this.blockchainPersistence = new Persistence({ snapshotInterval: 1000 });
         Main.instance = this;
     }
 
@@ -113,6 +114,10 @@ class Main {
             console.log('Initializing Main instance...');
             Main.instance = new Main();
             //await Main.instance.initialize();
+            if (this.blockchainPersistence && !this.persistenceInitialized) {
+                await this.blockchainPersistence.init();
+                this.persistenceInitialized = true;
+            }
             Main.isInitializing = false;  // Reset flag after initialization completes
         }
         return Main.instance;
@@ -690,6 +695,35 @@ class Main {
 
     async blockHandlerBegin(blockData, blockHeight) {
         try {
+              if (this.blockchainPersistence) {
+            // 1) Live reorg detection
+            const reorg = await this.blockchainPersistence.checkForReorgForNewBlock(
+                blockHeight,
+                blockData.previousblockhash
+            );
+
+            if (reorg) {
+                // Handle deep reorg (offline or multiple blocks)
+                const info = await this.blockchainPersistence.detectAndHandleReorg();
+                if (info && typeof info.restoredFrom === 'number') {
+                    console.log(
+                        `Replaying consensus from snapshot at ${info.restoredFrom + 1} ` +
+                        `after reorg (common ancestor ${info.commonAncestor}).`
+                    );
+                    await this.constructConsensusFromIndex(info.restoredFrom + 1);
+                }
+            }
+
+            // 2) Record this block header for future comparisons
+            await this.blockchainPersistence.recordBlockHeader(
+                blockHeight,
+                blockData.hash,
+                blockData.previousblockhash
+            );
+
+            // 3) Maybe write a snapshot + consensus checkpoint
+            await this.blockchainPersistence.maybeCheckpoint(blockHeight);
+        }
             //const blockData = await TxIndex.fetchBlockData(blockHeight);
             const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
             
