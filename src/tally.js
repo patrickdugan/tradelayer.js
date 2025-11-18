@@ -863,6 +863,8 @@ class TallyMap {
           }
         }
 
+
+
     /**
      * accrueFee:
      * - SPOT (contractId null/undefined): 50/50 split in integer sats → half Insurance NOW, half -> VALUE.
@@ -1068,6 +1070,28 @@ class TallyMap {
             console.error('Error saving delta:', error);
             throw error; // Rethrow the error or handle as needed
         }
+    }
+
+    static async didReceiveClearingProfitThisBlock(address, blockHeight) {
+        const db = await dbInstance.getDatabase('tallyMapDelta');
+
+        return new Promise((resolve, reject) => {
+            db.find(
+                {
+                    "data.address": address,
+                    "data.block": blockHeight
+                },
+                (err, docs) => {
+                    if (err) return reject(err);
+
+                    const hasClearing = docs.some(doc =>
+                        (doc.data.type === 'clearing')
+                    );
+
+                    resolve(hasClearing);
+                }
+            );
+        });
     }
 
 // Function to apply a delta to the TallyMap

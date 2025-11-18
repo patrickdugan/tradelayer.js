@@ -588,13 +588,27 @@ class ContractRegistry {
                     let contractUndo = 0
                     let excessMargin = 0
                     console.log('about to calc. excess margin '+orderPrice +' '+price+ ' '+totalComparedMargin + ' '+totalInitialMargin+' '+side+' '+maker)
-            if(orderPrice<price&&side==true&&channel==false&&maker==false){
-                    excessMargin = BigNumber(totalComparedMargin).minus(totalInitialMargin).decimalPlaces(8).toNumber()
-                    console.log('calling move margin in seller excess margin channel false '+sender+' '+excessMargin)
-                    //contract was bid higher than the fill, the initMargin in reserve is too high and will be returned to available
-                     await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin,0, 0, 'returnExcessMargin',block);
+            if (orderPrice < price && side === true && channel === false && maker === false) {
+                // Compute ABSOLUTE excess
+                const raw = BigNumber(totalInitialMargin).minus(totalComparedMargin); // 327 - 325.5 = +1.5
+                const excess = raw.decimalPlaces(8).toNumber();
+
+                if (excess > 0) {
+                    console.log(`returning excess margin ${excess} to ${sender}`);
+                    
+                    // Correct semantics (free margin):
+                    await TallyMap.updateBalance(
+                        sender,
+                        collateralPropertyId,
+                        excess,         // available +excess
+                        -excess,        // reserve  -excess
+                        0, 0,
+                        'returnExcessMargin',
+                        block
+                    );
+                }
             }else if(orderPrice>price&&side==false&&maker==false&&channel==false){
-                    excessMargin = BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber()
+                                excessMargin = BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber()
                     console.log('calling move margin in buyer excess margin channel false '+sender+' '+excessMargin)
                     const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, excessMargin);
                     if(hasSufficientBalance.hasSufficient==false){

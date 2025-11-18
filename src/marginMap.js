@@ -1353,8 +1353,11 @@ class MarginMap {
               pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
                 const matchBN = new BigNumber(matchSize)
 
-            await this.clawbackOrClawForward(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
-
+                const shouldClawback = await TallyMap.didReceiveClearingProfitThisBlock(pos.address, block)
+                console.log('should clawback? '+shouldClawback)
+                if(shouldClawback){
+                  await this.clawbackClearingProfit(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
+                }
               pos = await this.realizePnl(
                 pos.address,
                 matchSize,
@@ -1400,73 +1403,136 @@ class MarginMap {
             return deleveragingData;
     }
 
-    async clawbackOrClawForward(pos, markPrice, matchSize, notional, liqPrice, collateralId, block, TallyMap, sell, isInverse) {
-      // **** New Clawback Logic ****
-      // Compare the position's lastPrice (set previously during clearing) to markPrice.
-      // If they are equal, calculate the difference between lastPrice and liqPrice.
-      console.log('🔧' + pos.lastMark + ' ' + markPrice);
-      
-      if (pos.lastMark && new BigNumber(pos.lastMark).isEqualTo(markPrice)) {
-        // For example: if sell is true, difference = lastPrice - liqPrice; else liqPrice - lastPrice.
-        console.log('inside clawback ' + sell);
-        let diff = sell 
-          ? new BigNumber(pos.lastMark).minus(liqPrice)
-          : new BigNumber(liqPrice).minus(pos.lastMark);
-        console.log('diff ' + diff.decimalPlaces(8).toNumber() + ' ' + pos.lastMark + ' ' + liqPrice);
-        console.log(Boolean(Math.abs(diff.toNumber()) > 0));
-        
-        if (Math.abs(diff.toNumber()) > 0) {
-          let crawback = diff.times(matchSize).times(notional).decimalPlaces(8);
-          if (isInverse) {
-            crawback = diff
-              .dividedBy(new BigNumber(pos.lastMark).times(new BigNumber(liqPrice)))
-              .times(matchSize)
-              .times(notional);
+    async clawbackClearingProfit(
+          pos,
+          markPrice,
+          matchSize,
+          notional,
+          liqPrice,
+          collateralId,
+          block,
+          TallyMap,
+          sell,
+          isInverse
+        ) {
+          // --------------------------
+          // 1. BASIC SANITY CHECKS
+          // --------------------------
+          if (!pos || !pos.lastMark || !markPrice || !liqPrice) return;
+          if (!matchSize || matchSize <= 0) return;
+
+          const last = new BigNumber(pos.lastMark);
+          const mark = new BigNumber(markPrice);
+          const liq  = new BigNumber(liqPrice);
+
+          if (last.isNaN() || mark.isNaN() || liq.isNaN()) {
+            console.log("🔥 clawback skip: NaN in inputs", pos.lastMark, markPrice, liqPrice);
+            return;
           }
-          console.log(`🔧 Clawback adjustment for ${pos.address}: Difference = ${crawback.toFixed(8)}`);
-        
-        await TallyMap.updateBalance(
-            pos.address,
-            collateralId,
-            crawback.toNumber(),      // Add to available (or subtract, depending on your accounting)
-            0,
-            0,
-            0,
-            'clawbackSettlement',
-            block
-          );
-        }
-      } else {
-        // Profit adjustment logic: when lastMark != markPrice,
-        // calculate profit as the difference between markPrice and lastMark.
-        let profitDiff = sell 
-          ? new BigNumber(pos.lastMark).minus(liqPrice/*markPrice*/)
-          : new BigNumber(liqPrice/*markPrice*/).minus(pos.lastMark);
-        console.log(`Profit difference for ${pos.address}: ${profitDiff.toFixed(8)}`);
-        
-        if (Math.abs(profitDiff.toNumber()) > 0) {
-          let profit = profitDiff.times(matchSize).times(notional).decimalPlaces(8);
-          if (isInverse) {
-            profit = profit
-              .dividedBy(new BigNumber(pos.lastMark).times(new BigNumber(markPrice)))
-              .times(matchSize)
-              .times(notional);
+
+          // tolerance: 1e-8
+          const sameMark = last.minus(mark).abs().lt(1e-8);
+
+          console.log(`🔧 clawbackOrClawForward :: last=${last} mark=${mark} liq=${liq} sameMark=${sameMark}`);
+
+          // --------------------------
+          // helper for safe balance write
+          // --------------------------
+          const safeApply = async (amount, type) => {
+            if (!amount || isNaN(amount) || !isFinite(amount)) return;
+
+            const amt = new BigNumber(amount).decimalPlaces(8);
+
+            // ignore noise < 1 satoshi
+            if (amt.abs().lt(1e-8)) return;
+
+            // prevent pathological negative writes beyond available
+            // (TallyMap should reject anyway but we guard)
+            const limited = amt;
+
+            console.log(`🔧 TallyMap.updateBalance ${type}: ${limited.toString()}`);
+
+            await TallyMap.updateBalance(
+              pos.address,
+              collateralId,
+              limited.toNumber(),
+              0,
+              0,
+              0,
+              type,
+              block
+            );
+          };
+
+          // --------------------------
+          // 2. Compute diff endpoint rule
+          // --------------------------
+          // If same mark: diff vs LIQUIDATION price
+          // Else: diff vs MARK PRICE (correct incremental PnL logic)
+          const startPrice = sameMark ? last : mark;
+          const endPrice   = liq;
+
+          let diff = sell
+            ? startPrice.minus(endPrice)
+            : endPrice.minus(startPrice);
+
+          console.log(`🔧 Base diff = ${diff.toString()} (sell=${sell}) start=${startPrice} end=${endPrice}`);
+
+          if (diff.isNaN() || !diff.isFinite()) {
+            console.log("🔥 diff invalid; skipping");
+            return;
           }
-          console.log(`🔧 Profit adjustment for ${pos.address}: Profit = ${profit.toFixed(8)}`);
-          await TallyMap.updateBalance(
-            pos.address,
-            collateralId,
-            profit.toNumber(), // add profit tokens to available balance
-            0,
-            0,
-            0,
-            'profitAdjustmentSettlement',
-            block
-          );
+
+          // --------------------------
+          // 3. Compute linear PNL
+          // --------------------------
+          let pnlLinear = diff.times(matchSize).times(notional).decimalPlaces(8);
+
+          // --------------------------
+          // 4. INVERSE FIX — correct formula (NO double multiply)
+          // --------------------------
+          let pnl;
+
+          if (isInverse) {
+            // Calculate Δ(1/price)
+            const denom = last.times(endPrice);
+            if (denom.isZero() || denom.isNaN()) {
+              console.log("🔥 inverse denom invalid; skipping");
+              return;
+            }
+
+            pnl = diff
+              .dividedBy(denom)
+              .times(matchSize)
+              .times(notional)
+              .decimalPlaces(8);
+          } else {
+            pnl = pnlLinear;
+          }
+
+          console.log(`🔧 Computed PNL delta = ${pnl.toString()} (inverse=${isInverse})`);
+
+          // --------------------------
+          // 5. PROFIT / LOSS handling
+          // --------------------------
+          if (pnl.isZero()) return;
+
+          // profit for the counterparty = +pnl
+          // loss for the counterparty = -pnl
+          const finalDelta = pnl;
+
+          // --------------------------
+          // 6. APPLY TO TALLY — SAFE
+          // --------------------------
+          if (sameMark) {
+            await safeApply(finalDelta, "clawbackSettlement");
+          } else {
+            await safeApply(finalDelta, "profitAdjustmentSettlement");
+          }
+
+          return;
         }
-      }
-      return
-    }
+
 
     // Adjust deleveraging position
     async adjustDeleveraging(address, contractId, size, sell, block, liqPrice,TallyMap) {
