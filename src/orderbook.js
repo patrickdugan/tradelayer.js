@@ -187,97 +187,207 @@ class Orderbook {
         }
 
                 // Ensure we have the global pending queue
-        static _ensurePendingQueue() {
-            if (!this._pendingOnChainOrders) {
-                this._pendingOnChainOrders = []; // [{ kind, orderBookKey, sender, blockHeight, txid, order/params }]
+            // --- DB-backed on-chain order queue using the orderbook DB ---
+
+    static async _getOrderbookDB() {
+        // IMPORTANT: use the same name you already use for the orderbook collection
+        // e.g. dbInstance.getDatabase('orderbook') or dbInstance.getDatabase('orderBooks')
+        return dbInstance.getDatabase('orderBooks');
+    }
+
+    static async _addActivePair(pairKey) {
+        const db = await this._getOrderbookDB();
+        const doc = await db.findOneAsync({ _id: 'activePairs' });
+        let pairs = (doc && Array.isArray(doc.pairs)) ? doc.pairs : [];
+
+        if (!pairs.includes(pairKey)) {
+            pairs.push(pairKey);
+            await db.updateAsync(
+                { _id: 'activePairs' },
+                { _id: 'activePairs', pairs },
+                { upsert: true }
+            );
+            await db.loadDatabase();
+        }
+    }
+
+    static async _updateActivePairs(pairs) {
+        const db = await this._getOrderbookDB();
+        await db.updateAsync(
+            { _id: 'activePairs' },
+            { _id: 'activePairs', pairs },
+            { upsert: true }
+        );
+        await db.loadDatabase();
+    }
+
+    /**
+     * Queue a token:token on-chain order (tx type 5) under key "queue-<pairKey>".
+     */
+    static async queueOnChainTokenOrder(orderBookKey, sender, order, blockHeight, txid) {
+        const db = await this._getOrderbookDB();
+        const pairKey = String(orderBookKey);
+        const queueId = `queue-${pairKey}`;
+
+        const doc = await db.findOneAsync({ _id: queueId });
+        const entries = (doc && Array.isArray(doc.orders)) ? doc.orders : [];
+
+        entries.push({
+            kind: 'token',
+            orderBookKey: pairKey,
+            sender,
+            blockHeight: Number(blockHeight),
+            txid,
+            order
+        });
+
+        await db.updateAsync(
+            { _id: queueId },
+            { _id: queueId, orders: entries },
+            { upsert: true }
+        );
+        await db.loadDatabase();
+        await this._addActivePair(pairKey);
+    }
+
+    /**
+     * Queue a contract on-chain order (tx type 18) under key "queue-<contractId>".
+     */
+    static async queueOnChainContractOrder(contractId, sender, params, blockHeight, txid) {
+        const db = await this._getOrderbookDB();
+        const pairKey = String(contractId);       // reuse the same pattern
+        const queueId = `queue-${pairKey}`;
+
+        const doc = await db.findOneAsync({ _id: queueId });
+        const entries = (doc && Array.isArray(doc.orders)) ? doc.orders : [];
+
+        entries.push({
+            kind: 'contract',
+            orderBookKey: pairKey,
+            sender,
+            blockHeight: Number(blockHeight),
+            txid,
+            params
+        });
+
+        await db.updateAsync(
+            { _id: queueId },
+            { _id: queueId, orders: entries },
+            { upsert: true }
+        );
+        await db.loadDatabase();
+        await this._addActivePair(pairKey);
+    }
+
+    /**
+     * For a given blockHeight:
+     *  - read "activePairs"
+     *  - for each pair, read "queue-<pair>"
+     *  - split entries into thisBlock / remaining
+     *  - sort thisBlock by canonical tail-char sender order
+     *  - chaingun addTokenOrder / addContractOrder
+     *  - write back remaining, clean up activePairs for empty queues
+     */
+    static async processQueuedOnChainOrdersForBlock(blockHeight) {
+        const height = Number(blockHeight);
+        const db = await this._getOrderbookDB();
+
+        const activeDoc = await db.findOneAsync({ _id: 'activePairs' });
+        if (!activeDoc || !Array.isArray(activeDoc.pairs) || activeDoc.pairs.length === 0) {
+            return;
+        }
+
+        let activePairs = activeDoc.pairs.slice();
+
+        for (const pairKey of activeDoc.pairs) {
+            const queueId = `queue-${pairKey}`;
+            const qDoc = await db.findOneAsync({ _id: queueId });
+
+            if (!qDoc || !Array.isArray(qDoc.orders) || qDoc.orders.length === 0) {
+                // Nothing queued; ensure the pair doesn't linger in activePairs
+                activePairs = activePairs.filter(k => k !== pairKey);
+                await db.updateAsync(
+                    { _id: queueId },
+                    { _id: queueId, orders: [] },
+                    { upsert: true }
+                );
+                continue;
             }
-            return this._pendingOnChainOrders;
-        }
 
-        // Queue an on-chain token:token order (tx type 5)
-        static async queueOnChainTokenOrder(orderBookKey, sender, order, blockHeight, txid) {
-            const queue = this._ensurePendingQueue();
-            queue.push({
-                kind: 'token',
-                orderBookKey: String(orderBookKey),
-                sender,
-                blockHeight: Number(blockHeight),
-                txid,
-                order
-            });
-        }
-
-        // Queue an on-chain contract order (tx type 18)
-        static async queueOnChainContractOrder(contractId, sender, params, blockHeight, txid) {
-            const queue = this._ensurePendingQueue();
-            queue.push({
-                kind: 'contract',
-                orderBookKey: String(contractId),
-                sender,
-                blockHeight: Number(blockHeight),
-                txid,
-                params
-            });
-        }
-
-        // Replay all queued on-chain orders for this block, in canonical sender order
-        static async processQueuedOnChainOrdersForBlock(blockHeight) {
-            const height = Number(blockHeight);
-            const queue = this._ensurePendingQueue();
-            if (!queue.length) return;
-
+            const entries = qDoc.orders;
+            const thisBlock = [];
             const remaining = [];
-            const toProcess = [];
 
-            // Partition entries into "this block" and "later blocks"
-            for (const entry of queue) {
-                if (entry.blockHeight === height) {
-                    toProcess.push(entry);
+            for (const entry of entries) {
+                if (Number(entry.blockHeight) === height) {
+                    thisBlock.push(entry);
                 } else {
                     remaining.push(entry);
                 }
             }
 
-            this._pendingOnChainOrders = remaining;
-            if (!toProcess.length) return;
-
-            // Group by orderBookKey (pairKey or contractId)
-            const grouped = new Map();
-            for (const entry of toProcess) {
-                const key = entry.orderBookKey;
-                if (!grouped.has(key)) grouped.set(key, []);
-                grouped.get(key).push(entry);
+            if (thisBlock.length === 0) {
+                // No work for this block for this pair; maybe shrink queue but keep active if there are future blocks
+                if (remaining.length !== entries.length) {
+                    await db.updateAsync(
+                        { _id: queueId },
+                        { _id: queueId, orders: remaining },
+                        { upsert: true }
+                    );
+                }
+                if (remaining.length === 0) {
+                    activePairs = activePairs.filter(k => k !== pairKey);
+                }
+                continue;
             }
 
-            // Per-book: sort by canonical sender ordering, then chaingun add*Order
-            for (const [key, entries] of grouped.entries()) {
-                entries.sort((a, b) => compareSenderAddresses(a.sender, b.sender));
+            // Deterministic sender ordering for this block's entries
+            thisBlock.sort((a, b) => compareSenderAddresses(a.sender, b.sender));
 
-                const orderbook = await this.getOrderbookInstance(key);
+            const orderbook = await Orderbook.getOrderbookInstance(pairKey);
 
-                for (const entry of entries) {
-                    if (entry.kind === 'token') {
-                        await orderbook.addTokenOrder(entry.order, entry.blockHeight, entry.txid);
-                    } else if (entry.kind === 'contract') {
-                        const p = entry.params;
-                        await orderbook.addContractOrder(
-                            p.contractId,
-                            p.price,
-                            p.amount,
-                            p.sell,
-                            p.insurance,
-                            p.blockTime,
-                            entry.txid,
-                            entry.sender,
-                            p.isLiq,
-                            p.reduce,
-                            p.post,
-                            p.stop
-                        );
-                    }
+            for (const entry of thisBlock) {
+                if (entry.kind === 'token') {
+                    await orderbook.addTokenOrder(
+                        entry.order,
+                        entry.blockHeight,
+                        entry.txid
+                    );
+                } else if (entry.kind === 'contract') {
+                    const p = entry.params;
+                    await orderbook.addContractOrder(
+                        p.contractId,
+                        p.price,
+                        p.amount,
+                        p.sell,
+                        p.insurance,
+                        p.blockTime,         // or p.blockHeight if you add it
+                        entry.txid,
+                        entry.sender,
+                        p.isLiq || false,
+                        p.reduce,
+                        p.post,
+                        p.stop
+                    );
                 }
             }
+
+            // Write back remaining entries for this pair
+            await db.updateAsync(
+                { _id: queueId },
+                { _id: queueId, orders: remaining },
+                { upsert: true }
+            );
+
+            // If nothing left queued at all for this pair, drop it from activePairs
+            if (remaining.length === 0) {
+                activePairs = activePairs.filter(k => k !== pairKey);
+            }
         }
+
+        // Persist the shrunk activePairs set
+        await this._updateActivePairs(activePairs);
+    }
 
 
         // Adds a token order to the order book
@@ -2037,7 +2147,7 @@ class Orderbook {
                     console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
                     // Realize PnL if the trade reduces the position size
-                    let buyerPnl = 0, sellerPnl = 0;
+                    let buyerPnl = new BigNumber(0), sellerPnl = new BigNumber(0);
                     console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
                     let closedShorts=0
                     if((isBuyerReducingPosition||isBuyerFlippingPosition)/*&&!match.buyOrder.liq*/){
@@ -2106,7 +2216,7 @@ class Orderbook {
                         }
 
 
-                        buyerPnl=settlementPNL       
+                        buyerPnl=new BigNumber(settlementPNL)       
                         const savePNLParams = {height:currentBlockHeight, contractId:match.buyOrder.contractId, accountingPNL: match.buyerPosition.realizedPNL, isBuyer: true, 
                             address: match.buyOrder.buyerAddress, amount: closedShorts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.buyOrder.buyerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
@@ -2168,7 +2278,7 @@ class Orderbook {
                             currentBlockHeight
                           );
                         }
-                        sellerPnl=settlementPNL 
+                        sellerPnl=new BigNumber(settlementPNL) 
                         const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
                             timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
@@ -2213,7 +2323,7 @@ class Orderbook {
                     if(delta.gt(0)&&(buyerPnl.gt(0)||sellerPnl.gt(0))){
                         await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
                     }
-                    await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negate(), currentBlockHeight)
+                    await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight)
                     trade.delta=delta  
                     trades.push(trade)                     
             }

@@ -45,6 +45,7 @@ const TradeLayerManager = require('./vesting.js')
 const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Oracles = require('./oracle.js')
 const Activation = require('./activation.js')
+const Orderbook = require('./orderbook.js')
 let activation
 
 (async () => {
@@ -340,6 +341,7 @@ class Main {
                 }
                 if(blockHeight%10000==0){skip=false}
                 if(skip==false){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
+                    await Orderbook.processQueuedOnChainOrdersForBlock(blockHeight);
                     const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
                     const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight);
                     if (thisBlockVolumes.global > 0){
@@ -759,6 +761,7 @@ class Main {
 
             // Run clearing only if there was actual new TL work done
             if (didWork) {
+                await Orderbook.processQueuedOnChainOrdersForBlock(blockHeight);
                 console.log(`[CLEARING] Running for block ${blockHeight} (new TL work detected)`);
                 await Clearing.clearingFunction(blockHeight, /*skip=*/false);
             } else {

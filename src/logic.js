@@ -102,7 +102,7 @@ const Logic = {
                 await Logic.exerciseDerivative(params.contractId, params.amount, params.contractsRegistry,params.senderAddress, params.block);
                 break;
             case 18:
-                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.sell, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop);
+                await Logic.tradeContractOnchain(params.contractId, params.price, params.amount, params.sell, params.insurance, params.block, params.txid, params.senderAddress, params.reduce, params.post, params.stop,params.block);
                 break;
             case 19:
                 await Logic.tradeContractChannel(params.contractId, params.price, params.amount, params.columnAIsSeller, params.expiryBlock, params.insurance, params.senderAddress, params.block,params.txid,params.columnAIsMaker);
@@ -514,45 +514,38 @@ const Logic = {
         return;
     },
 
-    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post) {
-        // Construct the pair key for the Orderbook instance
+    async onChainTokenToToken(fromAddress, offeredPropertyId, desiredPropertyId, amountOffered, amountExpected, txid, blockHeight, stop,post){
         const pairKey = `${offeredPropertyId}-${desiredPropertyId}`;
-        // Retrieve or create the Orderbook instance for this pair
-        //console.log('loading orderbook for pair key '+pairKey)
-        const orderbook = await Orderbook.getOrderbookInstance(pairKey);
-        //console.log('load orderbook for pair key '+JSON.stringify(orderbook))
 
-        const txInfo = await TxUtils.getRawTransaction(txid)
-       
-        const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash)
+        const txInfo = await TxUtils.getRawTransaction(txid);
+        const confirmedBlock = await TxUtils.getBlockHeight(txInfo.blockhash);
 
-        if(stop==true&&post==true){
-            post=false
+        if (stop === true && post === true) {
+            post = false;
         }
-        // Construct the order object
-        const order = {
-            offeredPropertyId:offeredPropertyId,
-            desiredPropertyId:desiredPropertyId,
-            amountOffered:amountOffered,
-            amountExpected:amountExpected,
-            blockTime: confirmedBlock,
-            sender: fromAddress, 
-            stop: stop,
-            post: post
-        };
 
-        console.log('entering order into book '+JSON.stringify(order), 'txid')
+          const order = {
+                    offeredPropertyId:offeredPropertyId,
+                    desiredPropertyId:desiredPropertyId,
+                    amountOffered:amountOffered,
+                    amountExpected:amountExpected,
+                    blockTime: confirmedBlock,
+                    sender: fromAddress, 
+                    stop: stop,
+                    post: post
+                };
+                
+        console.log('queueing on-chain token order ' + JSON.stringify(order), txid);
 
-        // Add the order to the order book
-        await orderbook.addTokenOrder(order, blockHeight, txid);
+        // Do NOT mutate the book immediately; just enqueue
+        await Orderbook.queueOnChainTokenOrder(
+            pairKey,
+            fromAddress,
+            order,
+            blockHeight,
+            txid
+        );
 
-        // Log the order placement for record-keeping
-        console.log(`Order placed: ${JSON.stringify(order)}`);
-
-        // Optionally, you might want to update the tally map here
-        // Update Tally Map logic
-
-        // Return the details of the placed order
         return order;
     },
 
@@ -809,14 +802,33 @@ const Logic = {
 	    console.log(`Derivative contract ${contractId} exercised for amount ${amount}`);
 	},
 
-    async tradeContractOnchain(contractId, price, amount, sell, insurance, blockTime, txid,sender, isLiq, reduce, post,stop) {
-        // Trade the contract on-chain
-        const orderbook = await Orderbook.getOrderbookInstance(contractId);
-        console.log('checking contract orderbook ' +JSON.stringify(orderbook))
-	    await orderbook.addContractOrder(contractId, price, amount, sell, insurance, blockTime, txid, sender, false,reduce,post,stop);
-	    console.log(`Added contract order ${contractId} on-chain with price ${price} and amount ${amount}`);
-        return
-	},
+    async tradeContractOnchain(contractId, price, amount, sell, insurance, blockTime, txid, sender, isLiq, reduce, post, stop) {
+        const params = {
+            contractId,
+            price,
+            amount,
+            sell,
+            insurance,
+            blockTime,
+            isLiq,
+            reduce,
+            post,
+            stop
+        };
+
+        console.log('queueing on-chain contract order ' + JSON.stringify(params), txid);
+
+        // Again: no immediate addContractOrder; just enqueue
+        await Orderbook.queueOnChainContractOrder(
+            contractId,
+            sender,
+            params,
+            blockTime,   // if you want strict height, pass blockHeight instead
+            txid
+        );
+
+        return;
+    },
 
     async tradeContractChannel(
       contractId,
@@ -1328,143 +1340,143 @@ const Logic = {
     // inside logic.j
 
     async processOptionTrade(sender, params, txid){
-  // Validate first (also populates creditMargin, reduce/flip flags, rPNL, closed sizes)
-  const res = await Validity.validateOptionTrade(sender, params, txid);
-  if (!res.valid) return res;
+      // Validate first (also populates creditMargin, reduce/flip flags, rPNL, closed sizes)
+      const res = await Validity.validateOptionTrade(sender, params, txid);
+      if (!res.valid) return res;
 
-  const tMeta = OptionsEngine.parseTicker(params.contractId);
-  const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
-  const collateralPropertyId = seriesInfo.collateralPropertyId;
+      const tMeta = OptionsEngine.parseTicker(params.contractId);
+      const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
+      const collateralPropertyId = seriesInfo.collateralPropertyId;
 
-  // Resolve commits
-  const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
-  const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
-  const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
-  const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
+      // Resolve commits
+      const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+      const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+      const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
+      const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
 
-  // 1) Premium transfer (buyer -> seller), if present
-  if (Number(params.netPremium||0) !== 0) {
-    const np = Number(params.netPremium);
-    // buyer pays (available -)
-    await TallyMap.updateBalance(
-      buyerAddr, collateralPropertyId,
-      -np, 0, 0, 0,
-      'optionPremiumPay', params.blockHeight, txid
-    );
-    // seller receives (available +)
-    await TallyMap.updateBalance(
-      sellerAddr, collateralPropertyId,
-      +np, 0, 0, 0,
-      'optionPremiumReceive', params.blockHeight, txid
-    );
-  }
+      // 1) Premium transfer (buyer -> seller), if present
+      if (Number(params.netPremium||0) !== 0) {
+        const np = Number(params.netPremium);
+        // buyer pays (available -)
+        await TallyMap.updateBalance(
+          buyerAddr, collateralPropertyId,
+          -np, 0, 0, 0,
+          'optionPremiumPay', params.blockHeight, txid
+        );
+        // seller receives (available +)
+        await TallyMap.updateBalance(
+          sellerAddr, collateralPropertyId,
+          +np, 0, 0, 0,
+          'optionPremiumReceive', params.blockHeight, txid
+        );
+      }
 
-  // 2) Margin moves on seller
-  // - If reducing: free margin and realize PnL into available
-  // - Else opening/adding: lock margin (available -> margin)
-  const credit = Number(params.creditMargin || 0);
+      // 2) Margin moves on seller
+      // - If reducing: free margin and realize PnL into available
+      // - Else opening/adding: lock margin (available -> margin)
+      const credit = Number(params.creditMargin || 0);
 
-  if (params.sellerReducing) {
-    const r = Number(params.rpnlSeller || 0);
-    await TallyMap.updateBalance(
-      sellerAddr, collateralPropertyId,
-      r,           // availableChange (realized PnL)
-      0,
-      -credit,     // marginChange (unlock)
-      0,
-      'optionReduceSeller', params.blockHeight, txid
-    );
-  } else if (credit > 0) {
-    await TallyMap.updateBalance(
-      sellerAddr, collateralPropertyId,
-      -credit, 0, +credit, 0,
-      'optionMarginLock', params.blockHeight, txid
-    );
-  }
+      if (params.sellerReducing) {
+        const r = Number(params.rpnlSeller || 0);
+        await TallyMap.updateBalance(
+          sellerAddr, collateralPropertyId,
+          r,           // availableChange (realized PnL)
+          0,
+          -credit,     // marginChange (unlock)
+          0,
+          'optionReduceSeller', params.blockHeight, txid
+        );
+      } else if (credit > 0) {
+        await TallyMap.updateBalance(
+          sellerAddr, collateralPropertyId,
+          -credit, 0, +credit, 0,
+          'optionMarginLock', params.blockHeight, txid
+        );
+      }
 
-  // 3) Buyer reduce (rare but allowed if they were short and are buying to cover)
-  if (params.buyerReducing) {
-    const r = Number(params.rpnlBuyer || 0);
-    // buyer realized PnL goes to available; if they had margin locked (short), also unlock proportional credit
-    await TallyMap.updateBalance(
-      buyerAddr, collateralPropertyId,
-      r, 0, 0, 0, // we’re not adjusting buyer margin here (credit is seller’s requirement)
-      'optionReduceBuyer', params.blockHeight, txid
-    );
-  }
+      // 3) Buyer reduce (rare but allowed if they were short and are buying to cover)
+      if (params.buyerReducing) {
+        const r = Number(params.rpnlBuyer || 0);
+        // buyer realized PnL goes to available; if they had margin locked (short), also unlock proportional credit
+        await TallyMap.updateBalance(
+          buyerAddr, collateralPropertyId,
+          r, 0, 0, 0, // we’re not adjusting buyer margin here (credit is seller’s requirement)
+          'optionReduceBuyer', params.blockHeight, txid
+        );
+      }
 
-  // 4) Record positions into margin map (hybrid, nested by ticker)
-  const mm = await MarginMap.getInstance(tMeta.seriesId);
-  await mm.applyOptionTrade(
-    sellerAddr,              // we write positions for both sides below
-    params.contractId,
-    -Math.abs(params.amount || 0), // seller delta negative (short if SELL)
-    params.price,
-    params.blockHeight,
-    credit
-  );
-  await mm.applyOptionTrade(
-    buyerAddr,
-    params.contractId,
-    +Math.abs(params.amount || 0), // buyer delta positive
-    params.price,
-    params.blockHeight,
-    0 // buyer doesn’t post credit margin in our model
-  );
-
-  // 5) Combo leg: if it’s an option, do same; if it’s a perp/future, route to contract trade
-  if (params.comboTicker && params.comboAmount) {
-    const cMeta = OptionsEngine.parseTicker(params.comboTicker);
-    if (cMeta && cMeta.type) {
-      // Option combo leg: mirror deltas (typically opposite side)
+      // 4) Record positions into margin map (hybrid, nested by ticker)
+      const mm = await MarginMap.getInstance(tMeta.seriesId);
       await mm.applyOptionTrade(
-        sellerAddr,
-        params.comboTicker,
-        -(Math.abs(params.comboAmount||0)), // seller side consistent
-        params.comboPrice || 0,
+        sellerAddr,              // we write positions for both sides below
+        params.contractId,
+        -Math.abs(params.amount || 0), // seller delta negative (short if SELL)
+        params.price,
         params.blockHeight,
-        0 // margin included in credit for the package already
+        credit
       );
       await mm.applyOptionTrade(
         buyerAddr,
-        params.comboTicker,
-        +(Math.abs(params.comboAmount||0)),
-        params.comboPrice || 0,
+        params.contractId,
+        +Math.abs(params.amount || 0), // buyer delta positive
+        params.price,
         params.blockHeight,
-        0
+        0 // buyer doesn’t post credit margin in our model
       );
-    } else {
-      // Perp/future combo leg → use existing contract trade pathway
-      await tradeContractChannel(sender, {
-        contractId: params.comboTicker,
-        amount: params.comboAmount,
-        price: params.comboPrice || 0,
-        columnAIsSeller: params.columnAIsSeller,
-        expiryBlock: params.expiryBlock,
-        isMaker: params.isMaker,
-        blockHeight: params.blockHeight
-      }, txid);
-    }
-  }
 
-  // 6) (Optional) Persist trade history w/ rPNL fields for auditing
-  if (typeof TradeHistory?.recordTrade === 'function') {
-    await TradeHistory.recordTrade(
-      sellerAddr, params.contractId,
-      -Math.abs(params.amount||0), params.price,
-      Number(params.rpnlSeller||0),
-      params.blockHeight, txid
-    );
-    await TradeHistory.recordTrade(
-      buyerAddr, params.contractId,
-      +Math.abs(params.amount||0), params.price,
-      Number(params.rpnlBuyer||0),
-      params.blockHeight, txid
-    );
-  }
+      // 5) Combo leg: if it’s an option, do same; if it’s a perp/future, route to contract trade
+      if (params.comboTicker && params.comboAmount) {
+        const cMeta = OptionsEngine.parseTicker(params.comboTicker);
+        if (cMeta && cMeta.type) {
+          // Option combo leg: mirror deltas (typically opposite side)
+          await mm.applyOptionTrade(
+            sellerAddr,
+            params.comboTicker,
+            -(Math.abs(params.comboAmount||0)), // seller side consistent
+            params.comboPrice || 0,
+            params.blockHeight,
+            0 // margin included in credit for the package already
+          );
+          await mm.applyOptionTrade(
+            buyerAddr,
+            params.comboTicker,
+            +(Math.abs(params.comboAmount||0)),
+            params.comboPrice || 0,
+            params.blockHeight,
+            0
+          );
+        } else {
+          // Perp/future combo leg → use existing contract trade pathway
+          await tradeContractChannel(sender, {
+            contractId: params.comboTicker,
+            amount: params.comboAmount,
+            price: params.comboPrice || 0,
+            columnAIsSeller: params.columnAIsSeller,
+            expiryBlock: params.expiryBlock,
+            isMaker: params.isMaker,
+            blockHeight: params.blockHeight
+          }, txid);
+        }
+      }
 
-  return res;
-},
+      // 6) (Optional) Persist trade history w/ rPNL fields for auditing
+      if (typeof TradeHistory?.recordTrade === 'function') {
+        await TradeHistory.recordTrade(
+          sellerAddr, params.contractId,
+          -Math.abs(params.amount||0), params.price,
+          Number(params.rpnlSeller||0),
+          params.blockHeight, txid
+        );
+        await TradeHistory.recordTrade(
+          buyerAddr, params.contractId,
+          +Math.abs(params.amount||0), params.price,
+          Number(params.rpnlBuyer||0),
+          params.blockHeight, txid
+        );
+      }
+
+      return res;
+    },
 
 	async tradeBaiUrbun(tallyMap, marginMap, channelRegistry, channelAddress, propertyIdDownPayment, propertyIdToBeSold, downPaymentPercentage, price, amount, expiryBlock, tradeExpiryBlock) {
 	    // Validate inputs and check balances
