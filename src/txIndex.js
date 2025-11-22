@@ -61,12 +61,41 @@ class TxIndex {
         }
     }
 
-    static async extractBlockData(startHeight) {
+        static async extractBlockData(startHeight) {
         let chainTip = await this.fetchChainTip();
-        console.log('building index until' + chainTip);
-        for (let height = startHeight; height <= chainTip; height++) {
+        const forwardOnly = process.env.TL_FORWARD_INDEX === '1' || process.env.TL_FORWARD_INDEX === 'true';
+
+        let effectiveStart = startHeight;
+
+        if (forwardOnly) {
+            try {
+                const maxIndexed = await TxIndex.findMaxIndexedBlock();
+                if (maxIndexed !== null && maxIndexed !== undefined) {
+                    // Resume from the last indexed height + 1
+                    effectiveStart = maxIndexed + 1;
+                } else {
+                    // No existing index: in forward-only mode, start at current tip
+                    // to avoid deep rescans on pruned nodes.
+                    effectiveStart = chainTip;
+                }
+            } catch (err) {
+                console.error('Error determining forward index start height:', err);
+            }
+        }
+
+        if (effectiveStart === undefined || effectiveStart === null) {
+            effectiveStart = 0;
+        }
+
+        if (effectiveStart > chainTip) {
+            console.log('extractBlockData: nothing to index, effectiveStart > chainTip');
+            return;
+        }
+
+        console.log('building index until' + chainTip + ' from ' + effectiveStart);
+        for (let height = effectiveStart; height <= chainTip; height++) {
             this.parseBlock = height
-            if(height%100==1){console.log('indexed to '+height)};
+            if (height % 100 == 1) { console.log('indexed to ' + height) };
             let blockData = await this.fetchBlockData(height);
             //console.log(blockData)
             await this.processBlockData(blockData, height);
@@ -74,7 +103,7 @@ class TxIndex {
         }
         console.log('indexed to chaintip');
         this.saveMaxHeight(chainTip)
-                console.log('built index');
+        console.log('built index');
     }
 
     static async saveMaxHeight(chainTip){
