@@ -12,63 +12,62 @@ class Persistence {
         if (Persistence.instance) return Persistence.instance;
 
         if (!options.network) {
-            throw new Error("Persistence requires { network: 'ltc-test' | 'ltc-main' | 'btc-main' }");
+            throw new Error("Persistence requires { network, test }");
         }
 
-        this.network = options.network.toLowerCase().trim();
-        this.network += options.test ? '-test' : '-main'
+        //
+        // ───────────────────────────────────────────
+        // NETWORK IDENTIFICATION  (OPTION 1)
+        // ───────────────────────────────────────────
+        //
+        const raw = options.network.toLowerCase().trim();   // "ltc" | "btc"
+        const testFlag = !!options.test;                    // true | false
+
+        this.network = raw;                                 // "ltc"
+        this.isTest = testFlag;
+        this.networkFull = `${raw}-${testFlag ? "test" : "main"}`;
+        console.log("[Persistence] Using network:", this.networkFull);
 
         //
-        // ───────────────────────────────────────────────────────────────────────────────
-        // DIRECTORY LAYOUT (WINDOWS-SAFE)
-        // ───────────────────────────────────────────────────────────────────────────────
-        // nedb-data/
-        //     ltc-test/              ← LIVE DB (ONLY .db FILES)
-        //     ltc-test-snapshots/    ← SNAPSHOTS
-        //     ltc-test-backups/      ← BACKUPS OF LIVE DB
+        // ───────────────────────────────────────────
+        // DIRECTORY LAYOUT
+        // ───────────────────────────────────────────
         //
-        // NOTHING except *.db lives inside ltc-test/.
-        //
-        // ───────────────────────────────────────────────────────────────────────────────
-        //
-
         const baseDir = path.join(__dirname, "..", "nedb-data");
 
-        this.dbDir        = path.join(baseDir, this.network);
-        this.snapshotsDir = path.join(baseDir, `${this.network}-snapshots`);
-        this.backupsDir   = path.join(baseDir, `${this.network}-backups`);
+        this.dbDir        = path.join(baseDir, this.networkFull);
+        this.snapshotsDir = path.join(baseDir, `${this.networkFull}-snapshots`);
+        this.backupsDir   = path.join(baseDir, `${this.networkFull}-backups`);
 
         this.snapshotInterval = options.snapshotInterval || 1000;
-
-        this.client = null;
+        this.client = null; // filled in init()
 
         Persistence.instance = this;
     }
 
-    // Singleton init
-    static async getInstance(options = {}) {
-        if (!Persistence.instance) {
-            Persistence.instance = new Persistence(options);
-            await Persistence.instance.init();
-        }
-        return Persistence.instance;
-    }
-
+    //
+    // ───────────────────────────────────────────
+    // INIT — MUST BE CALLED BY MAIN ONCE
+    // ───────────────────────────────────────────
+    //
     async init() {
-        // Ensure directories exist
-        await fs.promises.mkdir(this.dbDir, { recursive: true });
-        await fs.promises.mkdir(this.snapshotsDir, { recursive: true });
-        await fs.promises.mkdir(this.backupsDir, { recursive: true });
+        const fsP = fs.promises;
 
-        // Attach RPC client
+        await fsP.mkdir(this.dbDir, { recursive: true });
+        await fsP.mkdir(this.snapshotsDir, { recursive: true });
+        await fsP.mkdir(this.backupsDir, { recursive: true });
+
         this.client = await ClientWrapper.getInstance(true);
+
+        console.log("[Persistence] Initialized for", this.networkFull);
     }
 
-    // ───────────────────────────────────────────────────────────────
+    //
+    // ───────────────────────────────────────────
     // BLOCK HEADER TRACKING
-    // ───────────────────────────────────────────────────────────────
-
-    async recordBlockHeader(blockHeight, blockHash, prevHash) {
+    // ───────────────────────────────────────────
+    //
+    async recordBlockHeader(blockHeight, blockHash, prevBlockHash) {
         const base = await db.getDatabase("persistence");
         await base.updateAsync(
             { _id: `block-${blockHeight}` },
@@ -76,7 +75,7 @@ class Persistence {
                 $set: {
                     height: blockHeight,
                     hash: blockHash,
-                    prevHash,
+                    prevHash: prevBlockHash,
                     createdAt: Date.now(),
                 },
             },
@@ -92,181 +91,158 @@ class Persistence {
     async getLastKnownBlock() {
         const base = await db.getDatabase("persistence");
         const docs = await base.findAsync({ height: { $exists: true } });
-        if (!docs.length) return null;
-
+        if (!docs || docs.length === 0) return null;
         docs.sort((a, b) => a.height - b.height);
-        return docs[docs.length - 1];
+        return docs.at(-1);
     }
 
-    async checkForReorgForNewBlock(blockHeight, prevBlockHash) {
-        if (blockHeight === 0) return false;
-
-        const last = await this.getBlockHeader(blockHeight - 1);
-        if (!last) return false;
-
-        if (last.hash !== prevBlockHash) {
-            console.warn(
-                `Reorg detected at height ${blockHeight}: stored=${last.hash}, incomingPrev=${prevBlockHash}`
-            );
-            return true;
-        }
-        return false;
-    }
-
-    // ───────────────────────────────────────────────────────────────
-    // SNAPSHOTS
-    // ───────────────────────────────────────────────────────────────
-
-    async maybeCheckpoint(blockHeight) {
-        if (!this.snapshotInterval) return;
-        if (blockHeight % this.snapshotInterval !== 0) return;
-
-        const hash = await ConsensusDatabase.stateConsensusHash();
-        await ConsensusDatabase.storeConsensusHash(blockHeight, hash);
-
-        await this.createSnapshot(blockHeight, hash);
-    }
-
+    //
+    // ───────────────────────────────────────────
+    // SNAPSHOT CREATION (EBUSY-SAFE)
+    // ───────────────────────────────────────────
+    //
     async createSnapshot(blockHeight, consensusHash) {
         const fsP = fs.promises;
+
         const short = (consensusHash || "nohash").slice(0, 12);
         const dirName = `${blockHeight}-${short}`;
-
         const snapshotPath = path.join(this.snapshotsDir, dirName);
+
         await fsP.mkdir(snapshotPath, { recursive: true });
 
         const files = await fsP.readdir(this.dbDir);
         const copied = [];
 
         for (const file of files) {
-            if (!file.endsWith(".db")) continue;   // ONLY DB FILES
+            if (!file.endsWith(".db")) continue;
+
             const src = path.join(this.dbDir, file);
             const dst = path.join(snapshotPath, file);
-            await fsP.copyFile(src, dst);
-            copied.push(file);
+
+            try {
+                // Windows-safe temp-step
+                const tmp = dst + ".tmp";
+                await fsP.copyFile(src, tmp);
+                await fsP.rename(tmp, dst);
+
+                copied.push(file);
+            } catch (err) {
+                console.error("[Snapshot] ERROR copying", file, err);
+            }
         }
+
+        const meta = {
+            blockHeight,
+            consensusHash,
+            createdAt: new Date().toISOString(),
+            files: copied,
+        };
 
         await fsP.writeFile(
             path.join(snapshotPath, "meta.json"),
-            JSON.stringify(
-                {
-                    blockHeight,
-                    consensusHash,
-                    createdAt: new Date().toISOString(),
-                    files: copied,
-                },
-                null,
-                2
-            )
+            JSON.stringify(meta, null, 2)
         );
 
         await this.pruneOldSnapshots(2);
+
         console.log(`Snapshot created at ${blockHeight} (${dirName})`);
     }
 
-    async listSnapshots() {
-        const fsP = fs.promises;
-        let list = [];
-
-        try {
-            const entries = await fsP.readdir(this.snapshotsDir, { withFileTypes: true });
-            for (const entry of entries) {
-                if (!entry.isDirectory()) continue;
-
-                const metaPath = path.join(this.snapshotsDir, entry.name, "meta.json");
-                try {
-                    const raw = await fsP.readFile(metaPath, "utf8");
-                    const json = JSON.parse(raw);
-                    json.dir = entry.name;
-                    list.push(json);
-                } catch (_) {}
-            }
-        } catch (e) {
-            return [];
-        }
-
-        list.sort((a, b) => a.blockHeight - b.blockHeight);
-        return list;
-    }
-
+    //
+    // ───────────────────────────────────────────
+    // PRUNE OLD SNAPSHOTS
+    // ───────────────────────────────────────────
+    //
     async pruneOldSnapshots(keep = 2) {
-        const snaps = await this.listSnapshots();
-        if (snaps.length <= keep) return;
+        const fsP = fs.promises;
 
-        const remove = snaps.slice(0, snaps.length - keep);
-        for (const snap of remove) {
-            const dirPath = path.join(this.snapshotsDir, snap.dir);
-            await fs.promises.rm(dirPath, { recursive: true, force: true });
-            console.log(`Pruned old snapshot: ${snap.dir}`);
+        let entries;
+        try {
+            entries = await fsP.readdir(this.snapshotsDir, {
+                withFileTypes: true,
+            });
+        } catch {
+            return;
+        }
+
+        const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+        if (dirs.length <= keep) return;
+
+        dirs.sort((a, b) => {
+            const A = parseInt(a.split("-")[0]);
+            const B = parseInt(b.split("-")[0]);
+            return A - B;
+        });
+
+        const deleteThese = dirs.slice(0, dirs.length - keep);
+
+        for (const d of deleteThese) {
+            const full = path.join(this.snapshotsDir, d);
+            console.log("Pruning old snapshot:", d);
+            await fsP.rm(full, { recursive: true, force: true });
         }
     }
 
-    /**
-     * Pick the snapshot *closest below* the ancestor height,
-     * but ignore any snapshot that is above the latest “expected interval”
-     * to prevent pollution from stale leftover snapshot dirs.
-     *
-     * This guarantees:
-     *   - no old snapshot from past runs is selected
-     *   - only snapshots from the current interval window are valid
-     */
-    async findBestSnapshotBefore(height) {
-        const snaps = await this.listSnapshots();
-        if (!snaps.length) return null;
-
-        const interval = this.snapshotInterval || 1000;
-
-        // Valid window: [height - interval, height]
-        const lowerBound = Math.max(0, height - interval);
-
-        let best = null;
-
-        for (const s of snaps) {
-            // Snapshot must be in valid window AND <= ancestor
-            if (s.blockHeight <= height && s.blockHeight >= lowerBound) {
-                if (!best || s.blockHeight > best.blockHeight) {
-                    best = s;
-                }
-            }
-        }
-
-        return best;
-    }
-
-
-    // ───────────────────────────────────────────────────────────────
-    // RESTORE LOGIC (WINDOWS SAFE)
-    // ───────────────────────────────────────────────────────────────
-
+    //
+    // ───────────────────────────────────────────
+    // RESTORE SNAPSHOT (EBUSY-SAFE)
+    // ───────────────────────────────────────────
+    //
     async restoreSnapshot(snapshotMeta) {
         const fsP = fs.promises;
 
-        const snapPath = path.join(this.snapshotsDir, snapshotMeta.dir);
+        const snapshotDir = path.join(this.snapshotsDir, snapshotMeta.dir);
+        const files = snapshotMeta.files || (await fsP.readdir(snapshotDir));
 
-        // Create fresh backup of current DB (.db files only)
-        const backupDir = path.join(this.backupsDir, `backup-${Date.now()}`);
+        //
+        // 1. Make a fresh backup
+        //
+        const backupDir = path.join(
+            this.backupsDir,
+            `backup-${Date.now()}`
+        );
         await fsP.mkdir(backupDir, { recursive: true });
 
         const currentFiles = await fsP.readdir(this.dbDir);
 
-        for (const file of currentFiles) {
-            if (!file.endsWith(".db")) continue;
-            const src = path.join(this.dbDir, file);
-            const dst = path.join(backupDir, file);
-            await fsP.copyFile(src, dst);
+        for (const f of currentFiles) {
+            if (!f.endsWith(".db")) continue;
+            const src = path.join(this.dbDir, f);
+            const dst = path.join(backupDir, f);
+            try {
+                await fsP.copyFile(src, dst);
+            } catch (e) {
+                console.warn("[Restore] Backup copy failed:", f, e);
+            }
         }
 
-        // Remove ONLY .db files from live DB
-        for (const file of currentFiles) {
-            if (!file.endsWith(".db")) continue;
-            await fsP.rm(path.join(this.dbDir, file), { force: true });
+        //
+        // 2. Overwrite live DB using temp file strategy
+        //
+        for (const f of currentFiles) {
+            if (!f.endsWith(".db")) continue;
+            try {
+                await fsP.rm(path.join(this.dbDir, f), {
+                    force: true,
+                });
+            } catch (e) {
+                console.warn("[Restore] Remove old failed:", f, e);
+            }
         }
 
-        // Copy snapshot DB back into live DB
-        for (const file of snapshotMeta.files) {
-            const src = path.join(snapPath, file);
-            const dst = path.join(this.dbDir, file);
-            await fsP.copyFile(src, dst);
+        for (const f of files) {
+            if (!f.endsWith(".db")) continue;
+
+            const src = path.join(snapshotDir, f);
+            const dst = path.join(this.dbDir, f);
+
+            try {
+                const tmp = dst + ".tmp";
+                await fsP.copyFile(src, tmp);
+                await fsP.rename(tmp, dst);
+            } catch (e) {
+                console.error("[Restore] Copy snapshot failed:", f, e);
+            }
         }
 
         console.log(
@@ -274,51 +250,97 @@ class Persistence {
         );
     }
 
-    // ───────────────────────────────────────────────────────────────
-    // FULL REORG RECOVERY (OFFLINE + DEEP)
-    // ───────────────────────────────────────────────────────────────
+    //
+    // ───────────────────────────────────────────
+    // LIST SNAPSHOTS
+    // ───────────────────────────────────────────
+    //
+    async listSnapshots() {
+        const fsP = fs.promises;
 
-    async detectAndHandleReorg(block) {
+        let entries;
+        try {
+            entries = await fsP.readdir(this.snapshotsDir, {
+                withFileTypes: true,
+            });
+        } catch {
+            return [];
+        }
+
+        const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+        const snapshots = [];
+
+        for (const dir of dirs) {
+            const metaPath = path.join(this.snapshotsDir, dir, "meta.json");
+            try {
+                const raw = await fsP.readFile(metaPath, "utf8");
+                const meta = JSON.parse(raw);
+                meta.dir = dir;
+                snapshots.push(meta);
+            } catch {
+                console.warn("[Snapshots] Invalid meta.json in", dir);
+            }
+        }
+
+        snapshots.sort((a, b) => a.blockHeight - b.blockHeight);
+        return snapshots;
+    }
+
+    //
+    // ───────────────────────────────────────────
+    // USED BY getSnapshotForHeight()
+    // ───────────────────────────────────────────
+    //
+    async getSnapshotForHeight(h) {
+        const snaps = await this.listSnapshots();
+        if (!snaps.length) return null;
+
+        // choose snapshot with largest blockHeight <= h
+        let best = null;
+        for (const s of snaps) {
+            if (s.blockHeight <= h) {
+                if (!best || s.blockHeight > best.blockHeight) best = s;
+            }
+        }
+        return best;
+    }
+
+    //
+    // ───────────────────────────────────────────
+    // REORG DETECTION (TOP CHECK DISABLED)
+    // ───────────────────────────────────────────
+    //
+    async detectAndHandleReorg(currentHeight) {
         const last = await this.getLastKnownBlock();
         if (!last) return null;
 
-        const nodeHash = await this.client.getBlockHash(last.height);
+        let nodeHash;
+        try {
+            nodeHash = await this.client.getBlockHash(last.height);
+        } catch (e) {
+            console.warn("[Reorg] Could not fetch node hash:", e);
+            return null;
+        }
 
-        //if (nodeHash === last.hash) return null;
+        // COMMENTED OUT ON PURPOSE FOR YOUR DRILLING
+        // if (nodeHash === last.hash) return null;
 
         console.warn(
             `Reorg suspected: local(${last.height})=${last.hash}, node=${nodeHash}`
         );
 
-        let h = last.height;
-        let ancestor = 0;
-
-        while (h > 0) {
-            const local = await this.getBlockHeader(h);
-            const chainHash = await this.client.getBlockHash(h);
-
-            if (local && local.hash === chainHash) {
-                ancestor = h;
-                break;
-            }
-            h--;
+        // Always use the passed height
+        const bestSnap = await this.getSnapshotForHeight(currentHeight);
+        if (!bestSnap) {
+            console.warn("[Reorg] No snapshot <= height; full rebuild required.");
+            return { restoredFrom: 0, commonAncestor: currentHeight, lastLocal: last.height };
         }
 
-        const snap = await this.findBestSnapshotBefore(block);
-        if (snap) {
-            await this.restoreSnapshot(snap);
+        await this.restoreSnapshot(bestSnap);
 
-            return {
-                restoredFrom: snap.blockHeight,
-                commonAncestor: ancestor,
-                lastLocal: last.height,
-            };
-        }
-
-        console.warn(`No snapshot ≤ ancestor ${ancestor}. Full reparse required.`);
         return {
-            restoredFrom: 0,
-            commonAncestor: ancestor,
+            restoredFrom: bestSnap.blockHeight,
+            commonAncestor: currentHeight,
             lastLocal: last.height,
         };
     }
