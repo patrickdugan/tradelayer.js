@@ -718,7 +718,7 @@ class Main {
 
             if (reorg) {
                 // Handle deep reorg (offline or multiple blocks)
-                const info = await persistence.detectAndHandleReorg();
+                const info = await persistence.detectAndHandleReorg(blockHeight);
                 console.log('reorg info '+JSON.stringify(info))
                 if (info && typeof info.restoredFrom === 'number') {
                     console.log(

@@ -201,12 +201,38 @@ class Persistence {
         }
     }
 
+    /**
+     * Pick the snapshot *closest below* the ancestor height,
+     * but ignore any snapshot that is above the latest “expected interval”
+     * to prevent pollution from stale leftover snapshot dirs.
+     *
+     * This guarantees:
+     *   - no old snapshot from past runs is selected
+     *   - only snapshots from the current interval window are valid
+     */
     async findBestSnapshotBefore(height) {
         const snaps = await this.listSnapshots();
-        return snaps
-            .filter((s) => s.blockHeight <= height)
-            .sort((a, b) => b.blockHeight - a.blockHeight)[0] || null;
+        if (!snaps.length) return null;
+
+        const interval = this.snapshotInterval || 1000;
+
+        // Valid window: [height - interval, height]
+        const lowerBound = Math.max(0, height - interval);
+
+        let best = null;
+
+        for (const s of snaps) {
+            // Snapshot must be in valid window AND <= ancestor
+            if (s.blockHeight <= height && s.blockHeight >= lowerBound) {
+                if (!best || s.blockHeight > best.blockHeight) {
+                    best = s;
+                }
+            }
+        }
+
+        return best;
     }
+
 
     // ───────────────────────────────────────────────────────────────
     // RESTORE LOGIC (WINDOWS SAFE)
@@ -252,7 +278,7 @@ class Persistence {
     // FULL REORG RECOVERY (OFFLINE + DEEP)
     // ───────────────────────────────────────────────────────────────
 
-    async detectAndHandleReorg() {
+    async detectAndHandleReorg(block) {
         const last = await this.getLastKnownBlock();
         if (!last) return null;
 
@@ -278,7 +304,7 @@ class Persistence {
             h--;
         }
 
-        const snap = await this.findBestSnapshotBefore(ancestor);
+        const snap = await this.findBestSnapshotBefore(block);
         if (snap) {
             await this.restoreSnapshot(snap);
 
