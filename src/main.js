@@ -100,28 +100,40 @@ class Main {
         //this.tradeLayerManager = new TradeLayerManager();
         this.txIndex = TxIndex.getInstance();  
         this.getBlockCountAsync = () => this.client.getBlockCount();
-        this.getNetworkInfoAsync = () => this.client.getNetworkInfo();
+        this.getNetworkInfoAsync = () => this.client.getNetworkInfo();        
         this.genesisBlock = 600000
         this.parseBlock = 0
         console.log(this.genesisBlock)
-        this.blockchainPersistence = new Persistence({ snapshotInterval: 1000 });
         Main.instance = this;
     }
 
-      static async getInstance() {
+    static async getInstance() {
         if (!Main.instance && !Main.isInitializing) {
-            Main.isInitializing = true;  // Set the flag to prevent multiple initializations
+            Main.isInitializing = true;
             console.log('Initializing Main instance...');
+
+            // 1. Construct Main first
             Main.instance = new Main();
-            //await Main.instance.initialize();
-            if (this.blockchainPersistence && !this.persistenceInitialized) {
-                await this.blockchainPersistence.init();
-                this.persistenceInitialized = true;
-            }
-            Main.isInitializing = false;  // Reset flag after initialization completes
+
+            // 2. Detect network from the initialized client instance
+            const net = await Main.instance.client.getChain();
+            const test = await Main.instance.client.getTest();
+            console.log("[Main] Detected network:", net, "test:", test);
+
+            // 3. Initialize Persistence ONCE only via its own singleton
+            Main.instance.blockchainPersistence = await Persistence.getInstance({
+                network: net,
+                test: test,
+                snapshotInterval: 1000
+            });
+
+            Main.persistenceInitialized = true;
+            Main.isInitializing = false;
         }
+
         return Main.instance;
     }
+
 
     async delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -263,7 +275,7 @@ class Main {
         txIndex then apply them to this to update the db and consensus.
     */
        async constructConsensusFromIndex(startHeight) {
-            let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
+             let lastIndexBlock = await TxIndex.findMaxIndexedBlock();
             let blockHeight;
             let maxProcessedHeight = startHeight - 1;
 
@@ -525,9 +537,7 @@ class Main {
             while(pause){
                 await delay(1000)
             }
-            if(!pause){
-                this.processIncomingBlocks(consensus)
-            }
+            return syncIfNecessary()
         }else{
                 this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip); // Start processing new blocks as they come
         }
@@ -694,35 +704,42 @@ class Main {
         }
 
     async blockHandlerBegin(blockData, blockHeight) {
-        try {
-              if (this.blockchainPersistence) {
+        const persistence = await Persistence.getInstance();
+
+        //try {
+            if (persistence) {
             // 1) Live reorg detection
-            const reorg = await this.blockchainPersistence.checkForReorgForNewBlock(
+            /*const reorg = await persistence.checkForReorgForNewBlock(
                 blockHeight,
                 blockData.previousblockhash
-            );
+            );*/
+            let reorg = false
+            if(blockHeight%4432000==1){reorg=true}
 
             if (reorg) {
                 // Handle deep reorg (offline or multiple blocks)
-                const info = await this.blockchainPersistence.detectAndHandleReorg();
+                const info = await persistence.detectAndHandleReorg();
+                console.log('reorg info '+JSON.stringify(info))
                 if (info && typeof info.restoredFrom === 'number') {
                     console.log(
                         `Replaying consensus from snapshot at ${info.restoredFrom + 1} ` +
                         `after reorg (common ancestor ${info.commonAncestor}).`
                     );
-                    await this.constructConsensusFromIndex(info.restoredFrom + 1);
+                    
+                    //await this.constructConsensusFromIndex(info.restoredFrom + 1, true);
+                    return this.syncIfNecessary() 
                 }
             }
 
             // 2) Record this block header for future comparisons
-            await this.blockchainPersistence.recordBlockHeader(
+            await persistence.recordBlockHeader(
                 blockHeight,
                 blockData.hash,
                 blockData.previousblockhash
             );
 
             // 3) Maybe write a snapshot + consensus checkpoint
-            await this.blockchainPersistence.maybeCheckpoint(blockHeight);
+            await persistence.maybeCheckpoint(blockHeight);
         }
             //const blockData = await TxIndex.fetchBlockData(blockHeight);
             const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
@@ -751,24 +768,18 @@ class Main {
 
             // Pass other transactions to `blockHandlerMid` for processing later
             return otherTxs;  // Store remaining txs for mid-processing
-       } catch (error) {
+       /*} catch (error) {
             console.error(`Error in blockHandlerBegin at block ${blockHeight}:`, error);
-            if (error && error.includes('ETIMEDOUT')) {  // ❌ This will throw a TypeError
+
+            // Normalize error message into a string safely
+            const msg = (error?.message || error?.toString?.() || "");
+
+            if (msg.includes("ETIMEDOUT")) {
+                // retry
                 return this.blockHandlerBegin('', blockHeight);
             }
+
             return [];
-        }
-
-
-         // Check for reorganization using ReOrgChecker
-        /*const reorgDetected = await this.reOrgChecker.checkReOrg(); //this needs more fleshing out against persistence DB but in place
-        if (reorgDetected) {
-            console.log(`Reorganization detected at block ${blockHeight}`);
-            await this.handleReorg(blockHeight);
-        } else {
-            // Proceed with regular block processing
-            await this.blockchainPersistence.updateLastKnownBlock(blockHash);
-            // Additional block begin logic here
         }*/
     }
 
