@@ -243,8 +243,29 @@ class Persistence {
         );
 
         await this.pruneOldSnapshots(2);
+        await this.updateMaxProcessed(height)
         console.log(`Snapshot created at ${height} (${dirName})`);
     }
+
+    async updateMaxProcessed(height) {
+        const consensusDB = await db.getDatabase('consensus'); // Access the consensus sub-database
+
+        try {
+            // Upsert the document with _id = 'MaxProcessedHeight'
+            await consensusDB.updateAsync(
+                { _id: 'MaxProcessedHeight' },
+                { $set: { value: height } },
+                { upsert: true }
+            );
+
+            //console.log('MaxProcessedHeight updated:', height);
+            return height;
+        } catch (error) {
+            console.error('Error updating MaxProcessedHeight:', error);
+            throw error;
+        }
+    }
+
 
     //-------------------------------------------------------
     // RESTORE SNAPSHOT (EBUSY-SAFE)
@@ -252,7 +273,56 @@ class Persistence {
     async restoreSnapshot(meta) {
         const dir = path.join(this.snapshotsDir, meta.dir || `${meta.blockHeight}`);
 
-        // backup current DB
+        // -----------------------------------------------------------------
+        // PRUNE OLD BACKUPS: keep only the most recent backup-* directory
+        // -----------------------------------------------------------------
+        try {
+            const backupEntries = await fs.promises.readdir(this.backupsDir);
+            const backups = [];
+
+            for (const name of backupEntries) {
+                const fullPath = path.join(this.backupsDir, name);
+                const stat = await fs.promises.stat(fullPath);
+
+                // only consider directories that look like "backup-<something>"
+                if (!stat.isDirectory()) continue;
+                if (!name.startsWith('backup-')) continue;
+
+                backups.push({
+                    name,
+                    fullPath,
+                    mtime: stat.mtimeMs,
+                });
+            }
+
+            if (backups.length > 1) {
+                // sort by newest first
+                backups.sort((a, b) => b.mtime - a.mtime);
+
+                // keep the newest one, delete all others
+                for (let i = 1; i < backups.length; i++) {
+                    try {
+                        await fs.promises.rm(backups[i].fullPath, {
+                            recursive: true,
+                            force: true,
+                        });
+                    } catch (e) {
+                        console.error(
+                            '[persistence] Error removing old backup dir:',
+                            backups[i].fullPath,
+                            e
+                        );
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[persistence] Error pruning backup dirs:', e);
+            // non-fatal: continue restoring snapshot
+        }
+
+        // -------------------------------------------------
+        // CREATE NEW BACKUP OF CURRENT DB STATE
+        // -------------------------------------------------
         const backupDir = path.join(
             this.backupsDir,
             `backup-${Date.now()}`
@@ -284,6 +354,7 @@ class Persistence {
             `Restored DB from snapshot ${meta.dir} (block=${meta.blockHeight})`
         );
     }
+
 
     //-------------------------------------------------------
     // LIST + PRUNE SNAPSHOTS

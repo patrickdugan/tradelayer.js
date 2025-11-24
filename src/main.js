@@ -594,7 +594,7 @@ class Main {
                 const block= await this.processBlock(blockData, blockNumber);
 
                 if(block.reOrg==true){
-                    console.log('returned block to restore '+blockMaybe)
+                    console.log('returned block to restore '+JSON.stringify(block))
                     return this.syncIfNecessary(block.restore)
                 }
                 let trackHeight = blockNumber;
@@ -679,7 +679,7 @@ class Main {
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
         const tx= await this.blockHandlerBegin(blockData, blockNumber);
-        if(typeof tx=='number'){return {reOrg: true, restore: tx}//re-org recovery at block
+        if(typeof tx=='number'){return {reOrg: true, restore: tx}}//re-org recovery at block
         // Process each transaction in the block
         blockNumber = await this.blockHandlerMid(tx, blockNumber);
 
