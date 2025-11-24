@@ -122,6 +122,82 @@ class Persistence {
         return docs[docs.length - 1];
     }
 
+    /**
+     * Hybrid reorg detection:
+     *   1. Fast path: compare incoming prevhash to our stored blockhash for (h-1)
+     *   2. If mismatch → confirm via RPC (canonical)
+     *   3. Only if both disagree → actual reorg
+     *
+     * Returns:
+     *   false → no reorg
+     *   true  → confirmed reorg
+     */
+    async checkForReorgForNewBlock(blockHeight, incomingPrevHash) {
+        try {
+            const prevHeight = blockHeight - 1;
+            if (prevHeight <= 0) return false; // genesis cannot reorg
+
+            const persistenceDB = await db.getDatabase("persistence");
+
+            // -----------------------------------------
+            // FAST PATH: LOCAL HASH CHAIN CHECK
+            // -----------------------------------------
+            const prevDoc = await persistenceDB.findOneAsync({ height: prevHeight });
+            let localPrevHash = null;
+
+            if (prevDoc && prevDoc.hash) {
+                localPrevHash = prevDoc.hash;
+
+                // If hashes match → definitely no reorg
+                if (localPrevHash === incomingPrevHash) {
+                    return false;
+                }
+
+                // If mismatch → MAYBE reorg, confirm via RPC
+                console.log(
+                    `[reorg?] Local mismatch at height=${blockHeight}. ` +
+                    `localPrev=${localPrevHash}, incomingPrev=${incomingPrevHash}. Confirming via RPC...`
+                );
+            } else {
+                // No local previous hash — could be startup or partial DB
+                // Must confirm with RPC
+                console.log(
+                    `[reorg?] No local metadata at height=${prevHeight}. Checking RPC for canonical chain...`
+                );
+            }
+
+            // -------------------------------------------------------------
+            // SLOW PATH (CANONICAL CONFIRMATION): FETCH BLOCK(h-1) via RPC
+            // -------------------------------------------------------------
+            const rpc = await this.getRPC(); // Use your RPC client getter
+            const rpcPrevHash = await rpc.getBlockHash(prevHeight);
+            const rpcPrevBlock = await rpc.getBlock(rpcPrevHash);
+            const nodePrevHash = rpcPrevBlock.hash;
+
+            // Now compare canonical vs incoming
+            if (nodePrevHash !== incomingPrevHash) {
+                console.log(
+                    `[reorg CONFIRMED] height=${blockHeight}. ` +
+                    `nodePrev=${nodePrevHash}, incomingPrev=${incomingPrevHash}`
+                );
+                return true;
+            }
+
+            // RPC confirms no reorg → local mismatch was stale or snapshot-induced
+            console.log(
+                `[reorg false-positive resolved] Local mismatch at height=${blockHeight} ` +
+                `but RPC chain matches incoming block. No reorg.`
+            );
+            return false;
+
+        } catch (err) {
+            console.error('[persistence] Error in hybrid reorg detection:', err);
+            // safer to assume no reorg in case of RPC failure — do not reorg-loop
+            return false;
+        }
+    }
+
+
     //-------------------------------------------------------
     // REORG CHECK FOR NEW BLOCK (top-of-chain equality removed)
     //-------------------------------------------------------
@@ -131,8 +207,7 @@ class Persistence {
 
         const nodeHash = await this.client.getBlockHash(last.height);
 
-        // (disabled for testing)
-        // if (nodeHash === last.hash) return null;
+        if (nodeHash === last.hash) return null;
 
         console.warn(
             `Reorg suspected: local(${last.height})=${last.hash}, node=${nodeHash}`
@@ -350,10 +425,23 @@ class Persistence {
             await this.safeCopy(src, dst);
         }
 
+        this.saveTrackHeight(meta.blockHeight)
+
         console.log(
             `Restored DB from snapshot ${meta.dir} (block=${meta.blockHeight})`
         );
+
     }
+
+    async saveTrackHeight(saveHeight){
+            const base = await db.getDatabase('consensus')
+           await base.updateAsync(
+                    { _id: 'TrackHeight' },
+                    { $set: { value: saveHeight } },
+                    { upsert: true }
+                    )
+    }
+ 
 
 
     //-------------------------------------------------------

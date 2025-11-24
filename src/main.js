@@ -532,10 +532,9 @@ class Main {
         const blockLag = await this.checkBlockLag();
         if(restore){
             blockLag.maxTrack=restore
+            console.log('set max track to restore '+blockLag.maxTrack)
         }
-        /*if (blockLag > 0) {
-            syncIndex(); // Sync the txIndexDB
-        }else if (blockLag === 0) {*/
+        
         if(pause){
             while(pause){
                 await delay(1000)
@@ -544,7 +543,6 @@ class Main {
         }else{
                 this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip); // Start processing new blocks as they come
         }
-        //}
     }
 
     setPause(){
@@ -583,6 +581,7 @@ class Main {
             let checkTrack = await this.loadTrackHeight()
             if(checkTrack>latestProcessedBlock){latestProcessedBlock=checkTrack}
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
+                console.log('block number in loop '+blockNumber)
                 const networkIsUp = await this.checkNetworkStatus();
                 if (!networkIsUp) {
                     console.log('Network down, entering recovery mode.');
@@ -591,6 +590,7 @@ class Main {
 
                 //const blockData = await TxIndex.fetchBlockData(blockNumber);
                 const blockData = await this.fetchWithRetry(blockNumber);
+                console.log('block data after fetch '+JSON.stringify(blockData))
                 const block= await this.processBlock(blockData, blockNumber);
 
                 if(block.reOrg==true){
@@ -717,17 +717,13 @@ class Main {
         //try {
             if (persistence) {
             // 1) Live reorg detection
-            /*const reorg = await persistence.checkForReorgForNewBlock(
+            const reorg = await persistence.checkForReorgForNewBlock(
                 blockHeight,
                 blockData.previousblockhash
-            );*/
-            let reorg = false
-            if(blockHeight%4431500==1){reorg=true}
-
+            );
             if (reorg) {
                 // Handle deep reorg (offline or multiple blocks)
                 const info = await persistence.detectAndHandleReorg(blockHeight);
-                console.log('reorg info '+JSON.stringify(info))
                 if (info && typeof info.restoredFrom === 'number') {
                     console.log(
                         `Replaying consensus from snapshot at ${info.restoredFrom + 1} ` +
