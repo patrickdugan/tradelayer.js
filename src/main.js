@@ -528,8 +528,11 @@ class Main {
     /*originally was an if-logic based switch function but refactoring real-time mode
       it simply is a part of a flow, could be refactored into one function
     */
-    async syncIfNecessary() {
+    async syncIfNecessary(restore) {
         const blockLag = await this.checkBlockLag();
+        if(restore){
+            blockLag.maxTrack=restore
+        }
         /*if (blockLag > 0) {
             syncIndex(); // Sync the txIndexDB
         }else if (blockLag === 0) {*/
@@ -588,7 +591,12 @@ class Main {
 
                 //const blockData = await TxIndex.fetchBlockData(blockNumber);
                 const blockData = await this.fetchWithRetry(blockNumber);
-                await this.processBlock(blockData, blockNumber);
+                const block= await this.processBlock(blockData, blockNumber);
+
+                if(block.reOrg==true){
+                    console.log('returned block to restore '+blockMaybe)
+                    return this.syncIfNecessary(block.restore)
+                }
                 let trackHeight = blockNumber;
                 //console.log('updating trackHeight'+trackHeight)
                 await this.saveTrackHeight(trackHeight)
@@ -671,13 +679,13 @@ class Main {
     async processBlock(blockData, blockNumber) {
         // Process the beginning of the block
         const tx= await this.blockHandlerBegin(blockData, blockNumber);
-
+        if(typeof tx=='number'){return {reOrg: true, restore: tx}//re-org recovery at block
         // Process each transaction in the block
         blockNumber = await this.blockHandlerMid(tx, blockNumber);
 
         // Process the end of the block
         await this.blockHandlerEnd(blockData.hash, blockNumber);
-        return blockNumber
+        return {reOrg:false, restore: blockNumber}
     }
 
      async shutdown() {
@@ -714,7 +722,7 @@ class Main {
                 blockData.previousblockhash
             );*/
             let reorg = false
-            if(blockHeight%4432000==1){reorg=true}
+            if(blockHeight%4431500==1){reorg=true}
 
             if (reorg) {
                 // Handle deep reorg (offline or multiple blocks)
@@ -727,7 +735,7 @@ class Main {
                     );
                     
                     //await this.constructConsensusFromIndex(info.restoredFrom + 1, true);
-                    return this.syncIfNecessary() 
+                    return info.restoredFrom 
                 }
             }
 
