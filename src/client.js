@@ -172,6 +172,13 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'getrawtransaction'))(txId, verbose);
   }
 
+  getnewaddress() {
+    return util.promisify(this.client.cmd.bind(this.client, 'getnewaddress'))();
+  }
+
+  sendtoaddress(addr,amt){
+    return util.promisify(this.client.cmd.bind(this.client, 'sendtoaddress'))(addr,amt)
+  }
 
   getNetworkInfo(){
     return util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'))()
@@ -223,6 +230,22 @@ class ClientWrapper {
 
   loadWallet(...params) {
     return util.promisify(this.client.cmd.bind(this.client, 'loadwallet'))(...params);
+  }
+
+  listlabels(...params) {
+    return util.promisify(this.client.cmd.bind(this.client, 'listlabels'))(...params);
+  }
+
+  getaddressesbylabel(label) {
+    return util.promisify(this.client.cmd.bind(this.client, 'getaddressesbylabel'))(label);
+  }
+
+  getwalletinfo() {
+    return util.promisify(this.client.cmd.bind(this.client, 'getwalletinfo'))();
+  }
+
+  listunspent() {
+    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))();
   }
 
 

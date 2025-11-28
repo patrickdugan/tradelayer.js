@@ -38,6 +38,7 @@ const paths = {
     marginMapDbPath: 'marginMaps.db',
     tallyMapDeltasDbPath: 'tallyMapDelta.db',
     marginMapDeltasDbPath: 'marginMapDelta.db',
+    channelMapDeltasDbPath: 'channelDelta.db',
     channelsDbPath: 'channels.db',
     withdrawalQueueDbPath: 'withdrawalQueue.db',
     liquidationsDbPath: 'liquidations.db',

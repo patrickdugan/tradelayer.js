@@ -534,9 +534,10 @@ class TallyMap {
                 const mapDataArray = JSON.parse(result.data);
                  // Convert the array back into a Map
                 this.addresses = new Map(mapDataArray.map(([key, value]) => [key, value]));
+                return this.addresses
             } else {
                 console.log('failed to load tallyMap, starting a new map')
-                this.addresses = new Map(); // Ensure addresses is always a Map
+                return this.addresses = new Map(); // Ensure addresses is always a Map
             }
         } catch (error) {
             console.error('Error loading tally map from dbInstance:', error);
@@ -635,6 +636,27 @@ class TallyMap {
             return new BigNumber(0);
         }
     }
+
+
+        static async loadTallyBlobDirect() {
+            try {
+                const dbInstance = require('./db.js')
+                const db = await dbInstance.getDatabase('tallyMap');
+                const result = await db.findOneAsync({ _id: 'tallyMap' });
+
+                if (!result) {
+                    console.log("[TALLY] No tallyMap found in DB.");
+                    return null;
+                }
+
+                // result = { _id, block, data: "JSON_STRING" }
+                return result;
+
+            } catch (err) {
+                console.error("[TALLY] Error loading tally map:", err);
+                return null;
+            }
+        }
 
     // Method to update fee cache for a property
     // tally.js
@@ -1130,11 +1152,11 @@ class TallyMap {
     static async getTally(address, propertyId) {
         const instance = await TallyMap.getInstance(); // Ensure instance is loaded
         if (!instance.addresses.has(address)) {
-            //console.log("can't find address in tallyMap")
+            console.log("can't find address in tallyMap")
             return 0;
         }
         const addressObj = instance.addresses.get(address);
-        //console.log('inside getTally '+propertyId+' '+JSON.stringify(addressObj))
+        console.log('inside getTally '+propertyId+' '+JSON.stringify(addressObj))
         if (!addressObj[propertyId]) {
             console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )
             return 0;

@@ -319,7 +319,22 @@ class Persistence {
 
         await this.pruneOldSnapshots(2);
         await this.updateMaxProcessed(height)
+        await this.cleanupPersistence(height)
         console.log(`Snapshot created at ${height} (${dirName})`);
+    }
+
+    /**
+     * Delete all persistence entries older than the checkpointHeight.
+     */
+    async cleanupPersistence(checkpointHeight) {
+        const persistenceDB = await db.getDatabase("persistence");
+        let height = checkpointHeight-1000
+        // delete everything older than the new checkpoint
+        await persistenceDB.removeAsync(
+            { height: { $lt: height } },
+            { multi: true }
+        );
+        console.log(`[persistence] Cleaned entries < ${checkpointHeight}`);
     }
 
     async updateMaxProcessed(height) {

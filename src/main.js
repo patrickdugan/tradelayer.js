@@ -581,7 +581,7 @@ class Main {
             let checkTrack = await this.loadTrackHeight()
             if(checkTrack>latestProcessedBlock){latestProcessedBlock=checkTrack}
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
-                console.log('block number in loop '+blockNumber)
+                
                 const networkIsUp = await this.checkNetworkStatus();
                 if (!networkIsUp) {
                     console.log('Network down, entering recovery mode.');
@@ -590,7 +590,6 @@ class Main {
 
                 //const blockData = await TxIndex.fetchBlockData(blockNumber);
                 const blockData = await this.fetchWithRetry(blockNumber);
-                console.log('block data after fetch '+JSON.stringify(blockData))
                 const block= await this.processBlock(blockData, blockNumber);
 
                 if(block.reOrg==true){

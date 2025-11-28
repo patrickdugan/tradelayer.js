@@ -4,7 +4,7 @@ const BigNumber = require('bignumber.js');
 const Consensus = require('./consensus.js');
 const clientPromise = require('./client').getInstance();  // Import the ClientWrapper instance
 const COIN = 100000000;
-const STANDARD_FEE = 10000; // Standard fee in LTC
+const STANDARD_FEE = 0.00002; // Standard fee in LTC
 const DUST_THRESHOLD = 54600;
 
 const TxUtils = {
@@ -957,17 +957,20 @@ async addInputs(utxos, rawTx) {
     },
 
     async createContractOnChainTradeTransaction(thisAddress, contractParams) {
-        try {
+        //try {
             var txNumber = 18;
             var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeTradeContractOnchain(contractParams);
-
+            console.log('payload in contract tx '+payload)
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+            console.log('utxo '+JSON.stringify(utxo))
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
                 .change(thisAddress)
-                .fee(STANDARD_FEE);
+                .fee(2000);
+
+                console.log('raw tx '+JSON.stringify(rawTx))
 
             const privateKey = await this.client.dumpprivkey(thisAddress);
             rawTx.sign(privateKey);
@@ -977,10 +980,10 @@ async addInputs(utxos, rawTx) {
 
             console.log(`Contract on-chain trade transaction sent successfully. TXID: ${txid}`);
             return txid;
-        } catch (error) {
-            console.error('Error in createContractOnChainTradeTransaction:', error);
-            throw error;
-        }
+        //} catch (error) {
+        //    console.error('Error in createContractOnChainTradeTransaction:', error);
+        //    throw error;
+        //}
     },
 
     async createCancelTransaction(thisAddress, cancelParams) {
@@ -1299,7 +1302,7 @@ inferChannelAddrType(addr) {
 
 async findSuitableUTXO(address, minAmount) {
     const utxos = await this.client.listUnspent(0, 9999999, [address]);
-    const suitableUtxo = utxos.find(utxo => (utxo.amount * COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
+    const suitableUtxo = utxos.find(utxo => (utxo.amount >=0.00002))//* COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
     if (!suitableUtxo) {
         throw new Error('No suitable UTXO found.');
     }
