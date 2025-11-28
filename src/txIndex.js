@@ -158,31 +158,42 @@ class TxIndex {
         }
     }
 
-
     static async processBlockData(blockData, blockHeight) {
-            const txIndexDB = await db.getDatabase('txIndex');
-            //console.log(blockData)
-            let txDetails =[]
-        for(const txId of blockData.tx){
+        const txIndexDB = await db.getDatabase('txIndex');
+
+        //let txDetails = [];
+
+        for (const txId of blockData.tx) {
+
             const txHex = await TxIndex.fetchTransactionData(txId, false, blockData.hash);
             const txData = await TxIndex.DecodeRawTransaction(txHex);
-            if (txData != null && txData!= undefined && txData.marker === 'tl') {
+
+            if (txData != null && txData != undefined && txData.marker === 'tl') {
+
                 const payload = txData.payload;
                 const thisTx = await TxIndex.processTransaction(payload, txId, txData.marker);
-                txDetails.push(thisTx)
-                console.log('payload '+payload+JSON.stringify(txDetails))
 
-               try {
-                    await txIndexDB.insertAsync({ _id: `tx-${blockHeight}-${txId}`, value: txDetails });
+                //txDetails.push(thisTx);
+
+                console.log('payload ' + payload + JSON.stringify(thisTx));
+
+                // 🔥 FIX: store **one tx per document** instead of the whole txDetails array
+                try {
+                    await txIndexDB.insertAsync({
+                        _id: `tx-${blockHeight}-${txId}`,
+                        value: thisTx
+                    });
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
                 }
-                  await this.saveMaxHeight(blockHeight)   
+
+                await this.saveMaxHeight(blockHeight);
             }
         }
-         
-        return txDetails
+
+        return //txDetails;
     }
+
     
     static async fetchTransactionData(txId, verbose, blockHash) {
         try {
@@ -283,13 +294,19 @@ class TxIndex {
       return /^[\x20-\x7E]*$/.test(s); // space..~ only
     }
 
-
     static async processTransaction(payload, txId, marker) {
         const Types = require('./types.js'); // Lazy load Types
         // Process the transaction...
         const sender = await TxUtils.getSender(txId);
-        const reference = await TxUtils.getTransactionOutputs(txId);
+        const outputs = await TxUtils.getTransactionOutputs(txId);
+            const reference = outputs
+        .filter(o => o.vout === 0 || o.vout === 1)
+        .map(o => ({
+            address: o.address,
+            satoshis: o.satoshis
+        }));
         const decodedParams = Types.decodePayload(txId, marker, payload);
+        console.log('sender, ref, payload, decode, market, txid '+JSON.stringify({ sender, reference, payload, decodedParams, marker, txId}))
         return { sender, reference, payload, decodedParams, marker, txId};
     }
 
