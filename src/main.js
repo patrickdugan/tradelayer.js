@@ -455,7 +455,7 @@ class Main {
                         console.log('consensus marking valid tx '+decodedParams)
                         await Consensus.markTxAsProcessed(txId, decodedParams);
                         await Logic.typeSwitch(type, decodedParams);
-                        await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                        //await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     } else {
                         console.log('consensus marking invalid tx '+decodedParams)
                         await Consensus.markTxAsProcessed(txId, decodedParams);

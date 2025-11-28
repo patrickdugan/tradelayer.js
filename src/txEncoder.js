@@ -349,7 +349,7 @@ const Encode = {
     encodeTradeContractOnchain: (params) => {
         const payload = [
             params.contractId?.toString(36) ?? '0',
-            Encode.encodeAmount(params.price), // 🛠 Correctly encodes decimal prices
+            new BigNumber(params.price).times(1e8).integerValue().toString(36),
             params.amount?.toString(36) ?? '0',
             params.sell ? '1' : '0',
             params.insurance ? '1' : '0',
@@ -366,7 +366,7 @@ const Encode = {
     encodeTradeContractChannel: (params) => {
         const payload = [
             params.contractId?.toString(36) ?? '0',
-            Encode.encodeAmount(params.price),
+            new BigNumber(params.price).times(1e8).integerValue().toString(36),
             params.amount?.toString(36) ?? '0',
             params.columnAIsSeller ? '1' : '0',
             params.expiryBlock?.toString(36) ?? '0',

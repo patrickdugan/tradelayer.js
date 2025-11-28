@@ -877,8 +877,7 @@ async addInputs(utxos, rawTx) {
 
     async createGeneralTransaction(thisAddress, contractParams, txNumber) {
         try {
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeCreateFutureContractSeries(contractParams);
+            var payload = Encode.encodeCreateFutureContractSeries(contractParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
@@ -901,10 +900,63 @@ async addInputs(utxos, rawTx) {
         }
     },
 
+    async createAttestTransaction(thisAddress, contractParams, txNumber) {
+        try {
+            // 1. ------ Build Payload (marker + type36 + encoded fields) ------
+            const payload = Encode.encodeIssueOrRevokeAttestation(contractParams);
+            const payloadBuffer = Buffer.from(payload, "utf8");
+
+            // 2. ------ Find UTXO for fees ------
+            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+            if (!utxo) {
+                throw new Error(`No suitable UTXO found for ${thisAddress}`);
+            }
+
+            const inputSats = Math.round(utxo.satoshis);
+            const feeSats = 2000;
+            const change = inputSats - feeSats;
+            console.log('input sats and fee sats '+inputSats+' '+feeSats)
+
+            // 3. ------ Build the transaction ------
+            let tx = new litecore.Transaction().from(utxo);
+
+            // 3a. Add OP_RETURN payload
+            tx = tx.addOutput(
+                new litecore.Transaction.Output({
+                    script: litecore.Script.buildDataOut(payloadBuffer),
+                    satoshis: 0,
+                })
+            );
+
+            // 3b. Add change only if > dust (546 sats)
+            if (change > 546) {
+                tx = tx.to(thisAddress, change);
+            }
+            // else → OP_RETURN-only valid TL TX
+
+            // 4. ------ Apply fee ------
+            tx = tx.fee(feeSats);
+
+            // 5. ------ Sign ------
+            const priv = await this.client.dumpprivkey(thisAddress);
+            tx = tx.sign(priv);
+
+            // 6. ------ Final serialize + broadcast ------
+            const raw = tx.serialize();
+            const txid = await this.client.sendrawtransaction(raw);
+
+            console.log(`General TX (type-${txNumber}) sent: ${txid}`);
+            return txid;
+
+        } catch (err) {
+            console.error("Error in createGeneralTransaction:", err);
+            throw err;
+        }
+    },
+
     async createOracleTransaction(thisAddress, contractParams) {
         try {
             var txNumber = 13;
-            var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodeCreateOracle(contractParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
@@ -932,7 +984,6 @@ async addInputs(utxos, rawTx) {
     async publishDataTransaction(thisAddress, contractParams) {
         try {
             var txNumber = 14;
-            var payload = 'tl' + txNumber.toString(36);
             payload += Encode.encodePublishOracleData(contractParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
@@ -959,8 +1010,7 @@ async addInputs(utxos, rawTx) {
     async createContractOnChainTradeTransaction(thisAddress, contractParams) {
         //try {
             var txNumber = 18;
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeTradeContractOnchain(contractParams);
+            var payload = Encode.encodeTradeContractOnchain(contractParams);
             console.log('payload in contract tx '+payload)
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             console.log('utxo '+JSON.stringify(utxo))

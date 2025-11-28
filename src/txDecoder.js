@@ -4,7 +4,7 @@ const base94 = require('./base94.js')
 const base256 = require('./base256.js')
 
 const Decode = {
-     decodeAmount: (encoded) => {
+    decodeAmount : (encoded) => {
         const isDecimal = encoded.endsWith('~'); // Check for decimal flag `~`
         const numStr = isDecimal ? encoded.slice(0, -1) : encoded;
         const value = new BigNumber(parseInt(numStr, 36));
@@ -375,7 +375,7 @@ const Decode = {
         const parts = payload.split(',');
         return {
             contractId: parseInt(parts[0] || '0', 36),
-            price: Decode.decodeAmount(parts[1] || '0'), // 🛠 Correctly decodes decimal prices
+            price: new BigNumber(parseInt(parts[1] || '0', 36)).div(1e8).toNumber(),
             amount: parseInt(parts[2] || '0', 36),
             sell: parts[3] === '1',
             insurance: parts[4] === '1',
@@ -390,7 +390,7 @@ const Decode = {
         const parts = payload.split(',');
         return {
             contractId: parseInt(parts[0] || '0', 36),
-            price: Decode.decodeAmount(parts[1] || '0'),
+            price: new BigNumber(parseInt(parts[1] || '0', 36)).div(1e8).toNumber(),
             amount: parseInt(parts[2] || '0', 36),
             columnAIsSeller: parts[3] === '1',
             expiryBlock: parseInt(parts[4] || '0', 36),
