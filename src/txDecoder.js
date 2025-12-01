@@ -373,9 +373,11 @@ const Decode = {
      // **✅ Decode Trade Contract Onchain**
     decodeTradeContractOnchain: (payload) => {
         const parts = payload.split(',');
+        const price = parseInt(parts[1], 36)||0
+        console.log('price in decode on chain contract '+price )
         return {
             contractId: parseInt(parts[0] || '0', 36),
-            price: new BigNumber(parseInt(parts[1] || '0', 36)).div(1e8).toNumber(),
+            price: new BigNumber(price).div(1e8).toNumber(),
             amount: parseInt(parts[2] || '0', 36),
             sell: parts[3] === '1',
             insurance: parts[4] === '1',
@@ -388,9 +390,10 @@ const Decode = {
     // Decode Trade Contract in Channel Transaction
     decodeTradeContractChannel: (payload) => {
         const parts = payload.split(',');
+        const price = parseInt(parts[1], 36)||0
         return {
             contractId: parseInt(parts[0] || '0', 36),
-            price: new BigNumber(parseInt(parts[1] || '0', 36)).div(1e8).toNumber(),
+            price: new BigNumber(price).div(1e8).toNumber(),
             amount: parseInt(parts[2] || '0', 36),
             columnAIsSeller: parts[3] === '1',
             expiryBlock: parseInt(parts[4] || '0', 36),

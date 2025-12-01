@@ -2458,7 +2458,7 @@ class Orderbook {
             sellerPnl,
             delta,
             blockHeight,
-            mm
+            marginMap
         ) {
             const totalWinning = BigNumber.sum(
                 buyerPnl.gt(0) ? buyerPnl : 0,

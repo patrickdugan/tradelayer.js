@@ -161,7 +161,7 @@ class TxIndex {
     static async processBlockData(blockData, blockHeight) {
         const txIndexDB = await db.getDatabase('txIndex');
 
-        //let txDetails = [];
+        let txDetails = [];
 
         for (const txId of blockData.tx) {
 
@@ -173,7 +173,7 @@ class TxIndex {
                 const payload = txData.payload;
                 const thisTx = await TxIndex.processTransaction(payload, txId, txData.marker);
 
-                //txDetails.push(thisTx);
+                txDetails.push(thisTx);
 
                 console.log('payload ' + payload + JSON.stringify(thisTx));
 
@@ -191,7 +191,7 @@ class TxIndex {
             }
         }
 
-        return //txDetails;
+        return txDetails;
     }
 
     

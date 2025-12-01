@@ -300,7 +300,8 @@ class Main {
                 // Determine if the transaction is a funding transaction (type starting with 4 or 20)
                 let counter1 = 0
                 let counter2 = 0
-                for(const valueData of txData.value){
+                const valueData=txData.value
+                if (!valueData || !valueData.payload) return acc;
                     const payload = valueData.payload;
                     const type = parseInt(payload.slice(0, 1).toString(36), 36);
                     // Assuming types 4 and 20 are the funding types
@@ -313,7 +314,6 @@ class Main {
                         //console.log('logging other '+counter2+' '+JSON.stringify(txData))
                         acc[txBlockHeight].tradeTx.push(txData);
                     }
-                }
                 return acc;
             }, {});
 
@@ -402,7 +402,7 @@ class Main {
                 let flag = false;
                
 
-                for (const valueData of txData.value) {
+                const valueData = txData.value
                     const txId = valueData.txId;
                     
                     if (await Consensus.checkIfTxProcessed(txId)) {
@@ -461,11 +461,9 @@ class Main {
                         await Consensus.markTxAsProcessed(txId, decodedParams);
                         await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
                     }
-                }
             }
             return skips
         }
-
 
         async processTx(txSet, blockHeight) {
               let processedAny = false;
@@ -746,7 +744,7 @@ class Main {
         }
             //const blockData = await TxIndex.fetchBlockData(blockHeight);
             const txDetails = await TxIndex.processBlockData(blockData, blockHeight);
-            
+         
             if(txDetails.length>=1){
                 console.log('processing new tx '+JSON.stringify(txDetails))   
             }

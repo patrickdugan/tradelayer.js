@@ -4,7 +4,7 @@ const BigNumber = require('bignumber.js');
 const Consensus = require('./consensus.js');
 const clientPromise = require('./client').getInstance();  // Import the ClientWrapper instance
 const COIN = 100000000;
-const STANDARD_FEE = 0.00002; // Standard fee in LTC
+const STANDARD_FEE = 2000; // Standard fee in LTC
 const DUST_THRESHOLD = 54600;
 
 const TxUtils = {
@@ -767,7 +767,7 @@ async addInputs(utxos, rawTx) {
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-            transaction.change(fromAddress);
+            //transaction.change(fromAddress);
 
             let payload = Encode.encodeSend({
                 sendAll: sendAll,
@@ -1116,6 +1116,7 @@ async addInputs(utxos, rawTx) {
             throw error;
         }
     },
+
 async createChannelContractTradeTransaction(thisAddress, params) {
     try {
         var txNumber = 19;
