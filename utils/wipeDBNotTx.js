@@ -44,6 +44,7 @@ const paths = {
     attestationsDbPath: 'attestations.db',
     vaultsDbPath: 'vaults.db',
     syntheticTokensDbPath: 'syntheticTokens.db',
+    iouDbPath: 'iou.db'
 };
 
 for (const [name, relativePath] of Object.entries(paths)) {

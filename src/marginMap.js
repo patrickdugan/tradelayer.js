@@ -198,11 +198,11 @@ class MarginMap {
     }*/
 
 // Set initial margin for a new position in the MarginMap
-    async setInitialMargin(sender, contractId, totalInitialMargin,block) {
+    async setInitialMargin(sender, contractId, totalInitialMargin,block,position) {
         console.log('setting initial margin '+sender, contractId, totalInitialMargin)
         
         // Check if there is an existing position for the sender
-        let position = this.margins.get(sender);
+        if(!position){position = this.margins.get(sender)};
 
         console.log('setting initial margin position '+JSON.stringify(position))
 
@@ -211,7 +211,8 @@ class MarginMap {
             position = {
                 contracts: 0,  // Number of contracts the sender has
                 margin: 0,
-                unrealizedPNL:0      // Total margin amount the sender has posted
+                unrealizedPNL:0,      // Total margin amount the sender has posted
+                avgPrice:0
             };
         }
 

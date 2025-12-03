@@ -570,7 +570,7 @@ class ContractRegistry {
         
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker,flag,txid){
+   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker,flag,txid,position){
         const TallyMap = require('./tally.js')
         const MarginMap = require('./marginMap.js')
         const marginMap = await MarginMap.getInstance(contractId)
@@ -692,7 +692,7 @@ class ContractRegistry {
             }
         } 
         console.log('about to setInitialMargin '+sender+contractId+' '+totalInitialMargin) 
-        var position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin,block);
+        position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin,block,position);
         return position
     }           
 

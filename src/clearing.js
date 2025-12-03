@@ -19,7 +19,52 @@ class Clearing {
         // Access the singleton instance of TallyMap
         //this.tallyMap = TallyMap.getSingletonInstance();
         this.balanceChanges = []; // Initialize an array to track balance changes
+        this.blockTrades = []
+    }
 
+    static recordTrade(contractId, address, signedDelta, opened) {
+        const key = `${contractId}:${address}`;
+
+        // Initialize the array for this address/contract in current block
+        if (!this.blockTrades.has(key)) {
+            this.blockTrades.set(key, []);
+        }
+
+        // Append the individual trade event
+        this.blockTrades.get(key).push({
+            delta: signedDelta,
+            opened: opened
+        });
+    }
+
+    static getOpenedThisBlock(contractId, address) {
+        const key = `${contractId}:${address}`;
+        const arr = this.blockTrades.get(key);
+        if (!arr) return 0;
+
+        let opened = 0;
+        for (const t of arr) {
+            opened += t.opened;
+        }
+        return opened;
+    }
+
+    static getDeltaThisBlock(contractId, address) {
+        const key = `${contractId}:${address}`;
+        const arr = this.blockTrades.get(key);
+        if (!arr) return 0;
+
+        let delta = 0;
+        for (const t of arr) {
+            delta += t.delta;
+        }
+        return delta;
+    }
+
+
+    static resetBlock() {
+        this.blockTrades.clear();
+        this.balanceChanges.length = 0;
     }
 
     static async recordClearingRun(blockHeight, isRealtime) {
@@ -140,7 +185,8 @@ class Clearing {
                 propertyTotal = propertyTotal.plus(vestingTLI.vesting);
                 //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
             }
-            const propertyInIou = PnlIou.getTotalForProperty(propertyId)
+            const propertyInIou =await PnlIou.getTotalForProperty(propertyId)
+            console.log('adding Iou '+propertyTotal.toNumber()+' Iou'+propertyInIou)
             propertyTotal= propertyTotal.plus(propertyInIou)
 
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
@@ -150,6 +196,7 @@ class Clearing {
                 expectedCirculation = await Vaults.getTotalOutstandingForProperty(propertyId);
                 console.log('vault diversion ')
             }
+            console.log('total '+propertyTotal.toNumber()+' expected '+expectedCirculation.toNumber())
             if(!propertyTotal.eq(expectedCirculation)){
                 if(!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
                     const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
@@ -765,13 +812,12 @@ class Clearing {
             }
          
             console.log('🔄 position '+JSON.stringify(position))
-
-            let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
+                  let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
             position.newPosThisBlock=0
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
             //await marginMap.writePositionToMap(contractId, position) // persist the full object
             let newPosition = await marginMap.clear(position,position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,liq,bank,blob.lastPrice);
-            if (pnlChange > 0){
+           if (pnlChange > 0){
               const reviewPos = await marginMap.getPositionForAddress(position.address,contractId);
 
               // Compare value-wise, not by reference.
@@ -1357,7 +1403,6 @@ class Clearing {
 
       return pnl.decimalPlaces(8).toNumber();
     }
-
 
     static async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system

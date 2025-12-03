@@ -279,7 +279,7 @@ class TallyMap {
                 
                 if (properties[propertyKey]) {
                     const balance = properties[propertyKey];
-
+                    console.log('property balance '+JSON.stringify(balance))
                     // Ensure all balance components are properly defined
                     const available = new BigNumber(balance.available || 0);
                     const reserved = new BigNumber(balance.reserved || 0);

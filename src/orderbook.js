@@ -8,7 +8,7 @@ const Channels = require('./channels.js')
 const ClearList = require('./clearlist.js')
 const Consensus = require('./consensus.js')
 const PnlIou = require('./iou.js')
-
+const Clearing = require('./clearing.js')
 
 // Helper: rank a single character with "alphabetical then numerical"
 function addressCharRank(ch) {
@@ -2160,12 +2160,12 @@ class Orderbook {
                             // Use the instance method to set the initial margin
                             console.log('moving margin buyer not channel not reducing '+counter+' '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount+' '+match.buyOrder.marginUsed)
                             const txid = match?.txid || '';
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,false,match.buyOrder.marginUsed,channel,null,currentBlockHeight,feeInfo,match.buyOrder.maker,debugFlag,txid)
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.tradePrice, match.buyOrder.price,false,match.buyOrder.marginUsed,channel,null,currentBlockHeight,feeInfo,match.buyOrder.maker,debugFlag,txid,match.buyerPosition)
                             console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
                         }else if(channel==true){
                             console.log('moving margin buyer channel not reducing '+counter+' '+match.buyOrder.buyerAddress+' '+match.buyOrder.contractId+' '+match.buyOrder.amount+' '+match.buyOrder.marginUsed)
                             const txid = match?.txid || '';
-                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,false,match.buyOrder.marginUsed,channel, match.channelAddress,currentBlockHeight,feeInfo,match.buyOrder.maker,debugFlag,txid)                  
+                            match.buyerPosition = await ContractRegistry.moveCollateralToMargin(match.buyOrder.buyerAddress, match.buyOrder.contractId,match.buyOrder.amount, match.buyOrder.price, match.buyOrder.price,false,match.buyOrder.marginUsed,channel, match.channelAddress,currentBlockHeight,feeInfo,match.buyOrder.maker,debugFlag,txid,match.buyerPosition)                  
                         }
                         //console.log('buyer position after moveCollat '+match.buyerPosition)
                     }
@@ -2175,10 +2175,10 @@ class Orderbook {
                         if(channel==false){
                             // Use the instance method to set the initial margin
                             console.log('moving margin seller not channel not reducing '+counter+' '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount+' '+match.sellOrder.initMargin)
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, true, match.sellOrder.marginUsed,channel,null,currentBlockHeight,feeInfo,match.buyOrder.maker)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.tradePrice,match.sellOrder.price, true, match.sellOrder.marginUsed,channel,null,currentBlockHeight,feeInfo,match.buyOrder.maker,match.sellerPosition)
                         }else if(channel==true){
                             console.log('moving margin seller channel not reducing '+counter+' '+match.sellOrder.sellerAddress+' '+match.sellOrder.contractId+' '+match.sellOrder.amount+' '+match.sellOrder.initMargin)
-                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, true, match.sellOrder.marginUsed,channel, match.channelAddress,currentBlockHeight,feeInfo,match.buyOrder.maker)
+                            match.sellerPosition = await ContractRegistry.moveCollateralToMargin(match.sellOrder.sellerAddress, match.sellOrder.contractId,match.sellOrder.amount, match.sellOrder.price,match.sellOrder.price, true, match.sellOrder.marginUsed,channel, match.channelAddress,currentBlockHeight,feeInfo,match.buyOrder.maker,match.sellerPosition)
                         }
                         console.log('sellerPosition after moveCollat '+match.sellerPosition)
                     }
@@ -2228,6 +2228,31 @@ class Orderbook {
                         remainderLiq: 0
                         // other relevant trade details...
                     };
+
+                    const deltas = deriveTradeDelta(
+                            match,
+                            buyerClosed,
+                            sellerClosed,
+                            flipLong,
+                            flipShort
+                        );
+
+                        Clearing.recordTrade({
+                            contractId: trade.contractId,
+                            address: trade.buyerAddress,
+                            ...deltas.buyer,
+                            tradePrice: trade.price,
+                            block: trade.block
+                        });
+
+                        Clearing.recordTrade({
+                            contractId: trade.contractId,
+                            address: trade.sellerAddress,
+                            ...deltas.seller,
+                            tradePrice: trade.price,
+                            block: trade.block
+                        });
+
 
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp
@@ -2599,6 +2624,29 @@ class Orderbook {
 		    buyerMaker:  !columnAIsSeller && makerIsA,
 		  };
 		}
+
+        deriveTradeDelta(match, buyerClosed, sellerClosed, flipLong, flipShort) {
+        const beforeBuyer = match.buyerPosition.contracts - match.buyOrder.amount + buyerClosed;
+        const afterBuyer  = match.buyerPosition.contracts;
+
+        const beforeSeller = match.sellerPosition.contracts + match.sellOrder.amount - sellerClosed;
+        const afterSeller  = match.sellerPosition.contracts;
+
+        return {
+            buyer: {
+                delta: match.buyOrder.amount,
+                opened: flipLong > 0 ? flipLong : (buyerClosed === 0 ? match.buyOrder.amount : 0),
+                wasLong: beforeBuyer > 0,
+                isLong: afterBuyer > 0
+            },
+            seller: {
+                delta: -match.sellOrder.amount,
+                opened: flipShort > 0 ? flipShort : (sellerClosed === 0 ? match.sellOrder.amount : 0),
+                wasLong: beforeSeller > 0,
+                isLong: afterSeller > 0
+            }
+        };
+    }
 
   async locateFee(
 		  match,

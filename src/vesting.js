@@ -8,7 +8,6 @@ const ClientWrapper = require('./client.js')
 
 class TradeLayerManager {
     static instance = null;
-
    
     constructor(adminAddress, chain, test) {
         if (!TradeLayerManager.instance) {
