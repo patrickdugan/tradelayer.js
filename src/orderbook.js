@@ -2229,7 +2229,7 @@ class Orderbook {
                         // other relevant trade details...
                     };
 
-                    const deltas = deriveTradeDelta(
+                    const deltas = this.deriveTradeDelta(
                             match,
                             buyerClosed,
                             sellerClosed,

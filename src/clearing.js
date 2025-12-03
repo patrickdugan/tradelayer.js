@@ -19,8 +19,9 @@ class Clearing {
         // Access the singleton instance of TallyMap
         //this.tallyMap = TallyMap.getSingletonInstance();
         this.balanceChanges = []; // Initialize an array to track balance changes
-        this.blockTrades = []
     }
+
+    static blockTrades = new Map();
 
     static recordTrade(contractId, address, signedDelta, opened) {
         const key = `${contractId}:${address}`;
@@ -62,9 +63,8 @@ class Clearing {
     }
 
 
-    static resetBlock() {
+    static resetBlockTrades() {
         this.blockTrades.clear();
-        this.balanceChanges.length = 0;
     }
 
     static async recordClearingRun(blockHeight, isRealtime) {
@@ -749,6 +749,7 @@ class Clearing {
                 continue;
             }
         }
+        await Clearing.resetBlockTrades();
         return
     }
 
@@ -812,7 +813,32 @@ class Clearing {
             }
          
             console.log('🔄 position '+JSON.stringify(position))
-                  let pnlChange = await Clearing.calculatePnLChange(position, blob.thisPrice, blob.lastPrice, inverse, notional);
+            // --- Inject block-trade deltas into the position object ---
+            const opened = Clearing.getOpenedThisBlock(contractId, position.address);
+            const delta  = Clearing.getDeltaThisBlock(contractId, position.address);
+
+            const oldContracts = position.contracts - opened;
+            const newContracts = opened;
+            const avgEntryPrice = position.avgPrice; // you already update this at trade time
+            console.log('before pnl calc '+JSON.stringify({
+                oldContracts,
+                newContracts,
+                avgEntryPrice,
+                previousMarkPrice: blob.lastPrice,
+                currentMarkPrice:  blob.thisPrice,
+                inverse,
+                notional
+            }))
+            const pnlChange = Clearing.calculatePnLChange({
+                oldContracts,
+                newContracts,
+                avgEntryPrice,
+                previousMarkPrice: blob.lastPrice,
+                currentMarkPrice:  blob.thisPrice,
+                inverse,
+                notional
+            });
+    
             position.newPosThisBlock=0
             console.log(`Processing position: ${JSON.stringify(position)}, PnL change: ${pnlChange}`);
             //await marginMap.writePositionToMap(contractId, position) // persist the full object
@@ -825,7 +851,7 @@ class Clearing {
               const sameMark = reviewPos.lastMark === position.lastMark;
               const sameUnreal = reviewPos.unrealizedPNL === position.unrealizedPNL;
 
-              const altChange = await Clearing.calculatePnLChange(
+              /*const altChange = await Clearing.calculatePnLChange(
                 reviewPos,
                 blob.thisPrice,
                 blob.lastPrice,
@@ -838,7 +864,7 @@ class Clearing {
               if ((!sameContracts || !sameMark || !sameUnreal) && altChange !== pnlChange) {
                 pnlChange = altChange;
                 console.log('pnl guard shimmy', pnlChange, 'altChange', altChange);
-              }
+              }*/
 
                 await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
                 totalPositivePnl.plus(pnlChange)
@@ -1358,50 +1384,47 @@ class Clearing {
         return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
     }
 
-    static async calculatePnLChange(position, currentMarkPrice, previousMarkPrice, inverse, notionalValue) {
-      const priceBN = new BigNumber(currentMarkPrice);
-      const notionalValueBN = new BigNumber(notionalValue);
-      
-      // Determine the number of "new" contracts for this block.
-      const newPosBN = new BigNumber(position.newPosThisBlock || 0);
-      const totalContractsBN = new BigNumber(position.contracts);
-      const oldContractsBN = totalContractsBN.minus(newPosBN);
+    static calculatePnLChange({
+        oldContracts,       // integer, contracts carried from prev block
+        newContracts,       // integer, newly opened in this block
+        avgEntryPrice,      // weighted entry for only the newContracts
+        previousMarkPrice,  // last block mark
+        currentMarkPrice,   // this block mark
+        inverse,
+        notional
+    }) {
+        const priceBN = new BigNumber(currentMarkPrice);
+        const notionalBN = new BigNumber(notional);
 
-      let pnl;
-      console.log('inside calc pnl '+currentMarkPrice+' '+notionalValue+' '+previousMarkPrice+' '+inverse+' '+position.newPosThisBlock+' '+position.contracts)
-      if (!inverse) {
-        // Linear contracts:
-        // For old contracts, baseline = previousMarkPrice.
-        // For new contracts, baseline = position.avgPrice (set at the trade time).
-        const oldBaselineBN = new BigNumber(previousMarkPrice);
-        // If avgPrice is not defined, fallback to previousMarkPrice.
-        const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
-        
-        const pnlOld = priceBN.minus(oldBaselineBN).times(oldContractsBN).times(notionalValueBN);
-        const pnlNew = priceBN.minus(newBaselineBN).times(newPosBN).times(notionalValueBN);
-        pnl = pnlOld.plus(pnlNew);
-        console.log('old and new '+pnlOld.toNumber()+' '+pnlNew.toNumber())
-      } else {
-        // Inverse contracts:
-        // For old contracts, baseline = previousMarkPrice.
-        // For new contracts, baseline = position.avgPrice.
-        const oldBaselineBN = new BigNumber(previousMarkPrice);
-        const newBaselineBN = new BigNumber(position.avgPrice || previousMarkPrice);
-        
-        const pnlOld = new BigNumber(1).dividedBy(oldBaselineBN)
-                        .minus(new BigNumber(1).dividedBy(priceBN))
-                        .times(oldContractsBN)
-                        .times(notionalValueBN);
-        const pnlNew = new BigNumber(1).dividedBy(newBaselineBN)
-                        .minus(new BigNumber(1).dividedBy(priceBN))
-                        .times(newPosBN)
-                        .times(notionalValueBN);
-        pnl = pnlOld.plus(pnlNew);
+        const oldBN = new BigNumber(oldContracts);
+        const newBN = new BigNumber(newContracts);
 
-      console.log('Calculated PnL change:', pnl.toFixed(8)+' '+pnlOld+' '+pnlNew);
-      }
+        if (!inverse) {
+            // linear
+            const pnlOld = priceBN.minus(previousMarkPrice)
+                .times(oldBN)
+                .times(notionalBN);
 
-      return pnl.decimalPlaces(8).toNumber();
+            const pnlNew = priceBN.minus(avgEntryPrice)
+                .times(newBN)
+                .times(notionalBN);
+
+            return pnlOld.plus(pnlNew).decimalPlaces(8).toNumber();
+        } 
+        else {
+            // inverse
+            const pnlOld = new BigNumber(1).div(previousMarkPrice)
+                .minus(new BigNumber(1).div(priceBN))
+                .times(oldBN)
+                .times(notionalBN);
+
+            const pnlNew = new BigNumber(1).div(avgEntryPrice)
+                .minus(new BigNumber(1).div(priceBN))
+                .times(newBN)
+                .times(notionalBN);
+
+            return pnlOld.plus(pnlNew).decimalPlaces(8).toNumber();
+        }
     }
 
     static async getBalance(holderAddress) {
