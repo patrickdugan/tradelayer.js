@@ -284,110 +284,184 @@ class MarginMap {
         return {bp: buyerPosition, sp: sellerPosition}
     }
 
-    async updateContractBalances(address, amount, price, isBuyOrder,position, inverse, close,flip,contractId,inClearing,block,initial) {
-        console.log('pre-liq check in update contracts '+amount+' '+JSON.stringify(position))
-        if(position.contracts==null){position.contracts=0}
+    async updateContractBalances(
+        address,
+        amount,
+        price,
+        isBuyOrder,
+        position,
+        inverse,
+        close,
+        flip,
+        contractId,
+        inClearing,
+        block,
+        initial
+    ) {
+        console.log('pre-liq check in update contracts ' + amount + ' ' + JSON.stringify(position));
+
+        if (position.contracts == null) {
+            position.contracts = 0;
+        }
         if (position.newPosThisBlock === undefined) {
-             position.newPosThisBlock = 0; //value intended to protect from replay in clearing
-        }
-        //const position = this.margins.get(address) || this.initMargin(address, 0, price);
-        //console.log('updating the above position for amount '+JSON.stringify(position) + ' '+amount + ' price ' +price +' address '+address+' is buy '+isBuyOrder)
-        //calculating avg. price
-        console.log('inside updateContractBalances '+close +' '+flip+' position '+position.contracts+' avg. price '+position.avgPrice)
-        if(close==0&&flip==0){
-            if(position.contracts==0){
-                if(position.avgPrice==undefined||position.avgPrice==null){
-                    position.avgPrice=price
-                    console.log('setting avg. price as trade price for new position '+position.avgPrice)
-                }else{
-                    position.avgPrice=price
-                }
-            }else{
-                console.log('about to call updateAveragePrice '+amount+' '+price+' '+contractId)
-                position.avgPrice=await this.updateAveragePrice(position,amount,price,contractId, isBuyOrder)
-                console.log('after the avg price function '+position.avgPrice)
-            }
-        }else if(flip>0){
-            //this is the first trade in the new direction of the flip so its price is the avg. entry price
-            position.avgPrice=price
+            position.newPosThisBlock = 0;
         }
 
-        // For buy orders, increase contracts and adjust margin
-        // Calculate the new position size and margin adjustment
-        console.log('position size before update '+position.contracts)
-        const amountBN = new BigNumber(amount)
-        let newPositionSize = isBuyOrder ? BigNumber(position.contracts).plus(amountBN).toNumber() : BigNumber(position.contracts).minus(amountBN).toNumber();
-        console.log('new newPositionSize '+newPositionSize + ' address '+ address + ' amount '+ amount + ' isBuyOrder '+isBuyOrder)
-        //if(newPositionSize==null){newPositionSize=amount}
-        position.contracts=newPositionSize
-        
-        const ContractList = require('./contractRegistry.js')
-        const TallyMap = require('./tally.js')
-        const contractInfo = await ContractList.getContractInfo(contractId)
-        console.log('contract Info in updateContractBalances' + JSON.stringify(contractInfo))
-        const notionalValue = contractInfo.notionalValue
-        const collateralId = contractInfo.collateralPropertyId
-        console.log('about to call getTally in updateContractBalances '+address +' '+collateralId)
-        const balances = await TallyMap.getTally(address,collateralId)
-        console.log(JSON.stringify(balances))
-        const available = balances.available
-        console.log('about to call calc liq price '+available +' '+position.margin+' '+position.contracts+' '+notionalValue+' '+inverse+' '+'avg entry '+position.avgPrice)
-        const isLong = position.contracts>0? true: false
-        console.log('about to calc liq for pos '+JSON.stringify(position))
-        const liquidationInfo = this.calculateLiquidationPrice(available, position.margin, position.contracts, notionalValue, inverse,isLong, position.avgPrice);
-        console.log('liquidation info ' +JSON.stringify(liquidationInfo));
-        //if(liquidationInfo.liquidationPrice==null){throw Error()}
-        if(liquidationInfo==null||position.contracts==0){
+        // Capture old size BEFORE contract update
+        const oldSize = position.contracts;
 
-            position.liqPrice=0
-            position.bankruptcyPrice=0
-            position.avgPrice=price
-        }else{
-            position.liqPrice = liquidationInfo.liquidationPrice || null
-            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice  
-            console.log('position with possible nulls '+JSON.stringify(position)) 
-        }
-        //if(address==null){throw new Error()}
-        
-        if(isBuyOrder&&!inClearing){
-            if(flip>0){
-                position.newPosThisBlock+=flip
-            }else if(close==0){
-                position.newPosThisBlock+=amount
-            }
-            console.log('buy order not in clearing '+position.newPosThisBlock)
-        }else if(!isBuyOrder&&!inClearing){
-            if(flip>0){
-                position.newPosThisBlock-=flip
-            }else if(close==0){
-                position.newPosThisBlock-=amount   
-            }
-            console.log('sell order not in clearing '+position.newPosThisBlock)
-        }else{
-            console.log('in clearing '+position.newPosThisBlock)
+        console.log(
+            'inside updateContractBalances ' + close + ' ' + flip + 
+            ' position ' + oldSize + ' avgPrice ' + position.avgPrice
+        );
+
+        // ----------------------------
+        // AVG PRICE LOGIC (correct)
+        // ----------------------------
+
+        // Case 1: Flip → full close + new open in opposite direction
+        if (flip > 0) {
+            position.avgPrice = price;
+            console.log('FLIP: avgPrice reset to', position.avgPrice);
         }
 
-        console.log('position before setting to margin '+JSON.stringify(position))
-        console.log('position in RAM before '+[...this.margins]);
-        this.margins.set(address, position);  
-        let tag = 'updateContractBalances'
-        if(inClearing){
-            tag = 'liquidatingContract'
-            if(initial){
-                tag = 'initialLiq'
+        // Case 2: Not a flip, not a close → open or extend
+        else if (close === 0) {
+
+            // New open (flat → nonflat)
+            if (oldSize === 0) {
+                position.avgPrice = price;
+                console.log('NEW OPEN: avgPrice =', position.avgPrice);
+            }
+
+            // Extend existing same-side position (weighted avg)
+            else if (
+                (oldSize > 0 && isBuyOrder) ||
+                (oldSize < 0 && !isBuyOrder)
+            ) {
+                console.log('Weighted avg update →', amount, price, contractId);
+                position.avgPrice = await this.updateAveragePrice(
+                    position, amount, price, contractId, isBuyOrder
+                );
+                console.log('Weighted avg result → avgPrice =', position.avgPrice);
+            }
+
+            // Partial close (oldSize and trade sides differ)
+            else {
+                console.log('PARTIAL CLOSE: avgPrice unchanged:', position.avgPrice);
             }
         }
 
-        if(position.bankruptcyPrice===undefined){
-            console.log('missing liq prices in position '+JSON.stringify(position))
-            //throw new Error()
-            position.bankruptcyPrice=0
+        // Case 3: Explicit close trade
+        else {
+            console.log('CLOSE TRADE: avgPrice unchanged:', position.avgPrice);
         }
-        console.log('✅ position before saving to marginMap '+JSON.stringify(position))
-        await this.saveMarginMap(block)
-        await this.recordMarginMapDelta(address, contractId, newPositionSize, amount,0,0,0,tag,block,liquidationInfo.bankruptcyPrice)
-        return position
+
+        // -----------------------------------------------------
+        // UPDATE CONTRACT COUNT AFTER avgPrice adjustments
+        // -----------------------------------------------------
+        console.log('position size before update ' + position.contracts);
+
+        const amountBN = new BigNumber(amount);
+        let newPositionSize = isBuyOrder
+            ? new BigNumber(oldSize).plus(amountBN).toNumber()
+            : new BigNumber(oldSize).minus(amountBN).toNumber();
+
+        console.log(
+            'newPositionSize ' + newPositionSize +
+            ' address ' + address +
+            ' amount ' + amount +
+            ' isBuyOrder ' + isBuyOrder
+        );
+
+        position.contracts = newPositionSize;
+
+        // -----------------------------------------------------
+        // NOW fetch contract info and compute liquidation
+        // -----------------------------------------------------
+        const ContractList = require('./contractRegistry.js');
+        const TallyMap = require('./tally.js');
+
+        const contractInfo = await ContractList.getContractInfo(contractId);
+        const notionalValue = contractInfo.notionalValue;
+        const collateralId = contractInfo.collateralPropertyId;
+
+        const balances = await TallyMap.getTally(address, collateralId);
+        const available = balances.available;
+
+        const isLong = position.contracts > 0;
+
+        console.log('about to calc liq for pos ' + JSON.stringify(position));
+        const liquidationInfo = this.calculateLiquidationPrice(
+            available,
+            position.margin,
+            position.contracts,
+            notionalValue,
+            inverse,
+            isLong,
+            position.avgPrice
+        );
+
+        console.log('liquidation info ' + JSON.stringify(liquidationInfo));
+
+        // -----------------------------------------------------
+        // Liquidation / reset logic
+        // -----------------------------------------------------
+        if (!liquidationInfo || position.contracts === 0) {
+            position.liqPrice = 0;
+            position.bankruptcyPrice = 0;
+
+            // If flat, avgPrice must be reset to null
+            if (position.contracts === 0) {
+                position.avgPrice = null;
+            }
+        } else {
+            position.liqPrice = liquidationInfo.liquidationPrice || null;
+            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice;
+        }
+
+        // -----------------------------------------------------
+        // newPosThisBlock adjustments
+        // -----------------------------------------------------
+        if (!inClearing) {
+            if (isBuyOrder) {
+                if (flip > 0) position.newPosThisBlock += flip;
+                else if (close == 0) position.newPosThisBlock += amount;
+            } else {
+                if (flip > 0) position.newPosThisBlock -= flip;
+                else if (close == 0) position.newPosThisBlock -= amount;
+            }
+        }
+
+        // -----------------------------------------------------
+        // SAVE POSITION TO MARGIN MAP
+        // -----------------------------------------------------
+        console.log('Saving position', JSON.stringify(position));
+        this.margins.set(address, position);
+
+        let tag = 'updateContractBalances';
+        if (inClearing) {
+            tag = initial ? 'initialLiq' : 'liquidatingContract';
+        }
+
+        await this.saveMarginMap(block);
+
+        await this.recordMarginMapDelta(
+            address,
+            contractId,
+            newPositionSize,
+            amount,
+            0,
+            0,
+            0,
+            tag,
+            block,
+            position.bankruptcyPrice
+        );
+
+        return position;
     }
+
     
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
         console.log(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL)
@@ -458,38 +532,30 @@ class MarginMap {
         };
     }
 
-    async updateAveragePrice(position, amount, price, contractId, isBuy) {
-        // Make sure our absolute value order amounts for sells register
-        if (!isBuy) {
-            amount *= -1;
+    async updateAveragePrice(position, amount, price, contractId, isBuyOrder) {
+        const oldSize = position.contracts;
+        const oldAvg = new BigNumber(position.avgPrice || 0);
+        const tradeSize = new BigNumber(amount);
+
+        // Determine new total position size
+        const newSize = isBuyOrder
+            ? new BigNumber(oldSize).plus(tradeSize)
+            : new BigNumber(oldSize).minus(tradeSize);
+
+        // If newSize is zero, the position is fully closed
+        if (newSize.isZero()) {
+            return null; // avgPrice resets in updateContractBalances
         }
 
-        // Convert existing values to BigNumber
-        const avgPrice = new BigNumber(position.avgPrice || 0);
-        const contracts = new BigNumber(position.contracts || 0);
-        const amountBN = new BigNumber(amount);
-        const priceBN = new BigNumber(price);
-   
-       console.log('inside update Avg. ' + position.avgPrice + ' ' + position.contracts + ' ' + amount + ' ' + price);
-        
-        // Calculate the numerator and denominator separately for clarity
-        const numerator = avgPrice.times(contracts).plus(amountBN.times(priceBN));
-        const denominator = contracts.plus(amountBN);
-        
-        // Calculate the updated average price
-        const updatedAvgPrice = numerator.dividedBy(denominator);
-            
-        console.log('updated avg ' + updatedAvgPrice);
-        
-        // Update the position object with the new values
-        position.avgPrice = updatedAvgPrice.abs().decimalPlaces(4).toNumber(); // Keep the avgPrice positive
-        //position.contracts = contracts.plus(amountBN).toNumber(); // Update the contracts
+        // Weighted average price formula (always absolute sizes)
+        const weighted = oldAvg.times(Math.abs(oldSize))
+            .plus(new BigNumber(price).times(amount))
+            .dividedBy(Math.abs(newSize))
+            .decimalPlaces(8);
 
-        await this.recordMarginMapDelta(position.address, contractId, 0, 0, 0, 0, (avgPrice.toNumber() - updatedAvgPrice.abs().toNumber()), 'newAvgPrice');
-        
-        // Return the updated position object
-        return position.avgPrice;
+        return weighted.toNumber();
     }
+
 
     async moveMarginAndContractsForMint(address, propertyId, contractId, contracts, margin,block) {
         // Check if the margin map exists for the given contractId
@@ -984,7 +1050,7 @@ class MarginMap {
                 }
                
                 if(contracts < 0){
-                    pnl.negated(); // Invert the value if contracts is negative
+                    pnl = pnl.negated(); // Invert the value if contracts is negative
                 }
                 // Update margin and unrealized PnL
                 //pos.margin -= Math.abs(pnl);
@@ -1292,288 +1358,412 @@ class MarginMap {
         }
     }
 
-    async simpleDeleverage(contractId, unfilledContracts, sell, liqPrice, liquidatingAddress, isInverse,notional,block,markPrice,collateralId) {
-          console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
-                 const TallyMap= require('./tally.js')
-          let remainingSize = new BigNumber(unfilledContracts);
-          
-          if(remainingSize.isNaN() || remainingSize.isNegative()){
-            throw new Error(`🔥 Invalid unfilledContracts. Value: ${unfilledContracts}`);
-          }
+    // =======================
+    // simpleDeleverage
+    // =======================
+    async simpleDeleverage(
+      contractId,
+      unfilledContracts,
+      sell,
+      liqPrice,
+      liquidatingAddress,
+      isInverse,
+      notional,
+      block,
+      markPrice,
+      collateralId
+    ) {
+      console.log(`\n🔸 [simpleDeleverage] contract=${contractId}, liqPrice=${liqPrice}, side=${sell}, unfilled=${unfilledContracts}`);
+      const TallyMap = require('./tally.js');
 
-          // Blob for final report
-          let deleveragingData = {
-            liquidatingAddress: liquidatingAddress || null,
-            contractId: contractId,
-            attemptedDeleverage: remainingSize.toNumber(),
-            totalDeleveraged: 0,
-            counterparties: []
-          };
+      let remainingSize = new BigNumber(unfilledContracts);
 
-          const allPositions = await this.getAllPositions(contractId);
-          console.log(` Found ${allPositions.length} total positions in marginMap.`);
+      if (remainingSize.isNaN() || !remainingSize.isFinite() || remainingSize.lte(0)) {
+        throw new Error(`🔥 Invalid unfilledContracts. Value: ${unfilledContracts}`);
+      }
 
-          // Filter out all longs vs. shorts
-          let longs = allPositions.filter(p => p.contracts > 0 && p.address !== liquidatingAddress&& p.contracts !==0);
-          let shorts = allPositions.filter(p => p.contracts < 0 && p.address !== liquidatingAddress && p.contracts !==0);
+      // Blob for final report
+      let deleveragingData = {
+        liquidatingAddress: liquidatingAddress || null,
+        contractId: contractId,
+        attemptedDeleverage: remainingSize.toNumber(),
+        totalDeleveraged: 0,
+        counterparties: []
+      };
 
-          // Sort each side by largest PNL first
-          longs.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
-          shorts.sort((a, b) => new BigNumber(b.unrealizedPNL).minus(a.unrealizedPNL).toNumber());
+      const allPositions = await this.getAllPositions(contractId);
+      console.log(` Found ${allPositions.length} total positions in marginMap.`);
 
-          console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
+      // Filter out all longs vs. shorts (exclude the liquidating address + zeros)
+      let longs = allPositions.filter(
+        p => p.contracts > 0 && p.address !== liquidatingAddress && p.contracts !== 0
+      );
+      let shorts = allPositions.filter(
+        p => p.contracts < 0 && p.address !== liquidatingAddress && p.contracts !== 0
+      );
 
-          // Select counterparties based on side
-          let counterparties = sell ? shorts:longs;
+      // Sort each side by largest absolute size first
+      const byAbsSizeDesc = (a, b) => Math.abs(b.contracts) - Math.abs(a.contracts);
+      longs.sort(byAbsSizeDesc);
+      shorts.sort(byAbsSizeDesc);
 
-          // Calculate contract differences for more even distribution
-          for(let i = 0; i < counterparties.length; i++){
-            let bigger = counterparties[i];
-            let next = counterparties[i + 1] || { contracts: 0 };
-            counterparties[i].difference = bigger.contracts - next.contracts;
-          }
+      console.log(`showing longs: ${JSON.stringify(longs)} \nshowing shorts: ${JSON.stringify(shorts)}`);
 
-            console.log(`🔎 Checking counterparties...`);
-            console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No counterparties found!");
+      // Select counterparties based on side of the LIQUIDATING position
+      // - if liquidating is a "sell" (closing a long), we match against SHORTS
+      // - if liquidating is a "buy" (closing a short), we match against LONGS
+      let counterparties = sell ? shorts : longs;
 
-          // Iterate through counterparties for deleveraging
-          for (let pos of counterparties) {
-            if(pos.contracts == 0){continue}
-            let sizeBN = new BigNumber(pos.contracts);    
-            let matchSize = Math.min(pos.difference, remainingSize.toNumber())
+      console.log(`🔎 Checking counterparties...`);
+      console.log(counterparties.length > 0 ? JSON.stringify(counterparties) : "❌ No counterparties found!");
 
-            // 🔹 If this is the last counterparty and there's still remaining size, force match
-            if (pos === counterparties[counterparties.length - 1] && remainingSize.gt(0)) {
-                matchSize = remainingSize.toNumber();
-            }
+      // Iterate through counterparties for deleveraging
+      for (let i = 0; i < counterparties.length && remainingSize.gt(0); i++) {
+        let pos = counterparties[i];
+        if (!pos || !pos.contracts) continue;
 
-            console.log(`• Matching: ${pos.address} (${sizeBN}) vs. ${liquidatingAddress} (${remainingSize}), remove ${matchSize}`);
+        const preContracts = Number(pos.contracts) || 0;
+        const posSize = Math.abs(preContracts);
 
-            // Ensure matchSize is positive before proceeding
-            if (matchSize > 0) {
-              pos = await this.adjustDeleveraging(pos.address, contractId, matchSize, !sell,block,liqPrice,TallyMap);
-                const matchBN = new BigNumber(matchSize)
+        if (posSize <= 0) continue;
 
-                const shouldClawback = await TallyMap.didReceiveClearingProfitThisBlock(pos.address, block)
-                console.log('should clawback? '+shouldClawback)
-                if(shouldClawback){
-                  await this.clawbackClearingProfit(pos, markPrice, matchSize,notional,liqPrice,collateralId,block,TallyMap,sell,isInverse)
-                }
-              pos = await this.realizePnl(
-                pos.address,
-                matchSize,
-                liqPrice,
-                pos.avgPrice,
-                isInverse,
-                notional,
-                pos,
-                !sell,
-                contractId
-              );
+        // **Key rule: never take more than this address actually has**
+        let matchSize = Math.min(posSize, remainingSize.toNumber());
 
-            console.log('post rPNL pos '+JSON.stringify(pos))
-              // **Construct Trade Object**
-            const trade = {
-                    contractId: contractId,
-                    amount: matchSize,
-                    price: liqPrice,
-                    markPrice: markPrice,
-                    counterpartyAddress: pos.address,
-                    liquidatingAddress: liquidatingAddress,
-                    block: block,
-                    realizedPnL: pos.realizedPNL,
-                    liquidation: true,
-                    deleverage: true
-                };
+        // Safety
+        if (!Number.isFinite(matchSize) || matchSize <= 0) continue;
 
-                // **Record Trade in Trade History**
-                await this.recordContractTrade(trade, block,'','');
+        console.log(
+          `• Matching: ${pos.address} (pos=${preContracts}) vs. ${liquidatingAddress} (remaining=${remainingSize.toString()}), remove=${matchSize}`
+        );
 
-              deleveragingData.totalDeleveraged += matchSize;
-              deleveragingData.counterparties.push(pos);
+        // Adjust counterparty position TOWARD ZERO (we pass !sell to indicate opposite trade)
+        let updatedPos = await this.adjustDeleveraging(
+          pos.address,
+          contractId,
+          matchSize,
+          !sell,
+          block,
+          liqPrice,
+          TallyMap
+        );
 
-              remainingSize = remainingSize.minus(matchSize);
-              console.log('delev data obj '+JSON.stringify(deleveragingData))
-              if (remainingSize.isZero()) break;
-            }
-
-          if (remainingSize.gt(0)) {
-            console.log(`⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`);
-          }
+        if (!updatedPos) {
+          console.log(`⚠️ adjustDeleveraging returned null for ${pos.address}`);
+          continue;
         }
-            return deleveragingData;
+
+        // Safety: ensure we did not flip sign
+        if (preContracts * updatedPos.contracts < 0) {
+          console.error(
+            `🔥 [simpleDeleverage] Position sign flipped for ${updatedPos.address}! before=${preContracts}, after=${updatedPos.contracts}`
+          );
+          // Clamp to flat as a last resort
+          updatedPos.contracts = 0;
+        }
+
+        const matchBN = new BigNumber(matchSize);
+
+        const shouldClawback = await TallyMap.didReceiveClearingProfitThisBlock(updatedPos.address, block);
+        console.log('should clawback? ' + shouldClawback);
+
+        if (shouldClawback) {
+          await this.clawbackClearingProfit(
+            updatedPos,
+            markPrice,
+            matchSize,
+            notional,
+            liqPrice,
+            collateralId,
+            block,
+            TallyMap,
+            sell,
+            isInverse
+          );
+        }
+
+        // Realize PnL for the counterparty on this matched size
+        updatedPos = await this.realizePnl(
+          updatedPos.address,
+          matchSize,
+          liqPrice,
+          updatedPos.avgPrice,
+          isInverse,
+          notional,
+          updatedPos,
+          !sell,          // counterparty does the opposite trade
+          contractId
+        );
+
+        console.log('post rPNL pos ' + JSON.stringify(updatedPos));
+
+        // **Record Trade in Trade History**
+        const trade = {
+          contractId: contractId,
+          amount: matchSize,
+          price: liqPrice,
+          markPrice: markPrice,
+          counterpartyAddress: updatedPos.address,
+          liquidatingAddress: liquidatingAddress,
+          block: block,
+          realizedPnL: updatedPos.realizedPNL,
+          liquidation: true,
+          deleverage: true
+        };
+
+        await this.recordContractTrade(trade, block, '', '');
+
+        deleveragingData.totalDeleveraged += matchSize;
+        deleveragingData.counterparties.push(updatedPos);
+
+        remainingSize = remainingSize.minus(matchBN);
+        console.log('delev data obj ' + JSON.stringify(deleveragingData));
+      }
+
+      if (remainingSize.gt(0)) {
+        console.log(
+          `⚠️ [simpleDeleverage] leftover unfilledContracts = ${remainingSize.toString()} -- no more matches possible!`
+        );
+      }
+
+      return deleveragingData;
     }
 
+
+    // =======================
+    // clawbackClearingProfit
+    // (unchanged except formatting)
+    // =======================
     async clawbackClearingProfit(
-          pos,
-          markPrice,
-          matchSize,
-          notional,
-          liqPrice,
+      pos,
+      markPrice,
+      matchSize,
+      notional,
+      liqPrice,
+      collateralId,
+      block,
+      TallyMap,
+      sell,
+      isInverse
+    ) {
+      // --------------------------
+      // 1. BASIC SANITY CHECKS
+      // --------------------------
+      if (!pos || !pos.lastMark || !markPrice || !liqPrice) return;
+      if (!matchSize || matchSize <= 0) return;
+
+      const last = new BigNumber(pos.lastMark);
+      const mark = new BigNumber(markPrice);
+      const liq  = new BigNumber(liqPrice);
+
+      if (last.isNaN() || mark.isNaN() || liq.isNaN()) {
+        console.log("🔥 clawback skip: NaN in inputs", pos.lastMark, markPrice, liqPrice);
+        return;
+      }
+
+      // tolerance: 1e-8
+      const sameMark = last.minus(mark).abs().lt(1e-8);
+
+      console.log(`🔧 clawbackOrClawForward :: last=${last} mark=${mark} liq=${liq} sameMark=${sameMark}`);
+
+      // --------------------------
+      // helper for safe balance write
+      // --------------------------
+      const safeApply = async (amount, type) => {
+        if (!amount || isNaN(amount) || !isFinite(amount)) return;
+
+        const amt = new BigNumber(amount).decimalPlaces(8);
+
+        // ignore noise < 1 satoshi
+        if (amt.abs().lt(1e-8)) return;
+
+        const limited = amt;
+
+        console.log(`🔧 TallyMap.updateBalance ${type}: ${limited.toString()}`);
+
+        await TallyMap.updateBalance(
+          pos.address,
           collateralId,
-          block,
-          TallyMap,
-          sell,
-          isInverse
-        ) {
-          // --------------------------
-          // 1. BASIC SANITY CHECKS
-          // --------------------------
-          if (!pos || !pos.lastMark || !markPrice || !liqPrice) return;
-          if (!matchSize || matchSize <= 0) return;
+          limited.toNumber(),
+          0,
+          0,
+          0,
+          type,
+          block
+        );
+      };
 
-          const last = new BigNumber(pos.lastMark);
-          const mark = new BigNumber(markPrice);
-          const liq  = new BigNumber(liqPrice);
+      // --------------------------
+      // 2. Compute diff endpoint rule
+      // --------------------------
+      const startPrice = sameMark ? last : mark;
+      const endPrice   = liq;
 
-          if (last.isNaN() || mark.isNaN() || liq.isNaN()) {
-            console.log("🔥 clawback skip: NaN in inputs", pos.lastMark, markPrice, liqPrice);
-            return;
-          }
+      let diff = sell
+        ? startPrice.minus(endPrice)
+        : endPrice.minus(startPrice);
 
-          // tolerance: 1e-8
-          const sameMark = last.minus(mark).abs().lt(1e-8);
+      console.log(`🔧 Base diff = ${diff.toString()} (sell=${sell}) start=${startPrice} end=${endPrice}`);
 
-          console.log(`🔧 clawbackOrClawForward :: last=${last} mark=${mark} liq=${liq} sameMark=${sameMark}`);
+      if (diff.isNaN() || !diff.isFinite()) {
+        console.log("🔥 diff invalid; skipping");
+        return;
+      }
 
-          // --------------------------
-          // helper for safe balance write
-          // --------------------------
-          const safeApply = async (amount, type) => {
-            if (!amount || isNaN(amount) || !isFinite(amount)) return;
+      // --------------------------
+      // 3. Compute linear PNL
+      // --------------------------
+      let pnlLinear = diff.times(matchSize).times(notional).decimalPlaces(8);
 
-            const amt = new BigNumber(amount).decimalPlaces(8);
+      // --------------------------
+      // 4. INVERSE FIX — correct formula (NO double multiply)
+      // --------------------------
+      let pnl;
 
-            // ignore noise < 1 satoshi
-            if (amt.abs().lt(1e-8)) return;
-
-            // prevent pathological negative writes beyond available
-            // (TallyMap should reject anyway but we guard)
-            const limited = amt;
-
-            console.log(`🔧 TallyMap.updateBalance ${type}: ${limited.toString()}`);
-
-            await TallyMap.updateBalance(
-              pos.address,
-              collateralId,
-              limited.toNumber(),
-              0,
-              0,
-              0,
-              type,
-              block
-            );
-          };
-
-          // --------------------------
-          // 2. Compute diff endpoint rule
-          // --------------------------
-          // If same mark: diff vs LIQUIDATION price
-          // Else: diff vs MARK PRICE (correct incremental PnL logic)
-          const startPrice = sameMark ? last : mark;
-          const endPrice   = liq;
-
-          let diff = sell
-            ? startPrice.minus(endPrice)
-            : endPrice.minus(startPrice);
-
-          console.log(`🔧 Base diff = ${diff.toString()} (sell=${sell}) start=${startPrice} end=${endPrice}`);
-
-          if (diff.isNaN() || !diff.isFinite()) {
-            console.log("🔥 diff invalid; skipping");
-            return;
-          }
-
-          // --------------------------
-          // 3. Compute linear PNL
-          // --------------------------
-          let pnlLinear = diff.times(matchSize).times(notional).decimalPlaces(8);
-
-          // --------------------------
-          // 4. INVERSE FIX — correct formula (NO double multiply)
-          // --------------------------
-          let pnl;
-
-          if (isInverse) {
-            // Calculate Δ(1/price)
-            const denom = last.times(endPrice);
-            if (denom.isZero() || denom.isNaN()) {
-              console.log("🔥 inverse denom invalid; skipping");
-              return;
-            }
-
-            pnl = diff
-              .dividedBy(denom)
-              .times(matchSize)
-              .times(notional)
-              .decimalPlaces(8);
-          } else {
-            pnl = pnlLinear;
-          }
-
-          console.log(`🔧 Computed PNL delta = ${pnl.toString()} (inverse=${isInverse})`);
-
-          // --------------------------
-          // 5. PROFIT / LOSS handling
-          // --------------------------
-          if (pnl.isZero()) return;
-
-          // profit for the counterparty = +pnl
-          // loss for the counterparty = -pnl
-          const finalDelta = pnl;
-
-          // --------------------------
-          // 6. APPLY TO TALLY — SAFE
-          // --------------------------
-          if (sameMark) {
-            await safeApply(finalDelta, "clawbackSettlement");
-          } else {
-            await safeApply(finalDelta, "profitAdjustmentSettlement");
-          }
-
+      if (isInverse) {
+        const denom = last.times(endPrice);
+        if (denom.isZero() || denom.isNaN()) {
+          console.log("🔥 inverse denom invalid; skipping");
           return;
         }
 
+        pnl = diff
+          .dividedBy(denom)
+          .times(matchSize)
+          .times(notional)
+          .decimalPlaces(8);
+      } else {
+        pnl = pnlLinear;
+      }
 
-    // Adjust deleveraging position
-    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice,TallyMap) {
-        console.log(`Adjusting position for ${address}: reducing ${size} contracts on contract ${contractId} for side ${sell}`);
-        const ContractRegistry= require('./contractRegistry.js')
- 
-        let position = await this.getPositionForAddress(address, contractId);
-        const initPerContract = await ContractRegistry.getInitialMargin(contractId,liqPrice)
-        const collateral = await ContractRegistry.getCollateralId(contractId)    
-        if (!position) return;
-        const contractChange = sell ? -size : size
-        console.log('⚠️ '+contractChange+' '+position.contracts)
-        if(!contractChange||!position.contracts){
-            console.log('issue in deleveraging '+contractChange+' '+position.contracts)
-            throw new Error()
-        } 
+      console.log(`🔧 Computed PNL delta = ${pnl.toString()} (inverse=${isInverse})`);
 
-        const contractChangeBN = new BigNumber(contractChange)
-        position.contracts = new BigNumber(position.contracts).plus(contractChangeBN).toNumber();
-        let reduction = await this.reduceMargin(position, contractChange, initPerContract, contractId, address, sell, false, 0)
-        console.log('reduction '+reduction)
-        const hasSufficient = await TallyMap.hasSufficientMargin(address,collateral,reduction)
-        console.log(JSON.stringify(hasSufficient))
-        if(!hasSufficient.hasSufficient){
-            reduction = new BigNumber(reduction).minus(hasSufficient.shortfall).decimalPlaces(8).toNumber()
-        }
-        if(reduction !==0){
-             await TallyMap.updateBalance(address, collateral, reduction, 0, -reduction, 0, 'contractDelevMarginReturn',block)              
-        }
-        if (position.contracts === 0) {
-            position.liqPrice = null;
-            position.bankruptcyPrice = null;
-        }
+      if (pnl.isZero()) return;
 
-        console.log('⚠️ '+position.contracts)
-        this.margins.set(position.address, position);
-        this.recordMarginMapDelta(address,contractId, position.contracts,contractChangeBN, position.margin,position.uPNL,position.avgEntry,'Deleveraging',block)  
-        await this.saveMarginMap(block);
-        return position
+      const finalDelta = pnl;
+
+      if (sameMark) {
+        await safeApply(finalDelta, "clawbackSettlement");
+      } else {
+        await safeApply(finalDelta, "profitAdjustmentSettlement");
+      }
+
+      return;
     }
+
+
+    // =======================
+    // adjustDeleveraging
+    // =======================
+    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice, TallyMap) {
+      console.log(`Adjusting position for ${address}: requested reduce ${size} contracts on contract ${contractId} for side ${sell}`);
+      const ContractRegistry = require('./contractRegistry.js');
+
+      // Normalize size to a positive scalar
+      let requestedSize = Number(size);
+      if (!Number.isFinite(requestedSize) || requestedSize <= 0) {
+        console.log(`⚠️ adjustDeleveraging: invalid size ${size} for ${address}`);
+        return;
+      }
+
+      let position = await this.getPositionForAddress(address, contractId);
+      if (!position || !position.contracts) {
+        console.log(`⚠️ adjustDeleveraging: no position found for ${address} on contract ${contractId}`);
+        return position;
+      }
+
+      const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
+      const collateral = await ContractRegistry.getCollateralId(contractId);
+
+      const beforeContracts = Number(position.contracts) || 0;
+      const maxReducible = Math.abs(beforeContracts);
+
+      if (maxReducible <= 0) {
+        console.log(`⚠️ adjustDeleveraging: maxReducible is 0 for ${address}`);
+        return position;
+      }
+
+      // **Key rule: never adjust more than the current absolute size**
+      const effectiveSize = Math.min(requestedSize, maxReducible);
+
+      // Direction:
+      //  - sell = true  -> contractChange = -effectiveSize
+      //  - sell = false -> contractChange = +effectiveSize
+      const contractChange = sell ? -effectiveSize : effectiveSize;
+
+      console.log('⚠️ contractChange=' + contractChange + ' beforeContracts=' + beforeContracts);
+
+      const contractChangeBN = new BigNumber(contractChange);
+      const afterContracts = new BigNumber(beforeContracts).plus(contractChangeBN).toNumber();
+      position.contracts = afterContracts;
+
+      // Safety: never flip sign; clamp to zero
+      if (beforeContracts * afterContracts < 0) {
+        console.error(
+          `🔥 adjustDeleveraging sign flip for ${address}: before=${beforeContracts}, after=${afterContracts}. Clamping to 0.`
+        );
+        position.contracts = 0;
+      }
+
+      let reduction = await this.reduceMargin(
+        position,
+        contractChange,
+        initPerContract,
+        contractId,
+        address,
+        sell,
+        false,
+        0
+      );
+
+      console.log('reduction ' + reduction);
+
+      const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
+      console.log(JSON.stringify(hasSufficient));
+
+      if (!hasSufficient.hasSufficient) {
+        reduction = new BigNumber(reduction)
+          .minus(hasSufficient.shortfall)
+          .decimalPlaces(8)
+          .toNumber();
+      }
+
+      if (reduction !== 0) {
+        await TallyMap.updateBalance(
+          address,
+          collateral,
+          reduction,
+          0,
+          -reduction,
+          0,
+          'contractDelevMarginReturn',
+          block
+        );
+      }
+
+      if (position.contracts === 0) {
+        position.liqPrice = null;
+        position.bankruptcyPrice = null;
+      }
+
+      console.log('⚠️ after contracts=' + position.contracts);
+
+      this.margins.set(position.address, position);
+      this.recordMarginMapDelta(
+        address,
+        contractId,
+        position.contracts,
+        contractChangeBN,
+        position.margin,
+        position.uPNL,
+        position.avgEntry,
+        'Deleveraging',
+        block
+      );
+      await this.saveMarginMap(block);
+      return position;
+    }
+
 
     async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
         console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
