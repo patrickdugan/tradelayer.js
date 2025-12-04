@@ -12,6 +12,7 @@ const PropertyManager = require('./property.js')
 const VolumeIndex = require('./volumeIndex.js')
 const Oracles = require('./oracle.js')
 const PnlIou = require('./iou.js')
+const _positionCache = new Map(); 
 
 class Clearing {
     // ... other methods ...
@@ -117,6 +118,41 @@ class Clearing {
 
     static resetBlockTrades() {
         this.resetBlockTracking();
+    }
+
+    static initPositionCache(contractId, blockHeight, positions) {
+        const key = `${contractId}:${blockHeight}`;
+        // Deep clone so nobody mutates marginMap’s internal structures
+        const cloned = JSON.parse(JSON.stringify(positions));
+        _positionCache.set(key, { positions: cloned });
+        return key;
+    }
+
+    static getPositionsFromCache(ctxKey) {
+        const ctx = _positionCache.get(ctxKey);
+        if (!ctx) throw new Error(`No clearing context for ${ctxKey}`);
+        return ctx.positions;
+    }
+
+    static updatePositionInCache(ctxKey, address, patchFn) {
+        const ctx = _positionCache.get(ctxKey);
+        if (!ctx) throw new Error(`No clearing context for ${ctxKey}`);
+        const positions = ctx.positions;
+
+        const idx = positions.findIndex(p => p.address === address);
+        if (idx === -1) {
+          throw new Error(`Position for ${address} not found in cache`);
+        }
+
+        const updated = patchFn(positions[idx]);
+        positions[idx] = updated;
+    }
+
+    static flushPositionCache(ctxKey) {
+        const ctx = _positionCache.get(ctxKey);
+        if (!ctx) throw new Error(`No clearing context for ${ctxKey}`);
+        _positionCache.delete(ctxKey);
+        return ctx.positions;
     }
 
     static async recordClearingRun(blockHeight, isRealtime) {
@@ -831,56 +867,106 @@ class Clearing {
         await marginMap.saveMarginMap(block)
     }
  
-    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional){
-        let liquidationData = [];
-        let marginMap = await MarginMap.getInstance(contractId);
-        let positions = await marginMap.getAllPositions(contractId);
-        console.log('positions before normalization '+JSON.stringify(positions))
-        let blob = await Clearing.getPriceChange(blockHeight, contractId);
-        await Clearing.normalizePositionMarks(positions, blob.lastPrice, marginMap, contractId,blockHeight);  
+static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
 
-        console.log('clearing price difference:', blob.lastPrice, blob.thisPrice);
-        let isLiq = [];
-        let systemicLoss = new BigNumber(0);
-        const Orderbook = require('./orderbook.js')
-        const Tally = require('./tally.js')
-        
-        let totalPositivePnl = new BigNumber(0);
-        let totalNegativePnl = new BigNumber(0);
-        
-        for(let i = 0; i < positions.length; i++){
-            let position = positions[i];
-            let orderbook = await Orderbook.getOrderbookInstance(contractId);
-            //if(position.contracts==null){throw new Error()}
-            console.log('positions before refresh '+JSON.stringify(positions))
-            const tally = await Tally.getTally(position.address,collateralId)
-            console.log('just checking '+position.address)
-            position = await marginMap.getPositionForAddress(position.address, contractId)
-            const liq = 0
-            const bank = 0
-            if(position.contracts==0){continue}
-            if(!blob.lastPrice){
-                console.log('last price was null, using avg price:', position.avgPrice);
-                blob.lastPrice = position.avgPrice;
-            }
-         
-            console.log('🔄 position '+JSON.stringify(position))
-            // --- Inject block-trade deltas into the position object ---
-            const opened = Clearing.getOpenedThisBlock(contractId, position.address);
-            const delta  = Clearing.getDeltaThisBlock(contractId, position.address);
+    console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
 
-            const oldContracts = position.contracts - opened;
-            const newContracts = opened;
-            const avgEntryPrice = position.avgPrice; // you already update this at trade time
-            console.log('before pnl calc '+JSON.stringify({
-                oldContracts,
-                newContracts,
-                avgEntryPrice,
-                previousMarkPrice: blob.lastPrice,
-                currentMarkPrice:  blob.thisPrice,
-                inverse,
-                notional
-            }))
+    const MarginMap = require('./marginMap.js');
+    const Orderbook = require('./orderbook.js');
+    const Tally = require('./tally.js');
+
+    const marginMap = await MarginMap.getInstance(contractId);
+
+    // ------------------------------------------------------------
+    // 1) Load all raw positions from DB, once
+    // ------------------------------------------------------------
+    const rawPositions = await marginMap.getAllPositions(contractId);
+    console.log(`Loaded ${rawPositions.length} positions from DB`);
+
+    // ------------------------------------------------------------
+    // 2) Initialize clearing cache (clones raw positions internally)
+    // ------------------------------------------------------------
+    const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
+
+    // Work always from cached positions
+    let positions = Clearing.getPositionsFromCache(ctxKey);
+
+    // ------------------------------------------------------------
+    // 3) Price-change blob
+    // ------------------------------------------------------------
+    const blob = await Clearing.getPriceChange(blockHeight, contractId);
+    let lastPrice = blob.lastPrice;
+    let thisPrice = blob.thisPrice;
+
+    if (!lastPrice) {
+        console.log("WARNING: lastPrice is null — using each position's avgPrice where needed");
+    }
+
+    console.log(`📈 Clearing price diff: last=${lastPrice} → this=${thisPrice}`);
+
+    // ------------------------------------------------------------
+    // 4) Normalize marks (NO DB writes)
+    // ------------------------------------------------------------
+    await Clearing.normalizePositionMarks(
+        positions,
+        lastPrice,
+        /* no marginMap writes */ null,
+        contractId,
+        blockHeight
+    );
+
+    // ------------------------------------------------------------
+    // 5) State variables for this block pass
+    // ------------------------------------------------------------
+    let systemicLoss = new BigNumber(0);
+    let totalPositivePnl = new BigNumber(0);
+    let totalNegativePnl = new BigNumber(0);
+
+    const orderbook = await Orderbook.getOrderbookInstance(contractId);
+
+    // ------------------------------------------------------------
+    // 6) MAIN PASS — only cached positions are touched
+    // ------------------------------------------------------------
+    for (const pos of positions) {
+
+        if (!pos.contracts || pos.contracts === 0) continue;
+
+        console.log(`\n🔍 Processing address ${pos.address}...`);
+
+        // Always read tally fresh, but DO NOT mutate map here
+        const tally = await Tally.getTally(pos.address, collateralId);
+
+        // Resolve lastPrice fallback
+        if (!lastPrice) {
+            console.log(`lastPrice null → fallback avgPrice=${pos.avgPrice}`);
+            lastPrice = new BigNumber(pos.avgPrice);
+        }
+
+        console.log(`Position snapshot: ${JSON.stringify(pos)}`);
+
+        // ------------------------------------------------------------
+        // 6a) Derive block deltas (opened contracts, delta contracts)
+        // ------------------------------------------------------------
+        const opened   = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+        const delta    = Clearing.getDeltaThisBlock(contractId, pos.address)  || 0;
+
+        // OLD contracts = previously existing quantity
+        const oldContracts = pos.contracts - opened;
+
+        // NEW contracts = opened this block
+        const newContracts = opened;
+
+        const avgEntryPrice = pos.avgPrice; // maintained by your trade engine
+
+        console.log("PnL input pre-check:", JSON.stringify({
+            oldContracts,
+            newContracts,
+            avgEntryPrice,
+            previousMarkPrice: lastPrice,
+            currentMarkPrice: thisPrice,
+            inverse,
+            notional
+        }));
             const pnlChange = Clearing.calculatePnLChange({
                 oldContracts,
                 newContracts,
@@ -1266,16 +1352,24 @@ class Clearing {
             // =========================================
             // Apply accumulated TallyMap writes AFTER deleverage
             // =========================================
-            if (result.tallyUpdates && result.tallyUpdates.length > 0) {
-                console.log(`📤 Applying ${result.tallyUpdates.length} accumulated TallyMap updates`);
-                for (const update of result.tallyUpdates) {
+            if (result.poolAssignments && result.poolAssignments.length > 0) {
+                  console.log(`📤 Crediting ${result.poolAssignments.length} counterparties from liquidation pool`);
+
+                  for (const cp of result.poolAssignments) {
                     await Tally.updateBalance(
-                        update.address, update.collateralId,
-                        update.availableDelta, 0, update.marginDelta, 0,
-                        update.tag, update.block
+                      cp.address,
+                      collateralId,              // same one passed into simpleDeleverage
+                      cp.poolShare,              // availableDelta (pure credit)
+                      0,                         // reservedDelta
+                      0,                         // marginDelta – margin handled in adjustDeleveraging
+                      0,                         // vestingDelta
+                      'deleveragePoolCredit',
+                      blockHeight
                     );
-                }
+                  }
             }
+
+
 
             // Save marginMap once after all updates
             await marginMap.saveMarginMap(blockHeight);
