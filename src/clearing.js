@@ -861,10 +861,10 @@ class Clearing {
                 );
 
                 pos.lastMark = canonicalLastMark;
-                marginMap.margins.set(pos.address, pos);  
+                //marginMap.margins.set(pos.address, pos);  
             }
         }
-        await marginMap.saveMarginMap(block)
+        //await marginMap.saveMarginMap(block)
     }
  
 static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
