@@ -21,51 +21,102 @@ class Clearing {
         this.balanceChanges = []; // Initialize an array to track balance changes
     }
 
-    static blockTrades = new Map();
-    static liquidationTrades = []
+    static blockTrades = new Map();        // Pre-clearing trades: `${contractId}:${address}` → [{delta, opened}]
+    static deleverageTrades = new Map();   // Deleverage events: `${contractId}:${address}` → [{matchSize, fromOld, fromNew, ...}]
+    static liquidationRecords = new Map(); // Liquidation records: `${contractId}:${address}` → {pool, contracts, ...}
 
+    // =========================================
+    // TRADE TRACKING
+    // =========================================
     static recordTrade(contractId, address, signedDelta, opened) {
         const key = `${contractId}:${address}`;
-
-        // Initialize the array for this address/contract in current block
         if (!this.blockTrades.has(key)) {
             this.blockTrades.set(key, []);
         }
-
-        // Append the individual trade event
-        this.blockTrades.get(key).push({
-            delta: signedDelta,
-            opened: opened
-        });
+        this.blockTrades.get(key).push({ delta: signedDelta, opened });
     }
 
     static getOpenedThisBlock(contractId, address) {
         const key = `${contractId}:${address}`;
         const arr = this.blockTrades.get(key);
         if (!arr) return 0;
-
-        let opened = 0;
-        for (const t of arr) {
-            opened += t.opened;
-        }
-        return opened;
+        return arr.reduce((sum, t) => sum + t.opened, 0);
     }
 
     static getDeltaThisBlock(contractId, address) {
         const key = `${contractId}:${address}`;
         const arr = this.blockTrades.get(key);
         if (!arr) return 0;
-
-        let delta = 0;
-        for (const t of arr) {
-            delta += t.delta;
-        }
-        return delta;
+        return arr.reduce((sum, t) => sum + t.delta, 0);
     }
 
+    // =========================================
+    // DELEVERAGE TRACKING (RAM only, atomic)
+    // =========================================
+    static recordDeleverageTrade(contractId, address, details) {
+        const key = `${contractId}:${address}`;
+        if (!this.deleverageTrades.has(key)) {
+            this.deleverageTrades.set(key, []);
+        }
+        this.deleverageTrades.get(key).push(details);
+    }
+
+    static getDeleveragedThisBlock(contractId, address) {
+        const key = `${contractId}:${address}`;
+        const arr = this.deleverageTrades.get(key);
+        if (!arr) return 0;
+        return arr.reduce((sum, t) => sum + (t.matchSize || 0), 0);
+    }
+
+    static getDeleverageTradesThisBlock(contractId, address) {
+        return this.deleverageTrades.get(`${contractId}:${address}`) || [];
+    }
+
+    // =========================================
+    // LIQUIDATION TRACKING (RAM only)
+    // =========================================
+    static recordLiquidation(contractId, address, details) {
+        this.liquidationRecords.set(`${contractId}:${address}`, details);
+    }
+
+    static getLiquidation(contractId, address) {
+        return this.liquidationRecords.get(`${contractId}:${address}`);
+    }
+
+    // =========================================
+    // VINTAGE BREAKDOWN - combines trade + deleverage data
+    // =========================================
+    static getVintageBreakdown(contractId, address, currentContracts) {
+        const openedViaTrade = this.getOpenedThisBlock(contractId, address) || 0;
+        const closedViaDelev = this.getDeleveragedThisBlock(contractId, address) || 0;
+        
+        const totalSize = Math.abs(currentContracts);
+        const newFromTrades = Math.abs(openedViaTrade);
+        
+        // Account for new contracts already deleveraged
+        const effectiveNew = Math.max(0, newFromTrades - closedViaDelev);
+        const effectiveOld = Math.max(0, totalSize - effectiveNew);
+        
+        return {
+            oldContracts: effectiveOld,
+            newContracts: effectiveNew,
+            totalContracts: totalSize,
+            openedViaTrade,
+            closedViaDelev
+        };
+    }
+
+    // =========================================
+    // RESET - clears all block-scoped tracking
+    // =========================================
+    static resetBlockTracking() {
+        this.blockTrades.clear();
+        this.deleverageTrades.clear();
+        this.liquidationRecords.clear();
+    }
 
     static resetBlockTrades() {
-        this.blockTrades.clear();
+        this.resetBlockTracking();
     }
 
     static async recordClearingRun(blockHeight, isRealtime) {
@@ -1164,10 +1215,40 @@ class Clearing {
                 systemicLoss = systemicLoss.plus(lossBN).decimalPlaces(8);
             }
 
+            // =========================================
+            // Calculate liquidation pool and debit BEFORE deleverage
+            // =========================================
+            const liqTally = await Tally.getTally(position.address, collateralId);
+            const liquidationPool = new BigNumber(liqTally.margin)
+                .plus(liqTally.available)
+                .dp(8)
+                .toNumber();
+            
+            console.log(`💰 Liquidation pool: ${liquidationPool} (margin=${liqTally.margin}, avail=${liqTally.available})`);
+
+            // Debit liquidated position
+            if (liquidationPool > 0) {
+                await Tally.updateBalance(
+                    position.address, collateralId,
+                    -liqTally.available, 0, -liqTally.margin, 0,
+                    'liquidationPoolDebit', blockHeight
+                );
+            }
+
+            // Record liquidation in Clearing tracking
+            Clearing.recordLiquidation(contractId, position.address, {
+                contracts: position.contracts,
+                margin: liqTally.margin,
+                available: liqTally.available,
+                pool: liquidationPool,
+                liqPrice: delevPrice,
+                markPrice
+            });
+
             if(splat.partiallyFilledBelowLiqPrice){
                 caseLabel = "CASE 2: Partial fill above, remainder filled below liquidation price.";
                 console.log(caseLabel)
-                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight,markPrice,collateralId);
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight, markPrice, collateralId, liquidationPool);
             }else if(splat.filledBelowLiqPrice && splat.remainder === 0){
                 caseLabel = "CASE 3: Fully filled but below liquidation price - Systemic loss.";
                 console.log(caseLabel)
@@ -1175,12 +1256,30 @@ class Clearing {
                 caseLabel = "CASE 4: Order partially filled, but book is exhausted.";
                 console.log(caseLabel);
                 console.log('remainder in case 4 '+remainder)
-                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight,markPrice,collateralId);
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight, markPrice, collateralId, liquidationPool);
             } else if(splat.trueBookEmpty){
                 caseLabel = "CASE 5: No liquidity available at all - full deleveraging needed.";
                 console.log('about to call simple deleverage in case 5 ' + contractId + ' ' + remainder + ' ' + liq.sell + ' ' + markPrice);
-                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional,blockHeight, markPrice,collateralId);
+                result = await marginMap.simpleDeleverage(contractId, remainder, liq.sell, delevPrice, position.address, inverse, notional, blockHeight, markPrice, collateralId, liquidationPool);
             }
+
+            // =========================================
+            // Apply accumulated TallyMap writes AFTER deleverage
+            // =========================================
+            if (result.tallyUpdates && result.tallyUpdates.length > 0) {
+                console.log(`📤 Applying ${result.tallyUpdates.length} accumulated TallyMap updates`);
+                for (const update of result.tallyUpdates) {
+                    await Tally.updateBalance(
+                        update.address, update.collateralId,
+                        update.availableDelta, 0, update.marginDelta, 0,
+                        update.tag, update.block
+                    );
+                }
+            }
+
+            // Save marginMap once after all updates
+            await marginMap.saveMarginMap(blockHeight);
+
             console.log('result from delev '+JSON.stringify(result))
             position = await marginMap.updateContractBalances(position.address, splat.remainder, liq.price, !liq.sell, refreshedPosition, inverse, true, false, contractId, true, blockHeight);
             console.log('🏦 showing counterparties before merge with trades '+JSON.stringify(result.counterparties))
