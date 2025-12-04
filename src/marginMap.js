@@ -1380,6 +1380,12 @@ class MarginMap {
     // Uses pool distribution for conservation, vintage tracking for old/new contracts
     // Accumulates TallyMap updates - caller applies them
     // =======================
+    // =======================
+    // simpleDeleverage - POOL-ONLY VERSION
+    // - Uses vintage-aware matching
+    // - Calls adjustDeleveraging() to shrink positions & move margin
+    // - Returns ONLY pool distribution data (per-CP share of liquidationPool)
+    // =======================
     async simpleDeleverage(
       contractId,
       unfilledContracts,
@@ -1391,33 +1397,47 @@ class MarginMap {
       block,
       markPrice,
       collateralId,
-      liquidationPool  // NEW: margin + available from liquidated position
+      liquidationPool  // margin + available stripped from liquidated position
     ) {
       console.log(`\n🔸 [simpleDeleverage] unfilled=${unfilledContracts}, pool=${liquidationPool}`);
-      
+
       const TallyMap = require('./tally.js');
       const Clearing = require('./clearing.js');
       const ContractRegistry = require('./contractRegistry.js');
+      const BigNumber = require('bignumber.js');
 
       const originalUnfilled = new BigNumber(unfilledContracts);
       let remainingSize = new BigNumber(unfilledContracts);
       const poolBN = new BigNumber(liquidationPool || 0);
 
       if (remainingSize.lte(0) || remainingSize.isNaN()) {
-        return { totalDeleveraged: 0, counterparties: [], tallyUpdates: [] };
+        return {
+          contractId,
+          liquidationPool: poolBN.toNumber(),
+          totalDeleveraged: 0,
+          counterparties: [],
+          poolAssignments: [],
+          totalPoolDistributed: 0,
+          remainingUnfilled: remainingSize.toNumber()
+        };
       }
 
       let totalPoolDistributed = new BigNumber(0);
-      const tallyUpdates = [];  // Accumulated for caller to apply
 
-      const deleveragingData = {
-        liquidatingAddress,
+      const result = {
         contractId,
+        liquidatingAddress,
         attemptedDeleverage: remainingSize.toNumber(),
         liquidationPool: poolBN.toNumber(),
         totalDeleveraged: 0,
+        // legacy field: keeps CP meta for debugging/audit
         counterparties: [],
-        tallyUpdates: []
+        // NEW: what caller actually needs:
+        // [{ address, matchSize, poolShare, fromOld, fromNew }]
+        poolAssignments: [],
+        totalPoolDistributed: 0,
+        remainingUnfilled: 0,
+        undistributedPool: 0
       };
 
       const allPositions = await this.getAllPositions(contractId);
@@ -1430,158 +1450,140 @@ class MarginMap {
       });
 
       if (!counterparties.length) {
-        console.log('❌ No counterparties');
-        return deleveragingData;
+        console.log('❌ No counterparties for deleverage');
+        return result;
       }
 
-      // Enrich with vintage from Clearing tracking
+      // Enrich with vintage breakdown
       counterparties = counterparties.map(pos => {
         const v = Clearing.getVintageBreakdown(contractId, pos.address, pos.contracts);
-        return { ...pos, oldContracts: v.oldContracts, newContracts: v.newContracts };
+        return {
+          ...pos,
+          oldContracts: v.oldContracts,
+          newContracts: v.newContracts
+        };
       });
 
-      // Sort: more old contracts first (protect newer traders)
-      counterparties.sort((a, b) => b.oldContracts - a.oldContracts || Math.abs(b.contracts) - Math.abs(a.contracts));
+      // Sort: more old contracts first, then larger abs size
+      counterparties.sort((a, b) => (
+        b.oldContracts - a.oldContracts ||
+        Math.abs(b.contracts) - Math.abs(a.contracts)
+      ));
 
       console.log(`📋 Counterparties by vintage:`);
       for (const cp of counterparties) {
-        console.log(`   ${cp.address}: old=${cp.oldContracts}, new=${cp.newContracts}`);
+        console.log(`   ${cp.address}: old=${cp.oldContracts}, new=${cp.newContracts}, size=${cp.contracts}`);
       }
 
       const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
 
-      // Main loop - NO DB WRITES, accumulate only
+      // ================
+      // MAIN LOOP
+      // ================
       for (const pos of counterparties) {
         if (remainingSize.lte(0)) break;
 
-        const preContracts = pos.contracts;
+        const preContracts = Number(pos.contracts || 0);
         const isLong = preContracts > 0;
         const posSize = Math.abs(preContracts);
         if (posSize <= 0) continue;
 
         const maxMatch = Math.min(posSize, remainingSize.toNumber());
-        const fromOld = Math.min(maxMatch, pos.oldContracts);
-        const fromNew = Math.min(maxMatch - fromOld, pos.newContracts);
+        const fromOld = Math.min(maxMatch, pos.oldContracts || 0);
+        const fromNew = Math.min(maxMatch - fromOld, pos.newContracts || 0);
         const matchSize = fromOld + fromNew;
 
         if (matchSize <= 0) continue;
 
-        console.log(`• ${pos.address}: ${matchSize} (${fromOld} old + ${fromNew} new)`);
+        console.log(`• ${pos.address}: matchSize=${matchSize} (${fromOld} old + ${fromNew} new)`);
 
-        // =========================================
-        // 1. POOL SHARE (pro-rata) - CONSERVATION KEY
-        // =========================================
+        // ==========================
+        // 1. POOL SHARE (pro-rata)
+        // ==========================
         const ratio = new BigNumber(matchSize).div(originalUnfilled);
         const poolShare = poolBN.times(ratio).dp(8);
 
-        // =========================================
-        // 2. CLEARING ADJUSTMENT (old contracts only)
-        // Old contracts got (lastMark → mark) in clearing
-        // Now closing at liqPrice, adjustment = (mark → liqPrice)
-        // =========================================
-        // 2. CLEARING ADJUSTMENT (old contracts only)
-        let clearingAdj = new BigNumber(0);
-
-        // Check: did this address actually participate in clearing this block?
-        // (DB truth > heuristic)
-        const didClearThisBlock = await TallyMap.didReceiveClearingProfitThisBlock(pos.address, block);
-
-        if (fromOld > 0 && didClearThisBlock) {
-          clearingAdj = this.calcPriceDelta(fromOld, markPrice, liqPrice, isInverse, notional, isLong);
-          console.log(`  🔧 Clearing adj: ${clearingAdj.toFixed(8)}`);
-        }
-
-
-        // =========================================
-        // 3. MARGIN RELEASE
-        // =========================================
-        const marginRelease = new BigNumber(matchSize).times(initPerContract).dp(8);
-
-        // =========================================
-        // 4. RECORD TO CLEARING (RAM only)
-        // =========================================
+        // ==========================
+        // 2. RECORD TO CLEARING (in-RAM)
+        //  (Good for audit / tax PnL later)
+        // ==========================
         Clearing.recordDeleverageTrade(contractId, pos.address, {
-          matchSize, fromOld, fromNew,
+          matchSize,
+          fromOld,
+          fromNew,
           poolCredit: poolShare.toNumber(),
-          clearingAdj: clearingAdj.toNumber(),
-          marginRelease: marginRelease.toNumber(),
-          liqPrice, markPrice, wasCleared, preContracts, isLong, block
-        });
-
-        // =========================================
-        // 5. ACCUMULATE TALLY UPDATE
-        // =========================================
-        const availableDelta = poolShare.plus(clearingAdj).plus(marginRelease).dp(8);
-        const marginDelta = marginRelease.negated();
-
-        tallyUpdates.push({
-          address: pos.address,
-          collateralId,
-          availableDelta: availableDelta.toNumber(),
-          marginDelta: marginDelta.toNumber(),
-          tag: 'deleverageSettlement',
+          liqPrice,
+          markPrice,
+          preContracts,
+          isLong,
           block,
-          matchSize, fromOld, fromNew,
-          poolShare: poolShare.toNumber(),
-          clearingAdj: clearingAdj.toNumber()
+          // NOTE: margin release & clearingAdj no longer applied here –
+          // they're handled via adjustDeleveraging / clearing logic.
         });
 
-        console.log(`  💰 Accumulated: avail +${availableDelta.toFixed(8)}, margin ${marginDelta.toFixed(8)}`);
+        // ==========================
+        // 3. SHRINK POSITION & RETURN MARGIN (adjustDeleveraging)
+        // ==========================
+        // This handles:
+        //  - contract size reduction
+        //  - margin reduction with non-negative guarantees
+        //  - TallyMap margin→available shuffle (no net leak)
+        await this.adjustDeleveraging(
+          pos.address,
+          contractId,
+          matchSize,
+          sell,
+          block,
+          liqPrice,
+          TallyMap
+        );
 
-        // =========================================
-        // 6. UPDATE POSITION IN MEMORY
-        // =========================================
-        const contractChange = sell ? matchSize : -matchSize;
-        pos.contracts = new BigNumber(preContracts).plus(contractChange).toNumber();
-        if (preContracts * pos.contracts < 0) pos.contracts = 0;
-        pos.margin = Math.max(0, new BigNumber(pos.margin || 0).plus(marginDelta).toNumber());
-        if (pos.contracts === 0) {
-          pos.liqPrice = null;
-          pos.bankruptcyPrice = null;
-        }
-        this.margins.set(pos.address, pos);
-
-        // Audit PnL (for records only)
-        const auditPnl = this.calcPriceDelta(matchSize, pos.avgPrice || liqPrice, liqPrice, isInverse, notional, isLong);
-        pos.realizedPNL = auditPnl.toNumber();
-
-        // Record trade
-        const trade = {
-          contractId, amount: matchSize, price: liqPrice, markPrice,
-          counterpartyAddress: pos.address, liquidatingAddress, block,
-          fromOld, fromNew, poolShare: poolShare.toNumber(),
-          clearingAdj: clearingAdj.toNumber(), auditPnl: auditPnl.toNumber(),
-          liquidation: true, deleverage: true
-        };
-        await this.recordContractTrade(trade, block, '', '');
-
-        // Track
+        // Track totals
         totalPoolDistributed = totalPoolDistributed.plus(poolShare);
-        deleveragingData.totalDeleveraged += matchSize;
-        deleveragingData.counterparties.push({
-          address: pos.address, contracts: pos.contracts, matchSize, fromOld, fromNew,
-          poolShare: poolShare.toNumber(), clearingAdj: clearingAdj.toNumber()
+        result.totalDeleveraged += matchSize;
+
+        // Debug / legacy view
+        result.counterparties.push({
+          address: pos.address,
+          contracts: pos.contracts, // note: this.getPositionForAddress will show updated size
+          matchSize,
+          fromOld,
+          fromNew,
+          poolShare: poolShare.toNumber()
         });
-        
+
+        // What the caller actually cares about:
+        result.poolAssignments.push({
+          address: pos.address,
+          matchSize,
+          fromOld,
+          fromNew,
+          poolShare: poolShare.toNumber()
+        });
+
+        // Reduce remaining unfilled size
         remainingSize = remainingSize.minus(matchSize);
       }
 
-      deleveragingData.tallyUpdates = tallyUpdates;
-      deleveragingData.totalPoolDistributed = totalPoolDistributed.toNumber();
+      result.totalPoolDistributed = totalPoolDistributed.dp(8).toNumber();
+      result.remainingUnfilled = remainingSize.dp(8).toNumber();
+      result.undistributedPool = poolBN.minus(totalPoolDistributed).dp(8).toNumber();
 
-      // Conservation check
+      // Optional conservation log
       if (remainingSize.isZero()) {
         const err = poolBN.minus(totalPoolDistributed).abs();
-        if (err.gt(1e-8)) console.error(`🔥 Pool conservation error: ${err.toFixed(8)}`);
-        else console.log(`✅ Pool conserved: ${totalPoolDistributed.toFixed(8)}`);
+        if (err.gt(1e-8)) {
+          console.error(`🔥 Pool conservation error: ${err.toFixed(8)}`);
+        } else {
+          console.log(`✅ Pool conserved: ${totalPoolDistributed.toFixed(8)} of ${poolBN.toFixed(8)}`);
+        }
       } else {
-        deleveragingData.remainingUnfilled = remainingSize.toNumber();
-        deleveragingData.undistributedPool = poolBN.minus(totalPoolDistributed).toNumber();
-        console.log(`⚠️ Partial: ${remainingSize.toNumber()} unfilled`);
+        console.log(`⚠️ Partial deleverage: ${remainingSize.toNumber()} contracts unfilled, undistributedPool=${result.undistributedPool}`);
       }
 
-      return deleveragingData;
+      return result;
     }
+
 
     // =======================
     // calcPriceDelta - PnL helper
