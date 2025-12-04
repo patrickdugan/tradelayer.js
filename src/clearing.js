@@ -22,6 +22,7 @@ class Clearing {
     }
 
     static blockTrades = new Map();
+    static liquidationTrades = []
 
     static recordTrade(contractId, address, signedDelta, opened) {
         const key = `${contractId}:${address}`;
