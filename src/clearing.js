@@ -965,6 +965,10 @@ class Clearing {
             await PnlIou.addDelta(contractId, collateralId, pnlDelta, blockHeight);
         }
      
+        // ---- CLEANUP FLAT POSITIONS (SAFE POST-CLEARING PHASE) ----
+        await marginMap.cleanupFlatPositions(contractId);
+
+
         //await marginMap.saveMarginMap(blockHeight);
         return { positions, isLiq, systemicLoss, pnlDelta};
     }

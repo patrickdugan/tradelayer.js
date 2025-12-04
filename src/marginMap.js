@@ -783,6 +783,23 @@ class MarginMap {
       }
     }
 
+    async cleanupFlatPositions(contractId) {
+        for (const [address, pos] of this.margins.entries()) {
+            // Only remove if truly flat and safe
+            if (
+                pos.contracts === 0 &&
+                (!pos.margin || pos.margin === 0) &&
+                (!pos.unrealizedPNL || pos.unrealizedPNL === 0)
+            ) {
+                this.margins.delete(address);
+            }
+        }
+
+        // Persist the pruned state
+        await this.saveMarginMap(true);
+    }
+
+
         
     calculateMarginRequirement(contracts, price, inverse) {
         
