@@ -233,6 +233,34 @@ class MarginMap {
         return position
     }
 
+            /**
+         * Atomically replace all positions for this contract with the final versions
+         * produced by the clearing engine.
+         *
+         * @param {Array} finalPositions - array of fully-computed positions from cache
+         * @param {number} contractId
+         * @param {boolean} flattenZeroes - if true, zero-contract positions are omitted
+         */
+        async mergePositions(finalPositions, contractId, flattenZeroes = true) {
+            const newMap = new Map();
+
+            for (const pos of finalPositions) {
+                if (flattenZeroes) {
+                    if (!pos.contracts || pos.contracts === 0) {
+                        continue;
+                    }
+                }
+                newMap.set(pos.address, pos);
+            }
+
+            // Replace the map atomically
+            this.margins = newMap;
+
+            // persist in DB
+            await this.saveMarginMap();
+        }
+
+
       // add save/load methods
     async saveMarginMap(block) {
         console.log('saving margin map')
@@ -1283,7 +1311,7 @@ class MarginMap {
         console.log(`Margin successfully updated for ${address} on contract ${contractId}`);
     }
 
-    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,liqPrice,bankruptcyPrice,oldPrice) {
+    async clear(position, address, pnlChange, avgPrice,contractId,block,markPrice,oldPrice) {
             //const position = await this.getPositionForAddress(address,contractId)
             console.log('position before clear '+JSON.stringify(position))
             if(position.unrealizedPNL==null||position.unrealizedPNL==undefined){
@@ -1293,9 +1321,6 @@ class MarginMap {
             position.lastMark = markPrice
             const uPNLBN = new BigNumber(position.unrealizedPNL)
             position.unrealizedPNL=new BigNumber(pnlChange).plus(uPNLBN).decimalPlaces(8).toNumber()
-            //if(address==null){throw new Error()}
-            //if(!position.liqPrice&&position.liqPrice!==null){position.liqPrice = liqPrice}
-            //if(!position.bankruptcyPrice&&position.bankruptcyPrice!==null){position.bankruptcyPrice = bankruptcyPrice}
             this.margins.set(position.address, position)
             console.log('set clearing in position '+JSON.stringify(position))
             await this.writePositionToMap(contractId, position)
@@ -1375,11 +1400,7 @@ class MarginMap {
         }
     }
 
-    // =======================
-    // simpleDeleverage - ATOMIC VERSION
-    // Uses pool distribution for conservation, vintage tracking for old/new contracts
-    // Accumulates TallyMap updates - caller applies them
-    // =======================
+
     // =======================
     // simpleDeleverage - POOL-ONLY VERSION
     // - Uses vintage-aware matching
