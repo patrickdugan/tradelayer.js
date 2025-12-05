@@ -2203,7 +2203,7 @@ class Orderbook {
                     let positions = await marginMap.updateContractBalancesWithMatch(match, channel, buyerClosed,flipLong,sellerClosed,flipShort,currentBlockHeight)
                  
                     const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
-                    //console.log(JSON.stringify(match.sellOrder))
+
                     const trade = {
                         buyerPosition: match.buyerPosition,
                         sellerPosition: match.sellerPosition,
@@ -2237,22 +2237,39 @@ class Orderbook {
                             flipShort
                         );
 
-                        Clearing.recordTrade({
-                            contractId: trade.contractId,
-                            address: trade.buyerAddress,
-                            ...deltas.buyer,
-                            tradePrice: trade.price,
-                            block: trade.block
-                        });
+                        const buyerTradeRecord = Clearing.recordTrade(
+                            trade.contractId,
+                            trade.buyerAddress,
+                            deltas.buyer.opened,    // opened
+                            buyerClosed,            // closed
+                            trade.price
+                        );
 
-                        Clearing.recordTrade({
-                            contractId: trade.contractId,
-                            address: trade.sellerAddress,
-                            ...deltas.seller,
-                            tradePrice: trade.price,
-                            block: trade.block
-                        });
+                        const sellerTradeRecord = Clearing.recordTrade(
+                            trade.contractId,
+                            trade.sellerAddress,
+                            deltas.seller.opened,   // opened
+                            sellerClosed,           // closed
+                            trade.price
+                        );
 
+                        const closesBuyer = buyerClosed;
+
+                        // how many of these closes belong to same-block opens?
+                        const buyerClosesAgainstAvg  = buyerTradeRecord.consumedFromOpened;
+                        const buyerClosesAgainstMark = closesBuyer - buyerClosesAgainstAvg;
+
+                        // settlement prices
+                        const buyerAvg = match.buyerPosition.avgPrice;
+                        const buyerMark = match.buyerPosition.lastMark;
+
+                        const closesSeller = sellerClosed;
+
+                        const sellerClosesAgainstAvg  = sellerTradeRecord.consumedFromOpened;
+                        const sellerClosesAgainstMark = closesSeller - sellerClosesAgainstAvg;
+
+                        const sellerAvg = match.sellerPosition.avgPrice;
+                        const sellerMark = match.sellerPosition.lastMark;
 
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp
@@ -2263,31 +2280,6 @@ class Orderbook {
 
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
-                    // Determine if the trade reduces the position size for buyer or seller
-                    /*let lastMark = await ContractRegistry.getPriceAtBlock(trade.contractId, currentBlockHeight)
-                    console.log('LAST MARK '+lastMark+' '+match.buyerPosition.lastMark+' '+match.sellerPosition.lastMark+' '+JSON.stringify(match.buyerPosition))
-                    if(lastMark==null){lastMark=trade.price}
-                    if(match.buyerPosition.lastMark==null){
-                        match.buyerPosition.newFlag=true
-                    }
-                    if(match.sellerPosition.lastMark==null){
-                        match.sellerPosition.newFlag=true
-                    }
-                    console.log(lastMark)  
-                    let buyerMark = lastMark
-                    let sellerMark = lastMark
-                    if((match.buyerPosition.lastMark!==lastMark&&match.buyerPosition.lastMark)&&!match.buyOrder.liq){
-                        buyerMark = match.buyerPosition.lastMark
-                    }else if(match.buyOrder.liq){
-                        buyerMark = match.buyerPosition.oldMark
-                    }
-                    if((match.sellerPosition.lastMark!==lastMark&&match.sellerPosition.lastMark)&&!match.sellOrder.liq){
-                        sellerMark = match.sellerPosition.lastMark
-                    }else if(match.sellOrder.liq){
-                        sellerMark = match.sellerPosition.oldMark
-                    } */
-                    let buyerMark = match.buyerPosition.lastMark//lastMark
-                    let sellerMark = match.sellerPosition.lastMark//lastMark
 
                     console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
                     console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
@@ -2314,7 +2306,33 @@ class Orderbook {
                         match.buyerPosition = await marginMap.realizePnl(match.buyOrder.buyerAddress, closedShorts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.buyerPosition, true,match.buyOrder.contractId);
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
-                        const settlementPNL = await marginMap.settlePNL(match.buyOrder.buyerAddress, -closedShorts, match.tradePrice, buyerMark, match.buyOrder.contractId, currentBlockHeight,isInverse,perContractNotional) 
+                        
+                        let settlementPNL =0
+
+                        if (buyerClosesAgainstAvg > 0)
+                            settlementPNL += await marginMap.settlePNL(
+                                trade.buyerAddress,
+                                -buyerClosesAgainstAvg,
+                                trade.price,
+                                buyerAvg,
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+
+                        if (buyerClosesAgainstMark > 0)
+                            settlementPNL += await marginMap.settlePNL(
+                                trade.buyerAddress,
+                                -buyerClosesAgainstMark,
+                                trade.price,
+                                buyerMark,
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedShorts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}
@@ -2324,16 +2342,7 @@ class Orderbook {
                             //console.log('reduction about to pass to TallyMap' +reduction)
                             await TallyMap.updateBalance(match.buyOrder.buyerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
                         }
-                        //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
-                        //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
-                        //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
-                        //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
-                        //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
-                        //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
-                        //unusual edge case but we're covering it here 'maint'
-                        //also if this trade realizes a loss that wipes out all maint. margin that we have to look at available balance and go for that
-                        //if there's not enough available balance then we have to go to the insurance fund, or we add the loss to the system tab for
-                        //socialization of losses at settlement, and I guess flag something so future rPNL profit calculations get held until settlement
+                       
                         let debit = settlementPNL < 0 ? Math.abs(settlementPNL) : 0;
                         if (debit > 0) {
                           const recovery = await this.sourceFundsForLoss(
@@ -2383,7 +2392,34 @@ class Orderbook {
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        const settlementPNL = await marginMap.settlePNL(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, sellerMark, match.sellOrder.contractId,currentBlockHeight,isInverse) 
+                        let settlementPNL = 0
+
+                        if (sellerClosesAgainstAvg > 0) {
+                            settlementPNL += await marginMap.settlePNL(
+                                trade.sellerAddress,
+                                sellerClosesAgainstAvg,      // reduce short by this much
+                                trade.price,
+                                sellerAvg,                   // basis = avgPrice
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+                        }
+
+                        if (sellerClosesAgainstMark > 0) {
+                            settlementPNL+= await marginMap.settlePNL(
+                                trade.sellerAddress,
+                                sellerClosesAgainstMark,
+                                trade.price,
+                                sellerMark,                  // basis = lastMark
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+                        }
+                    
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
                         const reduction = await marginMap.reduceMargin(match.sellerPosition, closedContracts, initialMarginPerContract, match.sellOrder.contractId, match.sellOrder.sellerAddress, false, feeInfo.sellFeeFromMargin, sellerFee)
@@ -2393,13 +2429,8 @@ class Orderbook {
                         
                         if(reduction !==0&&sufficientMargin.hasSufficient){
                             await TallyMap.updateBalance(match.sellOrder.sellerAddress, collateralPropertyId, reduction, 0, -reduction, 0, 'contractTradeMarginReturn',currentBlockHeight)              
-                        } //then we move the settlementPNL out of margin assuming that the PNL is not exactly equal to maintainence margin
-                        //the other modes (for auditing/testing) would be, PNL is positive and you get back init. margin 'profit'
-                        //PNL is positive and you get back some fraction of the init. margin that was previously settled out 'fractionalProfit'
-                        //PNL is negative and you get back more than maint. margin but of course less than init. margin 'moreThanMaint'
-                        //PNL is negative and you get back <= maintainence margin which hasn't yet cleared/topped-up 'lessThanMaint'
-                        //PNL is negative and all the negative PNL has exactly matched the maintainence margin which won't need to be topped up,
-                        //unusual edge case but we're covering it here 'maint'
+                        } 
+
                         let debit = settlementPNL < 0 ? Math.abs(settlementPNL) : 0;
                         if (debit > 0) {
                           const recovery = await this.sourceFundsForLoss(

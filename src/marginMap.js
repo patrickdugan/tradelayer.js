@@ -1602,6 +1602,8 @@ class MarginMap {
         console.log(`⚠️ Partial deleverage: ${remainingSize.toNumber()} contracts unfilled, undistributedPool=${result.undistributedPool}`);
       }
 
+      console.log('tally updates in delev '+JSON.stringify(result))
+
       return result;
     }
 

@@ -29,12 +29,39 @@ class Clearing {
     // =========================================
     // TRADE TRACKING
     // =========================================
-    static recordTrade(contractId, address, signedDelta, opened) {
+    static recordTrade(contractId, address, opened, closed, price) {
         const key = `${contractId}:${address}`;
+
         if (!this.blockTrades.has(key)) {
-            this.blockTrades.set(key, []);
+            this.blockTrades.set(key, { openedSoFar: 0, trades: [] });
         }
-        this.blockTrades.get(key).push({ delta: signedDelta, opened });
+
+        const entry = this.blockTrades.get(key);
+
+        // Add new opens to the block's open stack
+        if (opened > 0) {
+            entry.openedSoFar += opened;
+        }
+
+        // Consume stack for closes
+        let consumedFromOpened = 0;
+        if (closed > 0) {
+            consumedFromOpened = Math.min(entry.openedSoFar, closed);
+            entry.openedSoFar -= consumedFromOpened;
+        }
+
+        // Construct trade record
+        const tradeObj = {
+            opened,
+            closed,
+            consumedFromOpened,
+            price,
+            openedBefore: entry.openedSoFar + consumedFromOpened
+        };
+
+        entry.trades.push(tradeObj);
+
+        return tradeObj;
     }
 
     static getOpenedThisBlock(contractId, address) {
@@ -50,6 +77,42 @@ class Clearing {
         if (!arr) return 0;
         return arr.reduce((sum, t) => sum + t.delta, 0);
     }
+
+    static getTrades(contractId, address) {
+    const key = `${contractId}:${address}`;
+    return this.blockTrades.get(key) || [];
+    }
+
+    static countTrades(contractId, address) {
+        return this.getTrades(contractId, address).length;
+    }
+
+    static hadMultipleTrades(contractId, address) {
+        return this.countTrades(contractId, address) > 1;
+    }
+
+    static hadAnyTrade(contractId, address) {
+        return this.countTrades(contractId, address) > 0;
+    }
+
+    static getLastTradeDelta(contractId, address) {
+        const arr = this.getTrades(contractId, address);
+        return arr.length ? arr[arr.length - 1].delta : 0;
+    }
+
+    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrId) {
+        const key = `${contractId}:${address}`;
+        const arr = this.blockTrades.get(key) || [];
+        let openedSoFar = 0;
+
+        for (const t of arr) {
+            if (t === currentTradeIndexOrId) break; // or compare by some id/ref
+            openedSoFar += t.opened;
+        }
+        return openedSoFar;
+    }
+
+
 
     // =========================================
     // DELEVERAGE TRACKING (RAM only, atomic)
@@ -942,7 +1005,7 @@ class Clearing {
             lastPrice = new BigNumber(position.avgPrice);
         }
 
-        console.log(`Position snapshot: ${JSON.stringify(position)}`);
+        console.log(`Position snapshot and tally: ${JSON.stringify(position)}`+' '+JSON.stringify(tally));
 
         // ------------------------------------------------------------
         // 6a) Derive block deltas (opened contracts, delta contracts)
@@ -1213,8 +1276,25 @@ class Clearing {
         const MarginMap = require('./marginMap.js');
         const delevMap = await MarginMap.getInstance(contractId);
 
+        // Lines 1279-1312, replace with:
+
         // ------------------------------------------------------------
-        // 1) Generate liquidation order from *cached* position
+        // 1) Compute liq/bankruptcy price from current state (don't trust cached)
+        // ------------------------------------------------------------
+        markShortfall ||= 0;
+        
+        let computedLiqPrice = Clearing.computeLiquidationPriceFromLoss(
+            markPrice,
+            markShortfall,
+            position.contracts,
+            notional,
+            inverse
+        );
+        
+        console.log(`baseLiq price >0 ${computedLiqPrice} ${markPrice} ${markShortfall} ${position.contracts} ${notional}`);
+
+        // ------------------------------------------------------------
+        // 2) Generate liquidation order with computed price
         // ------------------------------------------------------------
         let liq = await delevMap.generateLiquidationOrder(
             position,
@@ -1227,27 +1307,25 @@ class Clearing {
             return null;
         }
 
+        // Override null prices with computed values
+        liq.price = liq.price || computedLiqPrice;
+        liq.bankruptcyPrice = liq.bankruptcyPrice || computedLiqPrice;
+
         // ------------------------------------------------------------
-        // 2) Estimate orderbook impact
+        // 3) Estimate orderbook impact (now with valid price)
         // ------------------------------------------------------------
         const splat = await orderbook.estimateLiquidation(liq);
-        markShortfall ||= 0;
 
         console.log(`Liq estimate: ${JSON.stringify(splat)}`);
 
-        // Compute delev price (your original logic)
-        let delevPrice = Clearing.computeLiquidationPriceFromLoss(
-            markPrice,
-            markShortfall,
-            position.contracts,
-            notional,
-            inverse
-        );
+        // Use computed price as delevPrice
+        let delevPrice = computedLiqPrice;
 
-        // Override liq.price based on OB feedback
-        liq.amount = splat.filledSize;
-        liq.price = splat.trueLiqPrice || liq.bankruptcyPrice;
-
+        // Override liq based on OB feedback (but don't zero out amount!)
+        if (splat.filledSize > 0) {
+            liq.amount = splat.filledSize;
+            liq.price = splat.trueLiqPrice || computedLiqPrice;
+        }
         // Handle “filled below liq price” logic
         if (splat.filledBelowLiqPrice || splat.partiallyFilledBelowLiqPrice) {
             liq.price = splat.trueLiqPrice;
@@ -1305,6 +1383,7 @@ class Clearing {
                 false
             );
         }
+        console.log('match result '+JSON.stringify(matchResult))
         await orderbook.saveOrderBook(matchResult.orderBook, obKey);
 
         // Aggregate remainders
@@ -1367,7 +1446,7 @@ class Clearing {
             }
 
             if (splat.partiallyFilledBelowLiqPrice) {
-                result = await delevMap.simpleDeleverage(
+                result = await marginMap.simpleDeleverage(
                     contractId, remainder, liq.sell, delevPrice,
                     position.address, inverse, notional, blockHeight,
                     markPrice, collateralId, liquidationPool
@@ -1377,14 +1456,14 @@ class Clearing {
                 // pure systemic loss, no delev
             }
             else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
-                result = await delevMap.simpleDeleverage(
+                result = await marginMap.simpleDeleverage(
                     contractId, remainder, liq.sell, delevPrice,
                     position.address, inverse, notional, blockHeight,
                     markPrice, collateralId, liquidationPool
                 );
             }
             else if (splat.trueBookEmpty) {
-                result = await delevMap.simpleDeleverage(
+                result = await marginMap.simpleDeleverage(
                     contractId, remainder, liq.sell, delevPrice,
                     position.address, inverse, notional, blockHeight,
                     markPrice, collateralId, liquidationPool
