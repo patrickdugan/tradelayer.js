@@ -64,23 +64,47 @@ class Clearing {
         return tradeObj;
     }
 
+    static _normalizeTrades(entry) {
+        if (!entry) return [];
+        if (Array.isArray(entry)) return entry;            // old format
+        if (Array.isArray(entry.trades)) return entry.trades; // new format
+        return [];
+    }
+
+    static _normalizeEntry(entry) {
+        if (!entry) return { openedSoFar: 0, trades: [] };
+        if (Array.isArray(entry)) {
+            // Construct a pseudo-entry for backwards compat
+            return { openedSoFar: 0, trades: entry };
+        }
+        return entry; // already in new format
+    }
+
     static getOpenedThisBlock(contractId, address) {
         const key = `${contractId}:${address}`;
-        const arr = this.blockTrades.get(key);
-        if (!arr) return 0;
-        return arr.reduce((sum, t) => sum + t.opened, 0);
+        const entry = this.blockTrades.get(key);
+
+        if (!entry) return 0;
+
+        const trades = this._normalizeTrades(entry);
+
+        return trades.reduce((sum, t) => sum + (t.opened || 0), 0);
     }
 
     static getDeltaThisBlock(contractId, address) {
         const key = `${contractId}:${address}`;
-        const arr = this.blockTrades.get(key);
-        if (!arr) return 0;
-        return arr.reduce((sum, t) => sum + t.delta, 0);
+        const entry = this.blockTrades.get(key);
+        if (!entry) return 0;
+
+        const trades = this._normalizeTrades(entry);
+
+        return trades.reduce((sum, t) => sum + (t.delta || 0), 0);
     }
 
     static getTrades(contractId, address) {
-    const key = `${contractId}:${address}`;
-    return this.blockTrades.get(key) || [];
+        const key = `${contractId}:${address}`;
+        const entry = this.blockTrades.get(key);
+        return this._normalizeTrades(entry);
     }
 
     static countTrades(contractId, address) {
@@ -96,23 +120,24 @@ class Clearing {
     }
 
     static getLastTradeDelta(contractId, address) {
-        const arr = this.getTrades(contractId, address);
-        return arr.length ? arr[arr.length - 1].delta : 0;
+        const trades = this.getTrades(contractId, address);
+        if (!trades.length) return 0;
+        return trades[trades.length - 1].delta || 0;
     }
 
-    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrId) {
+    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrObj) {
         const key = `${contractId}:${address}`;
-        const arr = this.blockTrades.get(key) || [];
-        let openedSoFar = 0;
+        const entry = this.blockTrades.get(key);
+        const trades = this._normalizeTrades(entry);
 
-        for (const t of arr) {
-            if (t === currentTradeIndexOrId) break; // or compare by some id/ref
-            openedSoFar += t.opened;
+        let opened = 0;
+
+        for (const t of trades) {
+            if (t === currentTradeIndexOrObj) break;
+            opened += t.opened || 0;
         }
-        return openedSoFar;
+        return opened;
     }
-
-
 
     // =========================================
     // DELEVERAGE TRACKING (RAM only, atomic)
@@ -1274,7 +1299,7 @@ class Clearing {
 
         const TallyMap = Tally;
         const MarginMap = require('./marginMap.js');
-        const delevMap = await MarginMap.getInstance(contractId);
+        const marginMap = await MarginMap.getInstance(contractId);
 
         // Lines 1279-1312, replace with:
 
@@ -1296,7 +1321,7 @@ class Clearing {
         // ------------------------------------------------------------
         // 2) Generate liquidation order with computed price
         // ------------------------------------------------------------
-        let liq = await delevMap.generateLiquidationOrder(
+        let liq = await marginMap.generateLiquidationOrder(
             position,
             contractId,
             isFull,

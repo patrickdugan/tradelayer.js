@@ -1328,41 +1328,40 @@ class MarginMap {
             await this.recordMarginMapDelta(address, contractId, position.contracts, 0, 0, pnlChange, avgPrice, 'markPrice',block,markPrice)
             return position
     }
+    
+    generateLiquidationOrder(position, contractId, total, block) {
+        let sell;
+        if (position.contracts > 0) {
+            sell = true;
+        } else if (position.contracts < 0) {
+            sell = false;
+        } else {
+            return "err:0 contracts";
+        }
+        
+        console.log(total + ' ' + position.contracts);
+        
+        let liquidationSize = position.contracts;
+        if (!total) {
+            liquidationSize = new BigNumber(position.contracts)
+                .dividedBy(2)
+                .decimalPlaces(0, BigNumber.ROUND_UP)
+                .toNumber();
+        }
 
-    generateLiquidationOrder(position, contractId,total,block) {
-                // Liquidate 50% of the position if below maintenance margin
-                let sell 
-                if(position.contracts>0){
-                    sell = true
-                }else if(position.contracts<0){
-                    sell = false
-                }else if(position.contracts==0){
-                    return "err:0 contracts"
-                }
-                
-                console.log(total+' '+position.contracts)
-                    let liquidationSize = position.contracts
-                
-                if(!total){
-                    liquidationSize = new BigNumber(position.contracts).dividedBy(2)
-                    .decimalPlaces(0, BigNumber.ROUND_UP).toNumber();
-                }
-            
-                let liquidationOrder={
-                    address: position.address,
-                    contractId: contractId,
-                    amount: Math.abs(liquidationSize),
-                    price: position.liqPrice,
-                    sell: sell,
-                    bankruptcyPrice: position.bankruptcyPrice,
-                    isLiq: true,
-                    blockTime: block
-                }
+        let liquidationOrder = {
+            address: position.address,
+            contractId: contractId,
+            amount: Math.abs(liquidationSize),
+            price: 0,  // Doesn't matter - isMarket bypasses price check
+            sell: sell,
+            isLiq: true,
+            isMarket: true,  // <-- This is the key
+            blockTime: block
+        };
 
-                if(total||!position.liqPrice){
-                    liquidationOrder.price = position.bankruptcyPrice
-                }
-                console.log('inside gen liq order '+total+' '+position.liqPrice+' '+position.bankruptcyPrice)
+        console.log('inside gen liq order ' + total + ' sell=' + sell + ' amount=' + liquidationOrder.amount);
+        
         return liquidationOrder;
     }
 

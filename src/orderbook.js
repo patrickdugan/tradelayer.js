@@ -55,14 +55,13 @@ class Orderbook {
             const orderbook = new Orderbook(orderBookKey); // Create instance
             orderbook.orderBooks[orderBookKey] = await orderbook.loadOrderBook(orderBookKey); // Load orderbook
             console.log("Returning Orderbook instance:", orderbook);
-            console.log("Does it have estimateLiquidation?", typeof orderbook.estimateLiquidation);
             return orderbook;
         }
 
         async loadOrderBook(key) {
                 const stringKey = typeof key === 'string' ? key : String(key);
                 const orderBooksDB = await dbInstance.getDatabase('orderBooks');
-
+              
                 try {
                     const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
                     console.log('load book '+JSON.stringify(orderBookData))
@@ -81,21 +80,21 @@ class Orderbook {
                 }
             }
 
+            async saveOrderBook(orderbookData, key) {
+                const stringKey = String(key);  // 🔒 normalize always to string
+                console.log('saving orderbook with key ' + stringKey);
 
-        async saveOrderBook(orderbookData, key) {
-            console.log('saving orderbook with key '+key)
-            if(key==undefined){
-                return console.log('orderbook save failed with undefined key')
+                const orderBooksDB = await dbInstance.getDatabase('orderBooks');
+
+                await orderBooksDB.updateAsync(
+                    { _id: stringKey },
+                    { _id: stringKey, value: JSON.stringify(orderbookData) },
+                    { upsert: true }
+                );
+
+                return;
             }
-            const orderBooksDB = await dbInstance.getDatabase('orderBooks');
-            await orderBooksDB.updateAsync(
-                { _id: key },
-                { _id: key, value: JSON.stringify(orderbookData) },
-                { upsert: true }
-            );
-            await orderBooksDB.loadDatabase();
-            return
-        }
+
 
            async saveTrade(tradeRecord) {
             const tradeDB =await dbInstance.getDatabase('tradeHistory');
@@ -1113,14 +1112,20 @@ class Orderbook {
 
             return matchResult;
         }
-
-
     
     async estimateLiquidation(liquidationOrder) {
-      const { contractId, amount, sell, price: liqPrice, address } = liquidationOrder;
+      const {
+        contractId,
+        amount,
+        sell,
+        price: liqPrice,
+        address,
+        isMarket
+      } = liquidationOrder;
 
       // Load the order book for the given contract
       const orderBookKey = `${contractId}`;
+      console.log('ob key in est. liq '+orderBookKey)
       const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
       // Opposite side of the book
@@ -1142,55 +1147,72 @@ class Orderbook {
         };
       }
 
-      // Sort: sell → hit highest bids first; buy → hit lowest asks first
-      sideOrders = sell
-        ? [...sideOrders].sort((a, b) => b.price - a.price)
-        : [...sideOrders].sort((a, b) => a.price - b.price);
+      // Defensive copy + sort:
+      //   SELL liquidation -> hit highest bids first
+      //   BUY  liquidation -> hit lowest asks first
+      //
+      // Use BigNumber compares to safely handle string prices.
+      sideOrders = [...sideOrders].sort((a, b) => {
+        const ap = new BigNumber(a?.price || 0);
+        const bp = new BigNumber(b?.price || 0);
+        return sell ? bp.comparedTo(ap) : ap.comparedTo(bp);
+      });
 
-      const amtReq   = new BigNumber(amount || 0);
-      const liqBN    = new BigNumber(liqPrice || 0);
+      const amtReq = new BigNumber(amount || 0);
 
-      let remaining  = amtReq;
+      // Even for "market" liquidations, we still want liqPrice for
+      // unfavorable-fill detection and loss estimates.
+      // If caller didn't supply it, we treat it as 0 (no loss accounting).
+      const liqBN = new BigNumber(liqPrice || 0);
+
+      let remaining = amtReq;
       let filledSize = new BigNumber(0);
-      let totalCost  = new BigNumber(0);
+      let totalCost = new BigNumber(0);
       let filledBelowLiqPrice = false;
-      let crossedQty = new BigNumber(0); // how much happened at unfavorable prices (relative to liq)
-      let loss       = new BigNumber(0);
+      let crossedQty = new BigNumber(0);
+      let loss = new BigNumber(0);
       let trueLiqPrice = null;
       const counterpartyOrders = [];
 
       for (const o of sideOrders) {
-        // Ignore self-liquidity and liquidation-originated orders
-        if (o?.sender === address) continue;
-        if (o?.isLiq) continue;
-
         if (remaining.lte(0)) break;
 
-        const oPrice = new BigNumber(o.price || 0);
-        const oAmt   = new BigNumber(o.amount || 0);
+        // Ignore self-liquidity and liquidation-originated orders
+        const oSender = o?.sender || o?.address;
+        if (oSender && address && oSender === address) continue;
+        if (o?.isLiq) continue;
+
+        // With the new model, "market" orders should not rest on book.
+        // If any appear in snapshots, ignore them to keep estimation stable.
+        if (o?.isMarket) continue;
+
+        const oPrice = new BigNumber(o?.price || 0);
+        const oAmt = new BigNumber(o?.amount || 0);
         if (oAmt.lte(0)) continue;
 
         const tradeSize = BigNumber.min(remaining, oAmt);
         if (tradeSize.lte(0)) continue;
 
         // Book-keeping
-        totalCost  = totalCost.plus(tradeSize.times(oPrice));
+        totalCost = totalCost.plus(tradeSize.times(oPrice));
         filledSize = filledSize.plus(tradeSize);
-        remaining  = remaining.minus(tradeSize);
+        remaining = remaining.minus(tradeSize);
         trueLiqPrice = oPrice.toNumber();
 
         // Loss detection is side-aware:
-        //  - For a SELL (liquidating a long): bad if execution < liqPrice
-        //  - For a BUY  (liquidating a short): bad if execution > liqPrice
+        //  - SELL (liquidating a long): bad if execution < liqPrice
+        //  - BUY  (liquidating a short): bad if execution > liqPrice
         let bad = false;
         let perUnitLoss = new BigNumber(0);
 
-        if (sell) {
-          bad = oPrice.lt(liqBN);
-          if (bad) perUnitLoss = liqBN.minus(oPrice);          // positive if below liq
-        } else {
-          bad = oPrice.gt(liqBN);
-          if (bad) perUnitLoss = oPrice.minus(liqBN);          // positive if above liq
+        if (liqBN.gt(0)) {
+          if (sell) {
+            bad = oPrice.lt(liqBN);
+            if (bad) perUnitLoss = liqBN.minus(oPrice);
+          } else {
+            bad = oPrice.gt(liqBN);
+            if (bad) perUnitLoss = oPrice.minus(liqBN);
+          }
         }
 
         if (bad) {
@@ -1199,10 +1221,9 @@ class Orderbook {
           loss = loss.plus(tradeSize.times(perUnitLoss));
         }
 
-        // Keep a pure snapshot of what we consumed
         counterpartyOrders.push({
           txid: o.txid,
-          sender: o.sender,
+          sender: oSender,
           price: oPrice.toNumber(),
           amount: oAmt.toNumber(),
           sized: tradeSize.decimalPlaces(8).toNumber(),
@@ -1218,7 +1239,6 @@ class Orderbook {
         ? filledSize.dividedBy(amtReq).times(100).decimalPlaces(8).toNumber()
         : 0;
 
-      // Partially-filled-below-liq := some filled AND not all of it was unfavorable
       const partiallyFilledBelowLiqPrice =
         filledBelowLiqPrice && crossedQty.gt(0) && crossedQty.lt(filledSize);
 
@@ -1253,11 +1273,17 @@ class Orderbook {
 
       // Sort buy orders descending by price and ascending by blockTime,
       // sort sell orders ascending by price and ascending by blockTime.
+      //
+      // LITERAL PATCH: add a small priority bump for isMarket without touching existing logic
       orderBook.buy.sort((a, b) =>
-        BigNumber(b.price).comparedTo(a.price) || a.blockTime - b.blockTime
+        ((b.isMarket === true) - (a.isMarket === true)) ||
+        BigNumber(b.price).comparedTo(a.price) ||
+        a.blockTime - b.blockTime
       );
       orderBook.sell.sort((a, b) =>
-        BigNumber(a.price).comparedTo(b.price) || a.blockTime - b.blockTime
+        ((b.isMarket === true) - (a.isMarket === true)) ||
+        BigNumber(a.price).comparedTo(b.price) ||
+        a.blockTime - b.blockTime
       );
 
       // Process a round of matching
@@ -1280,14 +1306,42 @@ class Orderbook {
           continue;
         }
 
+        // LITERAL PATCH: market flags
+        const buyIsMkt = !!buyOrder.isMarket;
+        const sellIsMkt = !!sellOrder.isMarket;
+
         // Check for price match: if the best buy price is below the best sell price, no trade can occur.
-        if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break;
+        // LITERAL PATCH: skip this break when either side is market
+        if (!buyIsMkt && !sellIsMkt) {
+          if (BigNumber(buyOrder.price).isLessThan(sellOrder.price)) break;
+        }
 
         // Determine trade price (using the order with the earlier blockTime)
-        let tradePrice =
-          sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
-        sellOrder.maker = sellOrder.blockTime < buyOrder.blockTime;
-        buyOrder.maker = buyOrder.blockTime < sellOrder.blockTime;
+        // LITERAL PATCH: market order always takes the resting price
+        let tradePrice;
+        if (buyIsMkt && !sellIsMkt) {
+          tradePrice = sellOrder.price;
+        } else if (sellIsMkt && !buyIsMkt) {
+          tradePrice = buyOrder.price;
+        } else if (buyIsMkt && sellIsMkt) {
+          // Should not happen in normal flow; conservative fallback
+          tradePrice = buyOrder.price;
+        } else {
+          tradePrice =
+            sellOrder.blockTime < buyOrder.blockTime ? sellOrder.price : buyOrder.price;
+        }
+
+        // LITERAL PATCH: maker/taker rules with market support
+        if (buyIsMkt && !sellIsMkt) {
+          buyOrder.maker = false;
+          sellOrder.maker = true;
+        } else if (sellIsMkt && !buyIsMkt) {
+          sellOrder.maker = false;
+          buyOrder.maker = true;
+        } else {
+          sellOrder.maker = sellOrder.blockTime < buyOrder.blockTime;
+          buyOrder.maker = buyOrder.blockTime < sellOrder.blockTime;
+        }
 
         // Prevent self-trading
         const sellSender = sellOrder.sender || sellOrder.address;
@@ -1303,7 +1357,8 @@ class Orderbook {
         }
 
         // For orders in the same block, decide based on the post-only flag.
-        if (sellOrder.blockTime === buyOrder.blockTime) {
+        // LITERAL PATCH: only apply same-block post-only logic when neither side is market
+        if (!buyIsMkt && !sellIsMkt && sellOrder.blockTime === buyOrder.blockTime) {
           console.log("Trades in the same block, defaulting to buy order");
           tradePrice = buyOrder.price;
           if (sellOrder.post) {
@@ -1381,15 +1436,15 @@ class Orderbook {
 
         //  initMargin shrinking
         if (sellOrder.amount > 0) {
-            sellOrder.initMargin = (
-                initialMarginPerContract * sellOrder.amount
-            ).toFixed(8);
+          sellOrder.initMargin = (
+            initialMarginPerContract * sellOrder.amount
+          ).toFixed(8);
         }
 
         if (buyOrder.amount > 0) {
-            buyOrder.initMargin = (
-                initialMarginPerContract * buyOrder.amount
-            ).toFixed(8);
+          buyOrder.initMargin = (
+            initialMarginPerContract * buyOrder.amount
+          ).toFixed(8);
         }
 
         // Remove fully filled orders from the front of the arrays
@@ -1407,10 +1462,21 @@ class Orderbook {
 
       // After this round, if there are still orders and the best buy price is at or above the best sell price,
       // recursively match the remaining orders.
+      //
+      // LITERAL PATCH: allow recursion to continue when a market order is at the top
+      const topBuy = orderBook.buy[0];
+      const topSell = orderBook.sell[0];
+      const topBuyIsMkt = topBuy ? !!topBuy.isMarket : false;
+      const topSellIsMkt = topSell ? !!topSell.isMarket : false;
+
       if (
         orderBook.buy.length > 0 &&
         orderBook.sell.length > 0 &&
-        BigNumber(orderBook.buy[0].price).isGreaterThanOrEqualTo(orderBook.sell[0].price)
+        (
+          topBuyIsMkt ||
+          topSellIsMkt ||
+          BigNumber(topBuy.price).isGreaterThanOrEqualTo(topSell.price)
+        )
       ) {
         const recResult = await this.matchContractOrders(orderBook);
         matches = matches.concat(recResult.matches);
@@ -1419,6 +1485,7 @@ class Orderbook {
 
       return { orderBook, matches };
     }
+
 
     async getAddressOrders(address, sell) {
         // Load the order book for the current instance's contractId
@@ -1761,7 +1828,7 @@ class Orderbook {
             }
         }
 
-        await orderbook.saveOrderBook(orderBookKey, obForContract);
+        await orderbook.saveOrderBook(obForContract, orderBookKey);
 
         console.log(`⚠️ Could not free all required margin. User may still be undercollateralized.`);
     }

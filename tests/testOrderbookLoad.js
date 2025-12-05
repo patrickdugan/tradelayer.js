@@ -1,62 +1,34 @@
-const dbInstance = require('./db.js');
+const util = require('util');
+const dbInstance = require('../src/db.js'); // your wrapper
 
-async function loadOrCreateOrderBook(orderBookKey) {
+async function main() {
     const orderBooksDB = dbInstance.getDatabase('orderBooks');
-    const orderBookData = await orderBooksDB.findOneAsync({ _id: orderBookKey });
 
-    let orderBooks = {};
-
-    if (orderBookData) {
-        orderBooks[orderBookKey] = JSON.parse(orderBookData.value);
-        console.log('Order book data:', JSON.stringify(orderBookData.value));
-    } else {
-        // If no data found, create a new order book
-        orderBooks[orderBookKey] = { buy: [], sell: [] };
-        console.log('No existing order book. Created new:', orderBooks[orderBookKey]);
-
-        // Implement your saveOrderBook logic here if needed
+    // Ensure database is actually loaded
+    if (typeof orderBooksDB.loadDatabase === 'function') {
+        await new Promise((resolve, reject) => {
+            orderBooksDB.loadDatabase(err => err ? reject(err) : resolve());
+        });
     }
 
-    return orderBooks[orderBookKey];
-}
+    // Promisify the datastore if async helpers aren’t present
+    if (!orderBooksDB.findOneAsync) {
+        orderBooksDB.findOneAsync = util.promisify(orderBooksDB.findOne.bind(orderBooksDB));
+        orderBooksDB.findAsync     = util.promisify(orderBooksDB.find.bind(orderBooksDB));
+    }
 
-// Example usage
-async function main() {
-    const orderBookKey = '3-4'; // Replace with your actual order book key
-    const data = await loadOrCreateOrderBook(orderBookKey);
-    console.log('Loaded or created order book:', data);
+    const key = '2';  // try loading contract 2
+    console.log("Trying to load key:", key);
+
+    const record = await orderBooksDB.findOneAsync({ _id: key });
+
+    if (!record) {
+        console.log("❌ Not found");
+    } else {
+        console.log("✔️ Found:");
+        console.log(record);
+        console.log("Parsed value:", JSON.parse(record.value));
+    }
 }
 
 main().catch(console.error);
-/*
- // Adds a token order to the order book
-    async addTokenOrder(order) {
-        // Determine the correct orderbook key
-        const normalizedOrderBookKey = this.normalizeOrderBookKey(order.offeredPropertyId, order.desiredPropertyId);
-        console.log('Normalized Order Book Key:', normalizedOrderBookKey);
-
-        // Create an instance of Orderbook for the pair and load its data
-        const orderbook = new Orderbook(normalizedOrderBookKey);
-        await orderbook.loadOrCreateOrderBook();
-
-        // Determine if the order is a sell order
-        const isSellOrder = order.offeredPropertyId < order.desiredPropertyId;
-
-        // Add the order to the orderbook
-        const orderConfirmation = await orderbook.insertOrder(order, isSellOrder);
-        console.log('Order Insertion Confirmation:', orderConfirmation);
-
-        // Match orders in the orderbook
-        const matchResult = await orderbook.matchOrders();
-        console.log('Match Result:', matchResult);
-
-        // Save the updated orderbook back to the database
-        await orderbook.saveOrderBook(normalizeOrderBookKey);
-
-        return matchResult;
-    }
-
-    normalizeOrderBookKey(propertyId1, propertyId2) {
-        // Ensure lower property ID is first in the key
-        return propertyId1 < propertyId2 ? `${propertyId1}-${propertyId2}` : `${propertyId2}-${propertyId1}`;
-    }*/
