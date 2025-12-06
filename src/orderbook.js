@@ -64,7 +64,6 @@ class Orderbook {
               
                 try {
                     const orderBookData = await orderBooksDB.findOneAsync({ _id: stringKey });
-                    console.log('load book '+JSON.stringify(orderBookData))
                     if (orderBookData && orderBookData.value) {
                         const parsedOrderBook = JSON.parse(orderBookData.value);
                         this.orderBooks[key] = parsedOrderBook;
@@ -1113,153 +1112,169 @@ class Orderbook {
             return matchResult;
         }
     
-    async estimateLiquidation(liquidationOrder) {
-      const {
-        contractId,
-        amount,
-        sell,
-        price: liqPrice,
-        address,
-        isMarket
-      } = liquidationOrder;
+    async estimateLiquidation(liquidationOrder, notional = 1, inverse = false) {
+          const {
+            contractId,
+            amount,
+            sell,
+            price: liqPrice,
+            address,
+            isMarket
+          } = liquidationOrder;
 
-      // Load the order book for the given contract
-      const orderBookKey = `${contractId}`;
-      console.log('ob key in est. liq '+orderBookKey)
-      const orderbookData = await this.loadOrderBook(orderBookKey, false);
+          console.log(`estimateLiquidation units → inverse=${inverse} notional=${notional} liqPrice=${liqPrice}`);
 
-      // Opposite side of the book
-      let sideOrders = sell ? orderbookData?.buy : orderbookData?.sell;
+          const orderBookKey = `${contractId}`;
+          console.log('ob key in est. liq ' + orderBookKey);
+          const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
-      if (!Array.isArray(sideOrders) || sideOrders.length === 0) {
-        return {
-          estimatedFillPrice: null,
-          filledSize: 0,
-          partialFillPercent: 0,
-          filled: false,
-          filledBelowLiqPrice: false,
-          partiallyFilledBelowLiqPrice: false,
-          trueBookEmpty: true,
-          remainder: Number(amount) || 0,
-          liquidationLoss: 0,
-          trueLiqPrice: null,
-          counterpartyOrders: []
-        };
-      }
+          let sideOrders = sell ? orderbookData?.buy : orderbookData?.sell;
 
-      // Defensive copy + sort:
-      //   SELL liquidation -> hit highest bids first
-      //   BUY  liquidation -> hit lowest asks first
-      //
-      // Use BigNumber compares to safely handle string prices.
-      sideOrders = [...sideOrders].sort((a, b) => {
-        const ap = new BigNumber(a?.price || 0);
-        const bp = new BigNumber(b?.price || 0);
-        return sell ? bp.comparedTo(ap) : ap.comparedTo(bp);
-      });
-
-      const amtReq = new BigNumber(amount || 0);
-
-      // Even for "market" liquidations, we still want liqPrice for
-      // unfavorable-fill detection and loss estimates.
-      // If caller didn't supply it, we treat it as 0 (no loss accounting).
-      const liqBN = new BigNumber(liqPrice || 0);
-
-      let remaining = amtReq;
-      let filledSize = new BigNumber(0);
-      let totalCost = new BigNumber(0);
-      let filledBelowLiqPrice = false;
-      let crossedQty = new BigNumber(0);
-      let loss = new BigNumber(0);
-      let trueLiqPrice = null;
-      const counterpartyOrders = [];
-
-      for (const o of sideOrders) {
-        if (remaining.lte(0)) break;
-
-        // Ignore self-liquidity and liquidation-originated orders
-        const oSender = o?.sender || o?.address;
-        if (oSender && address && oSender === address) continue;
-        if (o?.isLiq) continue;
-
-        // With the new model, "market" orders should not rest on book.
-        // If any appear in snapshots, ignore them to keep estimation stable.
-        if (o?.isMarket) continue;
-
-        const oPrice = new BigNumber(o?.price || 0);
-        const oAmt = new BigNumber(o?.amount || 0);
-        if (oAmt.lte(0)) continue;
-
-        const tradeSize = BigNumber.min(remaining, oAmt);
-        if (tradeSize.lte(0)) continue;
-
-        // Book-keeping
-        totalCost = totalCost.plus(tradeSize.times(oPrice));
-        filledSize = filledSize.plus(tradeSize);
-        remaining = remaining.minus(tradeSize);
-        trueLiqPrice = oPrice.toNumber();
-
-        // Loss detection is side-aware:
-        //  - SELL (liquidating a long): bad if execution < liqPrice
-        //  - BUY  (liquidating a short): bad if execution > liqPrice
-        let bad = false;
-        let perUnitLoss = new BigNumber(0);
-
-        if (liqBN.gt(0)) {
-          if (sell) {
-            bad = oPrice.lt(liqBN);
-            if (bad) perUnitLoss = liqBN.minus(oPrice);
-          } else {
-            bad = oPrice.gt(liqBN);
-            if (bad) perUnitLoss = oPrice.minus(liqBN);
+          if (!Array.isArray(sideOrders) || sideOrders.length === 0) {
+            return {
+              estimatedFillPrice: null,
+              filledSize: 0,
+              partialFillPercent: 0,
+              filled: false,
+              filledBelowLiqPrice: false,
+              partiallyFilledBelowLiqPrice: false,
+              trueBookEmpty: true,
+              remainder: Number(amount) || 0,
+              liquidationLoss: 0,
+              trueLiqPrice: null,
+              counterpartyOrders: []
+            };
           }
+
+          // sort best→worst for the liquidation direction
+          sideOrders = [...sideOrders].sort((a, b) => {
+            const ap = new BigNumber(a?.price || 0);
+            const bp = new BigNumber(b?.price || 0);
+            return sell ? bp.comparedTo(ap) : ap.comparedTo(bp);
+          });
+
+          const amtReq = new BigNumber(amount || 0);
+          const liqBN = new BigNumber(liqPrice || 0);
+          const BNNotional = new BigNumber(notional || 1);
+
+          let remaining = amtReq;
+          let filledSize = new BigNumber(0);
+          let totalCost = new BigNumber(0);
+
+          let filledBelowLiqPrice = false;
+          let crossedQty = new BigNumber(0);
+          let trueLiqPrice = null;
+          let loss = new BigNumber(0);
+
+          const counterpartyOrders = [];
+
+          for (const o of sideOrders) {
+            if (remaining.lte(0)) break;
+
+            const oSender = o?.sender || o?.address;
+            if (oSender && address && oSender === address) continue;
+            if (o?.isLiq) continue;
+            if (o?.isMarket) continue;   // ignore bad leftovers
+
+            const oPrice = new BigNumber(o?.price || 0);
+            const oAmt = new BigNumber(o?.amount || 0);
+            if (oAmt.lte(0)) continue;
+
+            const tradeSize = BigNumber.min(remaining, oAmt);
+            if (tradeSize.lte(0)) continue;
+
+            totalCost = totalCost.plus(tradeSize.times(oPrice));
+            filledSize = filledSize.plus(tradeSize);
+            remaining = remaining.minus(tradeSize);
+            trueLiqPrice = oPrice.toNumber();
+
+            // -------------------------------
+            // LOSS CALC: linear vs inverse
+            // -------------------------------
+            let bad = false;
+            let perUnitLoss = new BigNumber(0);
+
+            if (liqBN.gt(0)) {
+              if (!inverse) {
+                // -------------------------
+                // LINEAR
+                // -------------------------
+                if (sell) {
+                  bad = oPrice.lt(liqBN);
+                  if (bad) perUnitLoss = liqBN.minus(oPrice);
+                } else {
+                  bad = oPrice.gt(liqBN);
+                  if (bad) perUnitLoss = oPrice.minus(liqBN);
+                }
+                if (bad) {
+                  // scale by notional
+                  perUnitLoss = perUnitLoss.times(BNNotional);
+                }
+
+              } else {
+                // -------------------------
+                // INVERSE
+                // loss ∝ (1/execution - 1/liq)
+                // -------------------------
+                const invExec = new BigNumber(1).dividedBy(oPrice);
+                const invLiq  = new BigNumber(1).dividedBy(liqBN);
+
+                if (sell) {
+                  // closing a long: bad if exec < liq
+                  bad = oPrice.lt(liqBN);
+                  if (bad) perUnitLoss = invExec.minus(invLiq).times(BNNotional);
+                } else {
+                  // closing a short: bad if exec > liq
+                  bad = oPrice.gt(liqBN);
+                  if (bad) perUnitLoss = invLiq.minus(invExec).times(BNNotional);
+                }
+              }
+            }
+
+            if (bad) {
+              filledBelowLiqPrice = true;
+              crossedQty = crossedQty.plus(tradeSize);
+              loss = loss.plus(tradeSize.times(perUnitLoss));
+            }
+
+            counterpartyOrders.push({
+              txid: o.txid,
+              sender: oSender,
+              price: oPrice.toNumber(),
+              amount: oAmt.toNumber(),
+              sized: tradeSize.decimalPlaces(8).toNumber(),
+              maker: o.maker === true,
+            });
+          }
+
+          const estFillPrice = filledSize.gt(0)
+            ? totalCost.dividedBy(filledSize).decimalPlaces(8).toNumber()
+            : null;
+
+          const partialFillPercent = amtReq.gt(0)
+            ? filledSize.dividedBy(amtReq).times(100).decimalPlaces(8).toNumber()
+            : 0;
+
+          const partiallyFilledBelowLiqPrice =
+            filledBelowLiqPrice && crossedQty.gt(0) && crossedQty.lt(filledSize);
+
+          const trueBookEmpty = remaining.gt(0);
+          const remainder = BigNumber.max(remaining, 0).decimalPlaces(8).toNumber();
+
+          return {
+            estimatedFillPrice: estFillPrice,
+            filledSize: filledSize.decimalPlaces(8).toNumber(),
+            partialFillPercent,
+            filled: filledSize.gte(amtReq),
+            filledBelowLiqPrice,
+            partiallyFilledBelowLiqPrice,
+            trueBookEmpty,
+            remainder,
+            liquidationLoss: loss.decimalPlaces(8).toNumber(),
+            trueLiqPrice,
+            counterpartyOrders
+          };
         }
-
-        if (bad) {
-          filledBelowLiqPrice = true;
-          crossedQty = crossedQty.plus(tradeSize);
-          loss = loss.plus(tradeSize.times(perUnitLoss));
-        }
-
-        counterpartyOrders.push({
-          txid: o.txid,
-          sender: oSender,
-          price: oPrice.toNumber(),
-          amount: oAmt.toNumber(),
-          sized: tradeSize.decimalPlaces(8).toNumber(),
-          maker: o.maker === true,
-        });
-      }
-
-      const estFillPrice = filledSize.gt(0)
-        ? totalCost.dividedBy(filledSize).decimalPlaces(8).toNumber()
-        : null;
-
-      const partialFillPercent = amtReq.gt(0)
-        ? filledSize.dividedBy(amtReq).times(100).decimalPlaces(8).toNumber()
-        : 0;
-
-      const partiallyFilledBelowLiqPrice =
-        filledBelowLiqPrice && crossedQty.gt(0) && crossedQty.lt(filledSize);
-
-      // "trueBookEmpty" means we could NOT fill the entire request with external liquidity
-      const trueBookEmpty = remaining.gt(0);
-      const remainder = BigNumber.max(remaining, 0).decimalPlaces(8).toNumber();
-
-      return {
-        estimatedFillPrice: estFillPrice,
-        filledSize: filledSize.decimalPlaces(8).toNumber(),
-        partialFillPercent,
-        filled: filledSize.gte(amtReq),
-        filledBelowLiqPrice,
-        partiallyFilledBelowLiqPrice,
-        trueBookEmpty,
-        remainder,
-        liquidationLoss: loss.decimalPlaces(8).toNumber(),
-        trueLiqPrice,
-        counterpartyOrders
-      };
-    }
 
 
     async matchContractOrders(orderBook) {

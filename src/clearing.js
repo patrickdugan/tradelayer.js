@@ -1339,7 +1339,7 @@ class Clearing {
         // ------------------------------------------------------------
         // 3) Estimate orderbook impact (now with valid price)
         // ------------------------------------------------------------
-        const splat = await orderbook.estimateLiquidation(liq);
+        const splat = await orderbook.estimateLiquidation(liq, notional,inverse);
 
         console.log(`Liq estimate: ${JSON.stringify(splat)}`);
 
