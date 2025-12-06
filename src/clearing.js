@@ -1071,9 +1071,9 @@ class Clearing {
             let newPosition = await marginMap.clear(position,position.address, pnlChange, position.avgPrice, contractId,blockHeight,blob.thisPrice,blob.lastPrice);
            if (pnlChange > 0){
                 await Tally.updateBalance(position.address, collateralId, pnlChange, 0, 0, 0, 'clearing', blockHeight);
-                totalPositivePnl.plus(pnlChange)
+                totalPositivePnl = totalPositivePnl.plus(pnlChange)
             }else{
-                totalNegativePnl.plus(pnlChange)
+                totalNegativePnl = totalNegativePnl.plus(pnlChange)
                 let balance = await Tally.hasSufficientBalance(position.address, collateralId, Math.abs(pnlChange));
                 console.log(`Checking balance for ${position.address}:`, balance);
 
@@ -1168,10 +1168,10 @@ class Clearing {
         // 📏 Compute delta = totalProfit - totalLoss
         const pnlDelta = totalPositivePnl.minus(totalNegativePnl);
 
-        if (!pnlDelta.isZero()) {
+        /*if (!pnlDelta.isZero()) {
             console.log(`PnL delta for contract ${contractId} @ block ${blockHeight}: ${pnlDelta.toFixed(8)}`);
             await PnlIou.addDelta(contractId, collateralId, pnlDelta, blockHeight);
-        }
+        }*/
      
         // 5) Flush the cache into a final positions array
         const finalPositions = Clearing.flushPositionCache(ctxKey);
@@ -1275,276 +1275,302 @@ class Clearing {
     }
 
     static async handleLiquidation(
-        ctxKey,
-        orderbook,
-        Tally,
-        position,
-        contractId,
-        blockHeight,
-        inverse,
-        collateralId,
-        liquidationType,  // partial | total
-        marginDent,
-        notional,
-        markPrice,
-        applyDent,
-        markShortfall,
-        tallySnapshot
-    ) {
-        const Clearing = this;
-        const isFull = liquidationType === "total";
-        const isPartial = liquidationType === "partial";
-
-        console.log(`🔥 handleLiquidation: ${liquidationType} for ${position.address}`);
-
-        const TallyMap = Tally;
-        const MarginMap = require('./marginMap.js');
-        const marginMap = await MarginMap.getInstance(contractId);
-
-        // Lines 1279-1312, replace with:
-
-        // ------------------------------------------------------------
-        // 1) Compute liq/bankruptcy price from current state (don't trust cached)
-        // ------------------------------------------------------------
-        markShortfall ||= 0;
-        
-        let computedLiqPrice = Clearing.computeLiquidationPriceFromLoss(
-            markPrice,
-            markShortfall,
-            position.contracts,
-            notional,
-            inverse
-        );
-        
-        console.log(`baseLiq price >0 ${computedLiqPrice} ${markPrice} ${markShortfall} ${position.contracts} ${notional}`);
-
-        // ------------------------------------------------------------
-        // 2) Generate liquidation order with computed price
-        // ------------------------------------------------------------
-        let liq = await marginMap.generateLiquidationOrder(
+            ctxKey,
+            orderbook,
+            Tally,
             position,
             contractId,
-            isFull,
-            blockHeight
-        );
-        if (liq === "err:0 contracts") {
-            console.log("No contracts to liquidate.");
-            return null;
-        }
+            blockHeight,
+            inverse,
+            collateralId,
+            liquidationType,  // partial | total
+            marginDent,
+            notional,
+            markPrice,
+            applyDent,
+            markShortfall,
+            tallySnapshot
+        ) {
+            const Clearing = this;
 
-        // Override null prices with computed values
-        liq.price = liq.price || computedLiqPrice;
-        liq.bankruptcyPrice = liq.bankruptcyPrice || computedLiqPrice;
+            // ✅ must be let because you re-assign later
+            let isFull = liquidationType === "total";
+            let isPartial = liquidationType === "partial";
 
-        // ------------------------------------------------------------
-        // 3) Estimate orderbook impact (now with valid price)
-        // ------------------------------------------------------------
-        const splat = await orderbook.estimateLiquidation(liq, notional,inverse);
+            console.log(`🔥 handleLiquidation: ${liquidationType} for ${position.address}`);
 
-        console.log(`Liq estimate: ${JSON.stringify(splat)}`);
+            const TallyMap = Tally;
+            const MarginMap = require('./marginMap.js');
+            const marginMap = await MarginMap.getInstance(contractId);
 
-        // Use computed price as delevPrice
-        let delevPrice = computedLiqPrice;
+            // ------------------------------------------------------------
+            // 1) Compute liq/bankruptcy price from current state
+            //    Argument #2 is a LOSS BUDGET, not a "shortfall label"
+            // ------------------------------------------------------------
+            markShortfall ??= 0;
 
-        // Override liq based on OB feedback (but don't zero out amount!)
-        if (splat.filledSize > 0) {
-            liq.amount = splat.filledSize;
-            liq.price = splat.trueLiqPrice || computedLiqPrice;
-        }
-        // Handle “filled below liq price” logic
-        if (splat.filledBelowLiqPrice || splat.partiallyFilledBelowLiqPrice) {
-            liq.price = splat.trueLiqPrice;
+            // Prefer a provided explicit shortfall/budget if it’s positive,
+            // otherwise fall back to real account liquidity.
+            let lossBudget = new BigNumber(markShortfall || 0);
 
-            if (
-                isPartial &&
-                (
-                    (splat.estimatedFillPrice < liq.bankruptcyPrice && liq.sell) ||
-                    (splat.estimatedFillPrice > liq.bankruptcyPrice && !liq.sell)
-                )
-            ) {
-                // Falls through into forced full liquidation
-                isFull = true;
-                isPartial = false;
+            if (lossBudget.lte(0)) {
+                // Pull fresh tally. (If you want to use tallySnapshot later, this can be swapped.)
+                const liqTallyPreview = await Tally.getTally(position.address, collateralId);
+                lossBudget = new BigNumber(liqTallyPreview.margin || 0).plus(liqTallyPreview.available || 0);
             }
-        }
 
-        // ------------------------------------------------------------
-        // 3) Apply marginDent if needed
-        // ------------------------------------------------------------
-        if (applyDent) {
-            await Tally.updateBalance(
-                position.address,
-                collateralId,
-                0,
-                0,
-                -marginDent,
-                0,
-                "clearingLossApplyDent",
+            let computedLiqPrice = Clearing.computeLiquidationPriceFromLoss(
+                markPrice,
+                lossBudget.toNumber(),
+                position.contracts,
+                notional,
+                inverse
+            );
+
+            console.log(
+                `baseLiq price computed ${computedLiqPrice} ` +
+                `${markPrice} budget=${lossBudget} contracts=${position.contracts} notional=${notional}`
+            );
+
+            // ------------------------------------------------------------
+            // 2) Generate liquidation order
+            // ------------------------------------------------------------
+            let liq = await marginMap.generateLiquidationOrder(
+                position,
+                contractId,
+                isFull,
                 blockHeight
             );
 
-            // ⭐ Reduce margin IN CACHE
-            Clearing.updatePositionInCache(ctxKey, position.address, (p) => {
-                const c = { ...p };
-                c.margin = Math.max(0, new BigNumber(c.margin).minus(marginDent).toNumber());
-                return c;
-            });
-        }
-
-        // ------------------------------------------------------------
-        // 4) Insert/liquidate the order in the orderbook
-        // ------------------------------------------------------------
-        const obKey = contractId.toString();
-        let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
-
-        obData = await orderbook.insertOrder(liq, obData, liq.sell, true);
-
-        const matchResult = await orderbook.matchContractOrders(obData);
-        let trades = [];
-        if (matchResult.matches.length > 0) {
-            trades = await orderbook.processContractMatches(
-                matchResult.matches,
-                blockHeight,
-                false
-            );
-        }
-        console.log('match result '+JSON.stringify(matchResult))
-        await orderbook.saveOrderBook(matchResult.orderBook, obKey);
-
-        // Aggregate remainders
-        splat.remainder = trades.reduce((acc, t) =>
-            acc + (t?.remainder || 0), 0);
-
-        splat.filled = splat.remainder === 0;
-
-        // ------------------------------------------------------------
-        // 5) Resolve liquidation cases (your original CASE 1-5 logic)
-        // ------------------------------------------------------------
-        let result = { counterparties: [] };
-        let systemicLoss = new BigNumber(0);
-
-        const liqTally = await Tally.getTally(position.address, collateralId);
-        const liquidationPool = new BigNumber(liqTally.margin)
-            .plus(liqTally.available)
-            .dp(8)
-            .toNumber();
-
-        // Confiscate entire account
-        if (liquidationPool > 0) {
-            await Tally.updateBalance(
-                position.address,
-                collateralId,
-                -liqTally.available,
-                0,
-                -liqTally.margin,
-                0,
-                'liquidationPoolDebit',
-                blockHeight
-            );
-        }
-
-        Clearing.recordLiquidation(
-            contractId,
-            position.address,
-            {
-                contracts: position.contracts,
-                margin: liqTally.margin,
-                available: liqTally.available,
-                pool: liquidationPool,
-                liqPrice: delevPrice,
-                markPrice
+            if (liq === "err:0 contracts") {
+                console.log("No contracts to liquidate.");
+                return null;
             }
-        );
 
-        // === CASES 2,3,4,5 preserved exactly as before ===
-        if (!splat.filled) {
-            const remainder = splat.remainder;
-            const lossBN = new BigNumber(splat.liquidationLoss);
+            // Keep your “market order bypasses price check” model,
+            // but ensure liq/bankruptcy has something meaningful.
+            liq.price = liq.price || computedLiqPrice;
+            liq.bankruptcyPrice = liq.bankruptcyPrice || computedLiqPrice;
 
-            if (isPartial) {
-                const remM = new BigNumber(liqTally.margin);
-                let adj = lossBN.minus(remM);
+            // ------------------------------------------------------------
+            // 3) Estimate orderbook impact
+            // ------------------------------------------------------------
+            const splat = await orderbook.estimateLiquidation(liq);
+
+            console.log(`Liq estimate: ${JSON.stringify(splat)}`);
+
+            // Use computed price as delevPrice baseline
+            let delevPrice = computedLiqPrice;
+
+            // Override liq based on OB feedback (but don't zero out amount!)
+            if (splat.filledSize > 0) {
+                liq.amount = splat.filledSize;
+                liq.price = splat.trueLiqPrice || computedLiqPrice;
+            }
+
+            // Handle “filled below liq price” logic
+            if (splat.filledBelowLiqPrice || splat.partiallyFilledBelowLiqPrice) {
+                liq.price = splat.trueLiqPrice || liq.price;
+
+                if (
+                    isPartial &&
+                    (
+                        (splat.estimatedFillPrice < liq.bankruptcyPrice && liq.sell) ||
+                        (splat.estimatedFillPrice > liq.bankruptcyPrice && !liq.sell)
+                    )
+                ) {
+                    // Falls through into forced full liquidation
+                    isFull = true;
+                    isPartial = false;
+                }
+            }
+
+            // ------------------------------------------------------------
+            // 4) Apply marginDent if needed
+            // ------------------------------------------------------------
+            if (applyDent) {
+                await Tally.updateBalance(
+                    position.address,
+                    collateralId,
+                    0,
+                    0,
+                    -marginDent,
+                    0,
+                    "clearingLossApplyDent",
+                    blockHeight
+                );
+
+                // Reduce margin IN CACHE
+                Clearing.updatePositionInCache(ctxKey, position.address, (p) => {
+                    const c = { ...p };
+                    c.margin = Math.max(0, new BigNumber(c.margin).minus(marginDent).toNumber());
+                    return c;
+                });
+            }
+
+            // ------------------------------------------------------------
+            // 5) Insert/liquidate the order in the orderbook
+            // ------------------------------------------------------------
+            const obKey = contractId.toString();
+            let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
+
+            obData = await orderbook.insertOrder(liq, obData, liq.sell, true);
+
+            const matchResult = await orderbook.matchContractOrders(obData);
+            let trades = [];
+            if (matchResult.matches.length > 0) {
+                trades = await orderbook.processContractMatches(
+                    matchResult.matches,
+                    blockHeight,
+                    false
+                );
+            }
+
+            console.log('match result ' + JSON.stringify(matchResult));
+            await orderbook.saveOrderBook(matchResult.orderBook, obKey);
+
+            // Aggregate remainders
+            splat.remainder = trades.reduce((acc, t) =>
+                acc + (t?.remainder || 0), 0);
+
+            splat.filled = splat.remainder === 0;
+
+            // ------------------------------------------------------------
+            // 6) Confiscate liquidation pool
+            // ------------------------------------------------------------
+            let result = { counterparties: [] };
+            let systemicLoss = new BigNumber(0);
+
+            const liqTally = await Tally.getTally(position.address, collateralId);
+
+            const liquidationPool = new BigNumber(liqTally.margin || 0)
+                .plus(liqTally.available || 0)
+                .dp(8)
+                .toNumber();
+
+            if (liquidationPool > 0) {
+                await Tally.updateBalance(
+                    position.address,
+                    collateralId,
+                    -(liqTally.available || 0),
+                    0,
+                    -(liqTally.margin || 0),
+                    0,
+                    'liquidationPoolDebit',
+                    blockHeight
+                );
+            }
+
+            Clearing.recordLiquidation(
+                contractId,
+                position.address,
+                {
+                    contracts: position.contracts,
+                    margin: liqTally.margin,
+                    available: liqTally.available,
+                    pool: liquidationPool,
+                    liqPrice: delevPrice,
+                    markPrice
+                }
+            );
+
+            // ------------------------------------------------------------
+            // ✅ 7) Systemic loss is NET of confiscated pool
+            // ------------------------------------------------------------
+            if (splat.liquidationLoss && splat.liquidationLoss > 0) {
+                const lossBN = new BigNumber(splat.liquidationLoss);
+                const poolBN = new BigNumber(liquidationPool || 0);
+                let adj = lossBN.minus(poolBN);
+                if (adj.gt(0)) {
+                    systemicLoss = systemicLoss.plus(adj).dp(8);
+                }
+            }
+
+            if (!splat.filled) {
+                const remainder = splat.remainder;
+                const lossBN = new BigNumber(splat.liquidationLoss || 0);
+                const poolBN = new BigNumber(liquidationPool || 0);
+
+                // Blunt + consistent with your behavior:
+                // since you confiscate available + margin, subtract that same basis.
+                let adj = lossBN.minus(poolBN);
                 if (adj.lt(0)) adj = new BigNumber(0);
                 systemicLoss = systemicLoss.plus(adj).dp(8);
-            } else if (isFull) {
-                systemicLoss = systemicLoss.plus(lossBN).dp(8);
+
+                // Preserve your CASE logic
+                if (splat.partiallyFilledBelowLiqPrice) {
+                    result = await marginMap.simpleDeleverage(
+                        contractId, remainder, liq.sell, delevPrice,
+                        position.address, inverse, notional, blockHeight,
+                        markPrice, collateralId, liquidationPool
+                    );
+                }
+                else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
+                    // pure systemic loss, no delev
+                }
+                else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
+                    result = await marginMap.simpleDeleverage(
+                        contractId, remainder, liq.sell, delevPrice,
+                        position.address, inverse, notional, blockHeight,
+                        markPrice, collateralId, liquidationPool
+                    );
+                }
+                else if (splat.trueBookEmpty) {
+                    result = await marginMap.simpleDeleverage(
+                        contractId, remainder, liq.sell, delevPrice,
+                        position.address, inverse, notional, blockHeight,
+                        markPrice, collateralId, liquidationPool
+                    );
+                }
             }
 
-            if (splat.partiallyFilledBelowLiqPrice) {
-                result = await marginMap.simpleDeleverage(
-                    contractId, remainder, liq.sell, delevPrice,
-                    position.address, inverse, notional, blockHeight,
-                    markPrice, collateralId, liquidationPool
+            // ------------------------------------------------------------
+            // 8) Apply credit from deleverage pool
+            // ------------------------------------------------------------
+            for (const u of (result.poolAssignments || [])) {
+                await Tally.updateBalance(
+                    u.address,
+                    collateralId,
+                    u.poolShare,
+                    0, 0, 0,
+                    'deleveragePoolCredit',
+                    blockHeight
                 );
             }
-            else if (splat.filledBelowLiqPrice && splat.remainder === 0) {
-                // pure systemic loss, no delev
+
+            // ------------------------------------------------------------
+            // 9) Apply position updates IN CACHE
+            // ------------------------------------------------------------
+            for (const cp of (result.counterparties || [])) {
+                Clearing.updatePositionInCache(ctxKey, cp.address, (old) => {
+                    const c = { ...old };
+                    const pre = c.contracts;
+
+                    c.contracts = pre > 0 ? pre - cp.matchSize : pre + cp.matchSize;
+                    if (pre * c.contracts < 0) c.contracts = 0;
+                    return c;
+                });
             }
-            else if (splat.filledBelowLiqPrice && splat.remainder > 0) {
-                result = await marginMap.simpleDeleverage(
-                    contractId, remainder, liq.sell, delevPrice,
-                    position.address, inverse, notional, blockHeight,
-                    markPrice, collateralId, liquidationPool
-                );
-            }
-            else if (splat.trueBookEmpty) {
-                result = await marginMap.simpleDeleverage(
-                    contractId, remainder, liq.sell, delevPrice,
-                    position.address, inverse, notional, blockHeight,
-                    markPrice, collateralId, liquidationPool
-                );
-            }
+
+            Clearing.updatePositionInCache(ctxKey, position.address, (old) => ({
+                ...old,
+                contracts: 0,
+                margin: 0,
+                lastMark: markPrice,
+                unrealizedPNL: 0,
+                averagePrice: null,
+                bankruptcyPrice: null
+            }));
+
+            // ------------------------------------------------------------
+            // 10) Return liquidation summary
+            // ------------------------------------------------------------
+            return {
+                liquidation: liq,
+                systemicLoss: systemicLoss.toNumber(),
+                counterparties: result.counterparties || []
+            };
         }
-
-        // ------------------------------------------------------------
-        // 6) Apply credit from deleverage pool
-        // ------------------------------------------------------------
-        for (const u of (result.poolAssignments || [])) {
-            await Tally.updateBalance(
-                u.address,
-                collateralId,
-                u.poolShare,
-                0, 0, 0,
-                'deleveragePoolCredit',
-                blockHeight
-            );
-        }
-
-        // ------------------------------------------------------------
-        // ⭐ 7) Apply position updates IN CACHE
-        // ------------------------------------------------------------
-        // Update counterparties
-        for (const cp of result.counterparties) {
-            Clearing.updatePositionInCache(ctxKey, cp.address, (old) => {
-                const c = { ...old };
-                const pre = c.contracts;
-
-                c.contracts = pre > 0 ? pre - cp.matchSize : pre + cp.matchSize;
-                if (pre * c.contracts < 0) c.contracts = 0;
-                return c;
-            });
-        }
-
-        // Zero-out liquidated position
-        Clearing.updatePositionInCache(ctxKey, position.address, (old) => ({
-            ...old,
-            contracts: 0,
-            margin: 0,
-            lastMark: markPrice,
-            unrealizedPNL: 0,
-            averagePrice: null,
-            bankruptcyPrice: null
-        }));
-
-        // ------------------------------------------------------------
-        // 8) Return liquidation summary
-        // ------------------------------------------------------------
-        return {
-            liquidation: liq,
-            systemicLoss: systemicLoss.toNumber(),
-            counterparties: result.counterparties
-        };
-    }
 
 
     static async extractCounterpartyPositions(matches, deleveragedPositions, marginMap, contractId) {
