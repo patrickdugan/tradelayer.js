@@ -1491,12 +1491,6 @@ class Clearing {
                 const lossBN = new BigNumber(splat.liquidationLoss || 0);
                 const poolBN = new BigNumber(liquidationPool || 0);
 
-                // Blunt + consistent with your behavior:
-                // since you confiscate available + margin, subtract that same basis.
-                let adj = lossBN.minus(poolBN);
-                if (adj.lt(0)) adj = new BigNumber(0);
-                systemicLoss = systemicLoss.plus(adj).dp(8);
-
                 // Preserve your CASE logic
                 if (splat.partiallyFilledBelowLiqPrice) {
                     result = await marginMap.simpleDeleverage(

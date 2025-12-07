@@ -2012,9 +2012,13 @@ class Orderbook {
             let counter = 0 
             for (const match of matches) {
                 counter+=1
-                  console.log('bleh 🛑 '+counter+' '+JSON.stringify(matches))
+                  console.log('counter 🛑 '+counter+' '+JSON.stringify(matches))
                   console.log('🛑 JSON.stringify match '+JSON.stringify(match))
 
+                  let isLiquidation = false
+                  if(match.buyOrder.liq||match.sellOrder.liq){
+                    isLiquidation=true
+                  }
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
                         console.log('self trade nullified '+match.buyOrder.buyerAddress)
                         continue
@@ -2578,10 +2582,13 @@ class Orderbook {
                     // Save the updated margin map
                     await marginMap.saveMarginMap(currentBlockHeight);
                     const delta = buyerPnl.plus(sellerPnl);
-                    if(delta.gt(0)&&(buyerPnl.gt(0)||sellerPnl.gt(0))){
-                        await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
+                    if(!isLiquidation){
+                        if(delta.gt(0)&&(buyerPnl.gt(0)||sellerPnl.gt(0))){
+                                await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
+                        }
+                        await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight)  
                     }
-                    await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight)
+                    
                     trade.delta=delta  
                     trades.push(trade)                     
             }
