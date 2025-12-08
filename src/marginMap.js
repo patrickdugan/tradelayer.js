@@ -1407,6 +1407,7 @@ class MarginMap {
     // - Returns ONLY pool distribution data (per-CP share of liquidationPool)
     // =======================
     async simpleDeleverage(
+      positionCache,        // ✅ NEW: pass the array, not ctxKey
       contractId,
       unfilledContracts,
       sell,
@@ -1450,22 +1451,20 @@ class MarginMap {
         attemptedDeleverage: remainingSize.toNumber(),
         liquidationPool: poolBN.toNumber(),
         totalDeleveraged: 0,
-        // legacy field: keeps CP meta for debugging/audit
         counterparties: [],
-        // NEW: what caller actually needs:
-        // [{ address, matchSize, poolShare, fromOld, fromNew }]
         poolAssignments: [],
         totalPoolDistributed: 0,
         remainingUnfilled: 0,
         undistributedPool: 0
       };
 
-      const allPositions = await this.getAllPositions(contractId);
-      console.log(` Found ${allPositions.length} positions`);
+      // ✅ Use passed-in cache instead of DB
+      const allPositions = Array.isArray(positionCache) ? positionCache : [];
+      console.log(` Found ${allPositions.length} cached positions`);
 
       // Filter to opposite side
       let counterparties = allPositions.filter(p => {
-        if (p.address === liquidatingAddress || !p.contracts) return false;
+        if (!p || p.address === liquidatingAddress || !p.contracts) return false;
         return sell ? p.contracts < 0 : p.contracts > 0;
       });
 
@@ -1486,8 +1485,8 @@ class MarginMap {
 
       // Sort: more old contracts first, then larger abs size
       counterparties.sort((a, b) => (
-        b.oldContracts - a.oldContracts ||
-        Math.abs(b.contracts) - Math.abs(a.contracts)
+        (b.oldContracts || 0) - (a.oldContracts || 0) ||
+        Math.abs(b.contracts || 0) - Math.abs(a.contracts || 0)
       ));
 
       console.log(`📋 Counterparties by vintage:`);
@@ -1495,7 +1494,8 @@ class MarginMap {
         console.log(`   ${cp.address}: old=${cp.oldContracts}, new=${cp.newContracts}, size=${cp.contracts}`);
       }
 
-      const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
+      // (kept, even if currently unused here)
+      await ContractRegistry.getInitialMargin(contractId, liqPrice);
 
       // ================
       // MAIN LOOP
@@ -1520,12 +1520,14 @@ class MarginMap {
         // ==========================
         // 1. POOL SHARE (pro-rata)
         // ==========================
-        const ratio = new BigNumber(matchSize).div(originalUnfilled);
+        const ratio = originalUnfilled.gt(0)
+          ? new BigNumber(matchSize).div(originalUnfilled)
+          : new BigNumber(0);
+
         const poolShare = poolBN.times(ratio).dp(8);
 
         // ==========================
         // 2. RECORD TO CLEARING (in-RAM)
-        //  (Good for audit / tax PnL later)
         // ==========================
         Clearing.recordDeleverageTrade(contractId, pos.address, {
           matchSize,
@@ -1536,18 +1538,35 @@ class MarginMap {
           markPrice,
           preContracts,
           isLong,
-          block,
-          // NOTE: margin release & clearingAdj no longer applied here –
-          // they're handled via adjustDeleveraging / clearing logic.
+          block
         });
 
         // ==========================
-        // 3. SHRINK POSITION & RETURN MARGIN (adjustDeleveraging)
+        // 3. OPTIONAL CLEARING PNL CLAWBACK
+        //    ✅ Apply ONLY to OLD contracts
         // ==========================
-        // This handles:
-        //  - contract size reduction
-        //  - margin reduction with non-negative guarantees
-        //  - TallyMap margin→available shuffle (no net leak)
+        if (fromOld > 0) {
+          try {
+            await this.clawbackClearingProfit(
+              pos,
+              markPrice,
+              fromOld,            // ✅ old-only
+              notional,
+              liqPrice,
+              collateralId,
+              block,
+              TallyMap,
+              sell,
+              isInverse
+            );
+          } catch (e) {
+            console.log(`⚠️ clawbackClearingProfit failed for ${pos.address}: ${e.message}`);
+          }
+        }
+
+        // ==========================
+        // 4. SHRINK POSITION & RETURN MARGIN
+        // ==========================
         await this.adjustDeleveraging(
           pos.address,
           contractId,
@@ -1562,17 +1581,16 @@ class MarginMap {
         totalPoolDistributed = totalPoolDistributed.plus(poolShare);
         result.totalDeleveraged += matchSize;
 
-        // Debug / legacy view
+        // Legacy / audit view
         result.counterparties.push({
           address: pos.address,
-          contracts: pos.contracts, // note: this.getPositionForAddress will show updated size
+          contracts: pos.contracts,
           matchSize,
           fromOld,
           fromNew,
           poolShare: poolShare.toNumber()
         });
 
-        // What the caller actually cares about:
         result.poolAssignments.push({
           address: pos.address,
           matchSize,
@@ -1581,7 +1599,6 @@ class MarginMap {
           poolShare: poolShare.toNumber()
         });
 
-        // Reduce remaining unfilled size
         remainingSize = remainingSize.minus(matchSize);
       }
 
@@ -1589,7 +1606,6 @@ class MarginMap {
       result.remainingUnfilled = remainingSize.dp(8).toNumber();
       result.undistributedPool = poolBN.minus(totalPoolDistributed).dp(8).toNumber();
 
-      // Optional conservation log
       if (remainingSize.isZero()) {
         const err = poolBN.minus(totalPoolDistributed).abs();
         if (err.gt(1e-8)) {
@@ -1601,11 +1617,9 @@ class MarginMap {
         console.log(`⚠️ Partial deleverage: ${remainingSize.toNumber()} contracts unfilled, undistributedPool=${result.undistributedPool}`);
       }
 
-      console.log('tally updates in delev '+JSON.stringify(result))
-
+      console.log('tally updates in delev '+JSON.stringify(result));
       return result;
     }
-
 
     // =======================
     // calcPriceDelta - PnL helper
