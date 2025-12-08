@@ -1119,13 +1119,14 @@ class Orderbook {
             sell,
             price: liqPrice,
             address,
-            isMarket
+            isMarket,
           } = liquidationOrder;
 
-          console.log(`estimateLiquidation units → inverse=${inverse} notional=${notional} liqPrice=${liqPrice}`);
+          console.log(
+            `estimateLiquidation units → inverse=${inverse} notional=${notional} liqPrice=${liqPrice}`
+          );
 
           const orderBookKey = `${contractId}`;
-          console.log('ob key in est. liq ' + orderBookKey);
           const orderbookData = await this.loadOrderBook(orderBookKey, false);
 
           let sideOrders = sell ? orderbookData?.buy : orderbookData?.sell;
@@ -1142,11 +1143,16 @@ class Orderbook {
               remainder: Number(amount) || 0,
               liquidationLoss: 0,
               trueLiqPrice: null,
-              counterpartyOrders: []
+              counterpartyOrders: [],
+
+              // NEW fields
+              goodFilledSize: 0,
+              badFilledSize: 0,
+              remainderIfOnlyGood: Number(amount) || 0,
             };
           }
 
-          // sort best→worst for the liquidation direction
+          // Sort best→worst
           sideOrders = [...sideOrders].sort((a, b) => {
             const ap = new BigNumber(a?.price || 0);
             const bp = new BigNumber(b?.price || 0);
@@ -1161,11 +1167,13 @@ class Orderbook {
           let filledSize = new BigNumber(0);
           let totalCost = new BigNumber(0);
 
+          // NEW tracking
+          let goodQty = new BigNumber(0);
+          let badQty = new BigNumber(0);
+
           let filledBelowLiqPrice = false;
-          let crossedQty = new BigNumber(0);
           let trueLiqPrice = null;
           let loss = new BigNumber(0);
-
           const counterpartyOrders = [];
 
           for (const o of sideOrders) {
@@ -1174,7 +1182,7 @@ class Orderbook {
             const oSender = o?.sender || o?.address;
             if (oSender && address && oSender === address) continue;
             if (o?.isLiq) continue;
-            if (o?.isMarket) continue;   // ignore bad leftovers
+            if (o?.isMarket) continue;
 
             const oPrice = new BigNumber(o?.price || 0);
             const oAmt = new BigNumber(o?.amount || 0);
@@ -1189,16 +1197,13 @@ class Orderbook {
             trueLiqPrice = oPrice.toNumber();
 
             // -------------------------------
-            // LOSS CALC: linear vs inverse
+            // Loss check
             // -------------------------------
             let bad = false;
             let perUnitLoss = new BigNumber(0);
 
             if (liqBN.gt(0)) {
               if (!inverse) {
-                // -------------------------
-                // LINEAR
-                // -------------------------
                 if (sell) {
                   bad = oPrice.lt(liqBN);
                   if (bad) perUnitLoss = liqBN.minus(oPrice);
@@ -1206,35 +1211,27 @@ class Orderbook {
                   bad = oPrice.gt(liqBN);
                   if (bad) perUnitLoss = oPrice.minus(liqBN);
                 }
-                if (bad) {
-                  // scale by notional
-                  perUnitLoss = perUnitLoss.times(BNNotional);
-                }
-
+                if (bad) perUnitLoss = perUnitLoss.times(BNNotional);
               } else {
-                // -------------------------
-                // INVERSE
-                // loss ∝ (1/execution - 1/liq)
-                // -------------------------
                 const invExec = new BigNumber(1).dividedBy(oPrice);
-                const invLiq  = new BigNumber(1).dividedBy(liqBN);
+                const invLiq = new BigNumber(1).dividedBy(liqBN);
 
                 if (sell) {
-                  // closing a long: bad if exec < liq
                   bad = oPrice.lt(liqBN);
-                  if (bad) perUnitLoss = invExec.minus(invLiq).times(BNNotional);
-                } else {
-                  // closing a short: bad if exec > liq
-                  bad = oPrice.gt(liqBN);
                   if (bad) perUnitLoss = invLiq.minus(invExec).times(BNNotional);
+                } else {
+                  bad = oPrice.gt(liqBN);
+                  if (bad) perUnitLoss = invExec.minus(invLiq).times(BNNotional);
                 }
               }
             }
 
             if (bad) {
+              badQty = badQty.plus(tradeSize);
               filledBelowLiqPrice = true;
-              crossedQty = crossedQty.plus(tradeSize);
               loss = loss.plus(tradeSize.times(perUnitLoss));
+            } else {
+              goodQty = goodQty.plus(tradeSize);
             }
 
             counterpartyOrders.push({
@@ -1247,19 +1244,24 @@ class Orderbook {
             });
           }
 
-          const estFillPrice = filledSize.gt(0)
-            ? totalCost.dividedBy(filledSize).decimalPlaces(8).toNumber()
-            : null;
+          const estFillPrice =
+            filledSize.gt(0)
+              ? totalCost.dividedBy(filledSize).decimalPlaces(8).toNumber()
+              : null;
 
           const partialFillPercent = amtReq.gt(0)
             ? filledSize.dividedBy(amtReq).times(100).decimalPlaces(8).toNumber()
             : 0;
 
-          const partiallyFilledBelowLiqPrice =
-            filledBelowLiqPrice && crossedQty.gt(0) && crossedQty.lt(filledSize);
-
-          const trueBookEmpty = remaining.gt(0);
           const remainder = BigNumber.max(remaining, 0).decimalPlaces(8).toNumber();
+
+          // NEW remainder if honoring only clean fills
+          const remainderIfOnlyGood = BigNumber.max(
+            amtReq.minus(goodQty),
+            0
+          )
+            .decimalPlaces(8)
+            .toNumber();
 
           return {
             estimatedFillPrice: estFillPrice,
@@ -1267,12 +1269,18 @@ class Orderbook {
             partialFillPercent,
             filled: filledSize.gte(amtReq),
             filledBelowLiqPrice,
-            partiallyFilledBelowLiqPrice,
-            trueBookEmpty,
+            partiallyFilledBelowLiqPrice:
+              filledBelowLiqPrice && badQty.gt(0) && badQty.lt(filledSize),
+            trueBookEmpty: remaining.gt(0),
             remainder,
             liquidationLoss: loss.decimalPlaces(8).toNumber(),
             trueLiqPrice,
-            counterpartyOrders
+            counterpartyOrders,
+
+            // NEW FIELDS
+            goodFilledSize: goodQty.decimalPlaces(8).toNumber(),
+            badFilledSize: badQty.decimalPlaces(8).toNumber(),
+            remainderIfOnlyGood,
           };
         }
 

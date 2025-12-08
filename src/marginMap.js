@@ -1567,7 +1567,8 @@ class MarginMap {
         // ==========================
         // 4. SHRINK POSITION & RETURN MARGIN
         // ==========================
-        await this.adjustDeleveraging(
+        positionCache = await this.adjustDeleveraging(
+          positionCache,
           pos.address,
           contractId,
           matchSize,
@@ -1576,6 +1577,7 @@ class MarginMap {
           liqPrice,
           TallyMap
         );
+
 
         // Track totals
         totalPoolDistributed = totalPoolDistributed.plus(poolShare);
@@ -1605,7 +1607,7 @@ class MarginMap {
       result.totalPoolDistributed = totalPoolDistributed.dp(8).toNumber();
       result.remainingUnfilled = remainingSize.dp(8).toNumber();
       result.undistributedPool = poolBN.minus(totalPoolDistributed).dp(8).toNumber();
-
+      result.modifiedCache = positionCache
       if (remainingSize.isZero()) {
         const err = poolBN.minus(totalPoolDistributed).abs();
         if (err.gt(1e-8)) {
@@ -1767,114 +1769,146 @@ class MarginMap {
     // =======================
     // adjustDeleveraging
     // =======================
-    async adjustDeleveraging(address, contractId, size, sell, block, liqPrice, TallyMap) {
-      console.log(`Adjusting position for ${address}: requested reduce ${size} contracts on contract ${contractId} for side ${sell}`);
-      const ContractRegistry = require('./contractRegistry.js');
-
-      // Normalize size to a positive scalar
-      let requestedSize = Number(size);
-      if (!Number.isFinite(requestedSize) || requestedSize <= 0) {
-        console.log(`⚠️ adjustDeleveraging: invalid size ${size} for ${address}`);
-        return;
-      }
-
-      let position = await this.getPositionForAddress(address, contractId);
-      if (!position || !position.contracts) {
-        console.log(`⚠️ adjustDeleveraging: no position found for ${address} on contract ${contractId}`);
-        return position;
-      }
-
-      const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
-      const collateral = await ContractRegistry.getCollateralId(contractId);
-
-      const beforeContracts = Number(position.contracts) || 0;
-      const maxReducible = Math.abs(beforeContracts);
-
-      if (maxReducible <= 0) {
-        console.log(`⚠️ adjustDeleveraging: maxReducible is 0 for ${address}`);
-        return position;
-      }
-
-      // **Key rule: never adjust more than the current absolute size**
-      const effectiveSize = Math.min(requestedSize, maxReducible);
-
-      // Direction:
-      //  - sell = true  -> contractChange = -effectiveSize
-      //  - sell = false -> contractChange = +effectiveSize
-      const contractChange = sell ? -effectiveSize : effectiveSize;
-
-      console.log('⚠️ contractChange=' + contractChange + ' beforeContracts=' + beforeContracts);
-
-      const contractChangeBN = new BigNumber(contractChange);
-      const afterContracts = new BigNumber(beforeContracts).plus(contractChangeBN).toNumber();
-      position.contracts = afterContracts;
-
-      // Safety: never flip sign; clamp to zero
-      if (beforeContracts * afterContracts < 0) {
-        console.error(
-          `🔥 adjustDeleveraging sign flip for ${address}: before=${beforeContracts}, after=${afterContracts}. Clamping to 0.`
-        );
-        position.contracts = 0;
-      }
-
-      let reduction = await this.reduceMargin(
-        position,
-        contractChange,
-        initPerContract,
-        contractId,
-        address,
-        sell,
-        false,
-        0
-      );
-
-      console.log('reduction ' + reduction);
-
-      const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
-      console.log(JSON.stringify(hasSufficient));
-
-      if (!hasSufficient.hasSufficient) {
-        reduction = new BigNumber(reduction)
-          .minus(hasSufficient.shortfall)
-          .decimalPlaces(8)
-          .toNumber();
-      }
-
-      if (reduction !== 0) {
-        await TallyMap.updateBalance(
+    async adjustDeleveraging(
+          positionCache,   // ✅ NEW
           address,
-          collateral,
-          reduction,
-          0,
-          -reduction,
-          0,
-          'contractDelevMarginReturn',
-          block
-        );
-      }
+          contractId,
+          size,
+          sell,
+          block,
+          liqPrice,
+          TallyMap
+        ) {
+          console.log(`Adjusting position for ${address}: requested reduce ${size} contracts on contract ${contractId} for side ${sell}`);
+          const ContractRegistry = require('./contractRegistry.js');
+          const BigNumber = require('bignumber.js');
 
-      if (position.contracts === 0) {
-        position.liqPrice = null;
-        position.bankruptcyPrice = null;
-      }
+          // Normalize size to a positive scalar
+          let requestedSize = Number(size);
+          if (!Number.isFinite(requestedSize) || requestedSize <= 0) {
+            console.log(`⚠️ adjustDeleveraging: invalid size ${size} for ${address}`);
+            return;
+          }
 
-      console.log('⚠️ after contracts=' + position.contracts);
+          // ✅ Pull from cache instead of DB
+          const allPositions = Array.isArray(positionCache) ? positionCache : [];
+          let position = allPositions.find(p =>
+            p && p.address === address && (
+              // tolerate either style of cache
+              p.contractId == null || String(p.contractId) === String(contractId)
+            )
+          );
 
-      this.margins.set(position.address, position);
-      this.recordMarginMapDelta(
-        address,
-        contractId,
-        position.contracts,
-        contractChangeBN,
-        position.margin,
-        position.uPNL,
-        position.avgEntry,
-        'Deleveraging',
-        block
-      );
-      await this.saveMarginMap(block);
-      return position;
-    }
+          if (!position || !position.contracts) {
+            console.log(`⚠️ adjustDeleveraging: no cached position found for ${address} on contract ${contractId}`);
+            return position;
+          }
+
+          const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
+          const collateral = await ContractRegistry.getCollateralId(contractId);
+
+          const beforeContracts = Number(position.contracts) || 0;
+          const maxReducible = Math.abs(beforeContracts);
+
+          if (maxReducible <= 0) {
+            console.log(`⚠️ adjustDeleveraging: maxReducible is 0 for ${address}`);
+            return position;
+          }
+
+          // **Key rule: never adjust more than the current absolute size**
+          const effectiveSize = Math.min(requestedSize, maxReducible);
+
+          // Direction:
+          //  - sell = true  -> contractChange = -effectiveSize
+          //  - sell = false -> contractChange = +effectiveSize
+          const contractChange = sell ? -effectiveSize : effectiveSize;
+
+          console.log('⚠️ contractChange=' + contractChange + ' beforeContracts=' + beforeContracts);
+
+          const contractChangeBN = new BigNumber(contractChange);
+          const afterContracts = new BigNumber(beforeContracts).plus(contractChangeBN).toNumber();
+          position.contracts = afterContracts;
+
+          // Safety: never flip sign; clamp to zero
+          if (beforeContracts * afterContracts < 0) {
+            console.error(
+              `🔥 adjustDeleveraging sign flip for ${address}: before=${beforeContracts}, after=${afterContracts}. Clamping to 0.`
+            );
+            position.contracts = 0;
+          }
+
+          let reduction = await this.reduceMargin(
+            position,
+            contractChange,
+            initPerContract,
+            contractId,
+            address,
+            sell,
+            false,
+            0
+          );
+
+          console.log('reduction ' + reduction);
+
+          const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
+          console.log(JSON.stringify(hasSufficient));
+
+          if (!hasSufficient.hasSufficient) {
+            reduction = new BigNumber(reduction)
+              .minus(hasSufficient.shortfall)
+              .decimalPlaces(8)
+              .toNumber();
+          }
+
+          if (reduction !== 0) {
+            await TallyMap.updateBalance(
+              address,
+              collateral,
+              reduction,
+              0,
+              -reduction,
+              0,
+              'contractDelevMarginReturn',
+              block
+            );
+          }
+
+          if (position.contracts === 0) {
+            position.liqPrice = null;
+            position.bankruptcyPrice = null;
+          }
+
+          console.log('⚠️ after contracts=' + position.contracts);
+
+            // Find entry in the local cache that matches this position
+            const idx = positionCache.findIndex(p =>
+              p.address === position.address &&
+              String(p.contractId) === String(contractId)
+            );
+
+            // Replace it if found
+            if (idx >= 0) {
+              positionCache[idx] = { ...position };
+            }
+
+          this.recordMarginMapDelta(
+            address,
+            contractId,
+            position.contracts,
+            contractChangeBN,
+            position.margin,
+            position.uPNL,
+            position.avgEntry,
+            'Deleveraging',
+            block
+          );
+
+          // ❌ DO NOT save per-call anymore (persist once per contract later)
+          // await this.saveMarginMap(block);
+
+          return positionCache;
+        }
+
 
     async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
         console.log(`Starting dynamic deleveraging for contract ${contractId} at liquidation price ${liqPrice}`);
