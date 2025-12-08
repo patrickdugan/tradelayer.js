@@ -1112,18 +1112,19 @@ class Clearing {
             }
 
             //------------------------------------------------------------------
-            // NEGATIVE PNL — MUST BE PAID IMMEDIATELY IF SOLVENT
+            // NEGATIVE PNL — MUST BE PAID, but attempt solvency *before* liquidation
             //------------------------------------------------------------------
 
             const loss = pnl.abs();
             const available = new BigNumber(tally.available);
-            const margin    = new BigNumber(tally.margin);
-            const coverage  = available.plus(margin);
+            const margin    = new BigNumber(tally.margin).div(2);
+            let equity      = available.plus(margin);
 
-            if (coverage.gte(loss)) {
-                //--------------------------------------------------------------
-                // They CAN afford the loss → charge it now, NO liquidation
-                //--------------------------------------------------------------
+            // ----------------------------------------------------
+            // 1. If already solvent → no sourcing needed
+            // ----------------------------------------------------
+            if (equity.gte(loss)) {
+
                 await Tally.updateBalance(
                     pos.address,
                     collateralId,
@@ -1137,18 +1138,57 @@ class Clearing {
                 continue;
             }
 
-            //------------------------------------------------------------------
-            // INSUFFICIENT FUNDS → MUST LIQUIDATE (partial or total)
-            //------------------------------------------------------------------
-            const shortfall = loss.minus(coverage);
+            // ----------------------------------------------------
+            // 2. Otherwise: source loss first (available → reserve → x-contract)
+            // ----------------------------------------------------
+            const needed = loss.minus(equity);
 
+            const source = await Clearing.sourceLoss(
+                pos.address,
+                contractId,
+                collateralId,
+                needed,
+                blockHeight
+            );
+
+            // Recompute tally after sourcing
+            const after = await Tally.getTally(pos.address, collateralId);
+            const newAvail  = new BigNumber(after.available || 0);
+            const newMargin = new BigNumber(after.margin || 0);
+            equity          = newAvail.plus(newMargin);
+
+            const stillShort = loss.minus(equity);
+
+            // ----------------------------------------------------
+            // 3. If solvency achieved after sourcing → no liquidation
+            // ----------------------------------------------------
+            if (stillShort.lte(0)) {
+                await Tally.updateBalance(
+                    pos.address,
+                    collateralId,
+                    pnl, 0, 0, 0,
+                    'clearingPNL_after_sourcing',
+                    blockHeight
+                );
+
+                totalNeg = totalNeg.plus(loss);
+                pos._pendingPNL = pnl;
+                continue;
+            }
+
+            // ----------------------------------------------------
+            // 4. If STILL insolvent → must liquidate (partial or total)
+            // ----------------------------------------------------
             liqQueue.push({
                 address: pos.address,
                 pos,
-                shortfall,
-                coverage,
+                shortfall: stillShort,
+                coverage:   equity,
                 loss
             });
+
+            totalNeg = totalNeg.plus(loss);
+
 
             totalNeg = totalNeg.plus(loss);
             pos._pendingPNL = pnl;
@@ -1469,7 +1509,7 @@ class Clearing {
         // ---------------------------------------
         // 6. Insert order → attempt matching
         // ---------------------------------------
-        let obFill = new BigNumber(0);
+        let obFill = new BigNumber(0);  // always valid
 
         if (canFillSolvently) {
             const obKey = contractId.toString();
@@ -1481,21 +1521,33 @@ class Clearing {
             let trades = [];
 
             if (matchResult.matches.length > 0) {
-                trades = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+                trades = await orderbook.processContractMatches(
+                    matchResult.matches,
+                    blockHeight,
+                    false
+                );
             }
 
             await orderbook.saveOrderBook(matchResult.orderBook, obKey);
-            
-            if (splat.goodFilledSize > 0 && !splat.filledBelowLiqPrice) {
-                // Only count fills that were above bankruptcy price
-                obFill = new BigNumber(splat.goodFilledSize);
+
+            // Defensive: ensure goodFilledSize is numeric and safe
+            const gfs = (splat?.goodFilledSize ?? 0);
+
+            if (gfs > 0 && !splat.filledBelowLiqPrice) {
+                // Only count fills above bankruptcy price
+                obFill = new BigNumber(gfs);
             } else {
                 console.log(`⚠️ OB FILL INVALID → forcing full ADL for ${liqAmount} contracts`);
             }
         }
 
+        // ---------------------------------------
         // Remainder to ADL
-        const remainder = new BigNumber(liqAmount).minus(obFill).max(0).toNumber();
+        // ---------------------------------------
+        const remainder = BigNumber.max(
+            new BigNumber(liqAmount).minus(obFill),
+            new BigNumber(0)
+        ).toNumber();
         // ---------------------------------------
         // 7. Confiscate liquidation pool
         // ---------------------------------------
