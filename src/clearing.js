@@ -757,6 +757,78 @@ class Clearing {
         return excess
     }
 
+    static async sourceLoss(
+        address,
+        contractId,
+        collateralId,
+        requiredLoss,
+        blockHeight
+    ) {
+        const Tally = require('./tally.js');
+        const Orderbook = require('./orderbook.js');
+
+        let remaining = new BigNumber(requiredLoss);
+
+        console.log(`🧮 BEGIN LOSS SOURCING for ${address}, need ${remaining.toFixed(8)}`);
+
+        // 1. Use available balance
+        const t0 = await Tally.getTally(address, collateralId);
+        let avail = new BigNumber(t0.available || 0);
+
+        if (avail.gt(0)) {
+            const useA = BigNumber.min(avail, remaining);
+            console.log(`➡️ Using available ${useA}`);
+            await Tally.updateBalance(address, collateralId, -useA, 0, 0, 0, "loss_from_available", blockHeight);
+            remaining = remaining.minus(useA);
+        }
+
+        if (remaining.lte(0)) return { remaining: 0, stage: "available" };
+
+        // 2. Use margin on THIS contract (by canceling orders and freeing reserved)
+        console.log(`➡️ Sweeping contract-local orders for ${contractId}`);
+        await Orderbook.cancelExcessOrders(address, contractId, remaining, collateralId, blockHeight);
+
+        await Clearing.reconcileReserve(address, collateralId, blockHeight);
+
+        let t1 = await Tally.getTally(address, collateralId);
+        let avail1 = new BigNumber(t1.available || 0);
+
+        let freedLocal = avail1.minus(avail);
+        if (freedLocal.gt(0)) {
+            const useLocal = BigNumber.min(freedLocal, remaining);
+            console.log(`✔ Local freed ${useLocal}, applying to loss`);
+            await Tally.updateBalance(address, collateralId, -useLocal, 0, 0, 0, "loss_local_reserve", blockHeight);
+            remaining = remaining.minus(useLocal);
+            avail = avail1.minus(useLocal);
+        }
+
+        if (remaining.lte(0)) return { remaining: 0, stage: "localReserve" };
+
+        // 3. Cross-contract reserve scavenging
+        console.log(`➡️ Cross-contract scavenging…`);
+        const x = await Clearing.sourceCrossContractReserve(
+            address,
+            collateralId,
+            remaining,
+            contractId,
+            blockHeight
+        );
+
+        remaining = x.remaining;
+
+        // 4. Reconcile after scavenging
+        await Clearing.reconcileReserve(address, collateralId, blockHeight);
+
+        console.log(`🏁 LOSS SOURCING END — remaining: ${remaining}`);
+
+        return {
+            remaining: remaining.toNumber(),
+            stage: remaining.gt(0) ? "residual" : "cleared"
+        };
+    }
+
+
+
    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
 
@@ -1389,29 +1461,41 @@ class Clearing {
             });
         }
 
+        const canFillSolvently = (
+            splat.goodFilledSize > 0 &&
+            !splat.filledBelowLiqPrice
+        );
+
         // ---------------------------------------
         // 6. Insert order → attempt matching
         // ---------------------------------------
-        const obKey = contractId.toString();
-        let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
+        let obFill = new BigNumber(0);
 
-        obData = await orderbook.insertOrder(liq, obData, liq.sell, true);
+        if (canFillSolvently) {
+            const obKey = contractId.toString();
+            let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
 
-        const matchResult = await orderbook.matchContractOrders(obData);
-        let trades = [];
+            obData = await orderbook.insertOrder(liq, obData, liq.sell, true);
 
-        if (matchResult.matches.length > 0) {
-            trades = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+            const matchResult = await orderbook.matchContractOrders(obData);
+            let trades = [];
+
+            if (matchResult.matches.length > 0) {
+                trades = await orderbook.processContractMatches(matchResult.matches, blockHeight, false);
+            }
+
+            await orderbook.saveOrderBook(matchResult.orderBook, obKey);
+            
+            if (splat.goodFilledSize > 0 && !splat.filledBelowLiqPrice) {
+                // Only count fills that were above bankruptcy price
+                obFill = new BigNumber(splat.goodFilledSize);
+            } else {
+                console.log(`⚠️ OB FILL INVALID → forcing full ADL for ${liqAmount} contracts`);
+            }
         }
 
-        await orderbook.saveOrderBook(matchResult.orderBook, obKey);
-
-        let remainder = new BigNumber(liqAmount);
-        for (const t of trades) {
-            remainder = remainder.minus(t?.matchSize || 0);
-        }
-        remainder = BigNumber.max(0, remainder).toNumber();
-
+        // Remainder to ADL
+        const remainder = new BigNumber(liqAmount).minus(obFill).max(0).toNumber();
         // ---------------------------------------
         // 7. Confiscate liquidation pool
         // ---------------------------------------
