@@ -956,47 +956,67 @@ class Clearing {
     }
  
     static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
-        console.log(`\n=== UPDATE MARGIN MAPS CLEAN: contract=${contractId} block=${blockHeight} ===`);
+
+        console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
 
         const MarginMap = require('./marginMap.js');
         const Orderbook = require('./orderbook.js');
         const Tally = require('./tally.js');
-        const orderbook = await Orderbook.getOrderbookInstance(contractId);
+
         const marginMap = await MarginMap.getInstance(contractId);
 
-        // ============================================================
-        // 1) Load → Clone → Cache
-        // ============================================================
+        // ------------------------------------------------------------
+        // 1) Load raw positions → init clearing cache
+        // ------------------------------------------------------------
         const rawPositions = await marginMap.getAllPositions(contractId);
         const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
         let positions = Clearing.getPositionsFromCache(ctxKey);
 
-        // ============================================================
-        // 2) Get marks + normalize PNL calculation inputs
-        // ============================================================
+        // ------------------------------------------------------------
+        // 2) Load prices & normalize marks
+        // ------------------------------------------------------------
         const blob = await Clearing.getPriceChange(blockHeight, contractId);
-        const lastPrice = blob.lastPrice || null;
-        const thisPrice = blob.thisPrice;
+        let lastPrice = blob.lastPrice || null;
+        let thisPrice = blob.thisPrice;
 
         await Clearing.normalizePositionMarks(
             positions,
             lastPrice,
-            null,               // no DB writes
+            null,            // no DB writes
             contractId,
             blockHeight
         );
 
-        // ============================================================
-        // 3) First sweep — compute PNL ONLY, no liquidations yet
-        // ============================================================
-        const pnlList = [];
-        let totalPositive = new BigNumber(0);
-        let totalNegative = new BigNumber(0);
+        console.log(`📈 Price diff: last=${lastPrice} → this=${thisPrice}`);
 
+        // ------------------------------------------------------------
+        // 3) Accumulators
+        // ------------------------------------------------------------
+        let systemicLoss   = new BigNumber(0);
+        let totalPos       = new BigNumber(0);
+        let totalNeg       = new BigNumber(0);
+
+        const orderbook = await Orderbook.getOrderbookInstance(contractId);
+
+        // queue of forced liquidations
+        const liqQueue = [];
+
+        // ------------------------------------------------------------
+        // 4) FIRST PASS — Compute PNL & attempt to charge losers
+        // ------------------------------------------------------------
         for (const pos of positions) {
+
             if (!pos.contracts) continue;
 
-            const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            const tally = await Tally.getTally(pos.address, collateralId);
+
+            // Fallback for missing lastPrice
+            const effectiveLast = lastPrice ? new BigNumber(lastPrice)
+                                            : new BigNumber(pos.avgPrice);
+
+            // count block deltas
+            const opened   = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            const delta    = Clearing.getDeltaThisBlock(contractId, pos.address)  || 0;
             const oldContracts = pos.contracts - opened;
 
             const pnl = Clearing.calculatePnLChange({
@@ -1009,117 +1029,144 @@ class Clearing {
                 notional
             });
 
-            pnlList.push({ address: pos.address, pnl, pos });
+            // Clear this counter
+            pos.newPosThisBlock = 0;
 
-            if (pnl > 0) totalPositive = totalPositive.plus(pnl);
-            else totalNegative = totalNegative.plus(pnl);
+            if (pnl.gt(0)) {
+                // Profit → added in Phase 3
+                totalPos = totalPos.plus(pnl);
+                pos._pendingPNL = pnl;
+                continue;
+            }
 
-            // apply PNL to cache *not the DB*
-            Clearing.updatePositionInCache(ctxKey, pos.address, o => ({
-                ...o,
-                // no resets here
-                unrealizedPNL: pnl
-            }));
-        }
+            //------------------------------------------------------------------
+            // NEGATIVE PNL — MUST BE PAID IMMEDIATELY IF SOLVENT
+            //------------------------------------------------------------------
 
-        // ============================================================
-        // 4) Second sweep — identify liquidations but DO NOT process yet
-        // ============================================================
-        const liqQueue = [];
+            const loss = pnl.abs();
+            const available = new BigNumber(tally.available);
+            const margin    = new BigNumber(tally.margin);
+            const coverage  = available.plus(margin);
 
-        for (const { address, pnl, pos } of pnlList) {
-            if (pnl >= 0) continue;
+            if (coverage.gte(loss)) {
+                //--------------------------------------------------------------
+                // They CAN afford the loss → charge it now, NO liquidation
+                //--------------------------------------------------------------
+                await Tally.updateBalance(
+                    pos.address,
+                    collateralId,
+                    pnl, 0, 0, 0,
+                    'clearingPNL',
+                    blockHeight
+                );
 
-            const tally = await Tally.getTally(address, collateralId);
-            const shortfall = Math.abs(pnl) - (tally.available + tally.margin);
+                totalNeg = totalNeg.plus(loss);
+                pos._pendingPNL = pnl;
+                continue;
+            }
 
-            if (shortfall <= 0) continue;  // covered by available + margin
+            //------------------------------------------------------------------
+            // INSUFFICIENT FUNDS → MUST LIQUIDATE (partial or total)
+            //------------------------------------------------------------------
+            const shortfall = loss.minus(coverage);
 
-            // This position goes into liquidation queue
             liqQueue.push({
-                address,
+                address: pos.address,
                 pos,
                 shortfall,
-                isPartial: shortfall < tally.margin
+                coverage,
+                loss
             });
+
+            totalNeg = totalNeg.plus(loss);
+            pos._pendingPNL = pnl;
         }
 
-        // ============================================================
-        // 5) Process liquidations sequentially
-        // ============================================================
-        let systemicLoss = new BigNumber(0);
+        // ------------------------------------------------------------
+        // 5) SECOND PASS — Process liquidation queue (ADL/handleLiquidation)
+        // ------------------------------------------------------------
         const liqEvents = [];
 
-        for (const entry of liqQueue) {
-            const { address, pos, shortfall, isPartial } = entry;
+        for (const q of liqQueue) {
 
-            console.log(`⚡ QUEUED LIQ: ${address} shortfall=${shortfall} partial=${isPartial}`);
+            const tally = await Tally.getTally(q.address, collateralId);
 
-            // A) cancel all open orders
-            await orderbook.cancelAllOrdersForAddress(address, contractId, blockHeight, collateralId);
+            const liquidationType =
+                q.coverage.gt(0) ? "partial" : "total";
 
-            // B) determine liquidation type
-            const type = isPartial ? "partial" : "total";
-
-            const tallyNow = await Tally.getTally(address, collateralId);
-
-            // C) perform liquidation
             const liq = await Clearing.handleLiquidation(
                 ctxKey,
                 orderbook,
                 Tally,
-                pos,
+                q.pos,
                 contractId,
                 blockHeight,
                 inverse,
                 collateralId,
-                type,
-                isPartial ? -shortfall : null,
+                liquidationType,
+                q.shortfall.negated().toNumber(),   // margin dent passed as negative
                 notional,
                 blob.thisPrice,
-                false,
-                0,
-                tallyNow
+                true,                                // applyDent
+                q.shortfall.toNumber(),              // markShortfall
+                tally
             );
 
-            if (liq) {
-                systemicLoss = systemicLoss.plus(liq.systemicLoss);
-                liqEvents.push(liq);
+            if (!liq) continue;
 
-                // Apply ADL results to cache
-                if (liq.adlResult?.counterparties?.length) {
-                    positions = Clearing.updatePositions(positions, liq.adlResult.counterparties);
-                    positions = Clearing.flattenMark(positions);
-                }
+            // Track system-level loss
+            systemicLoss = systemicLoss.plus(liq.systemicLoss);
+
+            // Save liquidation event for insurance + logging later
+            liqEvents.push({
+                address: q.address,
+                liquidationType,
+                shortfall: q.shortfall.toNumber(),
+                coverage: q.coverage.toNumber(),
+                loss: q.loss.toNumber(),
+                systemicLoss: liq.systemicLoss,
+                counterparties: liq.counterparties ?? [],
+                contractsLiquidated: liq.totalDeleveraged ?? 0
+            });
+
+            // Merge position deltas
+            if (liq.counterparties?.length > 0) {
+                positions = Clearing.updatePositions(positions, liq.counterparties);
             }
         }
 
-        // ============================================================
-        // 6) Apply all profitable PNL to Tally
-        // ============================================================
-        for (const { address, pnl } of pnlList) {
-            if (pnl > 0) {
-                await Tally.updateBalance(address, collateralId, pnl, 0, 0, 0, 'clearing', blockHeight);
+
+        // ------------------------------------------------------------
+        // 6) THIRD PASS — Apply positive PNL credits
+        // ------------------------------------------------------------
+        for (const pos of positions) {
+            if (pos._pendingPNL && pos._pendingPNL.gt(0)) {
+                await Tally.updateBalance(
+                    pos.address,
+                    collateralId,
+                    pos._pendingPNL,
+                    0, 0, 0,
+                    'clearingCredit',
+                    blockHeight
+                );
             }
+            delete pos._pendingPNL;
         }
 
-        // subtract systemic loss from global negative PNL
-        totalNegative = totalNegative.minus(systemicLoss);
+        // ------------------------------------------------------------
+        // 7) Update systemic accounting
+        // ------------------------------------------------------------
+        totalNeg = totalNeg.minus(systemicLoss);
+        const pnlDelta = totalPos.minus(totalNeg);
 
-        // ============================================================
-        // 7) Flush + merge positions ONCE
-        // ============================================================
+        // ------------------------------------------------------------
+        // 8) Flush cache → merge positions → DB write
+        // ------------------------------------------------------------
         const finalPositions = Clearing.flushPositionCache(ctxKey);
         await marginMap.mergePositions(finalPositions, contractId, true);
 
-        return {
-            positions: finalPositions,
-            systemicLoss,
-            liqEvents,
-            pnlDelta: totalPositive.minus(totalNegative)
-        };
+        return { positions, liqEvents, systemicLoss, pnlDelta };
     }
-
 
     static flattenMark(positions) {
       positions.forEach(pos => {
@@ -1682,7 +1729,7 @@ class Clearing {
                 .times(newBN)
                 .times(notionalBN);
 
-            return pnlOld.plus(pnlNew).decimalPlaces(8).toNumber();
+            return pnlOld.plus(pnlNew).decimalPlaces(8);
         } 
         else {
             // inverse
