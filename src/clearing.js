@@ -1499,14 +1499,11 @@ class Clearing {
         // 11. Update position cache — CPs
         // ---------------------------------------
         for (const cp of (result.counterparties || [])) {
-            Clearing.updatePositionInCache(ctxKey, cp.address, (old) => {
-                const c = { ...old };
-                const pre = c.contracts;
-                c.contracts = pre > 0 ? pre - cp.matchSize : pre + cp.matchSize;
-                if (pre * c.contracts < 0) c.contracts = 0;
-                return c;
+            Clearing.updatePositionInCache(ctxKey, cp.address, (_old) => {
+                return { ...cp.updatedPosition };   // authoritative result from ADL
             });
         }
+
 
         // ---------------------------------------
         // 12. Liquidated account → zero contracts

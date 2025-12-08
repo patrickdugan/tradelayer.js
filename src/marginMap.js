@@ -1564,6 +1564,7 @@ class MarginMap {
         result.totalDeleveraged += matchSize;
 
         result.counterparties.push({
+          updatedPosition: updatedPos,   
           address: cp.address,
           matchSize,
           fromOld,
