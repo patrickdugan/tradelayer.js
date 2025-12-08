@@ -1407,169 +1407,145 @@ class MarginMap {
     // - Returns ONLY pool distribution data (per-CP share of liquidationPool)
     // =======================
     async simpleDeleverage(
-      positionCache,        // ✅ NEW: pass the array, not ctxKey
+      positionCache,        
       contractId,
       unfilledContracts,
       sell,
       liqPrice,
       liquidatingAddress,
-      isInverse,
+      inverse,
       notional,
       block,
       markPrice,
       collateralId,
-      liquidationPool  // margin + available stripped from liquidated position
+      liquidationPool
     ) {
       console.log(`\n🔸 [simpleDeleverage] unfilled=${unfilledContracts}, pool=${liquidationPool}`);
 
       const TallyMap = require('./tally.js');
       const Clearing = require('./clearing.js');
-      const ContractRegistry = require('./contractRegistry.js');
       const BigNumber = require('bignumber.js');
 
       const originalUnfilled = new BigNumber(unfilledContracts);
-      let remainingSize = new BigNumber(unfilledContracts);
+      let remaining = new BigNumber(unfilledContracts);
       const poolBN = new BigNumber(liquidationPool || 0);
-
-      if (remainingSize.lte(0) || remainingSize.isNaN()) {
-        return {
-          contractId,
-          liquidationPool: poolBN.toNumber(),
-          totalDeleveraged: 0,
-          counterparties: [],
-          poolAssignments: [],
-          totalPoolDistributed: 0,
-          remainingUnfilled: remainingSize.toNumber()
-        };
-      }
-
-      let totalPoolDistributed = new BigNumber(0);
 
       const result = {
         contractId,
         liquidatingAddress,
-        attemptedDeleverage: remainingSize.toNumber(),
+        attemptedDeleverage: remaining.toNumber(),
         liquidationPool: poolBN.toNumber(),
         totalDeleveraged: 0,
         counterparties: [],
         poolAssignments: [],
         totalPoolDistributed: 0,
         remainingUnfilled: 0,
-        undistributedPool: 0
+        undistributedPool: 0,
+        modifiedCache: positionCache  // will overwrite as needed
       };
 
-      // ✅ Use passed-in cache instead of DB
-      const allPositions = Array.isArray(positionCache) ? positionCache : [];
-      console.log(` Found ${allPositions.length} cached positions`);
+      if (remaining.lte(0)) return result;
 
-      // Filter to opposite side
-      let counterparties = allPositions.filter(p => {
-        if (!p || p.address === liquidatingAddress || !p.contracts) return false;
-        return sell ? p.contracts < 0 : p.contracts > 0;
+      // -------------------------------------------------------
+      // STEP 1: Select counterparties (opposite side only)
+      // -------------------------------------------------------
+      let cps = positionCache
+        .map((p, idx) => ({ ...p, _i: idx })) // track index for later mutation
+        .filter(p => {
+          if (!p.contracts) return false;
+          if (p.address === liquidatingAddress) return false;
+          return sell ? p.contracts < 0 : p.contracts > 0;
+        });
+
+      // no candidates
+      if (!cps.length) return result;
+
+      // -------------------------------------------------------
+      // STEP 2: Add vintage breakdown
+      // -------------------------------------------------------
+      cps = cps.map(p => {
+        const v = Clearing.getVintageBreakdown(contractId, p.address, p.contracts);
+        return { ...p, oldContracts: v.oldContracts, newContracts: v.newContracts };
       });
 
-      if (!counterparties.length) {
-        console.log('❌ No counterparties for deleverage');
+      // -------------------------------------------------------
+      // STEP 3: Profitability filter (your rule)
+      // -------------------------------------------------------
+      cps = cps.filter(p => {
+        if (p.contracts > 0) {
+          return new BigNumber(markPrice).gt(p.avgPrice);  // long profitable if mark > avg
+        } else {
+          return new BigNumber(markPrice).lt(p.avgPrice);  // short profitable if mark < avg
+        }
+      });
+
+      if (!cps.length) {
+        console.log("❌ No profitable counterparties for ADL");
         return result;
       }
 
-      // Enrich with vintage breakdown
-      counterparties = counterparties.map(pos => {
-        const v = Clearing.getVintageBreakdown(contractId, pos.address, pos.contracts);
-        return {
-          ...pos,
-          oldContracts: v.oldContracts,
-          newContracts: v.newContracts
-        };
+      // -------------------------------------------------------
+      // STEP 4: Sort by ADL priority
+      // -------------------------------------------------------
+      cps.sort((a, b) => {
+        // 1. Old contracts first
+        let d = (b.oldContracts || 0) - (a.oldContracts || 0);
+        if (d !== 0) return d;
+
+        // 2. Profit magnitude
+        const aProf = Math.abs(markPrice - a.avgPrice);
+        const bProf = Math.abs(markPrice - b.avgPrice);
+        d = bProf - aProf;
+        if (d !== 0) return d;
+
+        // 3. Larger size
+        return Math.abs(b.contracts) - Math.abs(a.contracts);
       });
 
-      // Sort: more old contracts first, then larger abs size
-      counterparties.sort((a, b) => (
-        (b.oldContracts || 0) - (a.oldContracts || 0) ||
-        Math.abs(b.contracts || 0) - Math.abs(a.contracts || 0)
-      ));
+      // -------------------------------------------------------
+      // STEP 5: Main ADL loop
+      // -------------------------------------------------------
+      let totalPoolDistributed = new BigNumber(0);
 
-      console.log(`📋 Counterparties by vintage:`);
-      for (const cp of counterparties) {
-        console.log(`   ${cp.address}: old=${cp.oldContracts}, new=${cp.newContracts}, size=${cp.contracts}`);
-      }
+      for (const cp of cps) {
+        if (remaining.lte(0)) break;
 
-      // (kept, even if currently unused here)
-      await ContractRegistry.getInitialMargin(contractId, liqPrice);
-
-      // ================
-      // MAIN LOOP
-      // ================
-      for (const pos of counterparties) {
-        if (remainingSize.lte(0)) break;
-
-        const preContracts = Number(pos.contracts || 0);
-        const isLong = preContracts > 0;
-        const posSize = Math.abs(preContracts);
+        const posSize = Math.abs(cp.contracts);
         if (posSize <= 0) continue;
 
-        const maxMatch = Math.min(posSize, remainingSize.toNumber());
-        const fromOld = Math.min(maxMatch, pos.oldContracts || 0);
-        const fromNew = Math.min(maxMatch - fromOld, pos.newContracts || 0);
-        const matchSize = fromOld + fromNew;
+        const matchSize = Math.min(posSize, remaining.toNumber());
 
-        if (matchSize <= 0) continue;
+        const fromOld = Math.min(matchSize, cp.oldContracts || 0);
+        const fromNew = Math.min(matchSize - fromOld, cp.newContracts || 0);
 
-        console.log(`• ${pos.address}: matchSize=${matchSize} (${fromOld} old + ${fromNew} new)`);
-
-        // ==========================
-        // 1. POOL SHARE (pro-rata)
-        // ==========================
+        // pool share
         const ratio = originalUnfilled.gt(0)
           ? new BigNumber(matchSize).div(originalUnfilled)
           : new BigNumber(0);
 
         const poolShare = poolBN.times(ratio).dp(8);
 
-        // ==========================
-        // 2. RECORD TO CLEARING (in-RAM)
-        // ==========================
-        Clearing.recordDeleverageTrade(contractId, pos.address, {
-          matchSize,
-          fromOld,
-          fromNew,
-          poolCredit: poolShare.toNumber(),
-          liqPrice,
-          markPrice,
-          preContracts,
-          isLong,
-          block
-        });
-
-        // ==========================
-        // 3. OPTIONAL CLEARING PNL CLAWBACK
-        //    ✅ Apply ONLY to OLD contracts
-        // ==========================
+        // clawback ONLY from old tranche
         if (fromOld > 0) {
-          try {
-            await this.clawbackClearingProfit(
-              pos,
-              markPrice,
-              fromOld,            // ✅ old-only
-              notional,
-              liqPrice,
-              collateralId,
-              block,
-              TallyMap,
-              sell,
-              isInverse
-            );
-          } catch (e) {
-            console.log(`⚠️ clawbackClearingProfit failed for ${pos.address}: ${e.message}`);
-          }
+          await this.clawbackClearingProfit(
+            cp,
+            markPrice,
+            fromOld,
+            notional,
+            liqPrice,
+            collateralId,
+            block,
+            TallyMap,
+            sell,
+            inverse
+          );
         }
 
-        // ==========================
-        // 4. SHRINK POSITION & RETURN MARGIN
-        // ==========================
-        positionCache = await this.adjustDeleveraging(
+        // adjust deleveraging — must return updated single position
+        const updatedPos = await this.adjustDeleveraging(
           positionCache,
-          pos.address,
+          cp._i,          // index for in-place array mutation
+          cp.address,
           contractId,
           matchSize,
           sell,
@@ -1578,15 +1554,17 @@ class MarginMap {
           TallyMap
         );
 
+        // write back to array
+        result.modifiedCache[cp._i] = updatedPos;
 
-        // Track totals
+        // accumulate results
+        remaining = remaining.minus(matchSize);
         totalPoolDistributed = totalPoolDistributed.plus(poolShare);
+
         result.totalDeleveraged += matchSize;
 
-        // Legacy / audit view
         result.counterparties.push({
-          address: pos.address,
-          contracts: pos.contracts,
+          address: cp.address,
           matchSize,
           fromOld,
           fromNew,
@@ -1594,34 +1572,22 @@ class MarginMap {
         });
 
         result.poolAssignments.push({
-          address: pos.address,
+          address: cp.address,
           matchSize,
           fromOld,
           fromNew,
           poolShare: poolShare.toNumber()
         });
-
-        remainingSize = remainingSize.minus(matchSize);
       }
 
+      // summary
       result.totalPoolDistributed = totalPoolDistributed.dp(8).toNumber();
-      result.remainingUnfilled = remainingSize.dp(8).toNumber();
+      result.remainingUnfilled = remaining.dp(8).toNumber();
       result.undistributedPool = poolBN.minus(totalPoolDistributed).dp(8).toNumber();
-      result.modifiedCache = positionCache
-      if (remainingSize.isZero()) {
-        const err = poolBN.minus(totalPoolDistributed).abs();
-        if (err.gt(1e-8)) {
-          console.error(`🔥 Pool conservation error: ${err.toFixed(8)}`);
-        } else {
-          console.log(`✅ Pool conserved: ${totalPoolDistributed.toFixed(8)} of ${poolBN.toFixed(8)}`);
-        }
-      } else {
-        console.log(`⚠️ Partial deleverage: ${remainingSize.toNumber()} contracts unfilled, undistributedPool=${result.undistributedPool}`);
-      }
 
-      console.log('tally updates in delev '+JSON.stringify(result));
       return result;
     }
+
 
     // =======================
     // calcPriceDelta - PnL helper
@@ -1770,74 +1736,41 @@ class MarginMap {
     // adjustDeleveraging
     // =======================
     async adjustDeleveraging(
-          positionCache,   // ✅ NEW
-          address,
-          contractId,
-          size,
-          sell,
-          block,
-          liqPrice,
-          TallyMap
-        ) {
-          console.log(`Adjusting position for ${address}: requested reduce ${size} contracts on contract ${contractId} for side ${sell}`);
-          const ContractRegistry = require('./contractRegistry.js');
-          const BigNumber = require('bignumber.js');
+        positionCache,
+        address,
+        contractId,
+        size,
+        sell,
+        block,
+        liqPrice,
+        TallyMap
+    ) {
+        console.log(`Adjusting position for ${address}: reduce ${size} contracts on ${contractId}`);
 
-          // Normalize size to a positive scalar
-          let requestedSize = Number(size);
-          if (!Number.isFinite(requestedSize) || requestedSize <= 0) {
-            console.log(`⚠️ adjustDeleveraging: invalid size ${size} for ${address}`);
-            return;
-          }
+        const ContractRegistry = require('./contractRegistry.js');
+        const BigNumber = require('bignumber.js');
 
-          // ✅ Pull from cache instead of DB
-          const allPositions = Array.isArray(positionCache) ? positionCache : [];
-          let position = allPositions.find(p =>
-            p && p.address === address && (
-              // tolerate either style of cache
-              p.contractId == null || String(p.contractId) === String(contractId)
-            )
-          );
+        let requestedSize = Number(size);
+        if (!requestedSize || requestedSize <= 0) return positionCache[address];
 
-          if (!position || !position.contracts) {
-            console.log(`⚠️ adjustDeleveraging: no cached position found for ${address} on contract ${contractId}`);
-            return position;
-          }
+        let position = positionCache[address];
+        if (!position || !position.contracts) return position;
 
-          const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
-          const collateral = await ContractRegistry.getCollateralId(contractId);
+        const before = Number(position.contracts);
+        const maxReducible = Math.abs(before);
+        if (maxReducible <= 0) return position;
 
-          const beforeContracts = Number(position.contracts) || 0;
-          const maxReducible = Math.abs(beforeContracts);
+        const effectiveSize = Math.min(requestedSize, maxReducible);
+        const contractChange = sell ? -effectiveSize : effectiveSize;
 
-          if (maxReducible <= 0) {
-            console.log(`⚠️ adjustDeleveraging: maxReducible is 0 for ${address}`);
-            return position;
-          }
+        const after = before + contractChange;
+        position.contracts = (before * after < 0) ? 0 : after;
 
-          // **Key rule: never adjust more than the current absolute size**
-          const effectiveSize = Math.min(requestedSize, maxReducible);
+        // Return margin
+        const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
+        const collateral = await ContractRegistry.getCollateralId(contractId);
 
-          // Direction:
-          //  - sell = true  -> contractChange = -effectiveSize
-          //  - sell = false -> contractChange = +effectiveSize
-          const contractChange = sell ? -effectiveSize : effectiveSize;
-
-          console.log('⚠️ contractChange=' + contractChange + ' beforeContracts=' + beforeContracts);
-
-          const contractChangeBN = new BigNumber(contractChange);
-          const afterContracts = new BigNumber(beforeContracts).plus(contractChangeBN).toNumber();
-          position.contracts = afterContracts;
-
-          // Safety: never flip sign; clamp to zero
-          if (beforeContracts * afterContracts < 0) {
-            console.error(
-              `🔥 adjustDeleveraging sign flip for ${address}: before=${beforeContracts}, after=${afterContracts}. Clamping to 0.`
-            );
-            position.contracts = 0;
-          }
-
-          let reduction = await this.reduceMargin(
+        let reduction = await this.reduceMargin(
             position,
             contractChange,
             initPerContract,
@@ -1846,68 +1779,37 @@ class MarginMap {
             sell,
             false,
             0
-          );
+        );
 
-          console.log('reduction ' + reduction);
-
-          const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
-          console.log(JSON.stringify(hasSufficient));
-
-          if (!hasSufficient.hasSufficient) {
+        const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
+        if (!hasSufficient.hasSufficient) {
             reduction = new BigNumber(reduction)
-              .minus(hasSufficient.shortfall)
-              .decimalPlaces(8)
-              .toNumber();
-          }
-
-          if (reduction !== 0) {
-            await TallyMap.updateBalance(
-              address,
-              collateral,
-              reduction,
-              0,
-              -reduction,
-              0,
-              'contractDelevMarginReturn',
-              block
-            );
-          }
-
-          if (position.contracts === 0) {
-            position.liqPrice = null;
-            position.bankruptcyPrice = null;
-          }
-
-          console.log('⚠️ after contracts=' + position.contracts);
-
-            // Find entry in the local cache that matches this position
-            const idx = positionCache.findIndex(p =>
-              p.address === position.address &&
-              String(p.contractId) === String(contractId)
-            );
-
-            // Replace it if found
-            if (idx >= 0) {
-              positionCache[idx] = { ...position };
-            }
-
-          this.recordMarginMapDelta(
-            address,
-            contractId,
-            position.contracts,
-            contractChangeBN,
-            position.margin,
-            position.uPNL,
-            position.avgEntry,
-            'Deleveraging',
-            block
-          );
-
-          // ❌ DO NOT save per-call anymore (persist once per contract later)
-          // await this.saveMarginMap(block);
-
-          return positionCache;
+                .minus(hasSufficient.shortfall)
+                .dp(8)
+                .toNumber();
         }
+
+        if (reduction !== 0) {
+            await TallyMap.updateBalance(
+                address,
+                collateral,
+                reduction,
+                0,
+                -reduction,
+                0,
+                'contractDelevMarginReturn',
+                block
+            );
+        }
+
+        if (position.contracts === 0) {
+            position.bankruptcyPrice = null;
+            position.averagePrice = null;
+            position.unrealizedPNL = 0;
+        }
+
+        return position;
+    }
 
 
     async dynamicDeleverage(contractId, side, unfilledContracts, liqPrice) {
