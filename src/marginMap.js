@@ -1472,29 +1472,24 @@ class MarginMap {
         return { ...p, oldContracts: v.oldContracts, newContracts: v.newContracts };
       });
 
-      // -------------------------------------------------------
-      // STEP 3: Profitability filter - FIXED
-      // For ADL, we want the PROFITABLE side - those who would receive clearing PNL
-      // Long profitable when mark > avgPrice
-      // Short profitable when mark < avgPrice
-      // -------------------------------------------------------
-      cps = cps.filter(p => {
-        const markBN = new BigNumber(markPrice);
-        const avgBN = new BigNumber(p.avgPrice || 0);
-        
-        if (p.contracts > 0) {
-          // Long: profitable if mark > avg
-          return markBN.gt(avgBN);
-        } else {
-          // Short: profitable if mark < avg
-          return markBN.lt(avgBN);
-        }
-      });
-
-      if (!cps.length) {
-        console.log("❌ No profitable counterparties for ADL");
-        return result;
-      }
+        // -------------------------------------------------------
+        // STEP 3: Profitability filter - use mark-to-mark, not avgPrice
+        // -------------------------------------------------------
+        cps = cps.filter(p => {
+            // If no lastMark, we can't determine profitability - include them
+            if (!p.lastMark) return true;
+            
+            const lastMarkBN = new BigNumber(p.lastMark);
+            const markBN = new BigNumber(markPrice);
+            
+            // Long (contracts > 0): profitable if mark went UP from lastMark
+            // Short (contracts < 0): profitable if mark went DOWN from lastMark
+            if (p.contracts > 0) {
+                return markBN.gt(lastMarkBN);
+            } else {
+                return markBN.lt(lastMarkBN);
+            }
+        });
 
       // -------------------------------------------------------
       // STEP 4: Sort by ADL priority
@@ -1539,7 +1534,7 @@ class MarginMap {
         // CRITICAL FIX: Cap pool distribution at the actual liquidation pool
         const poolShare = poolBN.times(ratio).dp(8);
 
-        // clawback ONLY from old tranche
+        /*// clawback ONLY from old tranche
         if (fromOld > 0) {
           await this.clawbackClearingProfit(
             cp,
@@ -1553,7 +1548,7 @@ class MarginMap {
             sell,
             inverse
           );
-        }
+        }*/
 
         // adjust deleveraging — reduce position by matchSize only
         const updatedPos = await this.adjustDeleveraging(

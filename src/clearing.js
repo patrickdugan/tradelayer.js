@@ -1079,7 +1079,7 @@ class Clearing {
             if (!pos.contracts) continue;
             const tally = await Tally.getTally(pos.address, collateralId);
 
-            const opened   = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
             const oldContracts = pos.contracts - opened;
 
             const pnl = Clearing.calculatePnLChange({
@@ -1095,7 +1095,7 @@ class Clearing {
             pos.newPosThisBlock = 0;
 
             // ---------------------------
-            // PROFIT
+            // PROFIT — store for later credit
             // ---------------------------
             if (pnl.gt(0)) {
                 totalPos = totalPos.plus(pnl);
@@ -1108,32 +1108,26 @@ class Clearing {
             // ---------------------------
             const loss = pnl.abs();
             const available = new BigNumber(tally.available || 0);
-
-            // MAINTENANCE MARGIN = margin / 2
             const maintMargin = new BigNumber(tally.margin || 0).div(2);
-
             const coverage = available.plus(maintMargin);
 
             if (coverage.gte(loss)) {
-                //
                 // SOLVENT → PAY LOSS IMMEDIATELY
-                //
                 await Tally.updateBalance(
                     pos.address,
                     collateralId,
-                    pnl, 0, 0, 0,
+                    pnl.toNumber(),  // negative number
+                    0, 0, 0,
                     'clearingPNL',
                     blockHeight
                 );
 
                 totalNeg = totalNeg.plus(loss);
-                pos._pendingPNL = pnl;
+                pos._pendingPNL = pnl;  // store so we track it
                 continue;
             }
 
-            //
-            // INSUFFICIENT FUNDS → MUST LIQUIDATE
-            //
+            // INSUFFICIENT FUNDS → LIQUIDATE
             const shortfall = loss.minus(coverage);
 
             liqQueue.push({
@@ -1202,19 +1196,47 @@ class Clearing {
         }
 
         // ------------------------------------------------------------
+        // 6) THIRD PASS — Apply positive PNL (credits)
+        // ------------------------------------------------------------
+        positions = Clearing.getPositionsFromCache(ctxKey);
+        console.log('updated post-liq positions '+JSON.stringify(positions))
+        // ------------------------------------------------------------
         // 6) THIRD PASS — Apply positive PNL
         // ------------------------------------------------------------
+        positions = Clearing.getPositionsFromCache(ctxKey);
+
         for (const pos of positions) {
-            if (pos._pendingPNL && pos._pendingPNL.gt(0)) {
+            // Skip zero-contract positions (fully liquidated)
+            if (!pos.contracts) {
+                delete pos._pendingPNL;
+                continue;
+            }
+
+            // RECALCULATE PNL based on CURRENT contract count (post-ADL)
+            const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            const oldContracts = pos.contracts - opened;
+
+            const pnl = Clearing.calculatePnLChange({
+                oldContracts,
+                newContracts: opened,
+                avgEntryPrice: pos.avgPrice,
+                previousMarkPrice: blob.lastPrice,
+                currentMarkPrice: blob.thisPrice,
+                inverse,
+                notional
+            });
+
+            if (pnl.gt(0)) {
                 await Tally.updateBalance(
                     pos.address,
                     collateralId,
-                    pos._pendingPNL,
+                    pnl.toNumber(),
                     0, 0, 0,
                     'clearingCredit',
                     blockHeight
                 );
             }
+
             delete pos._pendingPNL;
         }
 
@@ -1267,6 +1289,32 @@ class Clearing {
         }
       });
       return positions;
+    }
+
+    // ============================================
+    // ADD TO clearing.js - new helper function
+    // ============================================
+    static calculateMarkToMarkPNL({ contracts, fromPrice, toPrice, inverse, notional }) {
+        const Big = BigNumber;
+        const c = new Big(contracts);
+        const from = new Big(fromPrice);
+        const to = new Big(toPrice);
+        const n = new Big(notional || 1);
+
+        if (from.isZero() || to.isZero()) {
+            return new Big(0);
+        }
+
+        let pnl;
+        if (!inverse) {
+            // Linear: PNL = (toPrice - fromPrice) * contracts * notional
+            pnl = to.minus(from).times(c).times(n);
+        } else {
+            // Inverse: PNL = (1/fromPrice - 1/toPrice) * contracts * notional
+            pnl = new Big(1).div(from).minus(new Big(1).div(to)).times(c).times(n);
+        }
+
+        return pnl.dp(8);
     }
 
     static recomputeContractBalanceSnapshot(pos, remainder, price, isLong, inverse) {
@@ -1468,7 +1516,7 @@ class Clearing {
         const canFillSolvently =
             splat.goodFilledSize > 0 &&
             !splat.filledBelowLiqPrice;
-            
+
         const A = new Big(tallySnapshot.available || 0);
         const M = new Big(tallySnapshot.margin || 0);
         const maint = M.div(2);
@@ -1913,6 +1961,88 @@ class Clearing {
         //    throw error;
         //}
     }
+
+    static async resolveInsuranceMeta(tradingContractId) {
+        const ContractRegistry = require('./contractRegistry.js');
+
+        // 1) Does this trading contract use an oracle-style insurance fund?
+        const isOracle = await ContractRegistry.isOracleContract(tradingContractId);
+
+        // 2) If you later support cross-fund mapping, hook it here.
+        // For now, simplest: insurance fund is attached to same series.
+        const insuranceContractId = tradingContractId;
+
+        // 3) Storage key suffix policy
+        const fundKey = isOracle ? `${insuranceContractId}-oracle` : `${insuranceContractId}`;
+
+        return { insuranceContractId, isOracle, fundKey };
+    }
+
+    static async distributeInsuranceProRataToDelev(
+        tradingContractId,
+        collateralId,
+        totalLoss,
+        blockHeight
+    ) {
+        if (!totalLoss || totalLoss.abs().lte(0)) return;
+
+        const Clearing = this;
+        const BigNumber = require('bignumber.js');
+        const Tally = require('./tally.js');
+        const Insurance = require('./insurance.js');
+
+        const { insuranceContractId, isOracle } =
+            await Clearing.resolveInsuranceMeta(tradingContractId);
+
+        // 1) Pull the delev map for the *trading* contract
+        const delevMap = Clearing.delevTrades?.get(tradingContractId);
+        if (!delevMap || delevMap.size === 0) return;
+
+        // 2) Compute payout from the *correct* fund behavior
+        const insurance = await Insurance.getInstance(insuranceContractId, isOracle);
+        const payout = await insurance.calcPayout(totalLoss, blockHeight);
+
+        if (!payout || payout.lte(0)) return;
+
+        // 3) Total contracts deleveraged
+        let totalContracts = new BigNumber(0);
+        for (const entry of delevMap.values()) {
+            totalContracts = totalContracts.plus(entry.contracts || 0);
+        }
+        if (totalContracts.lte(0)) return;
+
+        // 4) Distribute pro-rata
+        let distributed = new BigNumber(0);
+
+        for (const [address, entry] of delevMap.entries()) {
+            const c = new BigNumber(entry.contracts || 0);
+            if (c.lte(0)) continue;
+
+            const share = payout.times(c).div(totalContracts);
+            if (share.lte(0)) continue;
+
+            await Tally.credit(
+                address,
+                collateralId,
+                share,
+                blockHeight,
+                `insurance_delev_${tradingContractId}`
+            );
+
+            distributed = distributed.plus(share);
+        }
+
+        // 5) Dust handling (rounding)
+        const dust = payout.minus(distributed);
+        if (dust.abs().gt(0)) {
+            const PnlIou = require('./pnlIou.js');
+            await PnlIou.absorbDust(tradingContractId, collateralId, dust, blockHeight);
+        }
+
+        // 6) Debit the fund
+        await insurance.debit(payout, blockHeight);
+    }
+
 
     /**
      * Summarize options for an address under a given series (for liquidation offsets).
