@@ -1658,6 +1658,7 @@ class Clearing {
         //------------------------------------------------------------
         for (const cp of (result.counterparties || [])) {
             Clearing.updatePositionInCache(ctxKey, cp.address, () => ({ ...cp.updatedPosition }));
+            Clearing.recordDeleverageTrade(contractId,cp.address,cp)
         }
 
         //------------------------------------------------------------
@@ -1672,6 +1673,7 @@ class Clearing {
             bankruptcyPrice: null,
             lastMark: markPrice
         }));
+
 
         //------------------------------------------------------------
         // 15. Return summary
@@ -1944,13 +1946,15 @@ class Clearing {
 
        //try {
                 // Step 2: Check if insurance fund payout is needed
+                console.log('total loss for '+contractId+' '+totalLoss.toNumber())
         if (totalLoss.abs().gt(0)) {
             const ContractRegistry = require('./contractRegistry.js');
             const isOracleContract = await ContractRegistry.isOracleContract(contractId);
             const insurance = await Insurance.getInstance(contractId, isOracleContract);
 
             const payout = await insurance.calcPayout(totalLoss.abs(), blockHeight);
-            if (payout.gt(0)) {
+            console.log('payout to distribute '+payout)
+            if (payout>0) {
                 await Clearing.distributeInsuranceProRataToDelev(
                     contractId,
                     collateralId,
@@ -1969,87 +1973,90 @@ class Clearing {
         //    throw error;
         //}
     }
-// -------------------------
-// INSURANCE RESOLUTION HELPERS
-// -------------------------
-static async resolveInsuranceMeta(tradingContractId) {
-    const ContractRegistry = require('./contractRegistry.js');
 
-    // For now: fund is keyed by same contractId,
-    // but type is determined by registry (drives -oracle storage behavior).
-    const isOracle = await ContractRegistry.isOracleContract(tradingContractId);
-    const insuranceContractId = tradingContractId;
+    // -------------------------
+    // INSURANCE RESOLUTION HELPERS
+    // -------------------------
+    static async resolveInsuranceMeta(tradingContractId) {
+        const ContractRegistry = require('./contractRegistry.js');
 
-    return { insuranceContractId, isOracle };
-}
+        // For now: fund is keyed by same contractId,
+        // but type is determined by registry (drives -oracle storage behavior).
+        const isOracle = await ContractRegistry.isOracleContract(tradingContractId);
+        const insuranceContractId = tradingContractId;
 
-static async distributeInsuranceProRataToDelev(
-    tradingContractId,
-    collateralId,
-    totalLoss,
-    blockHeight
-) {
-    const BigNumber = require('bignumber.js');
-    const Insurance = require('./insurance.js');
-    const Tally = require('./tally.js');
-    const PnlIou = require('./pnlIou.js');
-
-    if (!totalLoss) return;
-
-    const lossAbs = new BigNumber(totalLoss).abs();
-    if (lossAbs.lte(0)) return;
-
-    const { insuranceContractId, isOracle } =
-        await this.resolveInsuranceMeta(tradingContractId);
-
-    // Delev activity belongs to the *trading* contract
-    const delevMap = this.delevTrades?.get(tradingContractId);
-    if (!delevMap || delevMap.size === 0) return;
-
-    const insurance = await Insurance.getInstance(insuranceContractId, isOracle);
-    const payout = await insurance.calcPayout(lossAbs, blockHeight);
-
-    if (!payout || payout.lte(0)) return;
-
-    // Sum contracts actually deleveraged
-    let totalContracts = new BigNumber(0);
-    for (const entry of delevMap.values()) {
-        totalContracts = totalContracts.plus(entry.contracts || 0);
+        return { insuranceContractId, isOracle };
     }
-    if (totalContracts.lte(0)) return;
+    
+    static async distributeInsuranceProRataToDelev(
+        tradingContractId,
+        collateralId,
+        payout,        // NUMBER
+        blockHeight
+    ) {
+        const BigNumber = require('bignumber.js');
+        const Tally = require('./tally.js');
+        const PnlIou = require('./iou.js');
 
-    let distributed = new BigNumber(0);
+        if (!payout || payout <= 0) return;
 
-    for (const [address, entry] of delevMap.entries()) {
-        const c = new BigNumber(entry.contracts || 0);
-        if (c.lte(0)) continue;
+        const payoutBN = new BigNumber(payout);
 
-        const share = payout.times(c).div(totalContracts).decimalPlaces(8);
-        if (share.lte(0)) continue;
+        let totalContracts = new BigNumber(0);
 
-        await Tally.credit(
-            address,
-            collateralId,
-            share,
-            blockHeight,
-            `insurance_delev_${tradingContractId}`
-        );
+        for (const [key, trades] of Clearing.deleverageTrades.entries()) {
+            if (!key.startsWith(`${tradingContractId}:`)) continue;
+            for (const t of trades) {
+                totalContracts = totalContracts.plus(t.matchSize || 0);
+            }
+        }
 
-        distributed = distributed.plus(share);
+        if (totalContracts.lte(0)) return;
+
+        let distributed = new BigNumber(0);
+
+        for (const [key, trades] of Clearing.deleverageTrades.entries()) {
+            if (!key.startsWith(`${tradingContractId}:`)) continue;
+
+            const address = key.split(':')[1];
+
+            let addressContracts = new BigNumber(0);
+            for (const t of trades) {
+                addressContracts = addressContracts.plus(t.matchSize || 0);
+            }
+
+            if (addressContracts.lte(0)) continue;
+
+            const share = payoutBN.times(addressContracts).div(totalContracts);
+
+            if (share.lte(0)) continue;
+
+            await Tally.updateBalance(
+                address,
+                collateralId,
+                share,          // availableChange (+)
+                0,              // reservedChange
+                0,              // marginChange
+                0,              // vestingChange
+                'insuranceDelev',
+                blockHeight,
+                ''              // txid (synthetic / none)
+            );
+
+
+            distributed = distributed.plus(share);
+        }
+
+        const dust = payoutBN.minus(distributed);
+        if (dust.abs().gt(0)) {
+            await PnlIou.absorbDust(
+                tradingContractId,
+                collateralId,
+                dust,
+                blockHeight
+            );
+        }
     }
-
-    // Rounding dust sink
-    const dust = payout.minus(distributed);
-    if (dust.abs().gt(0)) {
-        await PnlIou.absorbDust(tradingContractId, collateralId, dust, blockHeight);
-    }
-
-    // Debit correct fund instance (native vs oracle behavior preserved)
-    await insurance.debit(payout, blockHeight);
-
-    // Optional log
-    console.log('🏦 insurance payout ' + payout.toFixed());
-}
 
     /**
      * Summarize options for an address under a given series (for liquidation offsets).

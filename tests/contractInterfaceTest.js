@@ -1,5 +1,49 @@
 const adminAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8";
 
+// ---- HARD INTERCEPTS ----
+const origLog = console.log;
+const origErr = console.error;
+const origExit = process.exit;
+
+console.log = (...args) => {
+    if (args.includes('Error:')) {
+        console.trace('TRACE console.log Error:');
+    }
+    origLog(...args);
+};
+
+console.error = (...args) => {
+    if (args.includes('Error:')) {
+        console.trace('TRACE console.error Error:');
+    }
+    origErr(...args);
+};
+
+process.exit = (code) => {
+    console.trace('TRACE process.exit', code);
+    origExit(code);
+};
+
+process.on('unhandledRejection', err => {
+    console.error('UNHANDLED REJECTION:', err);
+    console.trace();
+});
+
+process.on('uncaughtException', err => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+    console.trace();
+});
+
+
+const originalLog = console.log;
+console.log = (...args) => {
+    if (args.length === 1 && args[0] === 'Error:') {
+        console.trace('TRACE FOR swallowed Error:');
+    }
+    originalLog(...args);
+};
+
+
 async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
     }

@@ -8,7 +8,8 @@ const expressInterface = {
             console.log(response.data);
             return response
         } catch (error) {
-            console.error('Error:', error.response ? error.response.data : error.message);
+            console.error('initMain failed:', error.response ? error.response.data : error.message);
+            throw error;
         }
     },
 
