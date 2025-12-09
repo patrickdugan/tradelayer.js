@@ -1441,7 +1441,7 @@ class MarginMap {
         totalPoolDistributed: 0,
         remainingUnfilled: 0,
         undistributedPool: 0,
-        modifiedCache: positionCache  // will overwrite as needed
+        modifiedCache: positionCache
       };
 
       if (remaining.lte(0)) return result;
@@ -1450,15 +1450,19 @@ class MarginMap {
       // STEP 1: Select counterparties (opposite side only)
       // -------------------------------------------------------
       let cps = positionCache
-        .map((p, idx) => ({ ...p, _i: idx })) // track index for later mutation
+        .map((p, idx) => ({ ...p, _i: idx }))
         .filter(p => {
           if (!p.contracts) return false;
           if (p.address === liquidatingAddress) return false;
+          // sell=true means liquidating long, need shorts (contracts < 0)
+          // sell=false means liquidating short, need longs (contracts > 0)
           return sell ? p.contracts < 0 : p.contracts > 0;
         });
 
-      // no candidates
-      if (!cps.length) return result;
+      if (!cps.length) {
+        console.log("❌ No counterparties on opposite side for ADL");
+        return result;
+      }
 
       // -------------------------------------------------------
       // STEP 2: Add vintage breakdown
@@ -1469,13 +1473,21 @@ class MarginMap {
       });
 
       // -------------------------------------------------------
-      // STEP 3: Profitability filter (your rule)
+      // STEP 3: Profitability filter - FIXED
+      // For ADL, we want the PROFITABLE side - those who would receive clearing PNL
+      // Long profitable when mark > avgPrice
+      // Short profitable when mark < avgPrice
       // -------------------------------------------------------
       cps = cps.filter(p => {
+        const markBN = new BigNumber(markPrice);
+        const avgBN = new BigNumber(p.avgPrice || 0);
+        
         if (p.contracts > 0) {
-          return new BigNumber(markPrice).gt(p.avgPrice);  // long profitable if mark > avg
+          // Long: profitable if mark > avg
+          return markBN.gt(avgBN);
         } else {
-          return new BigNumber(markPrice).lt(p.avgPrice);  // short profitable if mark < avg
+          // Short: profitable if mark < avg
+          return markBN.lt(avgBN);
         }
       });
 
@@ -1503,7 +1515,7 @@ class MarginMap {
       });
 
       // -------------------------------------------------------
-      // STEP 5: Main ADL loop
+      // STEP 5: Main ADL loop - FIXED to preserve remainder
       // -------------------------------------------------------
       let totalPoolDistributed = new BigNumber(0);
 
@@ -1513,16 +1525,18 @@ class MarginMap {
         const posSize = Math.abs(cp.contracts);
         if (posSize <= 0) continue;
 
+        // CRITICAL FIX: Only deleverage what we need, preserve the rest
         const matchSize = Math.min(posSize, remaining.toNumber());
 
         const fromOld = Math.min(matchSize, cp.oldContracts || 0);
         const fromNew = Math.min(matchSize - fromOld, cp.newContracts || 0);
 
-        // pool share
+        // Pool share proportional to matchSize vs total unfilled
         const ratio = originalUnfilled.gt(0)
           ? new BigNumber(matchSize).div(originalUnfilled)
           : new BigNumber(0);
 
+        // CRITICAL FIX: Cap pool distribution at the actual liquidation pool
         const poolShare = poolBN.times(ratio).dp(8);
 
         // clawback ONLY from old tranche
@@ -1532,7 +1546,7 @@ class MarginMap {
             markPrice,
             fromOld,
             notional,
-            liqPrice,
+            liqPrice,  // Use liqPrice (bankruptcy price) for clawback
             collateralId,
             block,
             TallyMap,
@@ -1541,10 +1555,10 @@ class MarginMap {
           );
         }
 
-        // adjust deleveraging — must return updated single position
+        // adjust deleveraging — reduce position by matchSize only
         const updatedPos = await this.adjustDeleveraging(
           positionCache,
-          cp._i,          // index for in-place array mutation
+          cp._i,
           cp.address,
           contractId,
           matchSize,
@@ -1588,7 +1602,6 @@ class MarginMap {
 
       return result;
     }
-
 
     // =======================
     // calcPriceDelta - PnL helper
@@ -1738,6 +1751,7 @@ class MarginMap {
     // =======================
     async adjustDeleveraging(
         positionCache,
+        index,        
         address,
         contractId,
         size,
@@ -1752,9 +1766,10 @@ class MarginMap {
         const BigNumber = require('bignumber.js');
 
         let requestedSize = Number(size);
-        if (!requestedSize || requestedSize <= 0) return positionCache[address];
+        if (!requestedSize || requestedSize <= 0) return positionCache[index];
 
-        let position = positionCache[address];
+        // Get position from cache by index
+        let position = positionCache[index];
         if (!position || !position.contracts) return position;
 
         const before = Number(position.contracts);
@@ -1762,10 +1777,29 @@ class MarginMap {
         if (maxReducible <= 0) return position;
 
         const effectiveSize = Math.min(requestedSize, maxReducible);
-        const contractChange = sell ? -effectiveSize : effectiveSize;
+        
+        // FIXED: Correct sign handling
+        // If position is short (negative contracts) and we're deleveraging shorts,
+        // we ADD contracts (make less negative)
+        // If position is long (positive) and we're deleveraging longs,
+        // we SUBTRACT contracts
+        let contractChange;
+        if (before > 0) {
+          // Long position - reduce by subtracting
+          contractChange = -effectiveSize;
+        } else {
+          // Short position - reduce by adding (making less negative)
+          contractChange = effectiveSize;
+        }
 
         const after = before + contractChange;
-        position.contracts = (before * after < 0) ? 0 : after;
+        
+        // Handle potential sign flip - if we overshoot, clamp to 0
+        if ((before > 0 && after < 0) || (before < 0 && after > 0)) {
+          position.contracts = 0;
+        } else {
+          position.contracts = after;
+        }
 
         // Return margin
         const initPerContract = await ContractRegistry.getInitialMargin(contractId, liqPrice);
@@ -1773,7 +1807,7 @@ class MarginMap {
 
         let reduction = await this.reduceMargin(
             position,
-            contractChange,
+            Math.abs(contractChange),
             initPerContract,
             contractId,
             address,

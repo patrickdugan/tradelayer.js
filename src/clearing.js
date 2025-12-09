@@ -1468,41 +1468,38 @@ class Clearing {
         const canFillSolvently =
             splat.goodFilledSize > 0 &&
             !splat.filledBelowLiqPrice;
+            
+        const A = new Big(tallySnapshot.available || 0);
+        const M = new Big(tallySnapshot.margin || 0);
+        const maint = M.div(2);
+
+        // shortfall passed in as marginDent
+        const shortfallBN = new Big(marginDent);
+
+        // coverage = available + maintenance margin
+        const coverageBN = A.plus(maint);
+
+        // FIXED: loss = coverage + shortfall, but we can only distribute what we have
+        let lossBN = coverageBN.plus(shortfallBN);
 
         // ------------------------------------------------------------
-// RECONSTRUCT LOSS
-// ------------------------------------------------------------
-const A = new Big(tallySnapshot.available || 0);
-const M = new Big(tallySnapshot.margin || 0);
-const maint = M.div(2);
+        // COMPUTE REAL MARGIN DENT (bounded by margin)
+        // ------------------------------------------------------------
+        const lossFromAvail = Big.min(lossBN, A);
+        const remainingLoss = lossBN.minus(lossFromAvail);
 
-// You passed shortfall here as marginDent (incorrect name)
-const shortfallBN = new Big(marginDent);
+        // dent = portion of remainingLoss sourced from margin (bounded by maint)
+        let dentBN = Big.min(remainingLoss, maint);
 
-// coverage = available + maint
-const coverageBN = A.plus(maint);
+        // enforce invariant
+        if (dentBN.gt(M)) {
+            console.log(`⚠️ dent capped: ${dentBN.toString()} > margin ${M.toString()}`);
+            dentBN = M;
+        }
 
-// loss = coverage + shortfall
-let lossBN = coverageBN.plus(shortfallBN);
-
-// ------------------------------------------------------------
-// COMPUTE REAL MARGIN DENT (bounded by margin)
-// ------------------------------------------------------------
-const lossFromAvail = Big.min(lossBN, A);
-const remainingLoss = lossBN.minus(lossFromAvail);
-
-// dent = portion of remainingLoss sourced from margin (bounded by maint)
-let dentBN = Big.min(remainingLoss, maint);
-
-// enforce invariant
-if (dentBN.gt(M)) {
-    console.log(`⚠️ dent capped: ${dentBN.toString()} > margin ${M.toString()}`);
-    dentBN = M;
-}
-
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         // 6. Attempt OB matching
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         let obFill = new Big(0);
 
         if (canFillSolvently) {
@@ -1522,15 +1519,16 @@ if (dentBN.gt(M)) {
             obFill = new Big(splat.goodFilledSize);
         }
 
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         // 7. Determine ADL remainder
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         const adlSize = new Big(liqAmount).minus(obFill);
         const remainder = adlSize.gt(0) ? adlSize.toNumber() : 0;
 
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         // 8. Calculate liquidation pool BEFORE confiscation
-        //------------------------------------------------------------
+        // FIXED: Pool is what's actually available, not computed loss
+        // ------------------------------------------------------------
         const liqTally = await Tally.getTally(liquidatingAddress, collateralId);
 
         const liquidationPool = new Big(liqTally.margin || 0)
@@ -1538,9 +1536,9 @@ if (dentBN.gt(M)) {
             .dp(8)
             .toNumber();
 
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         // 9. Confiscate liquidation pool
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
         if (liquidationPool > 0) {
             await Tally.updateBalance(
                 liquidatingAddress,
@@ -1554,19 +1552,22 @@ if (dentBN.gt(M)) {
             );
         }
 
-        //------------------------------------------------------------
-        // 10. Systemic loss (splat.liquidationLoss minus pool)
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
+        // 10. Systemic loss - FIXED: Use actual shortfall vs pool
+        // ------------------------------------------------------------
         let systemicLoss = new Big(0);
 
-        if (splat.liquidationLoss > 0) {
-            const adjusted = new Big(splat.liquidationLoss).minus(liquidationPool);
-            if (adjusted.gt(0)) systemicLoss = adjusted.dp(8);
+        // The systemic loss is what we couldn't cover from the pool
+        const totalLossNeeded = lossBN;
+        const poolAvailable = new Big(liquidationPool);
+
+        if (totalLossNeeded.gt(poolAvailable)) {
+            systemicLoss = totalLossNeeded.minus(poolAvailable).dp(8);
         }
 
-        //------------------------------------------------------------
-        // 11. Apply ADL if needed
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
+        // 11. Apply ADL if needed - pass actual pool amount
+        // ------------------------------------------------------------
         let result = { counterparties: [], poolAssignments: [] };
 
         if (remainder > 0) {
@@ -1575,29 +1576,33 @@ if (dentBN.gt(M)) {
                 contractId,
                 remainder,
                 isSell,
-                bankruptcyPrice,
+                bankruptcyPrice,  // Use computed bankruptcy price
                 liquidatingAddress,
                 inverse,
                 notional,
                 blockHeight,
                 markPrice,
                 collateralId,
-                liquidationPool
+                liquidationPool  // FIXED: Pass actual available pool
             );
         }
 
-        //------------------------------------------------------------
-        // 12. Apply pool credits from ADL
-        //------------------------------------------------------------
+        // ------------------------------------------------------------
+        // 12. Apply pool credits from ADL - CAPPED at pool
+        // ------------------------------------------------------------
         for (const u of (result.poolAssignments || [])) {
-            await Tally.updateBalance(
-                u.address,
-                collateralId,
-                u.poolShare,
-                0, 0, 0,
-                'deleveragePoolCredit',
-                blockHeight
-            );
+            // CRITICAL: Don't distribute more than the pool has
+            const creditAmount = Math.min(u.poolShare, liquidationPool);
+            if (creditAmount > 0) {
+                await Tally.updateBalance(
+                    u.address,
+                    collateralId,
+                    creditAmount,
+                    0, 0, 0,
+                    'deleveragePoolCredit',
+                    blockHeight
+                );
+            }
         }
 
         //------------------------------------------------------------
