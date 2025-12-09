@@ -1945,17 +1945,24 @@ class Clearing {
        //try {
                 // Step 2: Check if insurance fund payout is needed
         if (totalLoss.abs().gt(0)) {
-            // Step 3: Apply insurance fund payout
             const ContractRegistry = require('./contractRegistry.js');
-            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
-            const insurance = await Insurance.getInstance(contractId,isOracleContract)
-            const payout = await insurance.calcPayout(totalLoss, blockHeight);
-            console.log('🏦 insurance payout '+payout.toFixed())
-            // Step 4: Compute remaining loss (socialize disabled)
+            const isOracleContract = await ContractRegistry.isOracleContract(contractId);
+            const insurance = await Insurance.getInstance(contractId, isOracleContract);
+
+            const payout = await insurance.calcPayout(totalLoss.abs(), blockHeight);
+            if (payout.gt(0)) {
+                await Clearing.distributeInsuranceProRataToDelev(
+                    contractId,
+                    collateralId,
+                    payout,        // ✅ PASS PAYOUT, NOT totalLoss
+                    blockHeight
+                );
+            }
+
             const remainingLoss = totalLoss.minus(payout);
-            console.log('remaining loss '+remainingLoss)
-            // NOTE: ADL-only refactor: do not call socializeLoss here.
+            console.log('remaining loss ' + remainingLoss);
         }
+
 
         //} catch (error) {
         //    console.error('Error performing additional settlement tasks:', error);
@@ -2017,7 +2024,7 @@ static async distributeInsuranceProRataToDelev(
         const c = new BigNumber(entry.contracts || 0);
         if (c.lte(0)) continue;
 
-        const share = payout.times(c).div(totalContracts);
+        const share = payout.times(c).div(totalContracts).decimalPlaces(8);
         if (share.lte(0)) continue;
 
         await Tally.credit(
