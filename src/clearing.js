@@ -1943,106 +1943,106 @@ class Clearing {
             }
 
        //try {
-            // Step 2: Check if insurance fund payout is needed
-            if (totalLoss.abs().gt(0)) {
-                // Step 3: Apply insurance fund payout
-                const ContractRegistry = require('./contractRegistry.js');
-                let isOracleContract = await ContractRegistry.isOracleContract(contractId);
-                const insurance = await Insurance.getInstance(contractId,isOracleContract)
-                const payout = await insurance.calcPayout(totalLoss, blockHeight);
-                console.log('🏦 insurance payout '+payout.toFixed())
-                // Step 4: Compute remaining loss (socialize disabled)
-                const remainingLoss = totalLoss.minus(payout);
-                console.log('remaining loss '+remainingLoss)
-                // NOTE: ADL-only refactor: do not call socializeLoss here.
-            }
+                // Step 2: Check if insurance fund payout is needed
+        if (totalLoss.abs().gt(0)) {
+            // Step 3: Apply insurance fund payout
+            const ContractRegistry = require('./contractRegistry.js');
+            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
+            const insurance = await Insurance.getInstance(contractId,isOracleContract)
+            const payout = await insurance.calcPayout(totalLoss, blockHeight);
+            console.log('🏦 insurance payout '+payout.toFixed())
+            // Step 4: Compute remaining loss (socialize disabled)
+            const remainingLoss = totalLoss.minus(payout);
+            console.log('remaining loss '+remainingLoss)
+            // NOTE: ADL-only refactor: do not call socializeLoss here.
+        }
+
         //} catch (error) {
         //    console.error('Error performing additional settlement tasks:', error);
         //    throw error;
         //}
     }
+// -------------------------
+// INSURANCE RESOLUTION HELPERS
+// -------------------------
+static async resolveInsuranceMeta(tradingContractId) {
+    const ContractRegistry = require('./contractRegistry.js');
 
-    static async resolveInsuranceMeta(tradingContractId) {
-        const ContractRegistry = require('./contractRegistry.js');
+    // For now: fund is keyed by same contractId,
+    // but type is determined by registry (drives -oracle storage behavior).
+    const isOracle = await ContractRegistry.isOracleContract(tradingContractId);
+    const insuranceContractId = tradingContractId;
 
-        // 1) Does this trading contract use an oracle-style insurance fund?
-        const isOracle = await ContractRegistry.isOracleContract(tradingContractId);
+    return { insuranceContractId, isOracle };
+}
 
-        // 2) If you later support cross-fund mapping, hook it here.
-        // For now, simplest: insurance fund is attached to same series.
-        const insuranceContractId = tradingContractId;
+static async distributeInsuranceProRataToDelev(
+    tradingContractId,
+    collateralId,
+    totalLoss,
+    blockHeight
+) {
+    const BigNumber = require('bignumber.js');
+    const Insurance = require('./insurance.js');
+    const Tally = require('./tally.js');
+    const PnlIou = require('./pnlIou.js');
 
-        // 3) Storage key suffix policy
-        const fundKey = isOracle ? `${insuranceContractId}-oracle` : `${insuranceContractId}`;
+    if (!totalLoss) return;
 
-        return { insuranceContractId, isOracle, fundKey };
+    const lossAbs = new BigNumber(totalLoss).abs();
+    if (lossAbs.lte(0)) return;
+
+    const { insuranceContractId, isOracle } =
+        await this.resolveInsuranceMeta(tradingContractId);
+
+    // Delev activity belongs to the *trading* contract
+    const delevMap = this.delevTrades?.get(tradingContractId);
+    if (!delevMap || delevMap.size === 0) return;
+
+    const insurance = await Insurance.getInstance(insuranceContractId, isOracle);
+    const payout = await insurance.calcPayout(lossAbs, blockHeight);
+
+    if (!payout || payout.lte(0)) return;
+
+    // Sum contracts actually deleveraged
+    let totalContracts = new BigNumber(0);
+    for (const entry of delevMap.values()) {
+        totalContracts = totalContracts.plus(entry.contracts || 0);
+    }
+    if (totalContracts.lte(0)) return;
+
+    let distributed = new BigNumber(0);
+
+    for (const [address, entry] of delevMap.entries()) {
+        const c = new BigNumber(entry.contracts || 0);
+        if (c.lte(0)) continue;
+
+        const share = payout.times(c).div(totalContracts);
+        if (share.lte(0)) continue;
+
+        await Tally.credit(
+            address,
+            collateralId,
+            share,
+            blockHeight,
+            `insurance_delev_${tradingContractId}`
+        );
+
+        distributed = distributed.plus(share);
     }
 
-    static async distributeInsuranceProRataToDelev(
-        tradingContractId,
-        collateralId,
-        totalLoss,
-        blockHeight
-    ) {
-        if (!totalLoss || totalLoss.abs().lte(0)) return;
-
-        const Clearing = this;
-        const BigNumber = require('bignumber.js');
-        const Tally = require('./tally.js');
-        const Insurance = require('./insurance.js');
-
-        const { insuranceContractId, isOracle } =
-            await Clearing.resolveInsuranceMeta(tradingContractId);
-
-        // 1) Pull the delev map for the *trading* contract
-        const delevMap = Clearing.delevTrades?.get(tradingContractId);
-        if (!delevMap || delevMap.size === 0) return;
-
-        // 2) Compute payout from the *correct* fund behavior
-        const insurance = await Insurance.getInstance(insuranceContractId, isOracle);
-        const payout = await insurance.calcPayout(totalLoss, blockHeight);
-
-        if (!payout || payout.lte(0)) return;
-
-        // 3) Total contracts deleveraged
-        let totalContracts = new BigNumber(0);
-        for (const entry of delevMap.values()) {
-            totalContracts = totalContracts.plus(entry.contracts || 0);
-        }
-        if (totalContracts.lte(0)) return;
-
-        // 4) Distribute pro-rata
-        let distributed = new BigNumber(0);
-
-        for (const [address, entry] of delevMap.entries()) {
-            const c = new BigNumber(entry.contracts || 0);
-            if (c.lte(0)) continue;
-
-            const share = payout.times(c).div(totalContracts);
-            if (share.lte(0)) continue;
-
-            await Tally.credit(
-                address,
-                collateralId,
-                share,
-                blockHeight,
-                `insurance_delev_${tradingContractId}`
-            );
-
-            distributed = distributed.plus(share);
-        }
-
-        // 5) Dust handling (rounding)
-        const dust = payout.minus(distributed);
-        if (dust.abs().gt(0)) {
-            const PnlIou = require('./pnlIou.js');
-            await PnlIou.absorbDust(tradingContractId, collateralId, dust, blockHeight);
-        }
-
-        // 6) Debit the fund
-        await insurance.debit(payout, blockHeight);
+    // Rounding dust sink
+    const dust = payout.minus(distributed);
+    if (dust.abs().gt(0)) {
+        await PnlIou.absorbDust(tradingContractId, collateralId, dust, blockHeight);
     }
 
+    // Debit correct fund instance (native vs oracle behavior preserved)
+    await insurance.debit(payout, blockHeight);
+
+    // Optional log
+    console.log('🏦 insurance payout ' + payout.toFixed());
+}
 
     /**
      * Summarize options for an address under a given series (for liquidation offsets).
