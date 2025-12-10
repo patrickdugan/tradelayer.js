@@ -1147,8 +1147,8 @@ class Clearing {
         }
 
         // Hard locals for the rest of the function
-        const lastPrice = blob?.lastPrice ?? null;
-        const thisPrice = blob?.thisPrice ?? null;
+        let lastPrice = blob?.lastPrice ?? null;
+        let thisPrice = blob?.thisPrice ?? null;
         if (lastPrice == null && thisPrice != null) {
           lastPrice = thisPrice;
         }
@@ -1239,7 +1239,8 @@ class Clearing {
                 inverse,
                 notional
             });
-
+            let type = 'clearingPNL'
+            if(opened>0){type='mixedClearingPNL'}
             pos.newPosThisBlock = 0;
 
             // ---------------------------
@@ -1266,7 +1267,7 @@ class Clearing {
                     collateralId,
                     pnl.toNumber(),  // negative number
                     0, 0, 0,
-                    'clearingPNL',
+                    type,
                     blockHeight
                 );
 
@@ -1344,11 +1345,6 @@ class Clearing {
         }
 
         // ------------------------------------------------------------
-        // 6) THIRD PASS — Apply positive PNL (credits)
-        // ------------------------------------------------------------
-        positions = Clearing.getPositionsFromCache(ctxKey);
-        console.log('updated post-liq positions '+JSON.stringify(positions))
-        // ------------------------------------------------------------
         // 6) THIRD PASS — Apply positive PNL
         // ------------------------------------------------------------
         positions = Clearing.getPositionsFromCache(ctxKey);
@@ -1361,9 +1357,10 @@ class Clearing {
             }
 
             // RECALCULATE PNL based on CURRENT contract count (post-ADL)
-            const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = pos.contracts - opened;
-
+            let type = 'clearingPNL'
+            if(opened>0){type='mixedClearingPNL'}
             const pnl = Clearing.calculatePnLChange({
                 oldContracts,
                 newContracts: opened,
@@ -1380,7 +1377,7 @@ class Clearing {
                     collateralId,
                     pnl.toNumber(),
                     0, 0, 0,
-                    'clearingCredit',
+                    type,
                     blockHeight
                 );
             }
@@ -1592,6 +1589,40 @@ class Clearing {
         return null;
       }
     }
+
+    static getOpenedByAddressFromTrades(relevantTrades) {
+        const openedByAddress = new Map();
+
+        if (!Array.isArray(relevantTrades)) return openedByAddress;
+
+        for (const t of relevantTrades) {
+            const trade = t?.trade ?? t;
+            if (!trade) continue;
+
+            const amt = Number(trade.amount || 0);
+            if (!amt) continue;
+
+            const buyer  = trade.buyerAddress;
+            const seller = trade.sellerAddress;
+
+            if (buyer) {
+                openedByAddress.set(
+                    buyer,
+                    (openedByAddress.get(buyer) || 0) + amt
+                );
+            }
+
+            if (seller) {
+                openedByAddress.set(
+                    seller,
+                    (openedByAddress.get(seller) || 0) - amt
+                );
+            }
+        }
+
+        return openedByAddress;
+    }
+
 
 
     static updatePositions(positions, updatedCounterparties) {

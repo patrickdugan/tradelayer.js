@@ -2102,7 +2102,7 @@ class Orderbook {
                             let diff = marginToRelease.minus(newMarginRequired).decimalPlaces(8).toNumber();
                             if(diff>0){
                                 await TallyMap.updateBalance(
-                                match.buyOrder.sellerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
+                                match.sellOrder.sellerAddress, collateralPropertyId, marginToRelease, -marginToRelease, 0, 0, 
                                 'contractMarginRelease', currentBlockHeight
                                 );
                             }else{
