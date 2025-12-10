@@ -509,7 +509,25 @@ async calculateLIFOEntry(address, amount, contractId) {
       return docs.map(d => d.trade ?? d);
     }
 
+    async getFirstTradeBlock(contractId) {
+      const tradeDB = await dbInstance.getDatabase('tradeHistory');
+      const key = `contract-${contractId}`;
 
+      return new Promise((resolve, reject) => {
+          tradeDB.find(
+              { key, type: 'contract' },
+              { blockHeight: 1 }
+          )
+          .sort({ blockHeight: 1 })
+          .limit(1)
+          .exec((err, docs) => {
+              if (err) return reject(err);
+              if (!docs || docs.length === 0) return resolve(null);
+
+              resolve(docs[0].blockHeight);
+          });
+      })
+    }
 }
 
 module.exports = TradeHistory;

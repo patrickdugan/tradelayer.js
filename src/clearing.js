@@ -1167,7 +1167,7 @@ class Clearing {
         // 2.5) Resolve trade window + build openedByAddress ONCE
         // ------------------------------------------------------------
         const tradeHistoryManager = new TradeHistory();
-        const plan = Clearing.getMarkTradeWindow(blob);
+        const plan = await Clearing.getMarkTradeWindow(blob,contractId);
 
         const openedByAddress = new Map();
 
@@ -1229,18 +1229,33 @@ class Clearing {
 
             const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = (pos.contracts || 0) - opened;
+            const currentContracts = pos.contracts;
 
-            const pnl = Clearing.calculatePnLChange({
+            const flipped =
+                oldContracts !== 0 &&
+                currentContracts !== 0 &&
+                Math.sign(oldContracts) !== Math.sign(currentContracts);
+
+            let pnl = Clearing.calculatePnLChange({
                 oldContracts,
                 newContracts: opened,
                 avgEntryPrice: pos.avgPrice,
                 previousMarkPrice: lastPrice,
                 currentMarkPrice: thisPrice,
                 inverse,
-                notional
+                notional,
+                address: pos.address,
+                loss: true,
+                flipped
             });
-            let type = 'clearingPNL'
-            if(opened>0){type='mixedClearingPNL'}
+            // Normalize PnL sign so that:
+            // negative = loss, positive = profit
+            if (pos.contracts < 0) {
+                pnl = pnl.negated();
+            }
+
+            let type = 'clearingLoss'
+            if(opened>0){type='mixedClearingLoss'}
             pos.newPosThisBlock = 0;
 
             // ---------------------------
@@ -1359,8 +1374,15 @@ class Clearing {
             // RECALCULATE PNL based on CURRENT contract count (post-ADL)
             const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = pos.contracts - opened;
-            let type = 'clearingPNL'
-            if(opened>0){type='mixedClearingPNL'}
+            const currentContracts = pos.contracts;
+
+            const flipped =
+                oldContracts !== 0 &&
+                currentContracts !== 0 &&
+                Math.sign(oldContracts) !== Math.sign(currentContracts);
+
+            let type = 'clearingProfit'
+            if(opened>0){type='mixedClearingProfit'}
             const pnl = Clearing.calculatePnLChange({
                 oldContracts,
                 newContracts: opened,
@@ -1368,7 +1390,10 @@ class Clearing {
                 previousMarkPrice: blob.lastPrice,
                 currentMarkPrice: blob.thisPrice,
                 inverse,
-                notional
+                notional,
+                address: pos.address,
+                loss: false,
+                flipped
             });
 
             if (pnl.gt(0)) {
@@ -1400,7 +1425,7 @@ class Clearing {
         return { positions, liqEvents, systemicLoss, pnlDelta };
     }
 
-    static getMarkTradeWindow(priceInfo) {
+    static async getMarkTradeWindow(priceInfo,contractId) {
         // priceInfo is the object you now return from isPriceUpdatedForBlockHeight
         // Expected minimal fields:
         //  - priceInfo.thisPrice
@@ -1410,6 +1435,20 @@ class Clearing {
 
         const markBlock = priceInfo?.blockHeight ?? null;
         const prevBlock = priceInfo?.prevBlockHeight ?? null;
+        const tradeHistoryManager = new TradeHistory()
+        if (prevBlock == null && markBlock != null) {
+            const firstTradeBlock =
+                await tradeHistoryManager.getFirstTradeBlock(contractId);
+
+            return {
+                isBootstrap: true,
+                mustQueryHistory: true,
+                startBlock: firstTradeBlock ?? thisMarkBlock,
+                endBlock: markBlock,
+                useBlockTrades: false
+            };
+        }
+
 
         if (!markBlock) {
             return {
@@ -2119,46 +2158,59 @@ class Clearing {
     }
 
     static calculatePnLChange({
-        oldContracts,       // integer, contracts carried from prev block
-        newContracts,       // integer, newly opened in this block
-        avgEntryPrice,      // weighted entry for only the newContracts
-        previousMarkPrice,  // last block mark
-        currentMarkPrice,   // this block mark
+        oldContracts,
+        newContracts,
+        avgEntryPrice,
+        previousMarkPrice,
+        currentMarkPrice,
         inverse,
-        notional
+        notional,
+        address,
+        loss,
+        flipped
     }) {
-        const priceBN = new BigNumber(currentMarkPrice);
-        const notionalBN = new BigNumber(notional);
+        const BigNumber = require('bignumber.js');
 
-        const oldBN = new BigNumber(oldContracts);
-        const newBN = new BigNumber(newContracts);
+        const last = new BigNumber(previousMarkPrice);
+        const cur  = new BigNumber(currentMarkPrice);
+        const avg  = new BigNumber(avgEntryPrice);
+        const noto = new BigNumber(notional);
 
-        if (!inverse) {
-            // linear
-            const pnlOld = priceBN.minus(previousMarkPrice)
-                .times(oldBN)
-                .times(notionalBN);
+        if (cur.eq(last)) return new BigNumber(0);
 
-            const pnlNew = priceBN.minus(avgEntryPrice)
-                .times(newBN)
-                .times(notionalBN);
+        let pnl = new BigNumber(0);
 
-            return pnlOld.plus(pnlNew).decimalPlaces(8);
-        } 
-        else {
-            // inverse
-            const pnlOld = new BigNumber(1).div(previousMarkPrice)
-                .minus(new BigNumber(1).div(priceBN))
-                .times(oldBN)
-                .times(notionalBN);
+        // 1) Old exposure → mark-to-mark
+        if (!flipped && oldContracts !== 0) {
+            const oldSize = new BigNumber(oldContracts);
+            const delta = cur.minus(last);
 
-            const pnlNew = new BigNumber(1).div(avgEntryPrice)
-                .minus(new BigNumber(1).div(priceBN))
-                .times(newBN)
-                .times(notionalBN);
-
-            return pnlOld.plus(pnlNew).decimalPlaces(8).toNumber();
+            pnl = pnl.plus(
+                inverse
+                  ? noto.times(oldSize).times(last.minus(cur)).div(last.times(cur))
+                  : noto.times(oldSize).times(delta)
+            );
         }
+
+        // 2) New exposure → avg-to-mark
+        if (newContracts !== 0) {
+            const newSize = new BigNumber(newContracts);
+            const delta = cur.minus(avg);
+
+            pnl = pnl.plus(
+                inverse
+                  ? noto.times(newSize).times(avg.minus(cur)).div(avg.times(cur))
+                  : noto.times(newSize).times(delta)
+            );
+        }
+
+        console.log(
+          `in calcPNL addr=${address} old=${oldContracts} new=${newContracts} ` +
+          `flipped=${flipped} loss=${loss} pnl=${pnl.toFixed()}`
+        );
+
+
+        return pnl;
     }
 
     static async getBalance(holderAddress) {
