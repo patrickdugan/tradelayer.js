@@ -19,11 +19,13 @@ class TradeHistory {
 
   // Legacy fallback: docs with prefix contract-<id>-
   if (typeof tradeHistoryDB.findAsync === 'function') {
-    const legacyRows = await tradeHistoryDB.findAsync({ _id: { $regex: `^${stringKey}-` } });
+    const re = new RegExp(`^${stringKey}-`);
+    const legacyRows = await tradeHistoryDB.findAsync({ _id: { $regex: re } });
     if (legacyRows && legacyRows.length) {
       return legacyRows.map(r => r.trade ?? r);
     }
   }
+
 
   // Last resort: filter whole db
   const all = await dbInstance.getDatabase('tradeHistory');
@@ -487,6 +489,27 @@ async calculateLIFOEntry(address, amount, contractId) {
                 throw error; // Rethrow the error for handling upstream
             }
     }
+
+    // Returns trade history rows for a contract within [startBlock, endBlock] inclusive.
+    // This is a lightweight in-memory filter over loadTradeHistory(contractId),
+    // which already handles single-doc, legacy, and fallback formats.
+    async getTradesForContractBetweenBlocks(contractId, startBlock, endBlock) {
+      const tradeDB = await dbInstance.getDatabase('tradeHistory');
+
+      const key = `contract-${contractId}`;
+
+      // Fast indexed-style query
+      const docs = await tradeDB.findAsync({
+        key,
+        blockHeight: { $gte: startBlock, $lte: endBlock }
+      });
+
+      if (!docs || !docs.length) return [];
+
+      return docs.map(d => d.trade ?? d);
+    }
+
+
 }
 
 module.exports = TradeHistory;

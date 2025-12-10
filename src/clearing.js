@@ -12,6 +12,8 @@ const PropertyManager = require('./property.js')
 const VolumeIndex = require('./volumeIndex.js')
 const Oracles = require('./oracle.js')
 const PnlIou = require('./iou.js')
+const TradeHistory = require('./tradeHistoryManager.js')
+
 const _positionCache = new Map(); 
 
 class Clearing {
@@ -88,16 +90,32 @@ class Clearing {
         return entry; // already in new format
     }
 
-    static getOpenedThisBlock(contractId, address) {
+    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrObj) {
         const key = `${contractId}:${address}`;
         const entry = this.blockTrades.get(key);
-
-        if (!entry) return 0;
-
         const trades = this._normalizeTrades(entry);
 
-        return trades.reduce((sum, t) => sum + (t.opened || 0), 0);
+        let opened = 0;
+
+        // Case 1: index
+        if (typeof currentTradeIndexOrObj === "number") {
+            const stop = Math.max(0, Math.min(currentTradeIndexOrObj, trades.length));
+            for (let i = 0; i < stop; i++) {
+                const t = trades[i];
+                opened += t?.opened || 0;
+            }
+            return opened;
+        }
+
+        // Case 2: object reference
+        for (const t of trades) {
+            if (t === currentTradeIndexOrObj) break;
+            opened += t?.opened || 0;
+        }
+
+        return opened;
     }
+
 
     static getDeltaThisBlock(contractId, address) {
         const key = `${contractId}:${address}`;
@@ -131,20 +149,6 @@ class Clearing {
         const trades = this.getTrades(contractId, address);
         if (!trades.length) return 0;
         return trades[trades.length - 1].delta || 0;
-    }
-
-    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrObj) {
-        const key = `${contractId}:${address}`;
-        const entry = this.blockTrades.get(key);
-        const trades = this._normalizeTrades(entry);
-
-        let opened = 0;
-
-        for (const t of trades) {
-            if (t === currentTradeIndexOrObj) break;
-            opened += t.opened || 0;
-        }
-        return opened;
     }
 
     // =========================================
@@ -184,7 +188,7 @@ class Clearing {
     // VINTAGE BREAKDOWN - combines trade + deleverage data
     // =========================================
     static getVintageBreakdown(contractId, address, currentContracts) {
-        const openedViaTrade = this.getOpenedThisBlock(contractId, address) || 0;
+        const openedViaTrade = this.getOpenedBeforeThisTrade(contractId, address) || 0;
         const closedViaDelev = this.getDeleveragedThisBlock(contractId, address) || 0;
         
         const totalSize = Math.abs(currentContracts);
@@ -835,9 +839,7 @@ class Clearing {
         };
     }
 
-
-
-   static async updateLastExchangeBlock(blockHeight) {
+    static async updateLastExchangeBlock(blockHeight) {
         console.log('Updating last exchange block in channels');
 
         // Fetch the list of active channels
@@ -1041,41 +1043,56 @@ class Clearing {
     }
 
     static async makeSettlement(blockHeight) {
-            const ContractRegistry = require('./contractRegistry.js');
-            const contracts = await ContractRegistry.loadContractSeries();
-            //console.log(contracts)
-            if(!contracts){return}
-        for (const contract of contracts) {
-            let id = contract[1].id
-            // Check if there is updated price information for the contract
-            //console.log('inside make settlement '+id+' '+blockHeight)
-            const newPrice = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight)
-            if (newPrice!=false) {
-                console.log('new price '+newPrice)
-                // Proceed with processing for this contract
-                console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
-                let collateralId = await ContractRegistry.getCollateralId(id)
-                let inverse = await ContractRegistry.isInverse(id)
-                const notionalValue = await ContractRegistry.getNotionalValue(id, newPrice)
-                console.log('notional obj '+JSON.stringify(notionalValue))
-                // Update margin maps based on mark prices and current contract positions
-                let {positions, liqEvents, systemicLoss, pnlDelta} = await Clearing.updateMarginMaps(blockHeight, id, collateralId, inverse,notionalValue.notionalPerContract); //problem child
-                console.log('is liq '+JSON.stringify(liqEvents))
-                console.log('length '+liqEvents.length+' '+Boolean(liqEvents.length>0))
-                 // Perform additional tasks like loss socialization if needed
+        const ContractRegistry = require('./contractRegistry.js');
+        const contracts = await ContractRegistry.loadContractSeries();
+        if (!contracts) return;
 
-                if(liqEvents.length>0){
-                    await Clearing.performAdditionalSettlementTasks(blockHeight,positions,id,newPrice,systemicLoss,collateralId,pnlDelta);
-                }
-            } else {
-                // Skip processing for this contract
-                //console.log(`No updated price for contract ${contract.id} at block height ${blockHeight}`);
-                continue;
+        for (const contract of contracts) {
+            const id = contract[1].id;
+
+            const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
+            if (!priceInfo || !priceInfo.updated) continue;
+
+            const newPrice = priceInfo.thisPrice;
+            console.log('new price ' + newPrice);
+            console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
+
+            const collateralId = await ContractRegistry.getCollateralId(id);
+            const inverse = await ContractRegistry.isInverse(id);
+
+            const notionalValue = await ContractRegistry.getNotionalValue(id, newPrice);
+            console.log('notional obj ' + JSON.stringify(notionalValue));
+
+            let { positions, liqEvents, systemicLoss, pnlDelta } =
+                await Clearing.updateMarginMaps(
+                    blockHeight,
+                    id,
+                    collateralId,
+                    inverse,
+                    notionalValue.notionalPerContract,
+                    priceInfo // ✅ pass the object
+                );
+
+            console.log('is liq ' + JSON.stringify(liqEvents));
+            console.log('length ' + liqEvents.length + ' ' + Boolean(liqEvents.length > 0));
+
+            if (liqEvents.length > 0) {
+                await Clearing.performAdditionalSettlementTasks(
+                    blockHeight,
+                    positions,
+                    id,
+                    newPrice,
+                    systemicLoss,
+                    collateralId,
+                    pnlDelta
+                );
             }
         }
+
         await Clearing.resetBlockTrades();
-        return
+        return;
     }
+
 
     /**
      * Normalize all position lastMark values to match the canonical previous mark
@@ -1103,7 +1120,7 @@ class Clearing {
         //await marginMap.saveMarginMap(block)
     }
  
-   static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional) {
+   static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional, priceInfo){
 
         console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
 
@@ -1121,11 +1138,20 @@ class Clearing {
         let positions = Clearing.getPositionsFromCache(ctxKey);
 
         // ------------------------------------------------------------
-        // 2) Load prices & normalize marks
+        // 2) Resolve priceInfo ONCE
         // ------------------------------------------------------------
-        const blob = await Clearing.getPriceChange(blockHeight, contractId);
-        const lastPrice = blob.lastPrice || null;
-        const thisPrice = blob.thisPrice;
+        let blob = priceInfo;
+
+        if (!blob || blob.thisPrice == null) {
+            blob = await Clearing.isPriceUpdatedForBlockHeight(contractId, blockHeight);
+        }
+
+        // Hard locals for the rest of the function
+        const lastPrice = blob?.lastPrice ?? null;
+        const thisPrice = blob?.thisPrice ?? null;
+        if (lastPrice == null && thisPrice != null) {
+          lastPrice = thisPrice;
+        }
 
         await Clearing.normalizePositionMarks(
             positions,
@@ -1136,6 +1162,52 @@ class Clearing {
         );
 
         console.log(`📈 Price diff: last=${lastPrice} → this=${thisPrice}`);
+
+        // ------------------------------------------------------------
+        // 2.5) Resolve trade window + build openedByAddress ONCE
+        // ------------------------------------------------------------
+        const tradeHistoryManager = new TradeHistory();
+        const plan = Clearing.getMarkTradeWindow(blob);
+
+        const openedByAddress = new Map();
+
+        if (plan?.useBlockTrades) {
+
+            // blockTrades already keyed by `${contractId}:${address}`
+            for (const pos of positions) {
+                const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+                openedByAddress.set(pos.address, opened);
+            }
+
+        } else if (plan?.mustQueryHistory) {
+
+            const relevantTrades = await tradeHistoryManager.getTradesForContractBetweenBlocks(
+                contractId,
+                plan.startBlock,
+                plan.endBlock
+            );
+
+            // Build opened sums per address using your trade shape
+            for (const t of relevantTrades || []) {
+                const addr = t.address || t.buyerAddress || t.sellerAddress;
+                if (!addr) continue;
+
+                const opened = new BigNumber(openedByAddress.get(addr) || 0)
+                    .plus(t.opened || t.amount || 0)
+                    .toNumber();
+
+                openedByAddress.set(addr, opened);
+            }
+
+            // Ensure every position address has at least 0
+            for (const pos of positions) {
+                if (!openedByAddress.has(pos.address)) openedByAddress.set(pos.address, 0);
+            }
+
+        } else {
+            // default fallback
+            for (const pos of positions) openedByAddress.set(pos.address, 0);
+        }
 
         // ------------------------------------------------------------
         // 3) Accumulators
@@ -1155,16 +1227,15 @@ class Clearing {
             if (!pos.contracts) continue;
             const tally = await Tally.getTally(pos.address, collateralId);
 
-            const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
-            console.log('opened '+opened)
-            const oldContracts = pos.contracts - opened;
+            const opened = openedByAddress.get(pos.address) || 0;
+            const oldContracts = (pos.contracts || 0) - opened;
 
             const pnl = Clearing.calculatePnLChange({
                 oldContracts,
                 newContracts: opened,
                 avgEntryPrice: pos.avgPrice,
-                previousMarkPrice: blob.lastPrice,
-                currentMarkPrice: blob.thisPrice,
+                previousMarkPrice: lastPrice,
+                currentMarkPrice: thisPrice,
                 inverse,
                 notional
             });
@@ -1331,6 +1402,66 @@ class Clearing {
 
         return { positions, liqEvents, systemicLoss, pnlDelta };
     }
+
+    static getMarkTradeWindow(priceInfo) {
+        // priceInfo is the object you now return from isPriceUpdatedForBlockHeight
+        // Expected minimal fields:
+        //  - priceInfo.thisPrice
+        //  - priceInfo.lastPrice (optional)
+        //  - priceInfo.blockHeight  (the block where the new mark lives)
+        //  - priceInfo.prevBlockHeight (optional but ideal)
+
+        const markBlock = priceInfo?.blockHeight ?? null;
+        const prevBlock = priceInfo?.prevBlockHeight ?? null;
+
+        if (!markBlock) {
+            return {
+                useBlockTrades: false,
+                mustQueryHistory: false,
+                startBlock: null,
+                endBlock: null,
+                reason: "No markBlock in priceInfo"
+            };
+        }
+
+        // If we don't know the previous mark block, safest assumption is:
+        // same-block cache is NOT sufficient for avgPrice history reconstruction.
+        if (!prevBlock) {
+            return {
+                useBlockTrades: false,
+                mustQueryHistory: true,
+                startBlock: markBlock,   // conservative default
+                endBlock: markBlock,
+                reason: "Missing prevBlockHeight; require history"
+            };
+        }
+
+        const gap = markBlock - prevBlock;
+
+        // gap === 0 means a mark update that effectively references same block interval
+        // but in practice markBlock >= prevBlock, and we care if there were trades
+        // in blocks between these marks.
+        if (gap <= 0) {
+            return {
+                useBlockTrades: true,
+                mustQueryHistory: false,
+                startBlock: markBlock,
+                endBlock: markBlock,
+                reason: "No inter-block gap"
+            };
+        }
+
+        // There is a discontinuity: blockTrades only holds current-block trades.
+        // For avgPrice correctness you need trades from prevBlock..markBlock.
+        return {
+            useBlockTrades: false,
+            mustQueryHistory: true,
+            startBlock: prevBlock + 1,
+            endBlock: markBlock,
+            reason: `Gap of ${gap} blocks`
+        };
+    }
+
 
 
     static applyLossPoolDrain(tally, loss) {
