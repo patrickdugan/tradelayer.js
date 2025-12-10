@@ -25,6 +25,14 @@ class Clearing {
     static blockTrades = new Map();        // Pre-clearing trades: `${contractId}:${address}` → [{delta, opened}]
     static deleverageTrades = new Map();   // Deleverage events: `${contractId}:${address}` → [{matchSize, fromOld, fromNew, ...}]
     static liquidationRecords = new Map(); // Liquidation records: `${contractId}:${address}` → {pool, contracts, ...}
+    // ==============================
+    // Mark caches (last-seen state)
+    // ==============================
+    static latestOracleMarkById = new Map(); 
+    // oracleId -> { price: number, blockHeight: number }
+
+    static latestNativeMarkByContract = new Map();
+    // contractId -> { price: number, blockHeight: number }
 
     // =========================================
     // TRADE TRACKING
@@ -892,75 +900,98 @@ class Clearing {
             const volumeIndexDB = await db.getDatabase('volumeIndex');
 
             const isOracle = await ContractRegistry.isOracleContract(contractId);
-            //console.log('oracle? '+isOracle)
+
+            // -----------------------------
+            // ORACLE CONTRACTS
+            // -----------------------------
             if (isOracle) {
-                // Handle Oracle-based contracts
                 const oracleId = await ContractRegistry.getOracleId(contractId);
-                //console.log(`Checking Oracle price update for Oracle ID ${oracleId} at block height ${blockHeight}`);
 
-                // Fetch oracle data
-                const oracleData = await base.findAsync({ oracleId });
-                if(!oracleData || oracleData.length === 0){
-                    //console.warn(`No oracle data found for Oracle ID ${oracleId}`);
+                // 1) Prime cache once (cheap-ish once per oracle)
+                if (!Clearing.latestOracleMarkById.has(oracleId)) {
+                    const all = await base.findAsync({ oracleId });
+                    if (!all || all.length === 0) return false;
+
+                    all.sort((a, b) => (b.blockHeight || 0) - (a.blockHeight || 0));
+                    const latest = all[0];
+
+                    Clearing.latestOracleMarkById.set(oracleId, {
+                        price: latest?.data?.price,
+                        blockHeight: latest?.blockHeight
+                    });
+
+                    // Don’t treat prime as an update signal.
                     return false;
                 }
 
-                // Sort data by blockHeight
-                oracleData.sort((a, b) => b.blockHeight - a.blockHeight);
+                const cached = Clearing.latestOracleMarkById.get(oracleId);
 
-                const [latestEntry, previousEntry] = oracleData;
-                if (!previousEntry) {
-                    //console.log(`Only one oracle data entry found for Oracle ID ${oracleId}. Assuming no price change.`);
+                // 2) Fast path: only check for entries at this exact height
+                const entriesThisBlock = await base.findAsync({ oracleId, blockHeight });
+
+                if (!entriesThisBlock || entriesThisBlock.length === 0) {
                     return false;
                 }
 
-                const latestPrice = latestEntry.data.price;
-                const previousPrice = previousEntry.data.price;
-                  //console.log('ssdfs'+blockHeight+' '+latestEntry.blockHeight)
-                    //console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
-                //console.log('latest price obj '+JSON.stringify(latestPrice))              
-                if(latestPrice!=previousPrice&&blockHeight==latestEntry.blockHeight){
-                    console.log('ssdfs'+blockHeight+' '+latestEntry.blockHeight)
-                    console.log(`Oracle prices: latest=${latestPrice}, previous=${previousPrice}`);    
-                    return latestPrice
-                }else{
-                    return false
-                }
-            } else {
-                const contractInfo = ContractRegistry.getContractInfo(contractId)
-                // Handle Native contracts
-                const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
-                //console.log(`Checking native price update for pair ${pairKey} at block height ${blockHeight}`);
+                // If multiple somehow exist, pick the first
+                const entry = entriesThisBlock[0];
+                const latestPrice = entry?.data?.price;
 
-                // Fetch volume index data
-                const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
-                if (!volumeData || volumeData.length === 0) {
-                    //console.warn(`No volume index data found for pair ${pairKey}`);
-                    return false;
+                if (latestPrice == null) return false;
+
+                // 3) Compare against cached last price
+                if (latestPrice !== cached.price) {
+                    Clearing.latestOracleMarkById.set(oracleId, {
+                        price: latestPrice,
+                        blockHeight
+                    });
+                    return latestPrice;
                 }
 
-                // Sort by blockHeight
-                volumeData.sort((a, b) => b.value.blockHeight - a.value.blockHeight);
-
-                const [latestEntry, previousEntry] = volumeData;
-
-                if (!previousEntry) {
-                    //console.log(`Only one volume index entry found for pair ${pairKey}. Assuming no price change.`);
-                    return false;
-                }
-
-                const latestPrice = latestEntry.value.price;
-                const previousPrice = previousEntry.value.price;
-                if(latestPrice!=previousPrice&&blockHeight==latestEntry.blockHeight){
-                    console.log(`Native prices: latest=${latestPrice}, previous=${previousPrice}`);
-                    return latestPrice
-                }else{
-                    return false
-                }
+                return false;
             }
+
+            // -----------------------------
+            // NATIVE CONTRACTS
+            // -----------------------------
+            const contractInfo = ContractRegistry.getContractInfo(contractId);
+            const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
+
+            const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
+            if (!volumeData || volumeData.length === 0) return false;
+
+            // In practice this appears to be a single rolling doc.
+            const latestEntry = volumeData[0];
+            const latestHeight = latestEntry?.value?.blockHeight;
+            const latestPrice = latestEntry?.value?.price;
+
+            if (latestPrice == null || latestHeight == null) return false;
+
+            // 1) Prime native cache once per contract
+            if (!Clearing.latestNativeMarkByContract.has(contractId)) {
+                Clearing.latestNativeMarkByContract.set(contractId, {
+                    price: latestPrice,
+                    blockHeight: latestHeight
+                });
+                return false;
+            }
+
+            const cached = Clearing.latestNativeMarkByContract.get(contractId);
+
+            // 2) Only fire update when the rolling doc points at THIS block
+            if (latestHeight === blockHeight && latestPrice !== cached.price) {
+                Clearing.latestNativeMarkByContract.set(contractId, {
+                    price: latestPrice,
+                    blockHeight: latestHeight
+                });
+                return latestPrice;
+            }
+
+            return false;
+
         } catch (error) {
             console.error(`Error checking price update for contract ID ${contractId}:`, error.message);
-            return false; // Default to no update in case of an error
+            return false;
         }
     }
 
@@ -1080,6 +1111,7 @@ class Clearing {
             const tally = await Tally.getTally(pos.address, collateralId);
 
             const opened = Clearing.getOpenedThisBlock(contractId, pos.address) || 0;
+            console.log('opened '+opened)
             const oldContracts = pos.contracts - opened;
 
             const pnl = Clearing.calculatePnLChange({
@@ -1987,7 +2019,7 @@ class Clearing {
 
         return { insuranceContractId, isOracle };
     }
-    
+
     static async distributeInsuranceProRataToDelev(
         tradingContractId,
         collateralId,
