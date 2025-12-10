@@ -25,13 +25,13 @@ class Clearing {
     static blockTrades = new Map();        // Pre-clearing trades: `${contractId}:${address}` → [{delta, opened}]
     static deleverageTrades = new Map();   // Deleverage events: `${contractId}:${address}` → [{matchSize, fromOld, fromNew, ...}]
     static liquidationRecords = new Map(); // Liquidation records: `${contractId}:${address}` → {pool, contracts, ...}
-    // ==============================
-    // Mark caches (last-seen state)
-    // ==============================
-    static latestOracleMarkById = new Map(); 
-    // oracleId -> { price: number, blockHeight: number }
-
-    static latestNativeMarkByContract = new Map();
+    // ---------------------------------------------------------------------------
+    // PRICE CACHE
+    // ---------------------------------------------------------------------------
+    // oracleId -> { price, blockHeight }
+    static latestOracleMarkById = new Map();
+    // native contractId -> { price, blockHeight }
+    static latestNativeMarkById = new Map();
     // contractId -> { price: number, blockHeight: number }
 
     // =========================================
@@ -893,105 +893,150 @@ class Clearing {
         }
     }
 
+    // ---------------------------------------------------------------------------
+    // isPriceUpdatedForBlockHeight (drop-in replacement)
+    // Returns object:
+    // {
+    //   updated: boolean,
+    //   lastPrice: number|null,
+    //   thisPrice: number|null,
+    //   blockHeight: number,
+    //   contractId: number|string,
+    //   isOracle: boolean,
+    //   oracleId?: number|null
+    // }
+    // ---------------------------------------------------------------------------
     static async isPriceUpdatedForBlockHeight(contractId, blockHeight) {
-        try {
-            const ContractRegistry = require('./contractRegistry.js');
-            const base = await db.getDatabase('oracleData');
-            const volumeIndexDB = await db.getDatabase('volumeIndex');
+        const ContractRegistry = require('./contractRegistry.js');
+        const base = await db.getDatabase('oracleData');
+        const volumeIndexDB = await db.getDatabase('volumeIndex');
 
+        try {
             const isOracle = await ContractRegistry.isOracleContract(contractId);
 
-            // -----------------------------
-            // ORACLE CONTRACTS
-            // -----------------------------
+            // -------------------------
+            // ORACLE CONTRACT
+            // -------------------------
             if (isOracle) {
                 const oracleId = await ContractRegistry.getOracleId(contractId);
-
-                // 1) Prime cache once (cheap-ish once per oracle)
-                if (!Clearing.latestOracleMarkById.has(oracleId)) {
-                    const all = await base.findAsync({ oracleId });
-                    if (!all || all.length === 0) return false;
-
-                    all.sort((a, b) => (b.blockHeight || 0) - (a.blockHeight || 0));
-                    const latest = all[0];
-
-                    Clearing.latestOracleMarkById.set(oracleId, {
-                        price: latest?.data?.price,
-                        blockHeight: latest?.blockHeight
-                    });
-
-                    // Don’t treat prime as an update signal.
-                    return false;
-                }
-
                 const cached = Clearing.latestOracleMarkById.get(oracleId);
+                const lastPrice = cached ? cached.price : null;
 
-                // 2) Fast path: only check for entries at this exact height
-                const entriesThisBlock = await base.findAsync({ oracleId, blockHeight });
+                // Only check THIS block for a new oracle mark
+                const rows = await base.findAsync({ oracleId, blockHeight });
+                const entry = Array.isArray(rows) && rows.length ? rows[0] : null;
+                const thisPrice = entry?.data?.price ?? null;
 
-                if (!entriesThisBlock || entriesThisBlock.length === 0) {
-                    return false;
+                if (thisPrice != null) {
+                    Clearing.latestOracleMarkById.set(oracleId, { price: thisPrice, blockHeight });
+
+                    return {
+                        updated: (lastPrice == null || thisPrice !== lastPrice),
+                        lastPrice,
+                        thisPrice,
+                        blockHeight,
+                        contractId,
+                        isOracle: true,
+                        oracleId
+                    };
                 }
 
-                // If multiple somehow exist, pick the first
-                const entry = entriesThisBlock[0];
-                const latestPrice = entry?.data?.price;
-
-                if (latestPrice == null) return false;
-
-                // 3) Compare against cached last price
-                if (latestPrice !== cached.price) {
-                    Clearing.latestOracleMarkById.set(oracleId, {
-                        price: latestPrice,
-                        blockHeight
-                    });
-                    return latestPrice;
+                // Prime cache once if empty (lightweight max scan, no sort)
+                if (lastPrice == null) {
+                    const all = await base.findAsync({ oracleId });
+                    if (Array.isArray(all) && all.length) {
+                        let best = all[0];
+                        for (const row of all) {
+                            if ((row.blockHeight || 0) > (best.blockHeight || 0)) best = row;
+                        }
+                        const p = best?.data?.price ?? null;
+                        if (p != null) {
+                            Clearing.latestOracleMarkById.set(oracleId, { price: p, blockHeight: best.blockHeight });
+                        }
+                    }
                 }
 
-                return false;
+                return {
+                    updated: false,
+                    lastPrice: Clearing.latestOracleMarkById.get(oracleId)?.price ?? null,
+                    thisPrice: null,
+                    blockHeight,
+                    contractId,
+                    isOracle: true,
+                    oracleId
+                };
             }
 
-            // -----------------------------
-            // NATIVE CONTRACTS
-            // -----------------------------
-            const contractInfo = ContractRegistry.getContractInfo(contractId);
-            const pairKey = `${contractInfo.notionalPropertyId}-${contractInfo.collateralPropertyId}`;
+            // -------------------------
+            // NATIVE CONTRACT
+            // -------------------------
+            const cached = Clearing.latestNativeMarkById.get(contractId);
+            const lastPrice = cached ? cached.price : null;
 
-            const volumeData = await volumeIndexDB.findAsync({ _id: pairKey });
-            if (!volumeData || volumeData.length === 0) return false;
+            let pairKey = null;
+            try {
+                const info = await ContractRegistry.getContractInfo(contractId);
+                if (info?.notionalPropertyId != null && info?.collateralPropertyId != null) {
+                    pairKey = `${info.notionalPropertyId}-${info.collateralPropertyId}`;
+                }
+            } catch (e) {}
 
-            // In practice this appears to be a single rolling doc.
-            const latestEntry = volumeData[0];
-            const latestHeight = latestEntry?.value?.blockHeight;
-            const latestPrice = latestEntry?.value?.price;
-
-            if (latestPrice == null || latestHeight == null) return false;
-
-            // 1) Prime native cache once per contract
-            if (!Clearing.latestNativeMarkByContract.has(contractId)) {
-                Clearing.latestNativeMarkByContract.set(contractId, {
-                    price: latestPrice,
-                    blockHeight: latestHeight
-                });
-                return false;
+            // Try pairKey doc first, then contractId doc
+            let docArr = [];
+            if (pairKey) {
+                docArr = await volumeIndexDB.findAsync({ _id: pairKey });
+            }
+            if (!Array.isArray(docArr) || docArr.length === 0) {
+                docArr = await volumeIndexDB.findAsync({ _id: contractId });
             }
 
-            const cached = Clearing.latestNativeMarkByContract.get(contractId);
+            const doc = Array.isArray(docArr) && docArr.length ? docArr[0] : null;
+            const docBlock = doc?.value?.blockHeight ?? doc?.blockHeight ?? null;
+            const thisPrice = doc?.value?.price ?? doc?.data?.price ?? null;
 
-            // 2) Only fire update when the rolling doc points at THIS block
-            if (latestHeight === blockHeight && latestPrice !== cached.price) {
-                Clearing.latestNativeMarkByContract.set(contractId, {
-                    price: latestPrice,
-                    blockHeight: latestHeight
-                });
-                return latestPrice;
+            // If there is a price entry at THIS block, update cache + return object
+            if (thisPrice != null && docBlock === blockHeight) {
+                Clearing.latestNativeMarkById.set(contractId, { price: thisPrice, blockHeight: docBlock });
+
+                return {
+                    updated: (lastPrice == null || thisPrice !== lastPrice),
+                    lastPrice,
+                    thisPrice,
+                    blockHeight,
+                    contractId,
+                    isOracle: false,
+                    oracleId: null
+                };
             }
 
-            return false;
+            // Prime cache if empty
+            if (lastPrice == null && thisPrice != null && docBlock != null) {
+                Clearing.latestNativeMarkById.set(contractId, { price: thisPrice, blockHeight: docBlock });
+            }
+
+            return {
+                updated: false,
+                lastPrice: Clearing.latestNativeMarkById.get(contractId)?.price ?? null,
+                thisPrice: null,
+                blockHeight,
+                contractId,
+                isOracle: false,
+                oracleId: null
+            };
 
         } catch (error) {
             console.error(`Error checking price update for contract ID ${contractId}:`, error.message);
-            return false;
+
+            return {
+                updated: false,
+                lastPrice: null,
+                thisPrice: null,
+                blockHeight,
+                contractId,
+                isOracle: false,
+                oracleId: null,
+                error: error.message
+            };
         }
     }
 
