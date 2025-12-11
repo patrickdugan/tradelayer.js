@@ -1235,10 +1235,9 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
         // ------------------------------------------------------------
         const tradeHistoryManager = new TradeHistory();
         const plan = await Clearing.getMarkTradeWindow(blob,contractId);
-
         const openedByAddress = new Map();
+        const openedCostByAddress = new Map();
 
-        // 1) Pull historical trades if required
         if (plan?.mustQueryHistory) {
           const trades = await tradeHistoryManager.getTradesForContractBetweenBlocks(
             contractId,
@@ -1247,16 +1246,18 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
           );
 
           for (const t of trades || []) {
-            const addr = t.address || t.buyerAddress || t.sellerAddress;
-            if (!addr) continue;
-
-            const prev = new BigNumber(openedByAddress.get(addr) || 0);
-            openedByAddress.set(
-              addr,
-              prev.plus(t.opened || t.amount || 0).toNumber()
-            );
+            Clearing.applyTradeToOpenStats(openedByAddress, openedCostByAddress, t);
           }
         }
+
+        const openedAvgByAddress = Clearing.computeOpenedAvgByAddress(
+          openedByAddress,
+          openedCostByAddress
+        );
+
+        // If you do the "both true" plan later, you'd just also loop blockTrades here
+        // and call the same applyTradeToOpenStats without changing the math.
+
 
         // ------------------------------------------------------------
         // 3) Accumulators
@@ -1273,12 +1274,13 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
         // ------------------------------------------------------------
         for (const pos of positions) {
 
+
             if (!pos.contracts) continue;
             const tally = await Tally.getTally(pos.address, collateralId);
 
             const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = (pos.contracts || 0) - opened;
-
+            const openedAvg = openedAvgByAddress.get(pos.address);
             const flipped =
                 oldContracts !== 0 &&
                 currentContracts !== 0 &&
