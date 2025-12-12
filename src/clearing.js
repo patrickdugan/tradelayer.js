@@ -116,17 +116,6 @@ class Clearing {
         return opened;
     }
 
-
-    static getDeltaThisBlock(contractId, address) {
-        const key = `${contractId}:${address}`;
-        const entry = this.blockTrades.get(key);
-        if (!entry) return 0;
-
-        const trades = this._normalizeTrades(entry);
-
-        return trades.reduce((sum, t) => sum + (t.delta || 0), 0);
-    }
-
     static getTrades(contractId, address) {
         const key = `${contractId}:${address}`;
         const entry = this.blockTrades.get(key);
@@ -145,11 +134,6 @@ class Clearing {
         return this.countTrades(contractId, address) > 0;
     }
 
-    static getLastTradeDelta(contractId, address) {
-        const trades = this.getTrades(contractId, address);
-        if (!trades.length) return 0;
-        return trades[trades.length - 1].delta || 0;
-    }
 
     // =========================================
     // DELEVERAGE TRACKING (RAM only, atomic)
@@ -584,26 +568,6 @@ class Clearing {
 
             await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
         }
-    }
-
-    static async getVWAP(contractId, block) {
-        const tradeHistoryDB = await dbInstance.getDatabase('tradeHistory');
-        const query = { "trade.contractId": contractId, blockHeight: { $gte: block - 23, $lte: block } };
-        const trades = await tradeHistoryDB.findAsync(query);
-
-        if (!trades.length) return null;
-
-        let totalVolume = new BigNumber(0);
-        let totalValue = new BigNumber(0);
-
-        for (let trade of trades) {
-            const price = new BigNumber(trade.trade.price);
-            const volume = new BigNumber(trade.trade.amount);
-            totalVolume = totalVolume.plus(volume);
-            totalValue = totalValue.plus(price.times(volume));
-        }
-
-        return totalVolume.isZero() ? null : totalValue.dividedBy(totalVolume).decimalPlaces(8).toNumber();
     }
 
     static async getIndexPrice(contractId, blockHeight) {
@@ -1041,61 +1005,6 @@ class Clearing {
             };
         }
     }
-
-    static async settleNewContracts(
-          contractId,
-          blockHeight,
-          priceInfo,
-          inverse,
-          notional
-        ) {
-          const Tally = require('./tally.js');
-          const MarginMap = require('./marginMap.js');
-
-          const marginMap = await MarginMap.getInstance(contractId);
-          const positions = await marginMap.getAllPositions(contractId);
-
-          const lastPrice = priceInfo.lastPrice;
-          if (lastPrice == null) return;
-
-          for (const pos of positions) {
-            const trades = Clearing.getTrades(contractId, pos.address);
-            if (!trades.length) continue;
-
-            let netNew = 0;
-            let cost = 0;
-
-            for (const t of trades) {
-              const signed = t.sell ? -t.amount : t.amount;
-              netNew += signed;
-              cost += Math.abs(signed) * t.price;
-            }
-
-            if (netNew === 0) continue;
-
-            const avgEntry = cost / Math.abs(netNew);
-
-            const pnl = Clearing.calculateNewContractPNL({
-              newContracts: netNew,
-              avgEntryPrice: avgEntry,
-              executionPrice: lastPrice, // 👈 key invariant
-              inverse,
-              notional
-            });
-
-            if (!pnl.isZero()) {
-              await Tally.updateBalance(
-                pos.address,
-                contract.collateralPropertyId,
-                pnl.toNumber(),
-                0, 0, 0,
-                'newContractMarkPNL',
-                blockHeight
-              );
-            }
-          }
-        }
-
 
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');
@@ -2245,50 +2154,6 @@ class Clearing {
         });
     }
 
-        static async getPriceChange(blockHeight, contractId) {
-            const ContractRegistry = require('./contractRegistry.js');
-            let isOracleContract = await ContractRegistry.isOracleContract(contractId);
-            let oracleId = null;
-            let propertyId1 = null;
-            let propertyId2 = null;
-            let latestData = [];
-
-            if (isOracleContract) {
-                oracleId = await ContractRegistry.getOracleId(contractId);
-                const base = await db.getDatabase('oracleData');
-                latestData = await base.findAsync({ oracleId: oracleId });
-
-            } else {
-                console.log('Inside getPriceChange() for native contract');
-                let info = await ContractRegistry.getContractInfo(contractId);
-                propertyId1 = info?.native?.onChainData?.[0];
-                propertyId2 = info?.native?.onChainData?.[1];
-                
-                if (!propertyId1 || !propertyId2) {
-                    console.warn(`No valid properties found for contract ${contractId}`);
-                    return { lastPrice: null, thisPrice: null };
-                }
-
-                latestData = await volumeIndexDB.findAsync({ propertyId1, propertyId2 });
-            }
-
-        // Ensure data is an array before sorting
-        const sortedData = Array.isArray(latestData) ? latestData.sort((a, b) => b.blockHeight - a.blockHeight) : [];
-        if (sortedData.length === 0) {
-            console.warn(`No price data found for contract ${contractId}`);
-            return { lastPrice: null, thisPrice: null };
-        }
-
-        // Get latest and previous prices
-        const latestBlockData = sortedData[0]; // Most recent entry
-        const currentMarkPrice = latestBlockData?.data?.price || null;
-        const previousMarkPrice = sortedData.length > 1 ? sortedData[1]?.data?.price : null;
-
-        console.log(`Checking mark price: Current=${currentMarkPrice}, Previous=${previousMarkPrice}`);
-        
-        return { lastPrice: previousMarkPrice, thisPrice: currentMarkPrice };
-    }
-
     // clearingPnL.js (or inside clearing.js)
 
     static calculateClearingPNL({
@@ -2626,18 +2491,6 @@ class Clearing {
         }
     }
 
-    static async getBalance(holderAddress) {
-        // Replace this with actual data fetching logic for your system
-        try {
-            let balance = await database.getBalance(holderAddress);
-            return balance;
-        } catch (error) {
-            console.error('Error fetching balance for address:', holderAddress, error);
-            //throw error;
-        }
-    }
-
-
     // Implement or reference these helper methods as per your system's logic
     static calculateTotalMargin(positions) {
         let totalMargin = 0;
@@ -2651,160 +2504,6 @@ class Clearing {
         const expectedMargin = this.getExpectedTotalMargin(); // Implement this method based on your system
         // You can also implement a range-based check instead of an exact value match
         return totalMargin === expectedMargin;
-    }
-
-    static async saveAuditIndex(blockHeight) {
-        const auditData = this.prepareAuditData(); // Implement this method to prepare data for saving
-        try {
-            await database.saveAuditData(blockHeight, auditData);
-        } catch (error) {
-            console.error('Error saving audit index for block height:', blockHeight, error);
-            //throw error;
-        }
-    }
-
-    static prepareAuditData(blockHeight, positions, balanceChanges) {
-        // The data structure to hold the audit data
-        let auditData = {};
-
-        balanceUpdates.forEach(update => {
-            // Assuming each update has contractId, blockHeight, and other relevant info
-            const key = `contract-${update.contractId}-block-${update.blockHeight}`;
-
-            // Initialize sub-object if not already present
-            if (!auditData[key]) {
-                auditData[key] = [];
-            }
-
-            // Add the update to the appropriate key
-            auditData[key].push({
-                holderAddress: update.holderAddress,
-                newBalance: update.newBalance,
-                // Include any other relevant fields from the update
-            });
-        });
-        // Reset the balanceChanges array after the audit process
-        this.balanceChanges = [];
-
-        return JSON.stringify(auditData);
-    }
-
-static async socializeLoss(contractId, totalLoss,block,collateralId) {
-    //try {
-        console.log(`🔹 Socializing loss for contract ${contractId}, total loss: ${totalLoss}`);
-        const margins = await MarginMap.getInstance(contractId)
-        const TallyMap = require('./tally.js')
-        // Get all positions
-        const rPNLs = await Clearing.loadRealizedPnLForBlock(contractId,block)
-        const openPositions = await margins.getAllPositions(contractId);
-        // Filter only positions with positive uPNL
-       console.log("🔍 Checking open positions before filtering:", JSON.stringify(openPositions));
-       console.log('checking rPNLs '+JSON.stringify(rPNLs))
-        // **Step 1: Identify positions with either uPNL or rPNL (or both)**
-        const positiveUPNLPositions = openPositions
-            .map(pos => {
-                const uPNL = new BigNumber(pos.unrealizedPNL || 0);
-                const rPNL = new BigNumber(rPNLs.get(pos.address) || 0);
-                const totalPnL = uPNL/*.plus(rPNL);*/
-
-                if (totalPnL.gt(0)) {
-                    return { ...pos, realizedPNL: rPNL.toNumber(), totalPnL: totalPnL.toNumber() };
-                }
-                return null;
-            })
-            .filter(pos => pos !== null);
-
-        if(positiveUPNLPositions){            
-            console.log("✅ Filtered unrealized PnL positions:", positiveUPNLPositions.length, JSON.stringify(positiveUPNLPositions, null, 2));
-        }
-
-        // Calculate total positive uPNL
-        const totalUPNL = positiveUPNLPositions.reduce((sum, pos) => sum.plus(pos.unrealizedPNL), new BigNumber(0));
-
-        if (totalUPNL.isZero()) {
-            console.log("⚠️ Total positive uPNL is zero. No loss to socialize.");
-            return;
-        }
-
-        // Calculate loss percentage
-        const lossPercentage = totalLoss.dividedBy(totalUPNL);
-
-        console.log(`📊 Total uPNL: ${totalUPNL.toFixed(4)}, Loss Percentage: ${(lossPercentage.times(100)).toFixed(2)}%`);
-
-        // Apply proportional loss to positive uPNL positions
-        for (let pos of positiveUPNLPositions) {
-            const lossForPosition = new BigNumber(pos.unrealizedPNL).times(lossPercentage).decimalPlaces(8);
-
-            console.log(`📉 Reducing ${pos.address} uPNL by ${lossForPosition.toFixed(8)} (original: ${pos.unrealizedPNL})`);
-            // Adjust uPNL
-            pos.unrealizedPNL = new BigNumber(pos.unrealizedPNL).minus(lossForPosition).toNumber();
-            // Update margin map
-            margins.margins.set(pos.address, pos);
-            await margins.recordMarginMapDelta(
-                pos.address,
-                contractId,
-                0, 0, 0,
-                -lossForPosition.toNumber(), // Deducted uPNL
-                0,
-                'socializeLoss'
-            );
-            TallyMap.updateBalance(pos.address, collateralId,-lossForPosition.toNumber(),0,0,0,'crawback',block,'')
-        }
-
-        // Save updated margin map
-        await margins.saveMarginMap(block);
-
-        console.log("✅ Socialized loss successfully applied.");
-
-    //} catch (error) {
-    //    console.error("❌ Error socializing loss:", error);
-    //    throw error;
-    //}
-}
-
-static async loadRealizedPnLForBlock(contractId, blockHeight) {
-    console.log(`📜 Fetching realized PNL for contract ${contractId} at block ${blockHeight}`);
-
-    const tradeHistoryDB = await db.getDatabase('tradeHistory');
-
-    try {
-        // Query for rPNL records specific to this contract and block
-        const query = { _id: new RegExp(`^rPNL-.*-${contractId}-${blockHeight}$`) };
-        const rPNLRecords = await tradeHistoryDB.findAsync(query);
-
-        const realizedPnLMap = new Map();
-
-        for (const record of rPNLRecords) {
-            const value = JSON.parse(record.value);
-            const address = value.address;
-            const pnl = new BigNumber(value.accountingPNL || 0);
-
-            if (realizedPnLMap.has(address)) {
-                realizedPnLMap.set(address, realizedPnLMap.get(address).plus(pnl));
-            } else {
-                realizedPnLMap.set(address, pnl);
-            }
-        }
-
-        console.log(`✅ Loaded realized PNL: ${JSON.stringify([...realizedPnLMap])}`);
-        return realizedPnLMap;
-    } catch (error) {
-        console.error("❌ Error loading realized PNL for block:", error);
-        return new Map();
-    }
-}
-
-
-
-    static async fetchAuditData(auditDataKey) {
-        // Implement logic to fetch audit data from the database
-        try {
-            const auditData = await database.getAuditData(auditDataKey);
-            return auditData;
-        } catch (error) {
-            console.error('Error fetching audit data:', error);
-            throw error;
-        }
     }
 
      static async saveFundingEvent(contractId, fundingRate, blockHeight) {
