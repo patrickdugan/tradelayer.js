@@ -1042,6 +1042,61 @@ class Clearing {
         }
     }
 
+    static async settleNewContracts(
+          contractId,
+          blockHeight,
+          priceInfo,
+          inverse,
+          notional
+        ) {
+          const Tally = require('./tally.js');
+          const MarginMap = require('./marginMap.js');
+
+          const marginMap = await MarginMap.getInstance(contractId);
+          const positions = await marginMap.getAllPositions(contractId);
+
+          const lastPrice = priceInfo.lastPrice;
+          if (lastPrice == null) return;
+
+          for (const pos of positions) {
+            const trades = Clearing.getTrades(contractId, pos.address);
+            if (!trades.length) continue;
+
+            let netNew = 0;
+            let cost = 0;
+
+            for (const t of trades) {
+              const signed = t.sell ? -t.amount : t.amount;
+              netNew += signed;
+              cost += Math.abs(signed) * t.price;
+            }
+
+            if (netNew === 0) continue;
+
+            const avgEntry = cost / Math.abs(netNew);
+
+            const pnl = Clearing.calculateNewContractPNL({
+              newContracts: netNew,
+              avgEntryPrice: avgEntry,
+              executionPrice: lastPrice, // 👈 key invariant
+              inverse,
+              notional
+            });
+
+            if (!pnl.isZero()) {
+              await Tally.updateBalance(
+                pos.address,
+                contract.collateralPropertyId,
+                pnl.toNumber(),
+                0, 0, 0,
+                'newContractMarkPNL',
+                blockHeight
+              );
+            }
+          }
+        }
+
+
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');
         const contracts = await ContractRegistry.loadContractSeries();
@@ -1049,8 +1104,8 @@ class Clearing {
 
         for (const contract of contracts) {
             const id = contract[1].id;
-
             const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
+            Clearing.settleNewContracts(id,blockHeight,priceInfo)
             if (!priceInfo || !priceInfo.updated) continue;
 
             const newPrice = priceInfo.thisPrice;

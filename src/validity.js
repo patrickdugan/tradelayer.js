@@ -1337,6 +1337,67 @@ const Validity = {
             return params;
         },
 
+        isTradePriceWithinLeverageBounds({
+          tradePrice,
+          markPrice,
+          leverage,
+          bufferBps = 65
+        }) {
+          const BigNumber = require('bignumber.js');
+
+          if (
+            tradePrice == null ||
+            markPrice == null ||
+            !leverage ||
+            leverage <= 0
+          ) {
+            return {
+              valid: false,
+              reason: 'Missing tradePrice, markPrice, or leverage'
+            };
+          }
+
+          const priceBN = new BigNumber(tradePrice);
+          const markBN  = new BigNumber(markPrice);
+
+          if (!priceBN.isFinite() || !markBN.isFinite() || markBN.lte(0)) {
+            return {
+              valid: false,
+              reason: 'Invalid numeric values for price or mark'
+            };
+          }
+
+          // |P - M| / M
+          const deviation = priceBN.minus(markBN).abs().div(markBN);
+
+          // 1 / leverage
+          const maxMove = new BigNumber(1).div(leverage);
+
+          // buffer in decimal (65 bps = 0.0065)
+          const buffer = new BigNumber(bufferBps).div(10_000);
+
+          const allowed = maxMove.minus(buffer);
+
+          if (allowed.lte(0)) {
+            return {
+              valid: false,
+              reason: 'Leverage buffer exceeds allowable price movement'
+            };
+          }
+
+          if (deviation.gte(allowed)) {
+            return {
+              valid: false,
+              reason:
+                `Trade price deviates ${(deviation.times(100)).toFixed(2)}% ` +
+                `from mark; max allowed ${(allowed.times(100)).toFixed(2)}%`
+            };
+          }
+
+          return { valid: true };
+        }
+
+
         // 18: Trade Contract On-chain
         validateTradeContractOnchain: async (sender, params, txid) => {
             params.reason = '';
@@ -1363,6 +1424,20 @@ const Validity = {
               params.reason += 'No reference price exists for contract at this block; ';
               return params;
             }
+
+            const priceCheck = Validity.isTradePriceWithinLeverageBounds({
+              tradePrice: params.price,
+              markPrice,
+              leverage: contractDetails.leverage,
+              bufferBps: 65
+            });
+
+            if (!priceCheck.valid) {
+              params.valid = false;
+              params.reason += priceCheck.reason + '; ';
+              return params;
+            }
+
 
 
             if(sender==null){
@@ -1519,6 +1594,19 @@ const Validity = {
             if (!hasRef) {
               params.valid = false;
               params.reason += 'No reference price exists for contract at this block; ';
+              return params;
+            }
+
+            const priceCheck = Validity.isTradePriceWithinLeverageBounds({
+              tradePrice: params.price,
+              markPrice,
+              leverage: contractDetails.leverage,
+              bufferBps: 65
+            });
+
+            if (!priceCheck.valid) {
+              params.valid = false;
+              params.reason += priceCheck.reason + '; ';
               return params;
             }
 
