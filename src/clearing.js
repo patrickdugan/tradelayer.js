@@ -1006,6 +1006,108 @@ class Clearing {
         }
     }
 
+    static async settleNewContracts(contractId, blockHeight, priceInfo) {
+      const BigNumber = require('bignumber.js');
+      const Tally = require('./tally.js');
+      const ContractRegistry = require('./contractRegistry.js');
+      const MarginMap = require('./marginMap.js');
+
+      // Need a canonical previous mark to tie off entry -> lastMark
+      const lastMark = priceInfo?.lastPrice ?? null;
+      if (lastMark == null) return;
+
+      // Early exit if nobody has positions
+      const mm = await MarginMap.getInstance(contractId);
+      const positions = await mm.getAllPositions(contractId);
+      if (!Array.isArray(positions) || positions.length === 0) return;
+
+      // Resolve contract params inside
+      const collateralId = await ContractRegistry.getCollateralId(contractId);
+      const inverse = await ContractRegistry.isInverse(contractId);
+
+      // Notional per contract (use lastMark as the reference price for any price-dependent notional)
+      const notionalObj = await ContractRegistry.getNotionalValue(contractId, lastMark);
+      const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
+
+      // Build opened stats from the correct trade window
+      const plan = await Clearing.getMarkTradeWindow(priceInfo, contractId);
+
+      const openedByAddress = new Map();
+      const openedCostByAddress = new Map();
+
+      // A) DB trades when needed
+      if (plan?.mustQueryHistory) {
+        const tradeHistoryManager = new TradeHistory();
+        const trades = await tradeHistoryManager.getTradesForContractBetweenBlocks(
+          contractId,
+          plan.startBlock,
+          plan.endBlock
+        );
+
+        for (const t of trades || []) {
+          Clearing.applyTradeToOpenStats(openedByAddress, openedCostByAddress, t);
+        }
+      }
+
+      // B) RAM blockTrades when safe
+      if (plan?.useBlockTrades) {
+        for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
+          if (!key.startsWith(`${contractId}:`)) continue;
+          const address = key.split(':')[1];
+
+          const entry = Clearing._normalizeEntry(entryRaw);
+          for (const t of (entry.trades || [])) {
+            // t is your local tradeObj: { opened, closed, consumedFromOpened, price, openedBefore }
+            const openedSigned = new BigNumber(t?.opened || 0);
+            if (openedSigned.isZero()) continue;
+
+            const px = new BigNumber(t?.price || 0);
+            if (px.lte(0)) continue;
+
+            const prevOpen = new BigNumber(openedByAddress.get(address) || 0);
+            openedByAddress.set(address, prevOpen.plus(openedSigned).toNumber());
+
+            const prevCost = new BigNumber(openedCostByAddress.get(address) || 0);
+            openedCostByAddress.set(
+              address,
+              prevCost.plus(openedSigned.abs().times(px)).toNumber()
+            );
+          }
+        }
+      }
+
+      const openedAvgByAddress = Clearing.computeOpenedAvgByAddress(openedByAddress, openedCostByAddress);
+
+      // Tie off entry -> lastMark
+      for (const [address, openedSignedNum] of openedByAddress.entries()) {
+        const openedSigned = new BigNumber(openedSignedNum || 0);
+        if (openedSigned.isZero()) continue;
+
+        const avgEntry = openedAvgByAddress.get(address);
+        if (!avgEntry) continue;
+
+        const pnlTie = Clearing.calculateNewContractPNL({
+          newContracts: openedSigned.toNumber(), // signed
+          avgEntryPrice: avgEntry,
+          lastPrice: lastMark,
+          inverse,
+          notional
+        });
+
+        if (!pnlTie.isZero()) {
+          await Tally.updateBalance(
+            address,
+            collateralId,
+            pnlTie.toNumber(),
+            0, 0, 0,
+            'newContractTieOff',
+            blockHeight
+          );
+        }
+      }
+    }
+
+
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');
         const contracts = await ContractRegistry.loadContractSeries();
@@ -2418,35 +2520,6 @@ class Clearing {
       }
 
       return { premiumMTM, intrinsicNet, maintNaked };
-    }
-
-    static async auditSettlementTasks(blockHeight, positions) {
-        try {
-            // Check total margin consistency
-            let totalMargin = this.calculateTotalMargin(positions);
-            if (!this.isMarginConsistent(totalMargin)) {
-                throw new Error("Inconsistent total margin detected");
-            }
-
-            // Verify insurance fund balance is not negative
-            if (Insurance.getBalance() < 0) {
-                throw new Error("Negative balance in the insurance fund");
-            }
-
-            // Save index populated during balance adjustment
-            await this.saveAuditIndex(blockHeight);
-        } catch (error) {
-            console.error('Audit error at block height', blockHeight, ':', error);
-
-                 // Check for the consistency of balance updates
-            let balanceUpdates = this.fetchBalanceUpdatesForSettlement();
-                if (!this.areBalanceUpdatesConsistent(balanceUpdates)) {
-                    //throw new Error("Inconsistent balance updates detected");
-                }
-                    // Save audit data
-                    const auditData = this.prepareAuditData(); 
-                    await this.saveAuditData(blockHeight, auditData);
-        }
     }
 
     static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {
