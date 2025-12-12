@@ -1353,6 +1353,18 @@ const Validity = {
                 params.reason += 'Price is not a valid number; ';
             }
 
+            const hasRef = await Validity.hasReferencePrice(
+              params.contractId,
+              params.block
+            );
+
+            if (!hasRef) {
+              params.valid = false;
+              params.reason += 'No reference price exists for contract at this block; ';
+              return params;
+            }
+
+
             if(sender==null){
                 params.valid=false
                 params.reason += "Sender is null"
@@ -1498,6 +1510,18 @@ const Validity = {
                 params.valid=false
                 params.reason += 'Tx type not yet activated '
             }
+
+            const hasRef = await Validity.hasReferencePrice(
+              params.contractId,
+              params.block
+            );
+
+            if (!hasRef) {
+              params.valid = false;
+              params.reason += 'No reference price exists for contract at this block; ';
+              return params;
+            }
+
 
             const is = await Validity.isActivated(params.block,txid,19)
             console.log(is)
@@ -1748,6 +1772,40 @@ const Validity = {
 
             return params;
         },
+
+        async hasReferencePrice(contractId, blockHeight) {
+          const contract = await ContractRegistry.getContractInfo(contractId);
+          if (!contract) return false;
+
+          // 1) Oracle-backed
+          if (contract.oracleId != null) {
+            const oracleDB = await db.getDatabase('oracleData');
+            const oraclePrint = await oracleDB.findOneAsync({
+              oracleId: contract.oracleId,
+              blockHeight: { $lte: blockHeight }
+            });
+            if (oraclePrint) return true;
+          }
+
+          // 2) Index / VWAP-backed
+          if (contract.indexPair != null) {
+            const price = await VolumeIndex.getLastPrice(contract.indexPair, blockHeight);
+            if (price != null && price > 0) return true;
+          }
+
+          // 3) Explicit bootstrap mark
+          if (
+            contract.firstMark &&
+            contract.firstMark.blockHeight <= blockHeight &&
+            Number.isFinite(contract.firstMark.price) &&
+            contract.firstMark.price > 0
+          ) {
+            return true;
+          }
+
+          return false;
+        }
+
 
         hasSufficientChannelMargin(balance, required, label) {
             if (balance < required) {

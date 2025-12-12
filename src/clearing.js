@@ -1121,73 +1121,72 @@ class Clearing {
     }
 
     // clearing.js
+    static applyTradeToOpenStats(openedByAddress, openedCostByAddress, trade) {
+      const BigNumber = require('bignumber.js');
 
-static applyTradeToOpenStats(openedByAddress, openedCostByAddress, trade) {
-  const BigNumber = require('bignumber.js');
+      const amount = new BigNumber(trade?.amount || 0);
+      if (amount.lte(0)) return;
 
-  const amount = new BigNumber(trade?.amount || 0);
-  if (amount.lte(0)) return;
+      const price = new BigNumber(trade?.price || 0);
+      if (price.lte(0)) return; // can't compute avg without price
 
-  const price = new BigNumber(trade?.price || 0);
-  if (price.lte(0)) return; // can't compute avg without price
+      const buyer = trade?.buyerAddress;
+      const seller = trade?.sellerAddress;
 
-  const buyer = trade?.buyerAddress;
-  const seller = trade?.sellerAddress;
+      const buyerClose = new BigNumber(trade?.buyerClose || 0);
+      const sellerClose = new BigNumber(trade?.sellerClose || 0);
 
-  const buyerClose = new BigNumber(trade?.buyerClose || 0);
-  const sellerClose = new BigNumber(trade?.sellerClose || 0);
+      // ✅ closes do NOT count as new exposure
+      const buyerOpenedAbs = BigNumber.max(new BigNumber(0), amount.minus(buyerClose));
+      const sellerOpenedAbs = BigNumber.max(new BigNumber(0), amount.minus(sellerClose));
 
-  // ✅ closes do NOT count as new exposure
-  const buyerOpenedAbs = BigNumber.max(new BigNumber(0), amount.minus(buyerClose));
-  const sellerOpenedAbs = BigNumber.max(new BigNumber(0), amount.minus(sellerClose));
+      // buyer opens long
+      if (buyer && buyerOpenedAbs.gt(0)) {
+        const prevOpen = new BigNumber(openedByAddress.get(buyer) || 0);
+        openedByAddress.set(buyer, prevOpen.plus(buyerOpenedAbs).toNumber());
 
-  // buyer opens long
-  if (buyer && buyerOpenedAbs.gt(0)) {
-    const prevOpen = new BigNumber(openedByAddress.get(buyer) || 0);
-    openedByAddress.set(buyer, prevOpen.plus(buyerOpenedAbs).toNumber());
+        const prevCost = new BigNumber(openedCostByAddress.get(buyer) || 0);
+        openedCostByAddress.set(
+          buyer,
+          prevCost.plus(buyerOpenedAbs.multipliedBy(price)).toNumber()
+        );
+      }
 
-    const prevCost = new BigNumber(openedCostByAddress.get(buyer) || 0);
-    openedCostByAddress.set(
-      buyer,
-      prevCost.plus(buyerOpenedAbs.multipliedBy(price)).toNumber()
-    );
-  }
+      // seller opens short
+      if (seller && sellerOpenedAbs.gt(0)) {
+        const prevOpen = new BigNumber(openedByAddress.get(seller) || 0);
+        openedByAddress.set(seller, prevOpen.minus(sellerOpenedAbs).toNumber());
 
-  // seller opens short
-  if (seller && sellerOpenedAbs.gt(0)) {
-    const prevOpen = new BigNumber(openedByAddress.get(seller) || 0);
-    openedByAddress.set(seller, prevOpen.minus(sellerOpenedAbs).toNumber());
-
-    // cost stored as ABS cost for avg calc
-    const prevCost = new BigNumber(openedCostByAddress.get(seller) || 0);
-    openedCostByAddress.set(
-      seller,
-      prevCost.plus(sellerOpenedAbs.multipliedBy(price)).toNumber()
-    );
-  }
-}
-
-static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
-  const BigNumber = require('bignumber.js');
-  const out = new Map();
-
-  for (const [addr, openedSignedNum] of openedByAddress.entries()) {
-    const openedSigned = new BigNumber(openedSignedNum || 0);
-    const openedAbs = openedSigned.abs();
-    const costAbs = new BigNumber(openedCostByAddress.get(addr) || 0);
-
-    if (openedAbs.gt(0) && costAbs.gt(0)) {
-      out.set(addr, costAbs.div(openedAbs).toNumber());
-    } else {
-      out.set(addr, null);
+        // cost stored as ABS cost for avg calc
+        const prevCost = new BigNumber(openedCostByAddress.get(seller) || 0);
+        openedCostByAddress.set(
+          seller,
+          prevCost.plus(sellerOpenedAbs.multipliedBy(price)).toNumber()
+        );
+      }
     }
-  }
 
-  return out;
-}
+    static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
+          const BigNumber = require('bignumber.js');
+          const out = new Map();
+
+          for (const [addr, openedSignedNum] of openedByAddress.entries()) {
+            const openedSigned = new BigNumber(openedSignedNum || 0);
+            const openedAbs = openedSigned.abs();
+            const costAbs = new BigNumber(openedCostByAddress.get(addr) || 0);
+
+            if (openedAbs.gt(0) && costAbs.gt(0)) {
+              out.set(addr, costAbs.div(openedAbs).toNumber());
+        } else {
+          out.set(addr, null);
+        }
+      }
+
+      return out;
+    }
 
  
-   static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional, priceInfo){
+    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional, priceInfo){
 
         console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
 
@@ -1281,12 +1280,13 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
             const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = (pos.contracts || 0) - opened;
             const openedAvg = openedAvgByAddress.get(pos.address);
+            const currentContracts = pos.contracts
             const flipped =
                 oldContracts !== 0 &&
-                currentContracts !== 0 &&
+                opened !== 0 &&
                 Math.sign(oldContracts) !== Math.sign(currentContracts);
 
-            const pnl = Clearing.calculateClearingPNL({
+            let pnl = Clearing.calculateClearingPNL({
                 oldContracts,
                 previousMarkPrice: lastPrice,
                 currentMarkPrice: thisPrice,
@@ -1300,6 +1300,8 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
               `mark=${lastPrice}->${thisPrice} pnl=${pnl.toFixed()}`
             );
 
+            console.log('opened contracts since last mark '+opened)
+
             // Normalize PnL sign so that:
             // negative = loss, positive = profit
             if (pos.contracts < 0) {
@@ -1307,24 +1309,12 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
             }
 
             const tradePNL = Clearing.calculateNewContractPNL({
-                newContracts: tradeSize,           // signed
-                avgEntryPrice,
-                executionPrice: tradePrice,
+                newContracts: opened,           // signed
+                avgEntryPrice: openedAvg,
+                executionPrice: thisPrice,
                 inverse,
                 notional
             });
-
-            if (!tradePNL.isZero()) {
-                await Tally.updateBalance(
-                    traderAddress,
-                    collateralId,
-                    tradePNL.toNumber(),
-                    0, 0, 0,
-                    'newContractsPNL',
-                    blockHeight
-                );
-            }
-
 
             let type = 'clearingLoss'
             if(opened>0){type='mixedClearingLoss'}
@@ -1339,10 +1329,16 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
                 continue;
             }
 
+            if (tradePNL.gt(0)) {
+                totalPos = totalPos.plus(tradePNL);
+                pos._pendingPNL += tradePNL;
+                continue;
+            }
+
             // ---------------------------
             // LOSS
             // ---------------------------
-            const loss = pnl.abs();
+            const loss = pnl.abs().plus(tradePNL);
             const available = new BigNumber(tally.available || 0);
             const maintMargin = new BigNumber(tally.margin || 0).div(2);
             const coverage = available.plus(maintMargin);
@@ -1354,12 +1350,22 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
                     collateralId,
                     pnl.toNumber(),  // negative number
                     0, 0, 0,
-                    type,
+                    clearingLoss,
                     blockHeight
                 );
 
+                if (tradePNL.lt(0)) {
+                    await Tally.updateBalance(
+                        pos.address,
+                        collateralId,
+                        tradePNL.toNumber(),
+                        0, 0, 0,
+                        'newContractsPNL',
+                        blockHeight
+                    );
+                }
+
                 totalNeg = totalNeg.plus(loss);
-                pos._pendingPNL = pnl;  // store so we track it
                 continue;
             }
 
@@ -1447,7 +1453,8 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
             const opened = openedByAddress.get(pos.address) || 0;
             const oldContracts = pos.contracts - opened;
             const currentContracts = pos.contracts;
-
+            const openedAvg = openedAvgByAddress.get(pos.address);
+            
             const flipped =
                 oldContracts !== 0 &&
                 currentContracts !== 0 &&
@@ -1455,20 +1462,16 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
 
             let type = 'clearingProfit'
             if(opened>0){type='mixedClearingProfit'}
-            const pnl = Clearing.calculatePnLChange({
+            const profit = Clearing.calculateClearingPNL({
                 oldContracts,
-                newContracts: opened,
-                avgEntryPrice: pos.avgPrice,
-                previousMarkPrice: blob.lastPrice,
-                currentMarkPrice: blob.thisPrice,
+                previousMarkPrice: lastPrice,
+                currentMarkPrice: thisPrice,
                 inverse,
-                notional,
-                address: pos.address,
-                loss: false,
-                flipped
+                notional
             });
 
-            if (pnl.gt(0)) {
+
+            if (profit.gt(0)) {
                 await Tally.updateBalance(
                     pos.address,
                     collateralId,
@@ -1477,6 +1480,8 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
                     type,
                     blockHeight
                 );
+            }else{
+               throw new Error() 
             }
 
             delete pos._pendingPNL;
@@ -2278,7 +2283,7 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
     static calculateNewContractPNL({
         newContracts,
         avgEntryPrice,
-        executionPrice,
+        lastPrice,
         inverse,
         notional
     }) {
@@ -2288,7 +2293,7 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
         if (size.isZero()) return new BigNumber(0);
 
         const avg  = new BigNumber(avgEntryPrice || 0);
-        const exec = new BigNumber(executionPrice || 0);
+        const exec = new BigNumber(lastPrice || 0);
         if (avg.isZero() || exec.eq(avg)) return new BigNumber(0);
 
         const noto = new BigNumber(notional || 1);
@@ -2309,8 +2314,6 @@ static computeOpenedAvgByAddress(openedByAddress, openedCostByAddress) {
 
         return pnl.isFinite() ? pnl : new BigNumber(0);
     }
-
-
 
     static async getBalance(holderAddress) {
         // Replace this with actual data fetching logic for your system
