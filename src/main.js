@@ -822,7 +822,7 @@ class Main {
     the main tx processing. But since I've stuck the clearing function, channel removal and others in the constructConsensus function
     this is currently also redundant */
     async blockHandlerEnd(blockHash, blockHeight) {
-
+            await Orderbook.processQueuedOnChainOrdersForBlock(blockHeight);
         const cumVolumes = await VolumeIndex.getCumulativeVolumes()
                 const thisBlockVolumes = await VolumeIndex.getBlockVolumes(blockHeight)
                 if(thisBlockVolumes>0){

@@ -39,40 +39,124 @@ class Clearing {
     // =========================================
     // TRADE TRACKING
     // =========================================
-    static recordTrade(contractId, address, opened, closed, price) {
-        const key = `${contractId}:${address}`;
+       // clearing.js
+    static _ensureBlockTradeEntry(key) {
+      if (!this.blockTrades.has(key)) {
+        this.blockTrades.set(key, { openedSoFar: 0, trades: [] });
+      }
+      const entry = this.blockTrades.get(key);
 
-        if (!this.blockTrades.has(key)) {
-            this.blockTrades.set(key, { openedSoFar: 0, trades: [] });
-        }
+      // add pools lazily (only used by "new" path)
+      if (!entry.pools) {
+        const BigNumber = require('bignumber.js');
+        entry.pools = {
+          long:  { qty: new BigNumber(0), cost: new BigNumber(0) },
+          short: { qty: new BigNumber(0), cost: new BigNumber(0) },
+        };
+      }
 
-        const entry = this.blockTrades.get(key);
+      return entry;
+    }
 
-        // Add new opens to the block's open stack
+    /**
+     * recordTrade(contractId, address, opened, closed, price, sideHint?)
+     *
+     * - Legacy mode (sideHint == null): behaves exactly like old openedSoFar stack.
+     * - Pool mode (sideHint provided): tracks same-block opens in long/short pools and
+     *   computes consumedFromOpened + consumedAvgPrice for same-block closes.
+     *
+     * sideHint: true/"buy" => incoming BUY leg for this address
+     *           false/"sell" => incoming SELL leg for this address
+     */
+    static recordTrade(contractId, address, opened, closed, price, sideHint = null) {
+      const key = `${contractId}:${address}`;
+      const entry = this._ensureBlockTradeEntry(key);
+
+      // ------------------------------------------------------------
+      // LEGACY PATH (unchanged behavior)
+      // ------------------------------------------------------------
+      if (sideHint === null || sideHint === undefined) {
         if (opened > 0) {
-            entry.openedSoFar += opened;
+          entry.openedSoFar += opened;
         }
 
-        // Consume stack for closes
         let consumedFromOpened = 0;
         if (closed > 0) {
-            consumedFromOpened = Math.min(entry.openedSoFar, closed);
-            entry.openedSoFar -= consumedFromOpened;
+          consumedFromOpened = Math.min(entry.openedSoFar, closed);
+          entry.openedSoFar -= consumedFromOpened;
         }
 
-        // Construct trade record
         const tradeObj = {
-            opened,
-            closed,
-            consumedFromOpened,
-            price,
-            openedBefore: entry.openedSoFar + consumedFromOpened
+          opened,
+          closed,
+          consumedFromOpened,
+          price,
+          openedBefore: entry.openedSoFar + consumedFromOpened
         };
 
         entry.trades.push(tradeObj);
-
         return tradeObj;
+      }
+
+      // ------------------------------------------------------------
+      // POOL PATH (same-block avg-cost per side)
+      // ------------------------------------------------------------
+      const BigNumber = require('bignumber.js');
+
+      const isBuyer =
+        sideHint === true ||
+        sideHint === "buy" ||
+        sideHint === "BUY";
+
+      const px = new BigNumber(price || 0);
+      const openedAbs = new BigNumber(Math.abs(opened || 0));
+      const closedAbs = new BigNumber(Math.abs(closed || 0));
+
+      const openPool  = isBuyer ? entry.pools.long  : entry.pools.short;
+      const closePool = isBuyer ? entry.pools.short : entry.pools.long;
+
+      const openedBefore = openPool.qty.toNumber();
+
+      // add opens to incoming side
+      if (openedAbs.gt(0)) {
+        openPool.qty  = openPool.qty.plus(openedAbs);
+        openPool.cost = openPool.cost.plus(openedAbs.multipliedBy(px));
+      }
+
+      // consume closes from opposite side pool (same-block closes)
+      let consumedFromOpened = new BigNumber(0);
+      let consumedAvgPrice = null;
+
+      if (closedAbs.gt(0) && closePool.qty.gt(0)) {
+        consumedFromOpened = BigNumber.min(closedAbs, closePool.qty);
+
+        const avgEntry = closePool.cost.dividedBy(closePool.qty);
+        consumedAvgPrice = avgEntry.toNumber();
+
+        const consumedCost = avgEntry.multipliedBy(consumedFromOpened);
+        closePool.qty  = closePool.qty.minus(consumedFromOpened);
+        closePool.cost = closePool.cost.minus(consumedCost);
+      }
+
+      const tradeObj = {
+        opened: openedAbs.toNumber(),                 // keep legacy shape
+        closed: closedAbs.toNumber(),
+        consumedFromOpened: consumedFromOpened.toNumber(),
+        price: px.toNumber(),
+        openedBefore,
+        // new field (optional, harmless): exact avg entry of same-block opens consumed
+        consumedAvgPrice
+      };
+
+      entry.trades.push(tradeObj);
+
+      // keep openedSoFar meaningful-ish for any legacy readers (optional, but safe)
+      entry.openedSoFar =
+        entry.pools.long.qty.plus(entry.pools.short.qty).toNumber();
+
+      return tradeObj;
     }
+
 
     static _normalizeTrades(entry) {
         if (!entry) return [];
