@@ -2254,51 +2254,6 @@ class Clearing {
         });
     }
 
-    // clearingPnL.js (or inside clearing.js)
-
-    static calculateClearingPNL({
-        oldContracts,
-        previousMarkPrice,
-        currentMarkPrice,
-        inverse,
-        notional
-    }) {
-        const BigNumber = require('bignumber.js');
-
-        const size = new BigNumber(oldContracts || 0);
-        if (size.isZero()) return new BigNumber(0);
-
-        const last = new BigNumber(previousMarkPrice || 0);
-        const cur  = new BigNumber(
-            currentMarkPrice != null ? currentMarkPrice : previousMarkPrice || 0
-        );
-
-        // no mark movement → no clearing PnL
-        if (last.eq(cur)) return new BigNumber(0);
-
-        const noto = new BigNumber(notional || 1);
-        let pnl;
-
-        if (!inverse) {
-            // linear
-            pnl = size
-                .times(cur.minus(last))
-                .times(noto);
-        } else {
-            // inverse
-            if (last.isZero() || cur.isZero()) return new BigNumber(0);
-
-            pnl = size
-                .times(
-                    new BigNumber(1).div(last)
-                        .minus(new BigNumber(1).div(cur))
-                )
-                .times(noto);
-        }
-
-        return pnl.isFinite() ? pnl : new BigNumber(0);
-    }
-
     // newContractPnL.js
     static calculateNewContractPNL({
         newContracts,

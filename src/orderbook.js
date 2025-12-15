@@ -2350,7 +2350,7 @@ class Orderbook {
                             deltas.buyer.opened,    // opened
                             buyerClosed,            // closed
                             trade.price,
-                            txid: match.sellOrder.txid
+                            match.sellOrder.txid
                         );
 
                         const sellerTradeRecord = Clearing.recordTrade(
@@ -2359,7 +2359,7 @@ class Orderbook {
                             deltas.seller.opened,   // opened
                             sellerClosed,           // closed
                             trade.price,
-                            txid: match.buyOrder.txid
+                            match.buyOrder.txid
                         );
 
                         const closesBuyer = buyerClosed;

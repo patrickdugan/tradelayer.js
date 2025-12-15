@@ -1093,10 +1093,6 @@ class MarginMap {
                 .times(notionalValueBN)
                 console.log('calculated settle PNL '+pnl.toNumber()+' '+JSON.stringify(pnl))
                 }
-               
-                if(contracts < 0){
-                    pnl = pnl.negated(); // Invert the value if contracts is negative
-                }
                 // Update margin and unrealized PnL
                 //pos.margin -= Math.abs(pnl);
                 const uPNLBN = new BigNumber(pos.unrealizedPNL)
