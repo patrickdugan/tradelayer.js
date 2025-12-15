@@ -1395,11 +1395,10 @@ const Validity = {
           }
 
           return { valid: true };
-        }
-
+        },
 
         // 18: Trade Contract On-chain
-        validateTradeContractOnchain: async (sender, params, txid) => {
+        async validateTradeContractOnchain(sender, params, txid){
             params.reason = '';
             params.valid = true;
             console.log('validating contract trade '+JSON.stringify(params))
@@ -1565,7 +1564,7 @@ const Validity = {
         },
 
         // 19: Trade Contract Channel
-        validateTradeContractChannel: async (sender, params,txid) => {
+        async validateTradeContractChannel(sender, params,txid){
             params.reason = '';
             params.valid = true;
 
@@ -1892,7 +1891,7 @@ const Validity = {
           }
 
           return false;
-        }
+        },
 
 
         hasSufficientChannelMargin(balance, required, label) {
@@ -2548,7 +2547,7 @@ const Validity = {
 
         // 2. Work out the pro-rata margin slice
         const posContracts = Math.abs(position.contracts);
-        let marginSlice = 0;
+        let marginSlice = new BigNumber(0);
         if (posContracts > 0) {
           marginSlice = BigNumber(position.margin)
             .times(params.amount)

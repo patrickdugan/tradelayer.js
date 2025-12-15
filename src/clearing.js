@@ -218,6 +218,45 @@ class Clearing {
         return this.countTrades(contractId, address) > 0;
     }
 
+    static applyMatchToOpenStats(openedByAddress, openedCostByAddress, match) {
+      const BigNumber = require('bignumber.js');
+
+      const buyer = match.buyerAddress || match?.buyOrder?.buyerAddress;
+      const seller = match.sellerAddress || match?.sellOrder?.sellerAddress;
+      if (!buyer || !seller) return;
+
+      // ignore self-trades for opened stats
+      if (buyer === seller) return;
+
+      const amount = new BigNumber(match.amount || match.contracts || match?.buyOrder?.amount || 0);
+      const price  = new BigNumber(match.tradePrice || match.price || match?.buyOrder?.price || match?.sellOrder?.price || 0);
+
+      const buyerClose  = new BigNumber(match.buyerClose || 0);
+      const sellerClose = new BigNumber(match.sellerClose || 0);
+
+      // opened component is what *increased exposure* for that side on that fill
+      const buyerOpenedAbs  = BigNumber.maximum(amount.minus(buyerClose), 0);
+      const sellerOpenedAbs = BigNumber.maximum(amount.minus(sellerClose), 0);
+
+      // buyer opens are +, seller opens are -
+      if (buyerOpenedAbs.gt(0)) {
+        const prev = new BigNumber(openedByAddress.get(buyer) || 0);
+        openedByAddress.set(buyer, prev.plus(buyerOpenedAbs).toNumber());
+
+        const prevCost = new BigNumber(openedCostByAddress.get(buyer) || 0);
+        openedCostByAddress.set(buyer, prevCost.plus(buyerOpenedAbs.times(price)).toNumber());
+      }
+
+      if (sellerOpenedAbs.gt(0)) {
+        const prev = new BigNumber(openedByAddress.get(seller) || 0);
+        openedByAddress.set(seller, prev.minus(sellerOpenedAbs).toNumber());
+
+        const prevCost = new BigNumber(openedCostByAddress.get(seller) || 0);
+        openedCostByAddress.set(seller, prevCost.plus(sellerOpenedAbs.times(price)).toNumber());
+      }
+    }
+
+
 
     // =========================================
     // DELEVERAGE TRACKING (RAM only, atomic)
