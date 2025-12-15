@@ -166,13 +166,26 @@ class Persistence {
                 );
             }
 
-            // -------------------------------------------------------------
-            // SLOW PATH (CANONICAL CONFIRMATION): FETCH BLOCK(h-1) via RPC
-            // -------------------------------------------------------------
-            const rpc = await this.getRPC(); // Use your RPC client getter
-            const rpcPrevHash = await rpc.getBlockHash(prevHeight);
-            const rpcPrevBlock = await rpc.getBlock(rpcPrevHash);
-            const nodePrevHash = rpcPrevBlock.hash;
+             const prevHeight = blockHeight - 1;
+
+            let nodePrevHash;
+            try {
+                const rpcPrevHash = await this.client.getBlockHash(prevHeight);
+                const rpcPrevBlock = await this.client.getBlock(rpcPrevHash);
+                nodePrevHash = rpcPrevBlock.hash;
+            } catch (e) {
+                logger.warn("[reorg] RPC failure during reorg check", e);
+                return true //{ reorg: true, depth: 1, uncertain: true };
+            }
+
+            if (nodePrevHash !== prevHash) {
+                return {
+                    reorg: true,
+                    depth: 1,
+                    expected: nodePrevHash,
+                    received: prevHash
+                };
+            }
 
             // Now compare canonical vs incoming
             if (nodePrevHash !== incomingPrevHash) {

@@ -1861,11 +1861,12 @@ const Validity = {
         },
 
         async hasReferencePrice(contractId, blockHeight) {
+            console.log('contractId in hasRef '+contractId)
           const contract = await ContractRegistry.getContractInfo(contractId);
           if (!contract) return false;
 
           // 1) Oracle-backed
-          if (contract.oracleId != null) {
+          if (contract.underlyingOracleId != null) {
             const oracleDB = await db.getDatabase('oracleData');
             const oraclePrint = await oracleDB.findOneAsync({
               oracleId: contract.oracleId,
