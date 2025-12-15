@@ -1344,7 +1344,7 @@ const Validity = {
           bufferBps = 65
         }) {
           const BigNumber = require('bignumber.js');
-
+          console.log('trade price, mark, lev '+tradePrice+' '+markPrice+' '+leverage)
           if (
             tradePrice == null ||
             markPrice == null ||
@@ -1402,6 +1402,10 @@ const Validity = {
             params.reason = '';
             params.valid = true;
             console.log('validating contract trade '+JSON.stringify(params))
+            console.log('calling get contract Info in validate trade'+params.contractId)
+            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+            console.log('checking contract details validity ' + JSON.stringify(contractDetails))
+           
             const isAlreadyActivated = await activationInstance.isTxTypeActive(18);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -1417,6 +1421,7 @@ const Validity = {
               params.contractId,
               params.block
             );
+            console.log('hasRef '+hasRef)
 
             if (!hasRef) {
               params.valid = false;
@@ -1426,7 +1431,7 @@ const Validity = {
 
             const priceCheck = Validity.isTradePriceWithinLeverageBounds({
               tradePrice: params.price,
-              markPrice,
+              markPrice:hasRef,
               leverage: contractDetails.leverage,
               bufferBps: 65
             });
@@ -1451,9 +1456,6 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            console.log('calling get contract Info in validate trade'+params.contractId)
-            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
-            console.log('checking contract details validity ' + JSON.stringify(contractDetails))
             if(contractDetails==null||contractDetails=={}){
                 params.valid=false
                 params.reason+= "contractId not found"
@@ -1568,6 +1570,9 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
+            console.log('calling get contract Info in validate channel trade'+params.block)
+            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+
             if(params.amount <= 1){
                 params.valid=false
                 params.reason += 'Contract amount must be a whole integer'
@@ -1598,7 +1603,7 @@ const Validity = {
 
             const priceCheck = Validity.isTradePriceWithinLeverageBounds({
               tradePrice: params.price,
-              markPrice,
+              markPrice: hasRef,
               leverage: contractDetails.leverage,
               bufferBps: 65
             });
@@ -1655,9 +1660,7 @@ const Validity = {
             }
             
             
-            console.log('calling get contract Info in validate channel trade'+params.block)
-            const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
-            const collateralPropertyId = contractDetails.collateralPropertyId
+              const collateralPropertyId = contractDetails.collateralPropertyId
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
          
@@ -1864,21 +1867,25 @@ const Validity = {
             console.log('contractId in hasRef '+contractId)
           const contract = await ContractRegistry.getContractInfo(contractId);
           if (!contract) return false;
-
+          console.log('contract info '+JSON.stringify(contract))
           // 1) Oracle-backed
-          if (contract.underlyingOracleId != null) {
+          
+          if (contract.underlyingOracleId) {
+            console.log('inside the bracket ')
             const oracleDB = await db.getDatabase('oracleData');
+            const oracleId = contract.underlyingOracleId
             const oraclePrint = await oracleDB.findOneAsync({
-              oracleId: contract.oracleId,
+              oracleId: oracleId,
               blockHeight: { $lte: blockHeight }
             });
-            if (oraclePrint) return true;
+            console.log('oracle print '+JSON.stringify(oraclePrint))
+            if (oraclePrint) return oraclePrint.data.price;
           }
 
           // 2) Index / VWAP-backed
-          if (contract.indexPair != null) {
+          if (contract.onChainData.length>0) {
             const price = await VolumeIndex.getLastPrice(contract.indexPair, blockHeight);
-            if (price != null && price > 0) return true;
+            if (price != null && price > 0) return price;
           }
 
           // 3) Explicit bootstrap mark

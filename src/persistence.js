@@ -166,8 +166,6 @@ class Persistence {
                 );
             }
 
-             const prevHeight = blockHeight - 1;
-
             let nodePrevHash;
             try {
                 const rpcPrevHash = await this.client.getBlockHash(prevHeight);
@@ -178,12 +176,12 @@ class Persistence {
                 return true //{ reorg: true, depth: 1, uncertain: true };
             }
 
-            if (nodePrevHash !== prevHash) {
+            if (nodePrevHash !== localPrevHash) {
                 return {
                     reorg: true,
                     depth: 1,
                     expected: nodePrevHash,
-                    received: prevHash
+                    received: localPrevHash
                 };
             }
 
