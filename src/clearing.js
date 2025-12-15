@@ -174,31 +174,51 @@ class Clearing {
         return entry; // already in new format
     }
 
-    static getOpenedBeforeThisTrade(contractId, address, currentTradeIndexOrObj) {
-        const key = `${contractId}:${address}`;
-        const entry = this.blockTrades.get(key);
-        const trades = this._normalizeTrades(entry);
+    static computeOpenedRemainderFromTrades(trades) {
+      const BigNumber = require('bignumber.js');
 
-        let opened = 0;
+      let openedSigned = new BigNumber(0);   // signed remainder since mark
+      let openedCostAbs = new BigNumber(0);  // cost basis of remainder: sum(abs(open) * openPrice)
 
-        // Case 1: index
-        if (typeof currentTradeIndexOrObj === "number") {
-            const stop = Math.max(0, Math.min(currentTradeIndexOrObj, trades.length));
-            for (let i = 0; i < stop; i++) {
-                const t = trades[i];
-                opened += t?.opened || 0;
-            }
-            return opened;
+      for (const t of trades || []) {
+        const px = new BigNumber(t?.price || 0);
+        if (px.lte(0)) continue;
+
+        const openSigned = new BigNumber(t?.opened || 0);    // signed
+        const closeAbs   = new BigNumber(t?.closed || 0).abs(); // abs
+
+        // 1) consume closes against the remainder FIRST (only up to remainder)
+        if (!closeAbs.isZero() && !openedSigned.isZero()) {
+          const remAbs = openedSigned.abs();
+          const consumeAbs = BigNumber.minimum(closeAbs, remAbs);
+
+          if (consumeAbs.gt(0)) {
+            // remove cost at CURRENT avg open cost, NOT at close price
+            const avgOpenCost = remAbs.gt(0) ? openedCostAbs.div(remAbs) : new BigNumber(0);
+            openedCostAbs = openedCostAbs.minus(consumeAbs.times(avgOpenCost));
+
+            // shrink signed remainder toward 0
+            const sgn = openedSigned.isNegative() ? -1 : 1;
+            openedSigned = openedSigned.minus(consumeAbs.times(sgn));
+          }
         }
 
-        // Case 2: object reference
-        for (const t of trades) {
-            if (t === currentTradeIndexOrObj) break;
-            opened += t?.opened || 0;
+        // 2) add new opens (signed)
+        if (!openSigned.isZero()) {
+          openedSigned = openedSigned.plus(openSigned);
+          openedCostAbs = openedCostAbs.plus(openSigned.abs().times(px));
         }
+      }
 
-        return opened;
+      const remAbs = openedSigned.abs();
+      const avg = remAbs.gt(0) ? openedCostAbs.div(remAbs) : null;
+
+      return {
+        openedSigned: openedSigned.toNumber(),
+        openedAvg: avg ? avg.toNumber() : null
+      };
     }
+
 
     static getTrades(contractId, address) {
         const key = `${contractId}:${address}`;
@@ -217,46 +237,6 @@ class Clearing {
     static hadAnyTrade(contractId, address) {
         return this.countTrades(contractId, address) > 0;
     }
-
-    static applyMatchToOpenStats(openedByAddress, openedCostByAddress, match) {
-      const BigNumber = require('bignumber.js');
-
-      const buyer = match.buyerAddress || match?.buyOrder?.buyerAddress;
-      const seller = match.sellerAddress || match?.sellOrder?.sellerAddress;
-      if (!buyer || !seller) return;
-
-      // ignore self-trades for opened stats
-      if (buyer === seller) return;
-
-      const amount = new BigNumber(match.amount || match.contracts || match?.buyOrder?.amount || 0);
-      const price  = new BigNumber(match.tradePrice || match.price || match?.buyOrder?.price || match?.sellOrder?.price || 0);
-
-      const buyerClose  = new BigNumber(match.buyerClose || 0);
-      const sellerClose = new BigNumber(match.sellerClose || 0);
-
-      // opened component is what *increased exposure* for that side on that fill
-      const buyerOpenedAbs  = BigNumber.maximum(amount.minus(buyerClose), 0);
-      const sellerOpenedAbs = BigNumber.maximum(amount.minus(sellerClose), 0);
-
-      // buyer opens are +, seller opens are -
-      if (buyerOpenedAbs.gt(0)) {
-        const prev = new BigNumber(openedByAddress.get(buyer) || 0);
-        openedByAddress.set(buyer, prev.plus(buyerOpenedAbs).toNumber());
-
-        const prevCost = new BigNumber(openedCostByAddress.get(buyer) || 0);
-        openedCostByAddress.set(buyer, prevCost.plus(buyerOpenedAbs.times(price)).toNumber());
-      }
-
-      if (sellerOpenedAbs.gt(0)) {
-        const prev = new BigNumber(openedByAddress.get(seller) || 0);
-        openedByAddress.set(seller, prev.minus(sellerOpenedAbs).toNumber());
-
-        const prevCost = new BigNumber(openedCostByAddress.get(seller) || 0);
-        openedCostByAddress.set(seller, prevCost.plus(sellerOpenedAbs.times(price)).toNumber());
-      }
-    }
-
-
 
     // =========================================
     // DELEVERAGE TRACKING (RAM only, atomic)
@@ -1130,106 +1110,93 @@ class Clearing {
     }
 
     static async settleNewContracts(contractId, blockHeight, priceInfo) {
-      const BigNumber = require('bignumber.js');
-      const Tally = require('./tally.js');
-      const ContractRegistry = require('./contractRegistry.js');
-      const MarginMap = require('./marginMap.js');
+          const BigNumber = require('bignumber.js');
+          const Tally = require('./tally.js');
+          const ContractRegistry = require('./contractRegistry.js');
+          const MarginMap = require('./marginMap.js');
 
-      // Need a canonical previous mark to tie off entry -> lastMark
-      const lastMark = priceInfo?.lastPrice ?? null;
-      if (lastMark == null) return;
+          // ------------------------------------------------------------
+          // 0) Resolve canonical reference price for this block
+          // ------------------------------------------------------------
+          const refPrice =
+            priceInfo?.thisPrice ??
+            priceInfo?.lastPrice ??
+            null;
 
-      // Early exit if nobody has positions
-      const mm = await MarginMap.getInstance(contractId);
-      const positions = await mm.getAllPositions(contractId);
-      if (!Array.isArray(positions) || positions.length === 0) return;
+          if (refPrice == null) return;
 
-      // Resolve contract params inside
-      const collateralId = await ContractRegistry.getCollateralId(contractId);
-      const inverse = await ContractRegistry.isInverse(contractId);
+          // ------------------------------------------------------------
+          // 1) Early exit if no positions exist
+          // ------------------------------------------------------------
+          const mm = await MarginMap.getInstance(contractId);
+          const positions = await mm.getAllPositions(contractId);
+          if (!Array.isArray(positions) || positions.length === 0) return;
 
-      // Notional per contract (use lastMark as the reference price for any price-dependent notional)
-      const notionalObj = await ContractRegistry.getNotionalValue(contractId, lastMark);
-      const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
+          // ------------------------------------------------------------
+          // 2) Contract parameters
+          // ------------------------------------------------------------
+          const collateralId = await ContractRegistry.getCollateralId(contractId);
+          const inverse = await ContractRegistry.isInverse(contractId);
 
-      // Build opened stats from the correct trade window
-      const plan = await Clearing.getMarkTradeWindow(priceInfo, contractId);
+          const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
+          const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
 
-      const openedByAddress = new Map();
-      const openedCostByAddress = new Map();
+          // ------------------------------------------------------------
+          // 3) Build per-address trade lists from blockTrades ONLY
+          // ------------------------------------------------------------
+          const tradesByAddress = new Map();
 
-      // A) DB trades when needed
-      if (plan?.mustQueryHistory) {
-        const tradeHistoryManager = new TradeHistory();
-        const trades = await tradeHistoryManager.getTradesForContractBetweenBlocks(
-          contractId,
-          plan.startBlock,
-          plan.endBlock
-        );
+          for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
+            if (!key.startsWith(`${contractId}:`)) continue;
 
-        for (const t of trades || []) {
-          Clearing.applyTradeToOpenStats(openedByAddress, openedCostByAddress, t);
-        }
-      }
+            const address = key.split(':')[1];
+            const entry = Clearing._normalizeEntry(entryRaw);
+            if (!entry?.trades?.length) continue;
 
-      // B) RAM blockTrades when safe
-      if (plan?.useBlockTrades) {
-        for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
-          if (!key.startsWith(`${contractId}:`)) continue;
-          const address = key.split(':')[1];
+            if (!tradesByAddress.has(address)) {
+              tradesByAddress.set(address, []);
+            }
 
-          const entry = Clearing._normalizeEntry(entryRaw);
-          for (const t of (entry.trades || [])) {
-            // t is your local tradeObj: { opened, closed, consumedFromOpened, price, openedBefore }
-            const openedSigned = new BigNumber(t?.opened || 0);
-            if (openedSigned.isZero()) continue;
+            for (const t of entry.trades) {
+              tradesByAddress.get(address).push({
+                opened: t.opened || 0,   // signed
+                closed: t.closed || 0,   // abs
+                price:  t.price || 0
+              });
+            }
+          }
 
-            const px = new BigNumber(t?.price || 0);
-            if (px.lte(0)) continue;
+          if (tradesByAddress.size === 0) return;
 
-            const prevOpen = new BigNumber(openedByAddress.get(address) || 0);
-            openedByAddress.set(address, prevOpen.plus(openedSigned).toNumber());
+          // ------------------------------------------------------------
+          // 4) Compute opened remainder and tie off
+          // ------------------------------------------------------------
+          for (const [address, trades] of tradesByAddress.entries()) {
+            const { openedSigned, openedAvg } =
+              Clearing.computeOpenedRemainderFromTrades(trades);
 
-            const prevCost = new BigNumber(openedCostByAddress.get(address) || 0);
-            openedCostByAddress.set(
-              address,
-              prevCost.plus(openedSigned.abs().times(px)).toNumber()
-            );
+            if (!openedSigned || !openedAvg) continue;
+
+            const pnlTie = Clearing.calculateNewContractPNL({
+              newContracts: openedSigned,   // signed remainder
+              avgEntryPrice: openedAvg,
+              executionPrice: refPrice,
+              inverse,
+              notional
+            });
+
+            if (!pnlTie.isZero()) {
+              await Tally.updateBalance(
+                address,
+                collateralId,
+                pnlTie.toNumber(),
+                0, 0, 0,
+                'newContractTieOff',
+                blockHeight
+              );
+            }
           }
         }
-      }
-
-      const openedAvgByAddress = Clearing.computeOpenedAvgByAddress(openedByAddress, openedCostByAddress);
-
-      // Tie off entry -> lastMark
-      for (const [address, openedSignedNum] of openedByAddress.entries()) {
-        const openedSigned = new BigNumber(openedSignedNum || 0);
-        if (openedSigned.isZero()) continue;
-
-        const avgEntry = openedAvgByAddress.get(address);
-        if (!avgEntry) continue;
-
-        const pnlTie = Clearing.calculateNewContractPNL({
-          newContracts: openedSigned.toNumber(), // signed
-          avgEntryPrice: avgEntry,
-          lastPrice: lastMark,
-          inverse,
-          notional
-        });
-
-        if (!pnlTie.isZero()) {
-          await Tally.updateBalance(
-            address,
-            collateralId,
-            pnlTie.toNumber(),
-            0, 0, 0,
-            'newContractTieOff',
-            blockHeight
-          );
-        }
-      }
-    }
-
 
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');

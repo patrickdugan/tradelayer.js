@@ -21,9 +21,12 @@ function addressCharRank(ch) {
 }
 
 // Helper: compare two sender addresses by last, then 2nd-last, then 3rd-last char
-function compareSenderAddresses(a, b) {
+// Helper: compare two sender addresses by last, then 2nd-last, then 3rd-last char,
+// with optional txid tie-break for full determinism
+function compareSenderAddresses(a, b, txidA = null, txidB = null) {
     const aLen = a.length;
     const bLen = b.length;
+
     const aChars = [a[aLen - 1], a[aLen - 2], a[aLen - 3]];
     const bChars = [b[bLen - 1], b[bLen - 2], b[bLen - 3]];
 
@@ -36,10 +39,17 @@ function compareSenderAddresses(a, b) {
         if (ra.char > rb.char) return 1;
     }
 
-    // final tie-breaker: full address lexicographically
-    return a.localeCompare(b);
-}
+    // fallback: full address lexicographically
+    const addrCmp = a.localeCompare(b);
+    if (addrCmp !== 0) return addrCmp;
 
+    // FINAL deterministic tie-breaker (optional)
+    if (txidA && txidB) {
+        return txidA.localeCompare(txidB);
+    }
+
+    return 0;
+}
 
 
 class Orderbook {
@@ -345,7 +355,7 @@ class Orderbook {
                     const ha = Number(a.blockHeight);
                     const hb = Number(b.blockHeight);
                     if (ha !== hb) return ha - hb;
-                    return compareSenderAddresses(a.sender, b.sender);
+                    return compareSenderAddresses(a.sender, b.sender,a.txid,b.txid);
                 });
 
                 const orderbook = await Orderbook.getOrderbookInstance(pairKey);
@@ -464,7 +474,7 @@ class Orderbook {
                     if (a.blockHeight !== b.blockHeight) {
                         return a.blockHeight - b.blockHeight;
                     }
-                    const s = compareSenderAddresses(a.sender, b.sender);
+                    const s = compareSenderAddresses(a.sender, b.sender,a.txid,b.txid);
                     if (s !== 0) return s;
                     return a.txid.localeCompare(b.txid);
                 });
@@ -1435,7 +1445,7 @@ class Orderbook {
             contractId: sellOrder.contractId,
             amount: tradeAmount.toNumber(),
             sellerAddress: sellOrder.sender || sellOrder.address,
-            sellerTx: sellOrder.txid,
+            txid: sellOrder.txid,
             maker: sellOrder.maker,
             liq: sellOrder.isLiq || false,
             marginUsed: marginUsed,
@@ -1446,7 +1456,7 @@ class Orderbook {
             contractId: buyOrder.contractId,
             amount: tradeAmount.toNumber(),
             buyerAddress: buyOrder.sender || buyOrder.address,
-            buyerTx: buyOrder.txid,
+            txid: buyOrder.txid,
             liq: buyOrder.isLiq || false,
             maker: buyOrder.maker,
             marginUsed: marginUsed,
@@ -2339,7 +2349,8 @@ class Orderbook {
                             trade.buyerAddress,
                             deltas.buyer.opened,    // opened
                             buyerClosed,            // closed
-                            trade.price
+                            trade.price,
+                            txid: match.sellOrder.txid
                         );
 
                         const sellerTradeRecord = Clearing.recordTrade(
@@ -2347,7 +2358,8 @@ class Orderbook {
                             trade.sellerAddress,
                             deltas.seller.opened,   // opened
                             sellerClosed,           // closed
-                            trade.price
+                            trade.price,
+                            txid: match.buyOrder.txid
                         );
 
                         const closesBuyer = buyerClosed;
@@ -2357,6 +2369,8 @@ class Orderbook {
                         const buyerAvg = match.buyerPosition.avgPrice;
                         const closesSeller = sellerClosed;
                         const sellerAvg = match.sellerPosition.avgPrice;
+                        const newBuyerAvg = positions.bp.avgPrice
+                        const newSellerAvg = positions.sp.avgPrice
 
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp

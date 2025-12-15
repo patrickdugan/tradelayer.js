@@ -973,7 +973,9 @@ const Logic = {
         amountOfTokenA: amountOfferedBN.toNumber(),
         amountOfTokenB: amountDesiredBN.toNumber(),
         tradePrice: tradePrice.toNumber(),
-        channel: channelAddress
+        channel: channelAddress,
+        buyerTx: txid,
+        sellerTx: txid
       };
 
       const matches = [match];
