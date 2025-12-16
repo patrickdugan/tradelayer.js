@@ -1176,25 +1176,47 @@ class Clearing {
               Clearing.computeOpenedRemainderFromTrades(trades);
 
             if (!openedSigned || !openedAvg) continue;
-
+            console.log('trades by address '+refPrice+' '+address+' '+openedSigned+' '+openedAvg)
             const pnlTie = Clearing.calculateNewContractPNL({
               newContracts: openedSigned,   // signed remainder
               avgEntryPrice: openedAvg,
-              executionPrice: refPrice,
+              lastPrice: refPrice,
               inverse,
               notional
             });
 
-            if (!pnlTie.isZero()) {
-              await Tally.updateBalance(
-                address,
-                collateralId,
-                pnlTie.toNumber(),
-                0, 0, 0,
-                'newContractTieOff',
-                blockHeight
-              );
-            }
+              const tally = await Tally.getTally(address, collateralId);
+              const available = new BigNumber(tally.available || 0);
+
+              if (pnlTie.gt(0)) {
+                // PROFIT → safe to credit available
+                await Tally.updateBalance(
+                  address,
+                  collateralId,
+                  pnlTie.toNumber(),
+                  0, 0, 0,
+                  'newContractTieOff',
+                  blockHeight
+                );
+              } else {
+                // LOSS → only take what available can support
+                const loss = pnlTie.abs();
+                const takeAvail = BigNumber.min(available, loss);
+
+                if (takeAvail.gt(0)) {
+                  await Tally.updateBalance(
+                    address,
+                    collateralId,
+                    takeAvail.negated().toNumber(),
+                    0, 0, 0,
+                    'newContractTieOff',
+                    blockHeight
+                  );
+                }
+
+                // remainder is intentionally deferred
+                // main clearing / liquidation will absorb it via margin / liqPool
+              }
           }
         }
 
@@ -1206,6 +1228,7 @@ class Clearing {
         for (const contract of contracts) {
             const id = contract[1].id;
             const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
+            console.log('price info '+JSON.stringify(priceInfo))
             Clearing.settleNewContracts(id,blockHeight,priceInfo)
             if (!priceInfo || !priceInfo.updated) continue;
 
@@ -1433,28 +1456,37 @@ class Clearing {
           continue;
         }
 
-        // LOSS
         const loss = pnl.abs();
-        const available = new BigNumber(tally.available || 0);
-        const maintMargin = new BigNumber(tally.margin || 0).div(2);
-        const coverage = available.plus(maintMargin);
+        const available   = new BigNumber(tally.available || 0);
+        const margin      = new BigNumber(tally.margin || 0);
+        const maintMargin = margin.div(2);
+        const coverage    = available.plus(maintMargin);
 
         totalNeg = totalNeg.plus(loss);
 
         if (coverage.gte(loss)) {
-          // SOLVENT → PAY LOSS IMMEDIATELY
+          // -----------------------------
+          // SOLVENT → PAY LOSS
+          // -----------------------------
+          const takeAvail  = BigNumber.min(available, loss);
+          const takeMargin = loss.minus(takeAvail);
+
           await Tally.updateBalance(
             pos.address,
             collateralId,
-            pnl.toNumber(),  // negative number
-            0, 0, 0,
+            takeAvail.negated().toNumber(),   // availableChange
+            0,
+            takeMargin.negated().toNumber(),  // marginChange
+            0,
             'clearingLoss',
             blockHeight
           );
           continue;
         }
 
+        // -----------------------------
         // INSUFFICIENT FUNDS → LIQUIDATE
+        // -----------------------------
         const shortfall = loss.minus(coverage);
 
         liqQueue.push({
@@ -2104,8 +2136,6 @@ class Clearing {
         };
     }
 
-
-
     static async extractCounterpartyPositions(matches, deleveragedPositions, marginMap, contractId) {
       // Create a set to store unique addresses
       const addresses = new Set();
@@ -2254,6 +2284,50 @@ class Clearing {
         });
     }
 
+
+    static calculateClearingPNL({
+        oldContracts,
+        previousMarkPrice,
+        currentMarkPrice,
+        inverse,
+        notional
+    }) {
+        const BigNumber = require('bignumber.js');
+
+        const size = new BigNumber(oldContracts || 0);
+        if (size.isZero()) return new BigNumber(0);
+
+        const last = new BigNumber(previousMarkPrice || 0);
+        const cur  = new BigNumber(
+            currentMarkPrice != null ? currentMarkPrice : previousMarkPrice || 0
+        );
+
+        // no mark movement → no clearing PnL
+        if (last.eq(cur)) return new BigNumber(0);
+
+        const noto = new BigNumber(notional || 1);
+        let pnl;
+
+        if (!inverse) {
+            // linear
+            pnl = size
+                .times(cur.minus(last))
+                .times(noto);
+        } else {
+            // inverse
+            if (last.isZero() || cur.isZero()) return new BigNumber(0);
+
+            pnl = size
+                .times(
+                    new BigNumber(1).div(last)
+                        .minus(new BigNumber(1).div(cur))
+                )
+                .times(noto);
+        }
+
+        return pnl.isFinite() ? pnl : new BigNumber(0);
+    }
+
     // newContractPnL.js
     static calculateNewContractPNL({
         newContracts,
@@ -2261,7 +2335,7 @@ class Clearing {
         lastPrice,
         inverse,
         notional
-    }) {
+    }){
         const BigNumber = require('bignumber.js');
 
         const size = new BigNumber(newContracts || 0);
@@ -2286,7 +2360,7 @@ class Clearing {
                 )
                 .times(noto);
         }
-
+        console.log('new contract clearing PNL '+pnl.toNumber()+' '+size.toNumber()+' '+avg.toNumber()+' '+exec.toNumber())
         return pnl.isFinite() ? pnl : new BigNumber(0);
     }
 

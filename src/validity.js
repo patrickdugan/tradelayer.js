@@ -1865,21 +1865,13 @@ const Validity = {
 
         async hasReferencePrice(contractId, blockHeight) {
             console.log('contractId in hasRef '+contractId)
-          const contract = await ContractRegistry.getContractInfo(contractId);
-          if (!contract) return false;
-          console.log('contract info '+JSON.stringify(contract))
+            const contract = await ContractRegistry.getContractInfo(contractId);
+            if (!contract) return false;
+            console.log('contract info '+JSON.stringify(contract))
           // 1) Oracle-backed
-          
-          if (contract.underlyingOracleId) {
-            console.log('inside the bracket ')
-            const oracleDB = await db.getDatabase('oracleData');
-            const oracleId = contract.underlyingOracleId
-            const oraclePrint = await oracleDB.findOneAsync({
-              oracleId: oracleId,
-              blockHeight: { $lte: blockHeight }
-            });
-            console.log('oracle print '+JSON.stringify(oraclePrint))
-            if (oraclePrint) return oraclePrint.data.price;
+          if (contract.underlyingOracleId){
+            return OracleList.getOraclePrice(contract.underlyingOracleId)
+
           }
 
           // 2) Index / VWAP-backed

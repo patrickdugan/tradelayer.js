@@ -2382,8 +2382,6 @@ class Orderbook {
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
 
-                    console.log('buyerMark '+match.buyerPosition.lastMark+' '+buyerMark)
-                    console.log('sellerMark '+match.sellerPosition.lastMark+' '+sellerMark)
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = new BigNumber(0), sellerPnl = new BigNumber(0);
                     console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
