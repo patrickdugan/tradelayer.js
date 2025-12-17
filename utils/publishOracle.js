@@ -66,7 +66,7 @@ async function buildSignAndSendTransaction(fromAddress, btcPrice) {
         // Create the payload
         const params = {
             oracleid: 2,
-            price: 180,//btcPrice,
+            price: 80,//btcPrice,
             targetAddress: fromAddress
         };
 
@@ -111,3 +111,5 @@ setInterval(() => {
     console.log('Starting BTC price publish cycle...');
     publishBTCPrice();
 }, 150 * 1000); // 150 seconds in milliseconds
+
+module.exports= {publishBTCPrice}

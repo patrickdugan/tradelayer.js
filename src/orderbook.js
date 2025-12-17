@@ -2350,7 +2350,7 @@ class Orderbook {
                             deltas.buyer.opened,    // opened
                             buyerClosed,            // closed
                             trade.price,
-                            match.sellOrder.txid,
+                            match.buyOrder.txid,
                             true
                         );
 
@@ -2360,20 +2360,24 @@ class Orderbook {
                             deltas.seller.opened,   // opened
                             sellerClosed,           // closed
                             trade.price,
-                            match.buyOrder.txid,
+                            match.sellOrder.txid,
                             false
                         );
 
                         const closesBuyer = buyerClosed;
                         // how many of these closes belong to same-block opens?
                         const buyerClosesAgainstAvg  = buyerTradeRecord.consumedFromOpened;
+                        const sellerClosesAgainstAvg = sellerTradeRecord.consumedFromOpened
                         // settlement prices
                         const buyerAvg = match.buyerPosition.avgPrice;
-                        const closesSeller = sellerClosed;
+                        let sellerClosesAgainstLast = sellerClosed- sellerClosesAgainstAvg;
+                        let buyerClosesAgainstLast = buyerClosed- buyerClosesAgainstAvg
+                        if(!sellerClosesAgainstAvg||isNaN(sellerClosesAgainstAvg)){sellerClosesAgainstLast=sellerClosed}
+                        if(!buyerClosesAgainstAvg||isNaN(buyerClosesAgainstAvg)){buyerClosesAgainstLast=buyerClosed}
                         const sellerAvg = match.sellerPosition.avgPrice;
                         const newBuyerAvg = positions.bp.avgPrice
                         const newSellerAvg = positions.sp.avgPrice
-
+                        console.log('closing two different ways '+sellerClosesAgainstAvg+' '+sellerClosesAgainstLast+' '+buyerClosesAgainstAvg+' 'buyerClosesAgainstLast)
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp
                     match.sellerPosition = positions.sp
@@ -2408,16 +2412,33 @@ class Orderbook {
                         //then we will look at the last settlement mark price for this contract or default to the LIFO Avg. Entry if
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
-                        let settlementPNL = await marginMap.settlePNL(
+                        let settlementPNL =
+                              buyerClosesAgainstLast > 0
+                                ? await marginMap.settlePNL(
+                                    trade.buyerAddress,
+                                    buyerClosesAgainstLast,
+                                    trade.price,
+                                    lastPrice,
+                                    trade.contractId,
+                                    currentBlockHeight,
+                                    isInverse,
+                                    perContractNotional
+                                  )
+                                : 0;
+
+                        let sameBlockPNL = buyerClosesAgainstAvg>0 
+                            ? await marginMap.settlePNL(
                                 trade.buyerAddress,
-                                -buyerClosesAgainstAvg,
+                                buyerClosesAgainstAvg,
                                 trade.price,
-                                buyerAvg,
+                                lastPrice,
                                 trade.contractId,
                                 currentBlockHeight,
                                 isInverse,
                                 perContractNotional
-                            );
+                            ) : 0
+
+                        settlementPNL += sameBlockPNL
                      
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedShorts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
@@ -2478,16 +2499,35 @@ class Orderbook {
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
-                        let settlementPNL = await marginMap.settlePNL(
+                           
+                        let settlementPNL =
+                              sellerClosesAgainstLast > 0
+                                ? await marginMap.settlePNL(
+                                    trade.sellerAddress,
+                                    sellerClosesAgainstLast,
+                                    trade.price,
+                                    lastPrice,
+                                    trade.contractId,
+                                    currentBlockHeight,
+                                    isInverse,
+                                    perContractNotional
+                                  )
+                                : 0;
+
+                        let sameBlockPNL = sellerClosesAgainstAvg>0 
+                            ? await marginMap.settlePNL(
                                 trade.sellerAddress,
-                                sellerClosesAgainstAvg,      // reduce short by this much
+                                sellerClosesAgainstAvg,
                                 trade.price,
-                                sellerAvg,                   // basis = avgPrice
+                                lastPrice,
                                 trade.contractId,
                                 currentBlockHeight,
                                 isInverse,
                                 perContractNotional
-                            );
+                            ) : 0
+
+                        settlementPNL += sameBlockPNL
+                     
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)

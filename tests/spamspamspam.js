@@ -223,12 +223,12 @@ function extractAvailable(tallyArray, address, propertyId = "5") {
  *    (your actual type-18 builder/sender).
  */
  async function sendType18Order(traderAddr, side, priceFloat, contracts) {
-  const action = (side === 'BUY') ? 1 : 2;
+  const action = (side === 'BUY') ? 0 : 1;
 
       console.log('firing for '+traderAddr)
   const contractParams = {
     contractId: CONTRACT_ID,
-    action,
+    sell: 1,
     amount: contracts,
     price: priceFloat,
   };
@@ -316,3 +316,5 @@ main().catch(err => {
   console.error('[FATAL]', err);
   process.exit(1);
 });
+
+module.exports = {sendType18Order}
