@@ -1403,120 +1403,148 @@ class MarginMap {
     // - Returns ONLY pool distribution data (per-CP share of liquidationPool)
     // =======================
     async simpleDeleverage(
+      positionCache,
+      contractId,
+      unfilledContracts,
+      sell,
+      liqPrice,
+      liquidatingAddress,
+      inverse,
+      notional,
+      block,
+      markPrice,
+      TallyMap,
+      collateralId,      // NEW (optional)
+      liquidationPool,   // NEW (optional)
+      Tally              // NEW (optional)
+    ) {
+      const BigNumber = require('bignumber.js');
+      const bn = x => new BigNumber(x || 0);
+
+      const result = {
+        contractId,
+        liquidatingAddress,
+        attemptedDeleverage: unfilledContracts,
+        totalDeleveraged: 0,
+        counterparties: [],
+        poolAssignments: [] // NEW
+      };
+
+      let remaining = bn(unfilledContracts);
+      if (remaining.lte(0)) return result;
+
+      // 1) Collect counterparties...
+      let cps = positionCache
+        .map((p, i) => ({ ...p, _i: i }))
+        .filter(p => {
+          if (!p || !p.contracts || !p.lastMark) return false;
+          if (p.address === liquidatingAddress) return false;
+          return sell ? p.contracts < 0 : p.contracts > 0;
+        });
+
+      if (!cps.length) return result;
+
+      // 2) Compute mark-to-mark PnL...
+      cps = cps.map(p => {
+        const size = bn(p.contracts);
+        const last = bn(p.lastMark);
+        const mark = bn(markPrice);
+
+        let pnl = bn(0);
+        if (last.gt(0) && mark.gt(0)) {
+          if (!inverse) {
+            pnl = size.times(mark.minus(last)).times(notional);
+          } else {
+            pnl = size.times(bn(1).div(last).minus(bn(1).div(mark)));
+          }
+        }
+
+        return { ...p, movePnl: pnl };
+      });
+
+      // 3) Winners only
+      cps = cps.filter(p => p.movePnl.gt(0));
+      if (!cps.length) return result;
+
+      // 4) Sort...
+      cps.sort((a, b) => {
+        const ap = a.movePnl.abs();
+        const bp = b.movePnl.abs();
+        if (!ap.eq(bp)) return bp.minus(ap).toNumber();
+        return Math.abs(b.contracts) - Math.abs(a.contracts);
+      });
+
+      // 5) Deleveraging loop
+      for (const cp of cps) {
+        if (remaining.lte(0)) break;
+
+        const absPos = Math.abs(cp.contracts);
+        if (absPos <= 0) continue;
+
+        const matchSize = Math.min(absPos, remaining.toNumber());
+
+        const updatedPos = await this.adjustDeleveraging(
           positionCache,
+          cp._i,
+          cp.address,
           contractId,
-          unfilledContracts,
+          matchSize,
           sell,
-          liqPrice,
-          liquidatingAddress,
-          inverse,
-          notional,
           block,
-          markPrice,
+          liqPrice,
           TallyMap
-        ) {
-          const BigNumber = require('bignumber.js');
-          const bn = x => new BigNumber(x || 0);
+        );
 
-          const result = {
-            contractId,
-            liquidatingAddress,
-            attemptedDeleverage: unfilledContracts,
-            totalDeleveraged: 0,
-            counterparties: []
-          };
+        remaining = remaining.minus(matchSize);
+        result.totalDeleveraged += matchSize;
 
-          let remaining = bn(unfilledContracts);
-          if (remaining.lte(0)) return result;
+        // NEW: capture weights for pool distribution
+        result.counterparties.push({
+          address: cp.address,
+          matchSize,
+          updatedPosition: updatedPos,
+          _adlAbsPos: absPos,
+          _adlMovePnl: cp.movePnl
+        });
+      }
 
-          // -------------------------------------------------------
-          // 1) Collect counterparties from LIVE positionCache
-          // -------------------------------------------------------
-          let cps = positionCache
-            .map((p, i) => ({ ...p, _i: i }))
-            .filter(p => {
-              if (!p || !p.contracts || !p.lastMark) return false;
-              if (p.address === liquidatingAddress) return false;
+      // NEW: produce poolAssignments so handleLiquidation can credit deleveragePoolCredit
+      const poolBN = bn(liquidationPool);
+      if (poolBN.gt(0) && result.counterparties.length > 0) {
+        // weight by per-contract pnl * matched contracts
+        let denom = bn(0);
+        for (const cp of result.counterparties) {
+          const perContract = bn(cp._adlMovePnl).div(bn(cp._adlAbsPos || 1));
+          denom = denom.plus(perContract.times(bn(cp.matchSize)));
+        }
 
-              // Opposite side only
-              return sell ? p.contracts < 0 : p.contracts > 0;
-            });
+        // fallback: just matchSize-proportional
+        const totalMatched = bn(result.totalDeleveraged || 0);
 
-          if (!cps.length) return result;
+        for (const cp of result.counterparties) {
+          let share = bn(0);
 
-          // -------------------------------------------------------
-          // 2) Compute mark-to-mark PnL for this clearing move
-          // -------------------------------------------------------
-          cps = cps.map(p => {
-            const size = bn(p.contracts);
-            const last = bn(p.lastMark);
-            const mark = bn(markPrice);
-
-            let pnl = bn(0);
-            if (last.gt(0) && mark.gt(0)) {
-              if (!inverse) {
-                pnl = size.times(mark.minus(last)).times(notional);
-              } else {
-                pnl = size.times(
-                  bn(1).div(last).minus(bn(1).div(mark))
-                );
-              }
-            }
-
-            return { ...p, movePnl: pnl };
-          });
-
-          // -------------------------------------------------------
-          // 3) Winners only
-          // -------------------------------------------------------
-          cps = cps.filter(p => p.movePnl.gt(0));
-          if (!cps.length) return result;
-
-          // -------------------------------------------------------
-          // 4) Sort by profit magnitude (largest first)
-          // -------------------------------------------------------
-          cps.sort((a, b) => {
-            const ap = a.movePnl.abs();
-            const bp = b.movePnl.abs();
-            if (!ap.eq(bp)) return bp.minus(ap).toNumber();
-            return Math.abs(b.contracts) - Math.abs(a.contracts);
-          });
-
-          // -------------------------------------------------------
-          // 5) Deleveraging loop
-          // -------------------------------------------------------
-          for (const cp of cps) {
-            if (remaining.lte(0)) break;
-
-            const absPos = Math.abs(cp.contracts);
-            if (absPos <= 0) continue;
-
-            const matchSize = Math.min(absPos, remaining.toNumber());
-
-            const updatedPos = await this.adjustDeleveraging(
-              positionCache,
-              cp._i,
-              cp.address,
-              contractId,
-              matchSize,
-              sell,
-              block,
-              liqPrice,
-              TallyMap
-            );
-
-            remaining = remaining.minus(matchSize);
-            result.totalDeleveraged += matchSize;
-
-            result.counterparties.push({
-              address: cp.address,
-              matchSize,
-              updatedPosition: updatedPos
-            });
+          if (denom.gt(0)) {
+            const perContract = bn(cp._adlMovePnl).div(bn(cp._adlAbsPos || 1));
+            const w = perContract.times(bn(cp.matchSize));
+            share = poolBN.times(w.div(denom));
+          } else if (totalMatched.gt(0)) {
+            share = poolBN.times(bn(cp.matchSize).div(totalMatched));
           }
 
-          return result;
+          result.poolAssignments.push({
+            address: cp.address,
+            poolShare: share.dp(8).toNumber()
+          });
+
+          // cleanup internal fields (optional, but keeps logs sane)
+          delete cp._adlAbsPos;
+          delete cp._adlMovePnl;
         }
+      }
+
+      return result;
+    }
 
     // =======================
     // calcPriceDelta - PnL helper
