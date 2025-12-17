@@ -2057,7 +2057,6 @@ class Clearing {
         // 11. Apply ADL if needed - pass actual pool amount
         // ------------------------------------------------------------
         let result = { counterparties: [], poolAssignments: [] };
-
         if (remainder > 0) {
             result = await marginMap.simpleDeleverage(
                 positionCache,
@@ -2075,7 +2074,7 @@ class Clearing {
                 Tally
             );
         }
-
+          console.log('adl result '+JSON.stringify(result))
         // ------------------------------------------------------------
         // 12. Apply pool credits from ADL - CAPPED at pool
         // ------------------------------------------------------------
