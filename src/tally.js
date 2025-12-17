@@ -85,7 +85,7 @@ class TallyMap {
         if (!TallyMap.instance) {
             TallyMap.instance = new TallyMap();
         }
-        await TallyMap.instance.loadFromDB();
+        await TallyMap.loadFromDB();
         return TallyMap.instance;
     }
 
@@ -109,7 +109,7 @@ class TallyMap {
 
     static async updateBalance(address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block,txid) {
             console.log('inside updateBalance for '+address, propertyId, availableChange, reservedChange, marginChange, vestingChange, type, block)
-
+            
             if(availableChange==null||reservedChange==null||marginChange==null||vestingChange==null||isNaN(availableChange)||isNaN(reservedChange)||isNaN(marginChange)||isNaN(vestingChange)){
                 throw new Error('Somehow null passed into updateBalance... avail. '+availableChange + ' reserved '+ reservedChange + ' margin' + marginChange + ' vesting '+vestingChange )
             }
@@ -140,11 +140,11 @@ class TallyMap {
                 vestingChange = new BigNumber(vestingChange).toNumber()
             }
 
-            const instance = await this.getInstance();
-            if (!instance.addresses.has(address)) {
-                instance.addresses.set(address, {});
+            await TallyMap.loadFromDB();
+            if (!TallyMap.addresses.has(address)) {
+                TallyMap.addresses.set(address, {});
             }
-            const addressObj = instance.addresses.get(address);
+            const addressObj = TallyMap.addresses.get(address);
             
             console.log('addressObj being changed '+propertyId + ' for addr '+JSON.stringify(addressObj[propertyId]))
 
@@ -211,19 +211,19 @@ class TallyMap {
             }else{
                 await TallyMap.recordTallyMapDelta(address, block, propertyId, addressObj[propertyId].amount, availableChange, reservedChange, marginChange, vestingChange, 0, type,txid) 
             }
-            instance.addresses.set(address, addressObj); // Update the map with the modified address object
+            TallyMap.addresses.set(address, addressObj); // Update the map with the modified address object
             //console.log('Updated balance for address:', JSON.stringify(addressObj), 'with propertyId:', propertyId);
-            await instance.saveToDB(block); // Save changes to the database
+            await TallyMap.saveToDB(block); // Save changes to the database
         }
 
         static async updateChannelBalance(address, propertyId, channelChange, type,block) {
-            const instance = await this.getInstance();
+            await TallyMap.loadFromDB();
             
             // Initialize the address if it doesn't exist
-            if (!instance.addresses.has(address)) {
-                instance.addresses.set(address, {});
+            if (!TallyMap.addresses.has(address)) {
+                TallyMap.addresses.set(address, {});
             }
-            const addressObj = instance.addresses.get(address);
+            const addressObj = TallyMap.addresses.get(address);
             
             // Initialize the propertyId if it doesn't exist
             if (!addressObj[propertyId]) {
@@ -263,8 +263,8 @@ class TallyMap {
             }
 
             // Save the updated object back to the map
-            instance.addresses.set(address, addressObj);
-            await instance.saveToDB(block); // Save the updated balance to the database
+            TallyMap.addresses.set(address, addressObj);
+            await TallyMap.saveToDB(block); // Save the updated balance to the database
         }
 
         static async getTotalForProperty(propertyId) {
@@ -275,7 +275,7 @@ class TallyMap {
             const propertyKey = String(propertyId);
 
             // Iterate over all addresses in tallyMap
-            for (const [address, properties] of instance.addresses.entries()) {
+            for (const [address, properties] of TallyMap.addresses.entries()) {
                 
                 if (properties[propertyKey]) {
                     const balance = properties[propertyKey];
@@ -325,26 +325,18 @@ class TallyMap {
 
 
     static async getAddressBalances(address) {
-            const instance = await this.getInstance();
-
-            // Check if the instance has been loaded
-            if(!instance){
-                console.log('TallyMap instance is not loaded. Attempting to load from DB...');
-                await instance.loadFromDB();
-            } else {
-                //console.log('TallyMap instance already exists. Using existing instance.');
-            }
+            await TallyMap.loadFromDB();
 
             // Log the serialized form of the data from the DB
             //console.log('Serialized data from DB:', JSON.stringify([...instance.addresses]));
 
             // Check if the address exists in the map
-            if (!instance.addresses.has(address)) {
+            if (!TallyMap.addresses.has(address)) {
                 console.log(`No data found for address: ${address}`);
                 return [];
             }
 
-            const addressObj = instance.addresses.get(address);
+            const addressObj = TallyMap.addresses.get(address);
             //console.log(`Data for address ${address}:`, addressObj);
             const balances = [];
             for (const propertyId in addressObj) {
@@ -387,7 +379,7 @@ class TallyMap {
             channelBalance: 0
         };
 
-        for (const properties of instance.addresses.values()) {
+        for (const properties of TallyMap.addresses.values()) {
             if (properties[propertyId]) {
                 totalTally.amount += properties[propertyId].amount || 0;
                 totalTally.available += properties[propertyId].available || 0;
@@ -510,7 +502,7 @@ class TallyMap {
         }
     }
 
-    async saveToDB(block) {
+    static async saveToDB(block) {
         try {
             const db = await dbInstance.getDatabase('tallyMap');
             const serializedData = JSON.stringify([...this.addresses]);
@@ -523,7 +515,7 @@ class TallyMap {
         }
     }
 
-    async loadFromDB() {
+    static async loadFromDB() {
         try {
             const query = { _id: 'tallyMap' };
             const db = await dbInstance.getDatabase('tallyMap')
@@ -1151,11 +1143,11 @@ class TallyMap {
     // Get the tally for a specific address and property
     static async getTally(address, propertyId) {
         const instance = await TallyMap.getInstance(); // Ensure instance is loaded
-        if (!instance.addresses.has(address)) {
+        if (!TallyMap.addresses.has(address)) {
             console.log("can't find address in tallyMap")
             return 0;
         }
-        const addressObj = instance.addresses.get(address);
+        const addressObj = TallyMap.addresses.get(address);
         console.log('inside getTally '+propertyId+' '+JSON.stringify(addressObj))
         if (!addressObj[propertyId]) {
             console.log("can't find property in address "+address+propertyId+ ' '+JSON.stringify(addressObj) )

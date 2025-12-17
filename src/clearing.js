@@ -1092,47 +1092,45 @@ class Clearing {
             };
         }
     }
-
+    
     static async settleNewContracts(contractId, blockHeight, priceInfo) {
       const BigNumber = require('bignumber.js');
       const Tally = require('./tally.js');
       const ContractRegistry = require('./contractRegistry.js');
-
+      
       // ------------------------------------------------------------
       // 0) Resolve reference price for tie-off
       // ------------------------------------------------------------
-      const refPrice =
-        priceInfo?.lastPrice ?? null
-
+      const refPrice = priceInfo?.lastPrice ?? null;
       if (refPrice == null) return;
-
+      
       // ------------------------------------------------------------
       // 1) Contract parameters
       // ------------------------------------------------------------
       const collateralId = await ContractRegistry.getCollateralId(contractId);
       const inverse = await ContractRegistry.isInverse(contractId);
-
       const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
       const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
-
+      
       // ------------------------------------------------------------
       // 2) Tie-off NEW trades from THIS block (ZERO-SUM)
       //    MUST be per-trade, not per-position
       // ------------------------------------------------------------
       for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
         if (!key.startsWith(`${contractId}:`)) continue;
-
+        
         const address = key.split(':')[1];
         const entry = Clearing._normalizeEntry(entryRaw);
+        
         if (!entry?.trades?.length) continue;
-
+        
         for (const t of entry.trades) {
           const opened = Number(t.opened || 0);
           if (!opened) continue;
-
+          
           const avgEntry = Number(t.price);
           if (!avgEntry || avgEntry <= 0) continue;
-
+          
           // --------------------------------------------------------
           // Compute PnL for THIS TRADE only
           // --------------------------------------------------------
@@ -1143,39 +1141,57 @@ class Clearing {
             inverse,
             notional
           });
-
+          
           if (!pnlBN || pnlBN.isZero()) continue;
-
+          
+          console.log(`[settleNewContracts] ${address} opened=${opened} entry=${avgEntry} ref=${refPrice} pnl=${pnlBN.toFixed()}`);
+          
           // --------------------------------------------------------
-          // Apply PnL conservatively (margin first, then available)
-          // ZERO-SUM GUARANTEED because counterparty entry
-          // has equal/opposite opened value
+          // Apply PnL: Take from available first, then margin
           // --------------------------------------------------------
           const tally = await Tally.getTally(address, collateralId);
           const avail = new BigNumber(tally?.available ?? 0);
-          const mar   = new BigNumber(tally?.margin ?? 0);
-
+          const mar = new BigNumber(tally?.margin ?? 0);
+          
           let availCh = new BigNumber(0);
-          let marCh   = new BigNumber(0);
-
+          let marCh = new BigNumber(0);
+          
           if (pnlBN.gt(0)) {
-            // winner → credit available
+            // Winner: credit available
             availCh = pnlBN;
+            console.log(`[settleNewContracts] Winner: crediting ${availCh.toFixed()} to available`);
           } else {
-            // loser → debit margin first, then available
+            // Loser: debit available first, then margin if needed
             const loss = pnlBN.abs();
-
-            const takeMar = BigNumber.min(mar, loss);
-            const rem = loss.minus(takeMar);
-            const takeAvail = BigNumber.min(avail, rem);
-
-            marCh = takeMar.negated();
-            availCh = takeAvail.negated();
-            // any remainder is deferred to main clearing / liquidation
+            
+            if (avail.gte(loss)) {
+              // Sufficient available balance - take it all from available
+              availCh = loss.negated();
+              console.log(`[settleNewContracts] Loser: debiting ${loss.toFixed()} from available`);
+            } else {
+              // Insufficient available - take what we can, then tap margin
+              const takeAvail = avail;
+              const remaining = loss.minus(takeAvail);
+              
+              if (mar.gte(remaining)) {
+                // Sufficient margin to cover remainder
+                availCh = takeAvail.negated();
+                marCh = remaining.negated();
+                console.log(`[settleNewContracts] Loser: debiting ${takeAvail.toFixed()} from available + ${remaining.toFixed()} from margin`);
+              } else {
+                // Even margin isn't enough - take all available + all margin
+                availCh = takeAvail.negated();
+                marCh = mar.negated();
+                const badDebt = remaining.minus(mar);
+                console.error(`[settleNewContracts] WARNING: Insufficient funds for ${address}. Loss=${loss.toFixed()}, Avail=${avail.toFixed()}, Margin=${mar.toFixed()}, BadDebt=${badDebt.toFixed()}`);
+                // TODO: Handle bad debt (insurance fund, socialized loss, etc.)
+              }
+            }
           }
-
-
+          
           if (!availCh.isZero() || !marCh.isZero()) {
+            console.log(`[settleNewContracts] Calling updateBalance: availCh=${availCh.toNumber()}, marCh=${marCh.toNumber()}`);
+            
             await Tally.updateBalance(
               address,
               collateralId,
@@ -1186,6 +1202,8 @@ class Clearing {
               'newContractTieOff',
               blockHeight
             );
+            
+            console.log(`[settleNewContracts] Successfully updated balance for ${address}`);
           }
         }
       }
@@ -1200,7 +1218,7 @@ class Clearing {
             const id = contract[1].id;
             const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
             console.log('price info '+JSON.stringify(priceInfo))
-            Clearing.settleNewContracts(id,blockHeight,priceInfo)
+            await Clearing.settleNewContracts(id,blockHeight,priceInfo)
             if (!priceInfo || !priceInfo.updated) continue;
 
             const newPrice = priceInfo.thisPrice;

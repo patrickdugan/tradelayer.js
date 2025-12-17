@@ -1606,8 +1606,8 @@ class MarginMap {
             false,
             0
         );
-        if(!TallyMap){TallyMap=require('./tally.js')}
-        const hasSufficient = await TallyMap.hasSufficientMargin(address, collateral, reduction);
+        const Tally=require('./tally.js')
+        const hasSufficient = await Tally.hasSufficientMargin(address, collateral, reduction);
         if (!hasSufficient.hasSufficient) {
             reduction = new BigNumber(reduction)
                 .minus(hasSufficient.shortfall)
@@ -1616,7 +1616,7 @@ class MarginMap {
         }
 
         if (reduction !== 0) {
-            await TallyMap.updateBalance(
+            await Tally.updateBalance(
                 address,
                 collateral,
                 reduction,
