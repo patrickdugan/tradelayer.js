@@ -2070,27 +2070,34 @@ class Clearing {
                 blockHeight,
                 markPrice,
                 collateralId,
-                liquidationPool,  // FIXED: Pass actual available pool
-                Tally
+                liquidationPool
             );
         }
           console.log('adl result '+JSON.stringify(result))
+        
         // ------------------------------------------------------------
-        // 12. Apply pool credits from ADL - CAPPED at pool
+        // 12. Apply pool credits from ADL - CAPPED at pool (FIXED)
         // ------------------------------------------------------------
+        let poolRemaining = new Big(liquidationPool);
+
         for (const u of (result.poolAssignments || [])) {
-            // CRITICAL: Don't distribute more than the pool has
-            const creditAmount = Math.min(u.poolShare, liquidationPool);
-            if (creditAmount > 0) {
-                await Tally.updateBalance(
-                    u.address,
-                    collateralId,
-                    creditAmount,
-                    0, 0, 0,
-                    'deleveragePoolCredit',
-                    blockHeight
-                );
-            }
+            if (poolRemaining.lte(0)) break;
+
+            const share = new Big(u.poolShare || 0);
+            if (share.lte(0)) continue;
+
+            const creditAmount = Big.min(share, poolRemaining).dp(8);
+
+            await Tally.updateBalance(
+                u.address,
+                collateralId,
+                creditAmount.toNumber(),
+                0, 0, 0,
+                'deleveragePoolCredit',
+                blockHeight
+            );
+
+            poolRemaining = poolRemaining.minus(creditAmount);
         }
 
         //------------------------------------------------------------

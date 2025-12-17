@@ -1413,10 +1413,8 @@ class MarginMap {
       notional,
       block,
       markPrice,
-      TallyMap,
-      collateralId,      // NEW (optional)
-      liquidationPool,   // NEW (optional)
-      Tally              // NEW (optional)
+      collateralId,      
+      liquidationPool   // NEW (optional)
     ) {
       const BigNumber = require('bignumber.js');
       const bn = x => new BigNumber(x || 0);
@@ -1491,8 +1489,7 @@ class MarginMap {
           matchSize,
           sell,
           block,
-          liqPrice,
-          TallyMap
+          liqPrice
         );
 
         remaining = remaining.minus(matchSize);
@@ -1576,8 +1573,7 @@ class MarginMap {
         size,
         sell,
         block,
-        liqPrice,
-        TallyMap
+        liqPrice
     ) {
         console.log(`Adjusting position for ${address}: reduce ${size} contracts on ${contractId}`);
 
