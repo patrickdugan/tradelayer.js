@@ -6,7 +6,7 @@ const litecoin = require('litecoin');
 
 const clientConfig = /*test ?*/ {
             host: '127.0.0.1',
-            port: 18332,
+            port: 19332,
             user: 'user',
             pass: 'pass',
             timeout: 10000
@@ -54,10 +54,10 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 }
 
 // Replace with actual values
-const senderAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
-const recipientAddress = "tltc1qqgru3cahyq5tj7l5q066ssv33gg3v7z9auxkcg"//tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw"
+const senderAddress = "tltc1qpqxydlyys2rdnc859q8a3a4a6449pxfke5rcq0"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
+const recipientAddress = "tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8"//tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw"
 //tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2"//tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
-const amountToSend = 0.01; // Amount of LTC to send
+const amountToSend = 0.001; // Amount of LTC to send
 
 // Execute the function to send Litecoin
 sendLitecoin(senderAddress, recipientAddress, amountToSend);

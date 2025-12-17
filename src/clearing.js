@@ -68,62 +68,44 @@ class Clearing {
      * sideHint: true/"buy" => incoming BUY leg for this address
      *           false/"sell" => incoming SELL leg for this address
      */
-    static recordTrade(contractId, address, opened, closed, price, sideHint = null) {
+    static recordTrade(contractId, address, opened, closed, price, txid, isBuyer) {
       const key = `${contractId}:${address}`;
       const entry = this._ensureBlockTradeEntry(key);
 
-      // ------------------------------------------------------------
-      // LEGACY PATH (unchanged behavior)
-      // ------------------------------------------------------------
-      if (sideHint === null || sideHint === undefined) {
-        if (opened > 0) {
-          entry.openedSoFar += opened;
-        }
-
-        let consumedFromOpened = 0;
-        if (closed > 0) {
-          consumedFromOpened = Math.min(entry.openedSoFar, closed);
-          entry.openedSoFar -= consumedFromOpened;
-        }
-
-        const tradeObj = {
-          opened,
-          closed,
-          consumedFromOpened,
-          price,
-          openedBefore: entry.openedSoFar + consumedFromOpened
-        };
-
-        entry.trades.push(tradeObj);
-        return tradeObj;
-      }
-
-      // ------------------------------------------------------------
-      // POOL PATH (same-block avg-cost per side)
-      // ------------------------------------------------------------
       const BigNumber = require('bignumber.js');
-
-      const isBuyer =
-        sideHint === true ||
-        sideHint === "buy" ||
-        sideHint === "BUY";
 
       const px = new BigNumber(price || 0);
       const openedAbs = new BigNumber(Math.abs(opened || 0));
       const closedAbs = new BigNumber(Math.abs(closed || 0));
 
+      // ------------------------------------------------------------
+      // Signed opened quantity (CRITICAL)
+      // Buyer  => +opened
+      // Seller => -opened
+      // ------------------------------------------------------------
+      const signedOpened = isBuyer
+        ? openedAbs
+        : openedAbs.negated();
+
+      // ------------------------------------------------------------
+      // Same-block pools (avg-cost accounting)
+      // ------------------------------------------------------------
       const openPool  = isBuyer ? entry.pools.long  : entry.pools.short;
       const closePool = isBuyer ? entry.pools.short : entry.pools.long;
 
       const openedBefore = openPool.qty.toNumber();
 
-      // add opens to incoming side
+      // ------------------------------------------------------------
+      // Add opens to the correct side pool
+      // ------------------------------------------------------------
       if (openedAbs.gt(0)) {
         openPool.qty  = openPool.qty.plus(openedAbs);
         openPool.cost = openPool.cost.plus(openedAbs.multipliedBy(px));
       }
 
-      // consume closes from opposite side pool (same-block closes)
+      // ------------------------------------------------------------
+      // Consume closes from opposite side pool (same-block closes)
+      // ------------------------------------------------------------
       let consumedFromOpened = new BigNumber(0);
       let consumedAvgPrice = null;
 
@@ -138,25 +120,27 @@ class Clearing {
         closePool.cost = closePool.cost.minus(consumedCost);
       }
 
+      // ------------------------------------------------------------
+      // Trade object (SIGNED opened)
+      // ------------------------------------------------------------
       const tradeObj = {
-        opened: openedAbs.toNumber(),                 // keep legacy shape
+        opened: signedOpened.toNumber(),     // ✅ SIGNED
         closed: closedAbs.toNumber(),
         consumedFromOpened: consumedFromOpened.toNumber(),
         price: px.toNumber(),
         openedBefore,
-        // new field (optional, harmless): exact avg entry of same-block opens consumed
-        consumedAvgPrice
+        consumedAvgPrice,
+        txid
       };
 
       entry.trades.push(tradeObj);
 
-      // keep openedSoFar meaningful-ish for any legacy readers (optional, but safe)
+      // Keep openedSoFar meaningful for any legacy readers
       entry.openedSoFar =
         entry.pools.long.qty.plus(entry.pools.short.qty).toNumber();
 
       return tradeObj;
     }
-
 
     static _normalizeTrades(entry) {
         if (!entry) return [];
@@ -1110,115 +1094,102 @@ class Clearing {
     }
 
     static async settleNewContracts(contractId, blockHeight, priceInfo) {
-          const BigNumber = require('bignumber.js');
-          const Tally = require('./tally.js');
-          const ContractRegistry = require('./contractRegistry.js');
-          const MarginMap = require('./marginMap.js');
+      const BigNumber = require('bignumber.js');
+      const Tally = require('./tally.js');
+      const ContractRegistry = require('./contractRegistry.js');
 
-          // ------------------------------------------------------------
-          // 0) Resolve canonical reference price for this block
-          // ------------------------------------------------------------
-          const refPrice =
-            priceInfo?.thisPrice ??
-            priceInfo?.lastPrice ??
-            null;
+      // ------------------------------------------------------------
+      // 0) Resolve reference price for tie-off
+      // ------------------------------------------------------------
+      const refPrice =
+        priceInfo?.lastPrice ?? null
 
-          if (refPrice == null) return;
+      if (refPrice == null) return;
 
-          // ------------------------------------------------------------
-          // 1) Early exit if no positions exist
-          // ------------------------------------------------------------
-          const mm = await MarginMap.getInstance(contractId);
-          const positions = await mm.getAllPositions(contractId);
-          if (!Array.isArray(positions) || positions.length === 0) return;
+      // ------------------------------------------------------------
+      // 1) Contract parameters
+      // ------------------------------------------------------------
+      const collateralId = await ContractRegistry.getCollateralId(contractId);
+      const inverse = await ContractRegistry.isInverse(contractId);
 
-          // ------------------------------------------------------------
-          // 2) Contract parameters
-          // ------------------------------------------------------------
-          const collateralId = await ContractRegistry.getCollateralId(contractId);
-          const inverse = await ContractRegistry.isInverse(contractId);
+      const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
+      const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
 
-          const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
-          const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
+      // ------------------------------------------------------------
+      // 2) Tie-off NEW trades from THIS block (ZERO-SUM)
+      //    MUST be per-trade, not per-position
+      // ------------------------------------------------------------
+      for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
+        if (!key.startsWith(`${contractId}:`)) continue;
 
-          // ------------------------------------------------------------
-          // 3) Build per-address trade lists from blockTrades ONLY
-          // ------------------------------------------------------------
-          const tradesByAddress = new Map();
+        const address = key.split(':')[1];
+        const entry = Clearing._normalizeEntry(entryRaw);
+        if (!entry?.trades?.length) continue;
 
-          for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
-            if (!key.startsWith(`${contractId}:`)) continue;
+        for (const t of entry.trades) {
+          const opened = Number(t.opened || 0);
+          if (!opened) continue;
 
-            const address = key.split(':')[1];
-            const entry = Clearing._normalizeEntry(entryRaw);
-            if (!entry?.trades?.length) continue;
+          const avgEntry = Number(t.price);
+          if (!avgEntry || avgEntry <= 0) continue;
 
-            if (!tradesByAddress.has(address)) {
-              tradesByAddress.set(address, []);
-            }
+          // --------------------------------------------------------
+          // Compute PnL for THIS TRADE only
+          // --------------------------------------------------------
+          const pnlBN = Clearing.calculateNewContractPNL({
+            newContracts: opened,      // signed
+            avgEntryPrice: avgEntry,
+            lastPrice: refPrice,
+            inverse,
+            notional
+          });
 
-            for (const t of entry.trades) {
-              tradesByAddress.get(address).push({
-                opened: t.opened || 0,   // signed
-                closed: t.closed || 0,   // abs
-                price:  t.price || 0
-              });
-            }
+          if (!pnlBN || pnlBN.isZero()) continue;
+
+          // --------------------------------------------------------
+          // Apply PnL conservatively (margin first, then available)
+          // ZERO-SUM GUARANTEED because counterparty entry
+          // has equal/opposite opened value
+          // --------------------------------------------------------
+          const tally = await Tally.getTally(address, collateralId);
+          const avail = new BigNumber(tally?.available ?? 0);
+          const mar   = new BigNumber(tally?.margin ?? 0);
+
+          let availCh = new BigNumber(0);
+          let marCh   = new BigNumber(0);
+
+          if (pnlBN.gt(0)) {
+            // winner → credit available
+            availCh = pnlBN;
+          } else {
+            // loser → debit margin first, then available
+            const loss = pnlBN.abs();
+
+            const takeMar = BigNumber.min(mar, loss);
+            const rem = loss.minus(takeMar);
+            const takeAvail = BigNumber.min(avail, rem);
+
+            marCh = takeMar.negated();
+            availCh = takeAvail.negated();
+            // any remainder is deferred to main clearing / liquidation
           }
 
-          if (tradesByAddress.size === 0) return;
 
-          // ------------------------------------------------------------
-          // 4) Compute opened remainder and tie off
-          // ------------------------------------------------------------
-          for (const [address, trades] of tradesByAddress.entries()) {
-            const { openedSigned, openedAvg } =
-              Clearing.computeOpenedRemainderFromTrades(trades);
-
-            if (!openedSigned || !openedAvg) continue;
-            console.log('trades by address '+refPrice+' '+address+' '+openedSigned+' '+openedAvg)
-            const pnlTie = Clearing.calculateNewContractPNL({
-              newContracts: openedSigned,   // signed remainder
-              avgEntryPrice: openedAvg,
-              lastPrice: refPrice,
-              inverse,
-              notional
-            });
-
-              const tally = await Tally.getTally(address, collateralId);
-              const available = new BigNumber(tally.available || 0);
-
-              if (pnlTie.gt(0)) {
-                // PROFIT → safe to credit available
-                await Tally.updateBalance(
-                  address,
-                  collateralId,
-                  pnlTie.toNumber(),
-                  0, 0, 0,
-                  'newContractTieOff',
-                  blockHeight
-                );
-              } else {
-                // LOSS → only take what available can support
-                const loss = pnlTie.abs();
-                const takeAvail = BigNumber.min(available, loss);
-
-                if (takeAvail.gt(0)) {
-                  await Tally.updateBalance(
-                    address,
-                    collateralId,
-                    takeAvail.negated().toNumber(),
-                    0, 0, 0,
-                    'newContractTieOff',
-                    blockHeight
-                  );
-                }
-
-                // remainder is intentionally deferred
-                // main clearing / liquidation will absorb it via margin / liqPool
-              }
+          if (!availCh.isZero() || !marCh.isZero()) {
+            await Tally.updateBalance(
+              address,
+              collateralId,
+              availCh.toNumber(),
+              0,
+              marCh.toNumber(),
+              0,
+              'newContractTieOff',
+              blockHeight
+            );
           }
         }
+      }
+    }
 
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');
@@ -2082,7 +2053,8 @@ class Clearing {
                 blockHeight,
                 markPrice,
                 collateralId,
-                liquidationPool  // FIXED: Pass actual available pool
+                liquidationPool,  // FIXED: Pass actual available pool
+                Tally
             );
         }
 

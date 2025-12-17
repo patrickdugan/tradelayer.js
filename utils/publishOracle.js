@@ -6,7 +6,7 @@ const encoder = require('../src/txEncoder.js');
 
 const clientConfig = {
     host: '127.0.0.1',
-    port: 18332, // Testnet RPC port
+    port: 19332, // Testnet RPC port
     user: 'user',
     pass: 'pass',
     timeout: 10000
@@ -66,7 +66,7 @@ async function buildSignAndSendTransaction(fromAddress, btcPrice) {
         // Create the payload
         const params = {
             oracleid: 2,
-            price: 142,//btcPrice,
+            price: 180,//btcPrice,
             targetAddress: fromAddress
         };
 
