@@ -570,131 +570,227 @@ class ContractRegistry {
         
     }
 
-   static async moveCollateralToMargin(sender, contractId, amount, price, orderPrice,side, initMargin,channel,channelAddr,block,feeInfo,maker,flag,txid,position){
-        const TallyMap = require('./tally.js')
-        const MarginMap = require('./marginMap.js')
-        const marginMap = await MarginMap.getInstance(contractId)
-        //console.log('looking at feeInfo obj '+JSON.stringify(feeInfo))
-        //console.log('checking instance of marginMap '+ JSON.stringify(marginMap))
-        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId,price)
-        const compareInitMargin = await ContractRegistry.getInitialMargin(contractId,orderPrice)
-        console.log('comparing realized price margin with orderPrice margin '+initMargin+' '+compareInitMargin)
-        const collateralPropertyId = await ContractRegistry.getCollateralId(contractId)
-        //console.log('collateralPropertyId '+collateralPropertyId)
-        let totalInitialMargin = initMargin;
-        let totalComparedMargin = BigNumber(compareInitMargin).times(amount).decimalPlaces(8).toNumber() 
-               console.log('Total Initial Margin ' +totalInitialMargin+' '+amount+' '+initMargin+' '+price)
-        // Move collateral to reservd position
-                    let contractUndo = 0
-                    let excessMargin = 0
-                    console.log('about to calc. excess margin '+orderPrice +' '+price+ ' '+totalComparedMargin + ' '+totalInitialMargin+' '+side+' '+maker)
-            if (orderPrice < price && side === true && channel === false && maker === false) {
-                // Compute ABSOLUTE excess
-                const raw = BigNumber(totalInitialMargin).minus(totalComparedMargin); // 327 - 325.5 = +1.5
-                const excess = raw.decimalPlaces(8).toNumber();
+    static async moveCollateralToMargin(
+        sender,
+        contractId,
+        amount,
+        price,
+        orderPrice,
+        side,
+        initMargin,
+        channel,
+        channelAddr,
+        block,
+        feeInfo,
+        maker,
+        flag,
+        txid,
+        position
+    ){
+        const TallyMap = require('./tally.js');
+        const MarginMap = require('./marginMap.js');
+        const BigNumber = require('bignumber.js');
+        const Channels = require('./channels.js');
 
-                if (excess > 0) {
-                    console.log(`returning excess margin ${excess} to ${sender}`);
-                    
-                    // Correct semantics (free margin):
+        const marginMap = await MarginMap.getInstance(contractId);
+
+        const initialMarginPerContract = await ContractRegistry.getInitialMargin(contractId, price);
+        const compareInitMargin = await ContractRegistry.getInitialMargin(contractId, orderPrice);
+        console.log('comparing realized price margin with orderPrice margin ' + initMargin + ' ' + compareInitMargin);
+
+        const collateralPropertyId = await ContractRegistry.getCollateralId(contractId);
+
+        // initMargin is already a TOTAL in your call-sites (marginUsed), keep it as-is
+        let totalInitialMargin = new BigNumber(initMargin || 0).decimalPlaces(8).toNumber();
+        const totalComparedMargin = new BigNumber(compareInitMargin).times(amount).decimalPlaces(8).toNumber();
+
+        console.log('Total Initial Margin ' + totalInitialMargin + ' ' + amount + ' ' + initMargin + ' ' + price);
+        console.log('about to calc. reserve-vs-fill delta ' + orderPrice + ' ' + price + ' ' + totalComparedMargin + ' ' + totalInitialMargin + ' ' + side + ' ' + maker);
+
+        // ------------------------------------------------------------
+        // Reconcile reserve at orderPrice vs required at fill price
+        // diff = reserved(orderPrice) - required(fill)
+        //  diff > 0 => refund from reserve to available
+        //  diff < 0 => top up reserve from available (if possible)
+        // NOTE: keep your original gating: only non-maker, non-channel
+        // ------------------------------------------------------------
+        if (channel === false && maker === false) {
+            const diff = new BigNumber(totalComparedMargin).minus(totalInitialMargin).decimalPlaces(8).toNumber();
+
+            if (diff > 0) {
+                console.log(`returning excess margin ${diff} to ${sender}`);
+                await TallyMap.updateBalance(
+                    sender,
+                    collateralPropertyId,
+                    diff,      // available +
+                    -diff,     // reserve   -
+                    0, 0,
+                    'returnExcessMargin',
+                    block
+                );
+            } else if (diff < 0) {
+                const topUp = new BigNumber(diff).abs().decimalPlaces(8).toNumber();
+                console.log(`topping up reserve ${topUp} for ${sender}`);
+                const has = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, topUp);
+                if (has.hasSufficient) {
                     await TallyMap.updateBalance(
                         sender,
                         collateralPropertyId,
-                        excess,         // available +excess
-                        -excess,        // reserve  -excess
+                        -topUp,    // available -
+                        topUp,     // reserve   +
                         0, 0,
-                        'returnExcessMargin',
+                        'topUpReserveToFillPriceMargin',
+                        block
+                    );
+                } else {
+                    console.log(`topUpReserveToFillPriceMargin skipped: insufficient available for ${sender}, need=${topUp}`);
+                }
+            }
+        }
+
+        console.log('checking feeInfo obj again ' + JSON.stringify(feeInfo));
+
+        if (feeInfo.buyFeeFromReserve && side === true) {
+            totalInitialMargin = new BigNumber(totalInitialMargin).minus(feeInfo.buyerFee).decimalPlaces(8).toNumber();
+        } else if (feeInfo.sellFeeFromReserve && side === false) {
+            totalInitialMargin = new BigNumber(totalInitialMargin).minus(feeInfo.sellerFee).decimalPlaces(8).toNumber();
+        }
+
+        // ------------------------------------------------------------
+        // Move init margin into margin bucket
+        // Priority: reserve -> available -> (optional) existing margin
+        // This prevents negative available crashes.
+        // ------------------------------------------------------------
+        if (channel === false) {
+            console.log('attention Will Robinson ' + totalInitialMargin);
+
+            // IMPORTANT: your getTally(address) path logs "undefined" and does not return a usable prop object
+            const propObj = await TallyMap.getTally(sender, collateralPropertyId) || {};
+
+            const availBal = new BigNumber(propObj.available || 0);
+            const resBal   = new BigNumber(propObj.reserved  || 0);
+            const marBal   = new BigNumber(propObj.margin    || 0);
+
+            // use as much reserve as possible
+            const reserveDebitBN = BigNumber.minimum(resBal, new BigNumber(totalInitialMargin));
+            const reserveDebit = reserveDebitBN.decimalPlaces(8).toNumber();
+
+            const remainingBN = new BigNumber(totalInitialMargin).minus(reserveDebitBN).decimalPlaces(8);
+            const remaining = remainingBN.toNumber();
+
+            // Case A: reserve alone covers it
+            if (remaining <= 0) {
+                if (reserveDebit > 0) {
+                    await TallyMap.updateBalance(
+                        sender,
+                        collateralPropertyId,
+                        0,
+                        -reserveDebit,
+                        reserveDebit,
+                        0,
+                        'contractTradeInitMargin',
                         block
                     );
                 }
-            }else if(orderPrice>price&&side==false&&maker==false&&channel==false){
-                                excessMargin = BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber()
-                    console.log('calling move margin in buyer excess margin channel false '+sender+' '+excessMargin)
-                    const hasSufficientBalance = await TallyMap.hasSufficientBalance(sender, collateralPropertyId, excessMargin);
-                    if(hasSufficientBalance.hasSufficient==false){
-                        contractUndo = BigNumber(hasSufficientBalance.shortfall)
-                                              .dividedBy(initialMarginPerContract)
-                                              .decimalPlaces(0, BigNumber.ROUND_CEIL)
-                                              .toNumber();
-                        amount -= contractUndo
-                        totalInitialMargin = BigNumber(initialMarginPerContract).times(amount).decimalPlaces(8).toNumber();                         
-                        excessMargin=BigNumber(totalInitialMargin).minus(totalComparedMargin).decimalPlaces(8).toNumber();                          
-                    //contract was offered lower than the fill, init Margin in reserve is too high extra will return to available
-                    console.log('calling move margin in seller excess margin channel false, insufficient Balance '+sender+' '+excessMargin)
-                        throw new Error()
-                        await TallyMap.updateBalance(sender, collateralPropertyId, excessMargin, -excessMargin, 0, 0, 'returnExcessMargin',block);    
-                    }else{
-                        totalInitialMargin = BigNumber(initMargin).minus(excessMargin).decimalPlaces(8).toNumber();
-                    console.log('calling move margin in seller excess margin channel false, sufficient Balance '+sender+' '+excessMargin)                
-                       await TallyMap.updateBalance(sender, collateralPropertyId, -excessMargin, excessMargin, 0, 0, 'pullingExcessMargin',block);  
-                    }  
             }
-
-            console.log('checking feeInfo obj again '+JSON.stringify(feeInfo))
-
-            if(feeInfo.buyFeeFromReserve&&side==true){
-                totalInitialMargin= BigNumber(totalInitialMargin).minus(feeInfo.buyerFee).decimalPlaces(8).toNumber()
-             }else if(feeInfo.sellFeeFromReserve&&side==false){
-                totalInitialMargin=BigNumber(totalInitialMargin).minus(feeInfo.sellerFee).decimalPlaces(8).toNumber()
-             }
-
-        if(channel==false){
-            console.log('attention Will Robinson '+totalInitialMargin)
-             let hasReserve = await TallyMap.hasSufficientReserve(sender, collateralPropertyId,totalInitialMargin)
-             console.log('calling move margin standard '+sender+' '+totalInitialMargin+' '+feeInfo.buyerFee+' '+feeInfo.sellerFee)
-             if(hasReserve.hasSufficient){
-                 await TallyMap.updateBalance(sender, collateralPropertyId, 0, -totalInitialMargin, totalInitialMargin, 0, 'contractTradeInitMargin',block);
-             }else{
-                if(hasReserve.reason!='undefined'){
-                        console.log(JSON.stringify(hasReserve), totalInitialMargin, amount)
-                        let shortfallBN = new BigNumber(hasReserve.shortfall)
-                        let tally = await TallyMap.getTally(sender)
-                        let reserveDebit = new BigNumber(totalInitialMargin).minus(shortfallBN).decimalPlaces(8).toNumber()
-                        console.log(reserveDebit+' '+hasReserve.shortfall)
-                       await TallyMap.updateBalance(sender, collateralPropertyId, -hasReserve.shortfall, -reserveDebit, totalInitialMargin, 0, 'contractTradeInitMargin',block);
-                }else{
-                    throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
-                }
-             }
-        }else if(channel==true){
-            let hasChannel = await TallyMap.hasSufficientChannel(channelAddr, collateralPropertyId,totalInitialMargin)
-            console.log('about to move initMargin from channel '+channelAddr+' '+collateralPropertyId+' '+totalInitialMargin)
-            if(hasChannel.hasSufficient){
-                await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin',block);
-                await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin',block);
-                await Channels.debitInitMarginFromChannel(
-                    channelAddr,
-                    sender,           // address of A or B
+            // Case B: reserve + available covers it
+            else if (availBal.gte(remaining)) {
+                await TallyMap.updateBalance(
+                    sender,
                     collateralPropertyId,
+                    -remaining,      // take remaining from available
+                    -reserveDebit,   // take what we can from reserve
                     totalInitialMargin,
+                    0,
+                    'contractTradeInitMargin',
                     block
                 );
-            }else{
-                if(hasChannel.reason!='undefined'){
-                        let shortfallBN = new BigNumber(hasChannel.shortfall)
-                        let tally = await TallyMap.getTally(sender,collateralPropertyId)
-                        console.log('tally '+JSON.stringify(tally))
-                        let channelDebit = new BigNumber(totalInitialMargin).minus(shortfallBN).decimalPlaces(8).toNumber()
-                        console.log(totalInitialMargin)     
-                        await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -channelDebit, 'contractTradeInitMargin',block);
-                        await TallyMap.updateBalance(sender, collateralPropertyId, -shortfallBN.toNumber(), 0, totalInitialMargin, 0, 'contractTradeInitMargin',block);
-                        await Channels.debitInitMarginFromChannel(
-                            channelAddr,
-                            sender,           // address of A or B
-                            collateralPropertyId,
-                            channelDebit,
-                            block
-                        );
+            }
+            // Case C: reserve + existing margin covers it (no available debit)
+            else if (marBal.gte(remaining)) {
+                // move reserve portion (if any) into margin
+                if (reserveDebit > 0) {
+                    await TallyMap.updateBalance(
+                        sender,
+                        collateralPropertyId,
+                        0,
+                        -reserveDebit,
+                        reserveDebit,
+                        0,
+                        'contractTradeInitMargin',
+                        block
+                    );
+                }
+                // remaining is assumed to already be sitting inside margin collateral
+                // (cross-margin style), so no tally movement needed.
+            }
+            // Case D: available + existing margin covers remaining (drain available, rest from margin)
+            else if (availBal.plus(marBal).gte(remaining)) {
+                const fromAvailBN = availBal.decimalPlaces(8);
+                const fromAvail = fromAvailBN.toNumber();
 
-                }else{
-                    throw new Error("reserve balance is undefined in tallymap for "+collateralPropertyId)
+                if (reserveDebit > 0) {
+                    await TallyMap.updateBalance(
+                        sender,
+                        collateralPropertyId,
+                        0,
+                        -reserveDebit,
+                        reserveDebit,
+                        0,
+                        'contractTradeInitMargin',
+                        block
+                    );
+                }
+
+                if (fromAvail > 0) {
+                    await TallyMap.updateBalance(
+                        sender,
+                        collateralPropertyId,
+                        -fromAvail,
+                        0,
+                        fromAvail,
+                        0,
+                        'contractTradeInitMargin',
+                        block
+                    );
+                }
+                // remainder-from-margin: no movement
+            }
+            // Case E: cannot fund
+            else {
+                throw new Error(
+                    `Insufficient collateral for contractTradeInitMargin sender=${sender} prop=${collateralPropertyId} need=${totalInitialMargin} avail=${availBal.toNumber()} res=${resBal.toNumber()} mar=${marBal.toNumber()}`
+                );
+            }
+        }
+        else if (channel === true) {
+            let hasChannel = await TallyMap.hasSufficientChannel(channelAddr, collateralPropertyId, totalInitialMargin);
+            console.log('about to move initMargin from channel ' + channelAddr + ' ' + collateralPropertyId + ' ' + totalInitialMargin);
+
+            if (hasChannel.hasSufficient) {
+                await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -totalInitialMargin, 'debitChannelContractTradeInitMargin', block);
+                await TallyMap.updateBalance(sender, collateralPropertyId, 0, 0, totalInitialMargin, 0, 'creditChannelContractTradeInitMargin', block);
+                await Channels.debitInitMarginFromChannel(channelAddr, sender, collateralPropertyId, totalInitialMargin, block);
+            } else {
+                if (hasChannel.reason != 'undefined') {
+                    let shortfallBN = new BigNumber(hasChannel.shortfall);
+                    let channelDebit = new BigNumber(totalInitialMargin).minus(shortfallBN).decimalPlaces(8).toNumber();
+
+                    await TallyMap.updateChannelBalance(channelAddr, collateralPropertyId, -channelDebit, 'contractTradeInitMargin', block);
+                    await TallyMap.updateBalance(sender, collateralPropertyId, -shortfallBN.toNumber(), 0, totalInitialMargin, 0, 'contractTradeInitMargin', block);
+
+                    await Channels.debitInitMarginFromChannel(channelAddr, sender, collateralPropertyId, channelDebit, block);
+                } else {
+                    throw new Error("reserve balance is undefined in tallymap for " + collateralPropertyId);
                 }
             }
-        } 
-        console.log('about to setInitialMargin '+sender+contractId+' '+totalInitialMargin) 
-        position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin,block,position);
-        return position
-    }           
+        }
+
+        console.log('about to setInitialMargin ' + sender + contractId + ' ' + totalInitialMargin);
+        position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin, block, position);
+        return position;
+    }
+
 
     static async getPriceAtBlock(contractId, blockHeight) {
         let isOracleContract = await ContractRegistry.isOracleContract(contractId);

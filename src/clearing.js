@@ -1351,7 +1351,11 @@ class Clearing {
       return out;
     }
 
- 
+    static consensusAddressSort(a, b) {
+        if (a === b) return 0;
+        return a < b ? -1 : 1;
+    }
+
    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional, priceInfo) {
 
       console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
@@ -1367,7 +1371,9 @@ class Clearing {
       // 1) Load raw positions → init clearing cache
       // ------------------------------------------------------------
       const rawPositions = await marginMap.getAllPositions(contractId);
-      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
+      const entries = [...rawPositions.entries()]
+    .sort(([addrA], [addrB]) => Clearing.consensusAddressSort(addrA, addrB));
+      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, entries);
       let positions = Clearing.getPositionsFromCache(ctxKey);
 
       if (!Array.isArray(positions) || positions.length === 0) {

@@ -265,7 +265,8 @@ const TxUtils = {
     async signRawTransaction(rawTx) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -278,7 +279,8 @@ const TxUtils = {
     async sendRawTransaction(serializedTx) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -293,7 +295,8 @@ const TxUtils = {
     async getTransactionOutputs(txId) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -311,7 +314,8 @@ const TxUtils = {
     async getReferenceAddresses(txId) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -342,7 +346,8 @@ const TxUtils = {
     async listUnspent(minconf, maxconf, addresses) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -356,7 +361,8 @@ const TxUtils = {
     async decoderawtransaction(hexString) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -370,7 +376,8 @@ const TxUtils = {
     async signrawtransactionwithwallet(rawTx) {
         if(!this.client){
             console.log('awaiting client in get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
 
         try {
@@ -402,7 +409,8 @@ const TxUtils = {
     async getAdditionalInputs(txId) {
         if(!this.client){
             console.log('awaitingthis.clientin get raw tx')
-            await init()
+            this.client = await clientPromise;
+
         }
         try {
             const tx = await this.client.getRawTransaction(txId, true);
@@ -433,7 +441,8 @@ const TxUtils = {
         try {
             if(!this.client){
                 console.log('awaitingthis.clientin get raw tx')
-                await init()
+                this.client = await clientPromise;
+
             }
             let utxos = await this.client.listUnspent(0, 9999999, [address]);
             utxos.sort((a, b) => b.amount - a.amount);

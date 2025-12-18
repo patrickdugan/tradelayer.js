@@ -198,6 +198,22 @@ class PnlIou {
         }
     }
 
+    // -----------------------
+    // Get FULL IOU DOC for a (contractId, propertyId)
+    // -----------------------
+    static async getDoc(contractId, propertyId) {
+        const key = PnlIou.key(contractId, propertyId);
+        const db = await PnlIou._db();
+
+        try {
+            const doc = await db.findOneAsync({ _id: key });
+            return doc || null;
+        } catch (err) {
+            return null;
+        }
+    }
+
+
     static async getTotalForProperty(propertyId) {
         const db = await PnlIou._db();
         const pId = Number(propertyId);

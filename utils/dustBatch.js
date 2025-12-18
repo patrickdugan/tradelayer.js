@@ -34,10 +34,10 @@ function toSats(x) { return Math.round(x * 1e8); }
 
 const UTXOS = [
   {
-    txid: "edb8ab388f390ef1577a39f4eb0c741a71b9bb466bd9cdd17ca6e6c68bc84dc8",
+    txid: "f878645b2e721732bda1fb585a7206b2015c60d2da520be7f7b4777247c68492",
     vout: 5,
     scriptPubKey: "001482fbfab2a62eb8722568c4c3639dd0e9e0183ced",
-    satoshis: toSats(1.34172534)
+    satoshis: toSats(1.31652534)
   }
 ];
 
