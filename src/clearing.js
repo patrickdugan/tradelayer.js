@@ -1244,7 +1244,6 @@ class Clearing {
             console.log('is liq ' + JSON.stringify(liqEvents));
             console.log('length ' + liqEvents.length + ' ' + Boolean(liqEvents.length > 0));
 
-            if (liqEvents.length > 0) {
                 await Clearing.performAdditionalSettlementTasks(
                     blockHeight,
                     positions,
@@ -1254,7 +1253,6 @@ class Clearing {
                     collateralId,
                     pnlDelta
                 );
-            }
         }
 
         await Clearing.resetBlockTrades();
@@ -2372,15 +2370,12 @@ class Clearing {
     }
 
     static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLoss,collateralId,pnlDelta){        
-            if (pnlDelta.gt(0)) {
-                // ✅ POSITIVE delta: cover it from IOU credit / insurance / fee cache
-                // Here we *do not* touch individual traders; we just reflect the mismatch
-                // into a central sink, e.g. "insurance" address or PnlIou bucket.
-                await PnlIou.applyToLosers(contractId,pnlDelta,blockHeight,collateralId);
-            } else if(pnlDelta.lt(0)){
-                // NEGATIVE delta: extra loss — treat as insurance accrual / reserve top-up
-                await PnlIou.payOutstandingIous(contractId, collateralId, pnlDelta, blockHeight);
-            }
+          const doc = await PnlIou.getDoc(contractId, collateralId); // whatever you have
+          const payAmount = PnlIou.blockReductionTowardZero(doc);
+
+          if (payAmount.gt(0)) {
+            await PnlIou.payOutstandingIous(contractId, collateralId, payAmount, blockHeight /*, positions */);
+          }
 
        //try {
                 // Step 2: Check if insurance fund payout is needed

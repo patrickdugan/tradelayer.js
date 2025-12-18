@@ -246,9 +246,10 @@ class MarginMap {
 
             for (const pos of finalPositions) {
                 if (flattenZeroes) {
-                    if (!pos.contracts || pos.contracts === 0) {
-                        continue;
-                    }
+                  const iou = new BigNumber(pos.iouClaim || 0);
+                  if ((!pos.contracts || pos.contracts === 0) && iou.isZero()) {
+                    continue;
+                  }
                 }
                 newMap.set(pos.address, pos);
             }
@@ -815,11 +816,12 @@ class MarginMap {
         for (const [address, pos] of this.margins.entries()) {
             // Only remove if truly flat and safe
             if (
-                pos.contracts === 0 &&
-                (!pos.margin || pos.margin === 0) &&
-                (!pos.unrealizedPNL || pos.unrealizedPNL === 0)
+              pos.contracts === 0 &&
+              (!pos.margin || pos.margin === 0) &&
+              (!pos.unrealizedPNL || pos.unrealizedPNL === 0) &&
+              new BigNumber(pos.iouClaim || 0).isZero()
             ) {
-                this.margins.delete(address);
+              this.margins.delete(address);
             }
         }
 
@@ -1023,6 +1025,40 @@ class MarginMap {
     }
 
 
+      /**
+       * Allocate an IOU CLAIM for this match's imbalance delta (>0).
+       * delta is the unfunded profit portion (e.g. buyerPnl + sellerPnl after loss caps).
+       * We assign CLAIMS to whichever side(s) have positive pnl, proportional to their positive pnl.
+       *
+       * NOTE: This only mints claim amount == delta (not full pnl), so it won't double-pay.
+       */
+      applyIouClaimDelta(buyerAddress, sellerAddress, buyerPnl, sellerPnl, delta) {
+        const d = new BigNumber(delta || 0);
+        if (d.lte(0)) return; // only mint claims when imbalance is positive
+
+        const bp = new BigNumber(buyerPnl || 0);
+        const sp = new BigNumber(sellerPnl || 0);
+
+        const bpPos = bp.gt(0) ? bp : new BigNumber(0);
+        const spPos = sp.gt(0) ? sp : new BigNumber(0);
+        const totalPos = bpPos.plus(spPos);
+
+        if (totalPos.lte(0)) return;
+
+        if (bpPos.gt(0) && buyerAddress) {
+          const share = d.times(bpPos).div(totalPos).decimalPlaces(8);
+          const pos = this._getOrInitPosition(buyerAddress);
+          pos.iouClaim = new BigNumber(pos.iouClaim || 0).plus(share).decimalPlaces(8).toNumber();
+          this.margins.set(buyerAddress, pos);
+        }
+
+        if (spPos.gt(0) && sellerAddress) {
+          const share = d.times(spPos).div(totalPos).decimalPlaces(8);
+          const pos = this._getOrInitPosition(sellerAddress);
+          pos.iouClaim = new BigNumber(pos.iouClaim || 0).plus(share).decimalPlaces(8).toNumber();
+          this.margins.set(sellerAddress, pos);
+        }
+      }
 
     /*realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
         //const pos = this.margins.get(address);

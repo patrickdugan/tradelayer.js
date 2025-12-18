@@ -2049,6 +2049,7 @@ class Orderbook {
                     // Load the margin map for the given series ID and block height
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
+                    const lastPrice = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight-1)
                     match.inverse = isInverse
 
                     let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
@@ -2377,7 +2378,7 @@ class Orderbook {
                         const sellerAvg = match.sellerPosition.avgPrice;
                         const newBuyerAvg = positions.bp.avgPrice
                         const newSellerAvg = positions.sp.avgPrice
-                        console.log('closing two different ways '+sellerClosesAgainstAvg+' '+sellerClosesAgainstLast+' '+buyerClosesAgainstAvg+' 'buyerClosesAgainstLast)
+                        console.log('closing two different ways '+sellerClosesAgainstAvg+' '+sellerClosesAgainstLast+' '+buyerClosesAgainstAvg+' '+buyerClosesAgainstLast)
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp
                     match.sellerPosition = positions.sp
@@ -2605,11 +2606,18 @@ class Orderbook {
                     // Save the updated margin map
                     await marginMap.saveMarginMap(currentBlockHeight);
                     const delta = buyerPnl.plus(sellerPnl);
-                    if(!isLiquidation){
-                        if(delta.gt(0)&&(buyerPnl.gt(0)||sellerPnl.gt(0))){
-                                await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
-                        }
-                        await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight)  
+                    if (!isLiquidation) {
+                      if (delta.gt(0) && (buyerPnl.gt(0) || sellerPnl.gt(0))) {
+                        marginMap.applyIouClaimDelta(
+                          trade.buyerAddress,
+                          trade.sellerAddress,
+                          buyerPnl,
+                          sellerPnl,
+                          delta
+                        );
+                      }
+                      await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
+                      await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight);
                     }
                     
                     trade.delta=delta  
@@ -2769,27 +2777,42 @@ class Orderbook {
 		}
 
         deriveTradeDelta(match, buyerClosed, sellerClosed, flipLong, flipShort) {
-        const beforeBuyer = match.buyerPosition.contracts - match.buyOrder.amount + buyerClosed;
-        const afterBuyer  = match.buyerPosition.contracts;
+            const beforeBuyer  = match.buyerPosition.contracts - match.buyOrder.amount + buyerClosed;
+            const afterBuyer   = match.buyerPosition.contracts;
 
-        const beforeSeller = match.sellerPosition.contracts + match.sellOrder.amount - sellerClosed;
-        const afterSeller  = match.sellerPosition.contracts;
+            const beforeSeller = match.sellerPosition.contracts + match.sellOrder.amount - sellerClosed;
+            const afterSeller  = match.sellerPosition.contracts;
 
-        return {
-            buyer: {
-                delta: match.buyOrder.amount,
-                opened: flipLong > 0 ? flipLong : (buyerClosed === 0 ? match.buyOrder.amount : 0),
-                wasLong: beforeBuyer > 0,
-                isLong: afterBuyer > 0
-            },
-            seller: {
-                delta: -match.sellOrder.amount,
-                opened: flipShort > 0 ? flipShort : (sellerClosed === 0 ? match.sellOrder.amount : 0),
-                wasLong: beforeSeller > 0,
-                isLong: afterSeller > 0
+            // ------------------------------------------------------------
+            // Compute opened ONCE, symmetrically
+            // ------------------------------------------------------------
+            let opened = 0;
+
+            if (flipLong > 0) {
+                opened = flipLong;
+            } else if (flipShort > 0) {
+                opened = flipShort;
+            } else if (buyerClosed === 0 && sellerClosed === 0) {
+                // pure open on both sides
+                opened = match.buyOrder.amount;
             }
-        };
-    }
+
+            return {
+                buyer: {
+                    delta: match.buyOrder.amount,
+                    opened: opened,
+                    wasLong: beforeBuyer > 0,
+                    isLong: afterBuyer > 0
+                },
+                seller: {
+                    delta: -match.sellOrder.amount,
+                    opened: opened,
+                    wasLong: beforeSeller > 0,
+                    isLong: afterSeller > 0
+                }
+            };
+        }
+
 
   async locateFee(
 		  match,

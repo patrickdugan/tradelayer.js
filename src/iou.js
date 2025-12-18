@@ -26,33 +26,62 @@ class PnlIou {
     // delta < 0 → traders owe system
     // -----------------------
     static async addDelta(contractId, propertyId, delta, block) {
+        const BigNumber = require('bignumber.js');
+
         const d = new BigNumber(delta || 0);
         if (d.isZero()) return null;
 
         const key = PnlIou.key(contractId, propertyId);
         const db = await PnlIou._db();
 
-        let existing;
-        try {
-            existing = await db.findOneAsync({ _id: key });
-        } catch (err) {
-            existing = null;
-        }
+        let existing = null;
+        try { existing = await db.findOneAsync({ _id: key }); } catch (e) {}
 
-        const current = new BigNumber(existing && existing.amount || 0);
+        const current = new BigNumber((existing && existing.amount) || 0);
+
+        // If we’re entering a new block, snapshot start-of-block.
+        // If same block, keep prior snapshot and keep accumulating blockDelta.
+        const isNewBlock = !(existing && Number(existing.lastBlock) === Number(block));
+
+        const blockStart = isNewBlock
+            ? current
+            : new BigNumber((existing && existing.blockStartAmount) || current);
+
+        const prevBlockDelta = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockDelta) || 0);
+
+        const nextBlockDelta = prevBlockDelta.plus(d);
         const updated = current.plus(d);
 
         const doc = {
             _id: key,
             contractId: Number(contractId),
             propertyId: Number(propertyId),
+
+            // signed running “net bucket”
             amount: updated.toString(10),
-            lastBlock: block
+
+            // per-block tracking
+            lastBlock: block,
+            blockStartAmount: blockStart.toString(10),
+            blockDelta: nextBlockDelta.toString(10)
         };
 
         await db.updateAsync({ _id: key }, doc, { upsert: true });
         return doc;
     }
+
+    static blockReductionTowardZero(doc) {
+        const BigNumber = require('bignumber.js');
+        const start = new BigNumber((doc && doc.blockStartAmount) || 0);
+        const end   = new BigNumber((doc && doc.amount) || 0);
+
+        const reduction = start.abs().minus(end.abs());
+        return reduction.gt(0) ? reduction : new BigNumber(0);
+    }
+
+
 
     static async applyToLosers(
         contractId,

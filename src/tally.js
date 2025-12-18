@@ -1142,7 +1142,7 @@ class TallyMap {
     }
     // Get the tally for a specific address and property
     static async getTally(address, propertyId) {
-        const instance = await TallyMap.getInstance(); // Ensure instance is loaded
+        await TallyMap.loadFromDB(); // Ensure instance is loaded
         if (!TallyMap.addresses.has(address)) {
             console.log("can't find address in tallyMap")
             return 0;
