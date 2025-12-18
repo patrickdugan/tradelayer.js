@@ -197,41 +197,116 @@ class MarginMap {
       return null;
     }*/
 
-// Set initial margin for a new position in the MarginMap
-    async setInitialMargin(sender, contractId, totalInitialMargin,block,position) {
-        console.log('setting initial margin '+sender, contractId, totalInitialMargin)
-        
-        // Check if there is an existing position for the sender
-        if(!position){position = this.margins.get(sender)};
+    // Set initial margin for a new position in the MarginMap
+    async setInitialMargin(sender, contractId, totalInitialMargin, block, position) {
+            const BigNumber = require('bignumber.js');
 
-        console.log('setting initial margin position '+JSON.stringify(position))
+            console.log(
+                `[MarginMap.setInitialMargin] sender=${sender} contractId=${contractId} totalInitialMargin=${totalInitialMargin} block=${block}`
+            );
 
-        if (!position) {
-            // If no existing position, initialize a new one
-            position = {
-                contracts: 0,  // Number of contracts the sender has
-                margin: 0,
-                unrealizedPNL:0,      // Total margin amount the sender has posted
-                avgPrice:0
-            };
+            // ------------------------------------------------------------
+            // 0) HYDRATE SAFETY: if this instance has an empty margins map,
+            //    load positions before we mutate + persist, otherwise we can
+            //    overwrite the DB with a partial map (the "contracts=0 wipe").
+            // ------------------------------------------------------------
+            const hadMap = !!this.margins;
+            const wasEmpty = !hadMap || this.margins.size === 0;
+            let hydrated = false;
+
+            if (wasEmpty) {
+                try {
+                    const loaded = await this.getAllPositions(contractId);
+                    if (loaded && loaded instanceof Map) {
+                        this.margins = loaded;
+                    } else if (loaded && typeof loaded.entries === 'function') {
+                        // Map-like fallback
+                        this.margins = new Map(loaded);
+                    } else if (!this.margins) {
+                        this.margins = new Map();
+                    }
+
+                    hydrated = this.margins.size > 0;
+                    console.log(
+                        `[MarginMap.setInitialMargin] hydrate attempt: size=${this.margins.size} hydrated=${hydrated}`
+                    );
+                } catch (e) {
+                    console.warn(
+                        `[MarginMap.setInitialMargin] hydrate FAILED: ${e && e.message ? e.message : e}`
+                    );
+                    if (!this.margins) this.margins = new Map();
+                }
+            }
+
+            // ------------------------------------------------------------
+            // 1) Resolve position
+            // ------------------------------------------------------------
+            if (!position) position = this.margins.get(sender);
+
+            console.log('[MarginMap.setInitialMargin] resolved position ' + JSON.stringify(position));
+
+            if (!position) {
+                position = {
+                    contracts: 0,
+                    margin: 0,
+                    unrealizedPNL: 0,
+                    avgPrice: 0,
+                    address: sender
+                };
+            } else {
+                // normalize missing fields without changing names/types
+                if (position.contracts == null) position.contracts = 0;
+                if (position.margin == null) position.margin = 0;
+                if (position.unrealizedPNL == null) position.unrealizedPNL = 0;
+                if (position.avgPrice == null) position.avgPrice = 0;
+                if (position.address == null) position.address = sender;
+            }
+
+            // ------------------------------------------------------------
+            // 2) Apply margin
+            // ------------------------------------------------------------
+            const before = position.margin;
+            position.margin = new BigNumber(position.margin || 0)
+                .plus(totalInitialMargin || 0)
+                .decimalPlaces(8)
+                .toNumber();
+
+            console.log(
+                `[MarginMap.setInitialMargin] margin ${before} -> ${position.margin} (delta=${totalInitialMargin}) contracts=${position.contracts}`
+            );
+
+            this.margins.set(sender, position);
+
+            // ------------------------------------------------------------
+            // 3) Record delta
+            // ------------------------------------------------------------
+            await this.recordMarginMapDelta(
+                sender,
+                contractId,
+                position.contracts, // totalPosition
+                0,                  // position delta (this fn is just margin posting)
+                totalInitialMargin, // margin delta
+                0,                  // uPNL
+                position.avgPrice || 0,
+                'initialMargin',
+                block
+            );
+
+            // ------------------------------------------------------------
+            // 4) Persist SAFELY:
+            //    Only persist if we either already had a populated map,
+            //    or we successfully hydrated it. Otherwise we risk wiping DB.
+            // ------------------------------------------------------------
+            if (!wasEmpty || hydrated) {
+                await this.saveMarginMap(true);
+            } else {
+                console.warn(
+                    `[MarginMap.setInitialMargin] SKIP saveMarginMap(true): margins map not hydrated (would risk partial overwrite)`
+                );
+            }
+
+            return position;
         }
-
-        //console.log('margin before '+position.margin)
-        // Update the margin for the existing or new position
-        position.margin = new BigNumber(position.margin)
-        .plus(totalInitialMargin)
-        .decimalPlaces(8)
-        .toNumber();
-        console.log('aftermargin  '+position.margin)
-        // Update the MarginMap with the modified position
-        //if(sender==null){throw new Error()}
-        this.margins.set(sender, position);
-        //console.log('margin should be topped up '+JSON.stringify(position))
-        await this.recordMarginMapDelta(sender, contractId, position.contracts, 0, totalInitialMargin, 0, 0, 'initialMargin', block)
-         // Save changes to the database or your storage solution
-        await this.saveMarginMap(true);
-        return position
-    }
 
             /**
          * Atomically replace all positions for this contract with the final versions
@@ -1693,6 +1768,17 @@ class MarginMap {
             position.averagePrice = null;
             position.unrealizedPNL = 0;
         }
+
+        await this.recordMarginMapDelta(
+            address,
+            contractId,
+            after,        // delta totalPosition
+            contractChange,        // delta position
+            -reduction,            // delta margin
+            0,                     // delta uPNL
+            0,                     // delta avgPrice
+            'deleverage'
+        );
 
         return position;
     }
