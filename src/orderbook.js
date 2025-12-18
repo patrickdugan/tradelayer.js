@@ -2616,7 +2616,6 @@ class Orderbook {
                           delta
                         );
                       }
-                      await this.recordTradeDelta(trade.contractId,trade.buyerAddress,trade.sellerAddress,buyerPnl,sellerPnl,delta,currentBlockHeight,marginMap)
                       await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight);
                     }
                     
@@ -2625,43 +2624,7 @@ class Orderbook {
             }
              return trades
 		}
-		
-        async recordTradeDelta (
-            contractId,
-            buyerAddr,
-            sellerAddr,
-            buyerPnl,
-            sellerPnl,
-            delta,
-            blockHeight,
-            marginMap
-        ) {
-            const totalWinning = BigNumber.sum(
-                buyerPnl.gt(0) ? buyerPnl : 0,
-                sellerPnl.gt(0) ? sellerPnl : 0
-            );
-
-            if (totalWinning.isZero()) {
-                console.warn(`IOU WARNING: positive delta but no winner? delta=${delta}`);
-                return;
-            }
-
-            // Buyer share
-            if (buyerPnl.gt(0)) {
-                const share = delta.times(buyerPnl).div(totalWinning);
-                let pos = await marginMap.getPositionForAddress(buyerAddr, contractId);
-                pos.realizedIOU = (pos.realizedIOU || new BigNumber(0)).plus(share);
-                await marginMap.writePositionToMap(contractId, pos);
-            }
-
-            // Seller share
-            if (sellerPnl.gt(0)) {
-                const share = delta.times(sellerPnl).div(totalWinning);
-                let pos = await marginMap.getPositionForAddress(sellerAddr, contractId);
-                pos.realizedIOU = (pos.realizedIOU || new BigNumber(0)).plus(share);
-                await marginMap.writePositionToMap(contractId, pos);
-            }
-        };
+	
 
         /**
 		 * calculateFee
