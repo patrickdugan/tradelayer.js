@@ -792,6 +792,7 @@ class ContractRegistry {
     }
 
 
+
     static async getPriceAtBlock(contractId, blockHeight) {
         let isOracleContract = await ContractRegistry.isOracleContract(contractId);
         let oracleId = null;
