@@ -1373,12 +1373,8 @@ class Clearing {
       // 1) Load positions
       // ------------------------------------------------------------
       const rawPositions = await marginMap.getAllPositions(contractId);
-      const entries = [...rawPositions.entries()]
-        .sort(([a], [b]) => Clearing.consensusAddressSort(a, b));
 
-      console.log(`[LOAD] rawPositions=${entries.length}`);
-
-      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, entries);
+      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
       let positions = Clearing.getPositionsFromCache(ctxKey);
 
       if (!Array.isArray(positions) || positions.length === 0) {
