@@ -1361,39 +1361,25 @@ class MarginMap {
             return position
     }
     
-    generateLiquidationOrder(position, contractId, total, block) {
-        let sell;
-        if (position.contracts > 0) {
-            sell = true;
-        } else if (position.contracts < 0) {
-            sell = false;
-        } else {
-            return "err:0 contracts";
-        }
-        
-        console.log(total + ' ' + position.contracts);
-        
-        let liquidationSize = position.contracts;
-        if (!total) {
-            liquidationSize = new BigNumber(position.contracts)
-                .dividedBy(2)
-                .decimalPlaces(0, BigNumber.ROUND_UP)
-                .toNumber();
+    generateLiquidationOrder(position, contractId, amount, block) {
+        if (!amount || amount <= 0) {
+            return null;
         }
 
-        let liquidationOrder = {
+        const sell = position.contracts > 0;
+        if (position.contracts === 0) return null;
+
+        const liquidationOrder = {
             address: position.address,
-            contractId: contractId,
-            amount: Math.abs(liquidationSize),
-            price: 0,  // Doesn't matter - isMarket bypasses price check
-            sell: sell,
+            contractId,
+            amount: Math.abs(amount),
+            price: 0,
+            sell,
             isLiq: true,
-            isMarket: true,  // <-- This is the key
+            isMarket: true,
             blockTime: block
         };
 
-        console.log('inside gen liq order ' + total + ' sell=' + sell + ' amount=' + liquidationOrder.amount);
-        
         return liquidationOrder;
     }
 
@@ -1687,6 +1673,17 @@ class MarginMap {
                 block
             );
         }
+
+        await this.recordMarginMapDelta(
+            address,
+            contractId,
+            after,        // delta totalPosition
+            contractChange,        // delta position
+            -reduction,            // delta margin
+            0,                     // delta uPNL
+            0,                     // delta avgPrice
+            'deleverage'
+        );
 
         if (position.contracts === 0) {
             position.bankruptcyPrice = null;

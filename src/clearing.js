@@ -1358,7 +1358,8 @@ class Clearing {
 
    static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, notional, priceInfo) {
 
-      console.log(`\n=== UPDATE MARGIN MAPS: contract=${contractId} block=${blockHeight} ===`);
+      console.log(`\n=== UPDATE MARGIN MAPS START ===`);
+      console.log(`contract=${contractId} block=${blockHeight} inverse=${inverse} notional=${notional}`);
 
       const MarginMap = require('./marginMap.js');
       const Orderbook = require('./orderbook.js');
@@ -1371,36 +1372,46 @@ class Clearing {
       // 1) Load raw positions → init clearing cache
       // ------------------------------------------------------------
       const rawPositions = await marginMap.getAllPositions(contractId);
-      const entries = [...rawPositions.entries()]
-    .sort(([addrA], [addrB]) => Clearing.consensusAddressSort(addrA, addrB));
-      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, entries);
+      console.log(`[LOAD] rawPositions.size=${rawPositions?.size}`);
+      const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
+      console.log(`[CACHE] initPositionCache ctxKey=${ctxKey}`);
+
       let positions = Clearing.getPositionsFromCache(ctxKey);
+      console.log(`[CACHE] positions.length=${Array.isArray(positions) ? positions.length : 'NOT ARRAY'}`);
 
       if (!Array.isArray(positions) || positions.length === 0) {
+        console.warn(`[EXIT] No positions in cache, flushing`);
         Clearing.flushPositionCache(ctxKey);
         return { positions: [], liqEvents: [], systemicLoss: new BigNumber(0), pnlDelta: new BigNumber(0) };
       }
 
       // ------------------------------------------------------------
-      // 2) Resolve priceInfo ONCE
+      // 2) Resolve priceInfo
       // ------------------------------------------------------------
       let blob = priceInfo;
       if (!blob || blob.thisPrice == null) {
         blob = await Clearing.isPriceUpdatedForBlockHeight(contractId, blockHeight);
+        console.log(`[PRICE] resolved via DB`, blob);
+      } else {
+        console.log(`[PRICE] provided priceInfo`, blob);
       }
 
       let lastPrice = blob?.lastPrice ?? null;
       let thisPrice = blob?.thisPrice ?? null;
 
-      // If we somehow have no last mark, we cannot do a consistent mark-to-mark
+      console.log(`[PRICE] last=${lastPrice} this=${thisPrice}`);
+
       if (lastPrice == null) {
+        console.warn(`[EXIT] lastPrice null → cannot clear`);
         const finalPositions = Clearing.flushPositionCache(ctxKey);
         await marginMap.mergePositions(finalPositions, contractId, true);
         return { positions, liqEvents: [], systemicLoss: new BigNumber(0), pnlDelta: new BigNumber(0) };
       }
 
-      // If thisPrice missing, treat as no move (shouldn’t happen when called on updated marks, but safe)
-      if (thisPrice == null) thisPrice = lastPrice;
+      if (thisPrice == null) {
+        console.warn(`[PRICE] thisPrice null, using lastPrice`);
+        thisPrice = lastPrice;
+      }
 
       await Clearing.normalizePositionMarks(
         positions,
@@ -1410,7 +1421,7 @@ class Clearing {
         blockHeight
       );
 
-      console.log(`📈 Price diff: last=${lastPrice} → this=${thisPrice}`);
+      console.log(`📈 PRICE MOVE ${lastPrice} → ${thisPrice}`);
 
       // ------------------------------------------------------------
       // 3) Accumulators
@@ -1423,14 +1434,22 @@ class Clearing {
       const liqQueue  = [];
 
       // ------------------------------------------------------------
-      // 4) FIRST PASS — Compute mark-to-mark PNL and check solvency
+      // 4) FIRST PASS — PNL + solvency
       // ------------------------------------------------------------
       for (const pos of positions) {
-        if (!pos?.contracts) continue;
+
+        if (!pos) {
+          console.warn(`[SKIP] null position`);
+          continue;
+        }
+
+        if (!pos.contracts || pos.contracts === 0) {
+          console.log(`[SKIP] addr=${pos.address} contracts=0`);
+          continue;
+        }
 
         const tally = await Tally.getTally(pos.address, collateralId);
 
-        // PURE mark-to-mark on full position (new exposure was already tied-off to lastMark)
         const pnl = Clearing.calculateClearingPNL({
           oldContracts: pos.contracts,
           previousMarkPrice: lastPrice,
@@ -1440,12 +1459,13 @@ class Clearing {
         });
 
         console.log(
-          `[CLEARING] addr=${pos.address} c=${pos.contracts} mark=${lastPrice}->${thisPrice} pnl=${pnl.toFixed()}`
+          `[PNL] addr=${pos.address} contracts=${pos.contracts} pnl=${pnl.toFixed()} ` +
+          `avail=${tally.available} margin=${tally.margin}`
         );
 
-        // PROFIT: defer credit until after ADL, because size may change
         if (pnl.gt(0)) {
           pos._wasProfitable = true;
+          console.log(`[DEFER PROFIT] addr=${pos.address}`);
           continue;
         }
 
@@ -1455,21 +1475,28 @@ class Clearing {
         const maintMargin = margin.div(2);
         const coverage    = available.plus(maintMargin);
 
+        console.log(
+          `[LOSS CHECK] addr=${pos.address} loss=${loss.toFixed()} ` +
+          `coverage=${coverage.toFixed()}`
+        );
+
         totalNeg = totalNeg.plus(loss);
 
         if (coverage.gte(loss)) {
-          // -----------------------------
-          // SOLVENT → PAY LOSS
-          // -----------------------------
           const takeAvail  = BigNumber.min(available, loss);
           const takeMargin = loss.minus(takeAvail);
+
+          console.log(
+            `[CLEARING LOSS] addr=${pos.address} ` +
+            `takeAvail=${takeAvail.toFixed()} takeMargin=${takeMargin.toFixed()}`
+          );
 
           await Tally.updateBalance(
             pos.address,
             collateralId,
-            takeAvail.negated().toNumber(),   // availableChange
+            takeAvail.negated().toNumber(),
             0,
-            takeMargin.negated().toNumber(),  // marginChange
+            takeMargin.negated().toNumber(),
             0,
             'clearingLoss',
             blockHeight
@@ -1477,10 +1504,11 @@ class Clearing {
           continue;
         }
 
-        // -----------------------------
-        // INSUFFICIENT FUNDS → LIQUIDATE
-        // -----------------------------
         const shortfall = loss.minus(coverage);
+
+        console.warn(
+          `[LIQ ENQUEUE] addr=${pos.address} shortfall=${shortfall.toFixed()}`
+        );
 
         liqQueue.push({
           address: pos.address,
@@ -1491,14 +1519,17 @@ class Clearing {
         });
       }
 
+      console.log(`[LIQ QUEUE] size=${liqQueue.length}`);
+
       // ------------------------------------------------------------
-      // 5) SECOND PASS — Process liquidation (handleLiquidation)
+      // 5) SECOND PASS — Liquidations
       // ------------------------------------------------------------
       const liqEvents = [];
 
       for (const q of liqQueue) {
-        const tally = await Tally.getTally(q.address, collateralId);
+        console.log(`[LIQ START] addr=${q.address}`);
 
+        const tally = await Tally.getTally(q.address, collateralId);
         const liquidationType = q.coverage.gt(0) ? "partial" : "total";
 
         const liq = await Clearing.handleLiquidation(
@@ -1511,18 +1542,19 @@ class Clearing {
           inverse,
           collateralId,
           liquidationType,
-          q.shortfall.toNumber(),   // dent (positive)
+          q.shortfall.toNumber(),
           notional,
           thisPrice,
           true,
-          q.shortfall.toNumber(),   // markShortfall
+          q.shortfall.toNumber(),
           tally
-          // (if your handleLiquidation signature still has extra args, keep them here as you had)
         );
+
+        console.log(`[LIQ RESULT] addr=${q.address}`, liq);
 
         if (!liq) continue;
 
-        systemicLoss = systemicLoss.plus(liq.systemicLoss);
+        systemicLoss = systemicLoss.plus(liq.systemicLoss || 0);
 
         liqEvents.push({
           address: q.address,
@@ -1536,22 +1568,23 @@ class Clearing {
         });
 
         if (liq.counterparties?.length > 0) {
+          console.log(`[LIQ UPDATE POSITIONS] counterparties=`, liq.counterparties);
           positions = Clearing.updatePositions(positions, liq.counterparties);
         }
       }
 
       // ------------------------------------------------------------
-      // 6) THIRD PASS — Credit profits (post-ADL sizes)
+      // 6) THIRD PASS — Profits
       // ------------------------------------------------------------
       positions = Clearing.getPositionsFromCache(ctxKey);
+      console.log(`[PROFIT PASS] positions.length=${positions.length}`);
 
       for (const pos of positions) {
-        if (!pos?.contracts) {
+        if (!pos?.contracts || pos.contracts === 0) {
           delete pos._wasProfitable;
           continue;
         }
 
-        // Recompute profit with current post-ADL size
         const profit = Clearing.calculateClearingPNL({
           oldContracts: pos.contracts,
           previousMarkPrice: lastPrice,
@@ -1561,6 +1594,8 @@ class Clearing {
         });
 
         if (profit.gt(0)) {
+          console.log(`[CLEARING PROFIT] addr=${pos.address} profit=${profit.toFixed()}`);
+
           totalPos = totalPos.plus(profit);
 
           await Tally.updateBalance(
@@ -1577,19 +1612,28 @@ class Clearing {
       }
 
       // ------------------------------------------------------------
-      // 7) SYSTEMIC ACCOUNTING
+      // 7) SYSTEMIC
       // ------------------------------------------------------------
       totalNeg = totalNeg.minus(systemicLoss);
       const pnlDelta = totalPos.minus(totalNeg);
+
+      console.log(
+        `[SYSTEMIC] totalPos=${totalPos.toFixed()} totalNeg=${totalNeg.toFixed()} ` +
+        `systemicLoss=${systemicLoss.toFixed()} pnlDelta=${pnlDelta.toFixed()}`
+      );
 
       // ------------------------------------------------------------
       // 8) WRITE POSITIONS
       // ------------------------------------------------------------
       const finalPositions = Clearing.flushPositionCache(ctxKey);
+      console.log(`[WRITE] finalPositions.length=${finalPositions.length}`);
       await marginMap.mergePositions(finalPositions, contractId, true);
+
+      console.log(`=== UPDATE MARGIN MAPS END ===\n`);
 
       return { positions, liqEvents, systemicLoss, pnlDelta };
     }
+
 
     static async getMarkTradeWindow(priceInfo,contractId) {
         // priceInfo is the object you now return from isPriceUpdatedForBlockHeight
@@ -1955,11 +1999,11 @@ class Clearing {
         // 4. Estimate book fill BEFORE inserting order
         //------------------------------------------------------------
         const splat = await orderbook.estimateLiquidation(liq, notional, inverse);
-        console.log("🔎 estimateLiquidation →", splat);
+        console.log("🔎 estimateLiquidation →", JSON.stringify(splat));
+        // Allow partial on-book fill at/above liq.price.
+        // "goodFilledSize" is already the safe-at-or-better size.
+        const canObFill = (splat && Number(splat.goodFilledSize || 0) > 0);
 
-        const canFillSolvently =
-            splat.goodFilledSize > 0 &&
-            !splat.filledBelowLiqPrice;
 
         const A = new Big(tallySnapshot.available || 0);
         const M = new Big(tallySnapshot.margin || 0);
@@ -1994,7 +2038,7 @@ class Clearing {
         // ------------------------------------------------------------
         let obFill = new Big(0);
 
-        if (canFillSolvently) {
+        if (canObFill) {
             const obKey = contractId.toString();
             let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
 
