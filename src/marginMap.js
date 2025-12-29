@@ -1436,27 +1436,29 @@ class MarginMap {
             return position
     }
     
-    generateLiquidationOrder(position, contractId, amount, block) {
-        if (!amount || amount <= 0) {
-            return null;
-        }
-
-        const sell = position.contracts > 0;
+    generateLiquidationOrder(position, contractId, amount, block, lastPrice, bankruptcyPrice) {
+        if (!amount || amount <= 0) return null;
         if (position.contracts === 0) return null;
 
-        const liquidationOrder = {
+        const sell = position.contracts > 0;
+
+        const equity = new BigNumber(position.margin || 0)
+            .plus(position.available || 0);
+
+        if (equity.lte(0)) return null;
+
+        return {
             address: position.address,
             contractId,
             amount: Math.abs(amount),
-            price: 0,
+            price: bankruptcyPrice.toNumber(),   // 🔑 THE boundary
             sell,
             isLiq: true,
-            isMarket: true,
+            isMarket: true,            // market-style but bounded
             blockTime: block
         };
-
-        return liquidationOrder;
     }
+
 
    async saveLiquidationOrders(contractId, position, order,reason,blockHeight,liquidationLoss,contractsDeleveraged, realizedLiquidation, delverageResults, infoBlob) {
         try {

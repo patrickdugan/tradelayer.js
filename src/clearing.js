@@ -1813,53 +1813,62 @@ class Clearing {
 
     // Make sure BigNumber is imported:
     // const BigNumber = require("bignumber.js");
-    static computeLiquidationPriceFromLoss(markPrice, systemicLoss, contracts, notional, inverse){
-      // We'll use feePercent = 0 and high internal precision
-      const feePercent = new BigNumber(0);
-      const PRECISION = 30; // high precision for internal calculations
+      static computeLiquidationPriceFromLoss(
+        lastPrice,
+        equity,
+        contracts,
+        notional,
+        inverse
+      ) {
+        const PRECISION = 30;
 
-      const BNMark = new BigNumber(markPrice);
-      const BNSystemicLoss = new BigNumber(systemicLoss);
-      const BNContracts = new BigNumber(contracts);
-      const BNNotional = new BigNumber(notional);
+        const BNLast = new BigNumber(lastPrice);
+        const BNEq = new BigNumber(equity);
+        const BNContracts = new BigNumber(contracts);
+        const BNNotional = new BigNumber(notional);
 
-      if (!inverse) {
-        let baseLiqPrice;
-        if (BNContracts.gt(0)) {
-          // For long positions:
-          // liqPrice = markPrice - (systemicLoss / (contracts * notional))
-          baseLiqPrice = BNMark.minus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
-          // Fee adjustment is trivial with feePercent 0, so just return with high precision:
-          console.log('baseLiq price >0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
-          return baseLiqPrice.decimalPlaces(PRECISION);
-        } else if (BNContracts.lt(0)) {
-          // For short positions:
-          // liqPrice = markPrice + (systemicLoss / (|contracts| * notional))
-          baseLiqPrice = BNMark.plus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
-          console.log('baseLiq price <0 '+baseLiqPrice+' '+markPrice+' '+systemicLoss+' '+contracts+' '+notional)
-          return baseLiqPrice.decimalPlaces(PRECISION);
+        if (BNContracts.isZero() || BNEq.lte(0)) {
+          return BNLast.decimalPlaces(PRECISION);
         }
-        return null;
-      } else {
-        let baseLiqPrice;
-        if (BNContracts.gt(0)) {
-          // Inverse Long:
-          // 1/liqPrice = 1/markPrice + (systemicLoss / (contracts * notional))
-          const invLiq = new BigNumber(1).dividedBy(BNMark)
-                          .plus(BNSystemicLoss.dividedBy(BNContracts.multipliedBy(BNNotional)));
-          baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-          return baseLiqPrice.decimalPlaces(PRECISION);
-        } else if (BNContracts.lt(0)) {
-          // Inverse Short:
-          // 1/liqPrice = 1/markPrice - (systemicLoss / (|contracts| * notional))
-          const invLiq = new BigNumber(1).dividedBy(BNMark)
-                          .minus(BNSystemicLoss.dividedBy(BNContracts.absoluteValue().multipliedBy(BNNotional)));
-          baseLiqPrice = new BigNumber(1).dividedBy(invLiq);
-          return baseLiqPrice.decimalPlaces(PRECISION);
+
+        // -------------------------------
+        // LINEAR CONTRACTS
+        // PnL = contracts × notional × (price − lastPrice)
+        // -------------------------------
+        if (!inverse) {
+          if (BNContracts.gt(0)) {
+            // Long → bankruptcy below lastPrice
+            return BNLast
+              .minus(BNEq.div(BNContracts.multipliedBy(BNNotional)))
+              .decimalPlaces(PRECISION);
+          } else {
+            // Short → bankruptcy above lastPrice
+            return BNLast
+              .plus(BNEq.div(BNContracts.absoluteValue().multipliedBy(BNNotional)))
+              .decimalPlaces(PRECISION);
+          }
         }
-        return null;
+
+        // -------------------------------
+        // INVERSE CONTRACTS
+        // PnL = contracts × notional × (1/lastPrice − 1/price)
+        // -------------------------------
+        const invLast = new BigNumber(1).dividedBy(BNLast);
+
+        if (BNContracts.gt(0)) {
+          // Inverse long → bankruptcy at lower price
+          const invBkr = invLast.plus(
+            BNEq.div(BNContracts.multipliedBy(BNNotional))
+          );
+          return new BigNumber(1).dividedBy(invBkr).decimalPlaces(PRECISION);
+        } else {
+          // Inverse short → bankruptcy at higher price
+          const invBkr = invLast.minus(
+            BNEq.div(BNContracts.absoluteValue().multipliedBy(BNNotional))
+          );
+          return new BigNumber(1).dividedBy(invBkr).decimalPlaces(PRECISION);
+        }
       }
-    }
 
     static getOpenedByAddressFromTrades(relevantTrades) {
         const openedByAddress = new Map();
@@ -2011,7 +2020,9 @@ class Clearing {
           position,
           contractId,
           liquidationType === "total",
-          blockHeight
+          blockHeight,
+          markPrice,
+          computedLiqPrice
         );
 
         if (!liq || liq === "err:0 contracts") return null;
@@ -2049,6 +2060,7 @@ class Clearing {
 
         let markImprovement = 0;
         if (canObFill) {
+          console.log('inside liquidation order drop!')
           const obKey = contractId.toString();
           let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
 
@@ -2060,10 +2072,12 @@ class Clearing {
           const safeSize = Number(splat.goodFilledSize || 0);
           const liqOb = { ...liq, amount: safeSize };
 
+          console.log('safe size!? '+safeSize)
+
           obData = await orderbook.insertOrder(liqOb, obData, liqOb.sell, true);
 
           const matchResult = await orderbook.matchContractOrders(obData);
-
+          console.log('liq match result '+JSON.stringify(matchResult))
           await orderbook.saveOrderBook(matchResult.orderBook, obKey);
 
            // PATCH 1: set obFill to what actually matched (best-effort from match objects)
@@ -2084,50 +2098,7 @@ class Clearing {
 
           // Never exceed requested liqAmount
           obFill = new Big(Math.min(filledFromMatches, liqAmount)).dp(8);
-
-
-        // ------------------------------------------------------------
-        // OB MARK-IMPROVEMENT REFUND (OB FILLS ONLY)
-        // ------------------------------------------------------------
-
-        // last mark used for prior clearingLoss (must be previous block mark)
-        const lastMark = markPrice;
-
-
-        if (obFill.gt(0)){
-          const side = position.contracts > 0 ? 1 : -1;
-
-          for (const cp of matchResult.matches) {
-            if (!cp.price || !cp.amount) continue;
-
-            // improvement relative to mark
-            const priceDiff = (lastMark - cp.price) * side;
-            if (priceDiff <= 0) continue;
-
-            markImprovement += priceDiff * cp.amount * notional;
-          }
-        }
-
-        }
-
-        // optional safety clamp if you track cumulative mark loss
-        // markImprovement = Math.min(markImprovement, position.markLossTaken ?? Infinity);
-
-        if (markImprovement > 0) {
-          await Tally.updateBalance(
-            liquidatingAddress,
-            collateralId,
-            markImprovement,
-            0,
-            0,
-            0,
-            'liqMarkRefund',
-            blockHeight
-          );
-
-          console.log(
-            `[LIQ MARK REFUND] addr=${liquidatingAddress} refund=${markImprovement.toFixed()}`
-          );
+          console.log()
         }
 
 

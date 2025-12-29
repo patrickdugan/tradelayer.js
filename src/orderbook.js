@@ -1222,6 +1222,7 @@ class Orderbook {
 
             return matchResult;
         }
+
     async estimateLiquidation(liq, notional, inverse, tally, contracts, lastPrice) {
     const { amount, sell, liquidatingAddress } = liq;
     const size = Math.ceil(Math.abs(Number(amount || 0)));
@@ -1366,7 +1367,7 @@ class Orderbook {
       // sort sell orders ascending by price and ascending by blockTime.
       //
       // LITERAL PATCH: add a small priority bump for isMarket without touching existing logic
-      orderBook.buy.sort((a, b) =>
+      /*orderBook.buy.sort((a, b) =>
         ((b.isMarket === true) - (a.isMarket === true)) ||
         BigNumber(b.price).comparedTo(a.price) ||
         a.blockTime - b.blockTime
@@ -1375,7 +1376,7 @@ class Orderbook {
         ((b.isMarket === true) - (a.isMarket === true)) ||
         BigNumber(a.price).comparedTo(b.price) ||
         a.blockTime - b.blockTime
-      );
+      );*/
 
       // Process a round of matching
       for (let i = 0; i < maxIterations; i++) {
