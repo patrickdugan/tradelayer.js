@@ -1224,7 +1224,7 @@ class Orderbook {
         }
     
         // In orderbook.js inside class Orderbook
-        async estimateLiquidation(liq, notional, inverse, tally, contractBudgetOverride) {
+        async estimateLiquidation(liq, notional, inverse, tally, lossBudgetOverride) {
             const { amount, sell, liquidatingAddress } = liq;
 
             // 🔒 enforce integer liquidation target (round UP)
@@ -1240,26 +1240,26 @@ class Orderbook {
                 fills: []
             };
 
-            if (size <= 0) return result;
-
-            // --------------------------------------------------
-            // LOSS BUDGET (CONTRACT COUNT ONLY)
-            // --------------------------------------------------
-            // If override is supplied, it is authoritative.
-            // Otherwise, estimator allows full liq size.
-            // (Economic constraints are handled elsewhere.)
+            // --------------------------------------------
+            // Loss budget (RESIDUAL-AWARE)
+            // If override is provided, it MUST match
+            // handleLiquidation seizure semantics.
+            // --------------------------------------------
             let lossBudget;
-            if (contractBudgetOverride !== undefined && contractBudgetOverride !== null) {
-                lossBudget = new BigNumber(contractBudgetOverride);
+
+            if (lossBudgetOverride !== undefined && lossBudgetOverride !== null) {
+                lossBudget = new BigNumber(lossBudgetOverride || 0);
             } else {
-                lossBudget = new BigNumber(size);
+                // backward-compatible fallback
+                lossBudget = new BigNumber(tally?.margin || 0)
+                    .plus(tally?.available || 0);
             }
 
             if (lossBudget.lte(0)) return result;
 
-            // --------------------------------------------------
+            // --------------------------------------------
             // Load orderbook for THIS instance key
-            // --------------------------------------------------
+            // --------------------------------------------
             const key = this.orderBookKey;
             let ob = this.orderBooks[key];
             if (!ob) {
@@ -1272,10 +1272,11 @@ class Orderbook {
 
             let remaining = new BigNumber(size);
             let weightedPriceSum = new BigNumber(0);
+            const BNNotional = new BigNumber(notional);
 
-            // --------------------------------------------------
-            // Route contracts through the book (integer-only)
-            // --------------------------------------------------
+            // --------------------------------------------
+            // Spend budget through the book (integer-only)
+            // --------------------------------------------
             for (const level of orderbookSide) {
                 if (remaining.lte(0)) break;
                 if (lossBudget.lte(0)) break;
@@ -1286,19 +1287,44 @@ class Orderbook {
 
                 if (px.lte(0) || rawSz.lte(0)) continue;
 
-                // 🔒 book truth: integer size
+                // 🔒 level size must be integer, round DOWN (book truth)
                 const levelSz = rawSz.integerValue(BigNumber.ROUND_FLOOR);
                 if (levelSz.lte(0)) continue;
 
-                const take = BigNumber.min(remaining, levelSz, lossBudget);
-                if (take.lte(0)) break;
+                const take = BigNumber.min(remaining, levelSz);
 
-                // "Cost" is simply contracts consumed
-                result.goodFilledSize += take.toNumber();
-                weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
+                const cost = inverse
+                    ? take.multipliedBy(BNNotional).dividedBy(px)
+                    : take.multipliedBy(BNNotional).multipliedBy(px);
 
-                remaining = remaining.minus(take);
-                lossBudget = lossBudget.minus(take);
+                if (cost.lte(lossBudget)) {
+                    // full integer take
+                    result.goodFilledSize += take.toNumber();
+                    weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
+                    remaining = remaining.minus(take);
+                    lossBudget = lossBudget.minus(cost);
+                } else {
+                    // --------------------------------------------
+                    // Partial fill: round UP to whole integer
+                    // --------------------------------------------
+                    const affordableRaw = inverse
+                        ? lossBudget.multipliedBy(px).dividedBy(BNNotional)
+                        : lossBudget.dividedBy(px.multipliedBy(BNNotional));
+
+                    // 🔒 ceil but cap to remaining & level
+                    let affordable = affordableRaw.integerValue(BigNumber.ROUND_CEIL);
+                    affordable = BigNumber.min(affordable, take, remaining);
+
+                    if (affordable.lte(0)) break;
+
+                    result.goodFilledSize += affordable.toNumber();
+                    weightedPriceSum = weightedPriceSum.plus(affordable.multipliedBy(px));
+                    remaining = remaining.minus(affordable);
+
+                    // budget exhausted by definition
+                    lossBudget = new BigNumber(0);
+                    break;
+                }
             }
 
             result.filledSize = result.goodFilledSize;
@@ -1316,7 +1342,6 @@ class Orderbook {
 
             return result;
         }
-        
 
 
 
