@@ -2051,47 +2051,47 @@ static async updateMarginMaps(blockHeight, contractId, collateralId, inverse, no
       }
 
       // ------------------------------------------------------------
-// OB MARK-IMPROVEMENT REFUND (OB FILLS ONLY)
-// ------------------------------------------------------------
+        // OB MARK-IMPROVEMENT REFUND (OB FILLS ONLY)
+        // ------------------------------------------------------------
 
-// last mark used for prior clearingLoss (must be previous block mark)
-const lastMark = position.lastMark ?? markPrice;
+        // last mark used for prior clearingLoss (must be previous block mark)
+        const lastMark = position.lastMark ?? markPrice;
 
-let markImprovement = 0;
+        let markImprovement = 0;
 
-if (obFill.gt(0) && Array.isArray(result.counterparties)) {
-  const side = position.contracts > 0 ? 1 : -1;
+        if (obFill.gt(0) && Array.isArray(result.counterparties)) {
+          const side = position.contracts > 0 ? 1 : -1;
 
-  for (const cp of result.counterparties) {
-    if (!cp.price || !cp.amount) continue;
+          for (const cp of result.counterparties) {
+            if (!cp.price || !cp.amount) continue;
 
-    // improvement relative to mark
-    const priceDiff = (lastMark - cp.price) * side;
-    if (priceDiff <= 0) continue;
+            // improvement relative to mark
+            const priceDiff = (lastMark - cp.price) * side;
+            if (priceDiff <= 0) continue;
 
-    markImprovement += priceDiff * cp.amount * notional;
-  }
-}
+            markImprovement += priceDiff * cp.amount * notional;
+          }
+        }
 
-// optional safety clamp if you track cumulative mark loss
-// markImprovement = Math.min(markImprovement, position.markLossTaken ?? Infinity);
+        // optional safety clamp if you track cumulative mark loss
+        // markImprovement = Math.min(markImprovement, position.markLossTaken ?? Infinity);
 
-if (markImprovement > 0) {
-  await Tally.updateBalance(
-    liquidatingAddress,
-    collateralId,
-    markImprovement,
-    0,
-    0,
-    0,
-    'liqMarkRefund',
-    blockHeight
-  );
+        if (markImprovement > 0) {
+          await Tally.updateBalance(
+            liquidatingAddress,
+            collateralId,
+            markImprovement,
+            0,
+            0,
+            0,
+            'liqMarkRefund',
+            blockHeight
+          );
 
-  console.log(
-    `[LIQ MARK REFUND] addr=${liquidatingAddress} refund=${markImprovement.toFixed()}`
-  );
-}
+          console.log(
+            `[LIQ MARK REFUND] addr=${liquidatingAddress} refund=${markImprovement.toFixed()}`
+          );
+        }
 
 
       //------------------------------------------------------------
