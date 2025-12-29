@@ -1387,37 +1387,36 @@ class Clearing {
         return { positions: [], liqEvents: [], systemicLoss: new BigNumber(0), pnlDelta: new BigNumber(0) };
       }
 
+
       // ------------------------------------------------------------
-      // 2) Resolve price blob
+      // 2) Resolve mark prices (use priceInfo, not blob)
       // ------------------------------------------------------------
-      const lastPrice = new BigNumber(priceInfo?.lastPrice || priceInfo?.previousMarkPrice || priceInfo?.previousPrice || 0);
-      const thisPrice = new BigNumber(priceInfo?.thisPrice || priceInfo?.markPrice || priceInfo?.currentMarkPrice || 0);
+      console.log(`[PRICE] provided priceInfo`, priceInfo);
 
-      if (!lastPrice.gt(0) || !thisPrice.gt(0)) {
-        console.warn(`[SKIP] invalid mark prices last=${lastPrice.toFixed()} this=${thisPrice.toFixed()}`);
-        return { positions, liqEvents: [], systemicLoss: 0, pnlDelta: 0 };
-      }
+      const lastPrice = new BigNumber(
+        priceInfo?.lastPrice ??
+        0
+      );
 
+      let thisPrice = new BigNumber(
+        priceInfo?.thisPrice ??
+        0
+      );
 
-      const lastPrice = blob?.lastPrice ?? null;
-      let thisPrice   = blob?.thisPrice ?? null;
+      console.log(`[PRICE] last=${lastPrice.toFixed()} this=${thisPrice.toFixed()}`);
 
-      console.log(`[PRICE] blob=`, blob);
-      console.log(`[PRICE] last=${lastPrice} this=${thisPrice}`);
-
-      if (lastPrice == null) {
+      if (!lastPrice.gt(0)) {
         console.log('[EXIT] no lastPrice');
         const finalPositions = Clearing.flushPositionCache(ctxKey);
         await marginMap.mergePositions(finalPositions, contractId, true);
         return { positions, liqEvents: [], systemicLoss: new BigNumber(0), pnlDelta: new BigNumber(0) };
       }
 
-      if (thisPrice == null) {
-        console.log('[WARN] thisPrice null, setting = lastPrice');
+      // If we didn't get a fresh mark for "this", settle using lastPrice for this block
+      if (!thisPrice.gt(0)) {
+        console.log('[WARN] thisPrice null/0, setting = lastPrice');
         thisPrice = lastPrice;
       }
-
-      console.log(`[PRICE DELTA] ${lastPrice} -> ${thisPrice}`);
 
       // ------------------------------------------------------------
       // 3) Setup totals + orderbook

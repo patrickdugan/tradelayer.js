@@ -2049,9 +2049,10 @@ class Orderbook {
                     // Load the margin map for the given series ID and block height
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
-                    const lastPrice = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight-1)
+                    let lastPrice = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight-1)
+                    const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(match.sellOrder.contractId,currentBlockHeight)
+                    if(isLiquidation){lastPrice=priceInfo.lastPrice}
                     match.inverse = isInverse
-
                     let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
                     const blob = await ContractRegistry.getNotionalValue(match.sellOrder.contractId,match.tradePrice)
                     const notionalValue = blob.notionalValue
