@@ -1291,7 +1291,7 @@ class Orderbook {
 
     let remaining = new BigNumber(size);
     let weightedPriceSum = new BigNumber(0);
-    let lossBudget = totalEquity.clone();
+    let lossBudget = totalEquity;
 
     for (const level of orderbookSide) {
         if (remaining.lte(0)) break;
