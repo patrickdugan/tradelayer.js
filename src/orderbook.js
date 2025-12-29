@@ -1226,9 +1226,10 @@ class Orderbook {
         // In orderbook.js inside class Orderbook
 
         async estimateLiquidation(liq, notional, inverse, tally) {
-            const { amount, sell } = liq;
+            const { amount, sell, liquidatingAddress } = liq;
 
-            const size = Math.abs(Number(amount || 0));
+            // 🔒 enforce integer liquidation target (round UP)
+            const size = Math.ceil(Math.abs(Number(amount || 0)));
 
             const result = {
                 filled: false,
@@ -1239,8 +1240,6 @@ class Orderbook {
                 avgFillPrice: null,
                 fills: []
             };
-
-            if (!size) return result;
 
             // --------------------------------------------
             // Loss budget: TALLY ONLY
@@ -1268,53 +1267,62 @@ class Orderbook {
             const BNNotional = new BigNumber(notional);
 
             // --------------------------------------------
-            // Spend budget through the book (no avgEntry PnL)
-            // cost(linear)  = size * notional * price
-            // cost(inverse) = size * notional / price
+            // Spend budget through the book (integer-only)
             // --------------------------------------------
             for (const level of orderbookSide) {
                 if (remaining.lte(0)) break;
                 if (lossBudget.lte(0)) break;
+                if (level.sender && level.sender === liquidatingAddress) continue;
 
                 const px = new BigNumber(level.price || 0);
-                const sz = new BigNumber(level.size ?? level.amount ?? 0);
-                if (px.lte(0) || sz.lte(0)) continue;
+                const rawSz = new BigNumber(level.size ?? level.amount ?? 0);
 
-                const take = BigNumber.min(remaining, sz);
+                if (px.lte(0) || rawSz.lte(0)) continue;
+
+                // 🔒 level size must be integer, round DOWN (book truth)
+                const levelSz = rawSz.integerValue(BigNumber.ROUND_FLOOR);
+                if (levelSz.lte(0)) continue;
+
+                const take = BigNumber.min(remaining, levelSz);
 
                 const cost = inverse
-                    ? take.multipliedBy(BNNotional).dividedBy(px)        // inverse
-                    : take.multipliedBy(BNNotional).multipliedBy(px);    // linear
+                    ? take.multipliedBy(BNNotional).dividedBy(px)
+                    : take.multipliedBy(BNNotional).multipliedBy(px);
 
                 if (cost.lte(lossBudget)) {
-                    // take full level
+                    // full integer take
                     result.goodFilledSize += take.toNumber();
                     weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
                     remaining = remaining.minus(take);
                     lossBudget = lossBudget.minus(cost);
                 } else {
-                    // partial at this level
-                    const affordable = inverse
+                    // --------------------------------------------
+                    // Partial fill: round UP to whole integer
+                    // --------------------------------------------
+                    const affordableRaw = inverse
                         ? lossBudget.multipliedBy(px).dividedBy(BNNotional)
                         : lossBudget.dividedBy(px.multipliedBy(BNNotional));
 
+                    // 🔒 ceil but cap to remaining & level
+                    let affordable = affordableRaw.integerValue(BigNumber.ROUND_CEIL);
+                    affordable = BigNumber.min(affordable, take, remaining);
+
                     if (affordable.lte(0)) break;
 
-                    const partial = BigNumber.min(affordable, take);
-                    if (partial.lte(0)) break;
+                    result.goodFilledSize += affordable.toNumber();
+                    weightedPriceSum = weightedPriceSum.plus(affordable.multipliedBy(px));
+                    remaining = remaining.minus(affordable);
 
-                    result.goodFilledSize += partial.toNumber();
-                    weightedPriceSum = weightedPriceSum.plus(partial.multipliedBy(px));
-                    remaining = remaining.minus(partial);
-
-                    // budget fully spent
+                    // budget exhausted by definition
                     lossBudget = new BigNumber(0);
                     break;
                 }
             }
 
             result.filledSize = result.goodFilledSize;
-            result.remainder = new BigNumber(size).minus(result.goodFilledSize).toNumber();
+            result.remainder = new BigNumber(size)
+                .minus(result.goodFilledSize)
+                .toNumber();
 
             if (result.goodFilledSize > 0) {
                 result.filled = true;
@@ -1326,6 +1334,7 @@ class Orderbook {
 
             return result;
         }
+
 
 
     async matchContractOrders(orderBook) {

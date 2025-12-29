@@ -2047,6 +2047,7 @@ class Clearing {
         //------------------------------------------------------------
         let obFill = new Big(0);
 
+        let markImprovement = 0;
         if (canObFill) {
           const obKey = contractId.toString();
           let obData = orderbook.orderBooks[obKey] || { buy: [], sell: [] };
@@ -2083,7 +2084,7 @@ class Clearing {
 
           // Never exceed requested liqAmount
           obFill = new Big(Math.min(filledFromMatches, liqAmount)).dp(8);
-        }
+
 
         // ------------------------------------------------------------
         // OB MARK-IMPROVEMENT REFUND (OB FILLS ONLY)
@@ -2092,9 +2093,8 @@ class Clearing {
         // last mark used for prior clearingLoss (must be previous block mark)
         const lastMark = markPrice;
 
-        let markImprovement = 0;
 
-        if (obFill.gt(0) && Array.isArray(matchResult.matches)) {
+        if (obFill.gt(0)){
           const side = position.contracts > 0 ? 1 : -1;
 
           for (const cp of matchResult.matches) {
@@ -2106,6 +2106,8 @@ class Clearing {
 
             markImprovement += priceDiff * cp.amount * notional;
           }
+        }
+
         }
 
         // optional safety clamp if you track cumulative mark loss
@@ -2241,6 +2243,7 @@ class Clearing {
         //------------------------------------------------------------
         // 14. Zero out liquidated position
         //------------------------------------------------------------
+        console.log('zero out liqd addr '+liquidatingAddress+' '+ctxKey)
         Clearing.updatePositionInCache(ctxKey, liquidatingAddress, old => ({
           ...old,
           contracts: 0,
