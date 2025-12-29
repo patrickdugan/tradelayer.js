@@ -1222,127 +1222,135 @@ class Orderbook {
 
             return matchResult;
         }
+    async estimateLiquidation(liq, notional, inverse, tally, contracts, lastPrice) {
+    const { amount, sell, liquidatingAddress } = liq;
+    const size = Math.ceil(Math.abs(Number(amount || 0)));
+
+    const result = {
+        filled: false,
+        filledSize: 0,
+        goodFilledSize: 0,
+        badFilledSize: 0,
+        remainder: size,
+        avgFillPrice: null,
+        bankruptcyPrice: null,
+        fills: []
+    };
+
+    // --------------------------------------------
+    // Calculate TRUE bankruptcy price from lastPrice
+    // --------------------------------------------
+    const totalEquity = new BigNumber(tally?.margin || 0)
+        .plus(tally?.available || 0);
     
-        // In orderbook.js inside class Orderbook
-        async estimateLiquidation(liq, notional, inverse, tally, lossBudgetOverride) {
-            const { amount, sell, liquidatingAddress } = liq;
+    if (totalEquity.lte(0)) {
+        result.bankruptcyPrice = lastPrice;
+        return result;
+    }
 
-            // 🔒 enforce integer liquidation target (round UP)
-            const size = Math.ceil(Math.abs(Number(amount || 0)));
+    const contractsBN = new BigNumber(contracts);
+    const lastPriceBN = new BigNumber(lastPrice);
+    const BNNotional = new BigNumber(notional);
 
-            const result = {
-                filled: false,
-                filledSize: 0,
-                goodFilledSize: 0,
-                badFilledSize: 0,
-                remainder: size,
-                avgFillPrice: null,
-                fills: []
-            };
+    let bankruptcyPrice;
+    if (!inverse) {
+        // Linear: PNL = contracts × (price - lastPrice) × notional
+        // At bankruptcy: equity + PNL = 0
+        // equity + contracts × (bankruptcyPrice - lastPrice) × notional = 0
+        // bankruptcyPrice = lastPrice - (equity / (contracts × notional))
+        
+        bankruptcyPrice = lastPriceBN.minus(
+            totalEquity.div(contractsBN.abs().times(BNNotional))
+        );
+    } else {
+        // Inverse: PNL = contracts × (1/lastPrice - 1/price) × notional
+        // At bankruptcy: equity + contracts × (1/lastPrice - 1/bankruptcyPrice) × notional = 0
+        // 1/bankruptcyPrice = 1/lastPrice - (equity / (contracts × notional))
+        
+        const invLastPrice = new BigNumber(1).div(lastPriceBN);
+        const invBankruptcy = invLastPrice.minus(
+            totalEquity.div(contractsBN.abs().times(BNNotional))
+        );
+        bankruptcyPrice = new BigNumber(1).div(invBankruptcy);
+    }
 
-            // --------------------------------------------
-            // Loss budget (RESIDUAL-AWARE)
-            // If override is provided, it MUST match
-            // handleLiquidation seizure semantics.
-            // --------------------------------------------
-            let lossBudget;
+    result.bankruptcyPrice = bankruptcyPrice.dp(8).toNumber();
 
-            if (lossBudgetOverride !== undefined && lossBudgetOverride !== null) {
-                lossBudget = new BigNumber(lossBudgetOverride || 0);
-            } else {
-                // backward-compatible fallback
-                lossBudget = new BigNumber(tally?.margin || 0)
-                    .plus(tally?.available || 0);
-            }
+    // --------------------------------------------
+    // Walk orderbook, only fill better than bankruptcy
+    // --------------------------------------------
+    const key = this.orderBookKey;
+    let ob = this.orderBooks[key];
+    if (!ob) {
+        ob = await this.loadOrderBook(key);
+        this.orderBooks[key] = ob;
+    }
 
-            if (lossBudget.lte(0)) return result;
+    const orderbookSide = sell ? ob.buy : ob.sell;
+    if (!orderbookSide || orderbookSide.length === 0) return result;
 
-            // --------------------------------------------
-            // Load orderbook for THIS instance key
-            // --------------------------------------------
-            const key = this.orderBookKey;
-            let ob = this.orderBooks[key];
-            if (!ob) {
-                ob = await this.loadOrderBook(key);
-                this.orderBooks[key] = ob;
-            }
+    let remaining = new BigNumber(size);
+    let weightedPriceSum = new BigNumber(0);
+    let lossBudget = totalEquity.clone();
 
-            const orderbookSide = sell ? ob.buy : ob.sell; // SELL into bids, BUY into asks
-            if (!orderbookSide || orderbookSide.length === 0) return result;
+    for (const level of orderbookSide) {
+        if (remaining.lte(0)) break;
+        if (lossBudget.lte(0)) break;
+        if (level.sender && level.sender === liquidatingAddress) continue;
 
-            let remaining = new BigNumber(size);
-            let weightedPriceSum = new BigNumber(0);
-            const BNNotional = new BigNumber(notional);
+        const px = new BigNumber(level.price || 0);
+        if (px.lte(0)) continue;
 
-            // --------------------------------------------
-            // Spend budget through the book (integer-only)
-            // --------------------------------------------
-            for (const level of orderbookSide) {
-                if (remaining.lte(0)) break;
-                if (lossBudget.lte(0)) break;
-                if (level.sender && level.sender === liquidatingAddress) continue;
+        // ✅ Only fill orders BETTER than bankruptcy
+        if (sell && px.lte(bankruptcyPrice)) break;  // Selling: need bids > bankruptcy
+        if (!sell && px.gte(bankruptcyPrice)) break; // Buying: need asks < bankruptcy
 
-                const px = new BigNumber(level.price || 0);
-                const rawSz = new BigNumber(level.size ?? level.amount ?? 0);
+        const rawSz = new BigNumber(level.size ?? level.amount ?? 0);
+        const levelSz = rawSz.integerValue(BigNumber.ROUND_FLOOR);
+        if (levelSz.lte(0)) continue;
 
-                if (px.lte(0) || rawSz.lte(0)) continue;
+        const take = BigNumber.min(remaining, levelSz);
 
-                // 🔒 level size must be integer, round DOWN (book truth)
-                const levelSz = rawSz.integerValue(BigNumber.ROUND_FLOOR);
-                if (levelSz.lte(0)) continue;
+        const cost = inverse
+            ? take.multipliedBy(BNNotional).dividedBy(px)
+            : take.multipliedBy(BNNotional).multipliedBy(px);
 
-                const take = BigNumber.min(remaining, levelSz);
+        if (cost.lte(lossBudget)) {
+            result.goodFilledSize += take.toNumber();
+            weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
+            remaining = remaining.minus(take);
+            lossBudget = lossBudget.minus(cost);
+        } else {
+            const affordableRaw = inverse
+                ? lossBudget.multipliedBy(px).dividedBy(BNNotional)
+                : lossBudget.dividedBy(px.multipliedBy(BNNotional));
 
-                const cost = inverse
-                    ? take.multipliedBy(BNNotional).dividedBy(px)
-                    : take.multipliedBy(BNNotional).multipliedBy(px);
+            let affordable = affordableRaw.integerValue(BigNumber.ROUND_CEIL);
+            affordable = BigNumber.min(affordable, take, remaining);
 
-                if (cost.lte(lossBudget)) {
-                    // full integer take
-                    result.goodFilledSize += take.toNumber();
-                    weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
-                    remaining = remaining.minus(take);
-                    lossBudget = lossBudget.minus(cost);
-                } else {
-                    // --------------------------------------------
-                    // Partial fill: round UP to whole integer
-                    // --------------------------------------------
-                    const affordableRaw = inverse
-                        ? lossBudget.multipliedBy(px).dividedBy(BNNotional)
-                        : lossBudget.dividedBy(px.multipliedBy(BNNotional));
+            if (affordable.lte(0)) break;
 
-                    // 🔒 ceil but cap to remaining & level
-                    let affordable = affordableRaw.integerValue(BigNumber.ROUND_CEIL);
-                    affordable = BigNumber.min(affordable, take, remaining);
-
-                    if (affordable.lte(0)) break;
-
-                    result.goodFilledSize += affordable.toNumber();
-                    weightedPriceSum = weightedPriceSum.plus(affordable.multipliedBy(px));
-                    remaining = remaining.minus(affordable);
-
-                    // budget exhausted by definition
-                    lossBudget = new BigNumber(0);
-                    break;
-                }
-            }
-
-            result.filledSize = result.goodFilledSize;
-            result.remainder = new BigNumber(size)
-                .minus(result.goodFilledSize)
-                .toNumber();
-
-            if (result.goodFilledSize > 0) {
-                result.filled = true;
-                result.avgFillPrice = weightedPriceSum
-                    .dividedBy(result.goodFilledSize)
-                    .decimalPlaces(8)
-                    .toNumber();
-            }
-
-            return result;
+            result.goodFilledSize += affordable.toNumber();
+            weightedPriceSum = weightedPriceSum.plus(affordable.multipliedBy(px));
+            remaining = remaining.minus(affordable);
+            lossBudget = new BigNumber(0);
+            break;
         }
+    }
 
+    result.filledSize = result.goodFilledSize;
+    result.remainder = new BigNumber(size).minus(result.goodFilledSize).toNumber();
+
+    if (result.goodFilledSize > 0) {
+        result.filled = true;
+        result.avgFillPrice = weightedPriceSum
+            .dividedBy(result.goodFilledSize)
+            .dp(8)
+            .toNumber();
+    }
+
+    return result;
+}
 
 
     async matchContractOrders(orderBook) {
