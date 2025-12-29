@@ -1224,8 +1224,7 @@ class Orderbook {
         }
     
         // In orderbook.js inside class Orderbook
-
-        async estimateLiquidation(liq, notional, inverse, tally) {
+        async estimateLiquidation(liq, notional, inverse, tally, lossBudgetOverride) {
             const { amount, sell, liquidatingAddress } = liq;
 
             // 🔒 enforce integer liquidation target (round UP)
@@ -1242,10 +1241,19 @@ class Orderbook {
             };
 
             // --------------------------------------------
-            // Loss budget: TALLY ONLY
+            // Loss budget (RESIDUAL-AWARE)
+            // If override is provided, it MUST match
+            // handleLiquidation seizure semantics.
             // --------------------------------------------
-            let lossBudget = new BigNumber(tally?.margin || 0)
-                .plus(tally?.available || 0);
+            let lossBudget;
+
+            if (lossBudgetOverride !== undefined && lossBudgetOverride !== null) {
+                lossBudget = new BigNumber(lossBudgetOverride || 0);
+            } else {
+                // backward-compatible fallback
+                lossBudget = new BigNumber(tally?.margin || 0)
+                    .plus(tally?.available || 0);
+            }
 
             if (lossBudget.lte(0)) return result;
 
