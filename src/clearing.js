@@ -2054,6 +2054,7 @@ class Clearing {
       let result = { counterparties: [] };
 
       if (canObFill && remainder.gt(0)) {
+        console.log('processing liq with this remainder '+remainder)
         try {
           const safePrefix = Clearing.safePrefixSize(remainder.toNumber(), contractId);
           const safeToFill = new Big(safePrefix || 0);
@@ -2063,6 +2064,7 @@ class Clearing {
             if (fillRes?.filled) {
               obFill = new Big(fillRes.filled || 0);
               remainder = remainder.minus(obFill);
+              console.log('remainder after '+remainder+' '+fillRes.filled+' '+obFill)
               result.counterparties = fillRes.counterparties || [];
             }
           }

@@ -1526,18 +1526,21 @@ class MarginMap {
       };
 
       let remaining = bn(unfilledContracts);
-      if (remaining.lte(0)) return result;
 
       // 1) Collect counterparties...
       let cps = positionCache
         .map((p, i) => ({ ...p, _i: i }))
         .filter(p => {
-          if (!p || !p.contracts || !p.lastMark) return false;
           if (p.address === liquidatingAddress) return false;
           return sell ? p.contracts < 0 : p.contracts > 0;
         });
 
-      if (!cps.length) return result;
+        console.log(`[simpleDeleverage] liquidatingAddress=${liquidatingAddress} unfilledContracts=${unfilledContracts}`);
+        console.log(`[simpleDeleverage] Total positions in cache: ${positionCache.length}`);
+        console.log(`[simpleDeleverage] After filter, counterparties: ${cps.length}`);
+        cps.forEach((cp, i) => {
+          console.log(`  CP[${i}]: address=${cp.address} contracts=${cp.contracts} lastMark=${cp.lastMark}`);
+        });
 
       // 2) Compute mark-to-mark PnL...
       cps = cps.map(p => {
@@ -1558,8 +1561,23 @@ class MarginMap {
       });
 
       // 3) Winners only
-      cps = cps.filter(p => p.movePnl.gt(0));
-      if (!cps.length) return result;
+        const winners = cps.filter(p => p.movePnl.gt(0));
+
+        // If no winners, FALL BACK to all opposite-side cps (net-0 guarantee path)
+        if (winners.length === 0) {
+          // keep cps as-is (already opposite side), optionally sort by size
+          cps.sort((a, b) => Math.abs(b.contracts) - Math.abs(a.contracts));
+        } else {
+          cps = winners;
+
+          // 4) Sort winners...
+          cps.sort((a, b) => {
+            const ap = a.movePnl.abs();
+            const bp = b.movePnl.abs();
+            if (!ap.eq(bp)) return bp.minus(ap).toNumber();
+            return Math.abs(b.contracts) - Math.abs(a.contracts);
+          });
+        }
 
       // 4) Sort...
       cps.sort((a, b) => {
