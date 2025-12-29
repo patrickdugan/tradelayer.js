@@ -583,7 +583,6 @@ class TallyMap {
                 }
 
                 if (typeof result.value === "undefined") {
-                    console.warn(`⚠️ Skipping entry with undefined value: ${JSON.stringify(result)}`);
                     continue;
                 }
                 if(!result.stash){result.stash=0}

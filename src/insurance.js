@@ -285,7 +285,6 @@ async getPayouts(contractId, startBlock, endBlock) {
                     }
                 }
             } else {
-                console.warn(`⚠️ Skipping entry without balances: ${entry._id || entry.key}`);
             }
         }
 

@@ -1223,75 +1223,105 @@ class Orderbook {
             return matchResult;
         }
     
-        async estimateLiquidation({
-            orderbookSide,   // bids if long liq, asks if short liq
-            amount,          // contracts to liquidate
-            liqPrice,        // raw liquidation price input
-            trueLiqPrice,    // normalized price (correct tick space)
-            inverse,
-            notional
-        }) {
+        // In orderbook.js inside class Orderbook
+
+        async estimateLiquidation(liq, notional, inverse, tally) {
+            const { amount, sell } = liq;
+
+            const size = Math.abs(Number(amount || 0));
+
             const result = {
                 filled: false,
                 filledSize: 0,
                 goodFilledSize: 0,
                 badFilledSize: 0,
-                remainder: amount,
+                remainder: size,
                 avgFillPrice: null,
                 fills: []
             };
 
-            if (!orderbookSide || orderbookSide.length === 0) {
-                return result;            // nothing on book → skip to delev
+            if (!size) return result;
+
+            // --------------------------------------------
+            // Loss budget: TALLY ONLY
+            // --------------------------------------------
+            let lossBudget = new BigNumber(tally?.margin || 0)
+                .plus(tally?.available || 0);
+
+            if (lossBudget.lte(0)) return result;
+
+            // --------------------------------------------
+            // Load orderbook for THIS instance key
+            // --------------------------------------------
+            const key = this.orderBookKey;
+            let ob = this.orderBooks[key];
+            if (!ob) {
+                ob = await this.loadOrderBook(key);
+                this.orderBooks[key] = ob;
             }
 
-            let remaining = amount;
-            let weightedPriceSum = 0;
+            const orderbookSide = sell ? ob.buy : ob.sell; // SELL into bids, BUY into asks
+            if (!orderbookSide || orderbookSide.length === 0) return result;
 
-            // ---------------------------------------------------------
-            // 1. Iterate through orderbook and collect GOOD fills only
-            //    Good fill condition:
-            //       - if liquidating a LONG → need bids >= trueLiqPrice
-            //       - if liquidating a SHORT → need asks <= trueLiqPrice
-            // ---------------------------------------------------------
+            let remaining = new BigNumber(size);
+            let weightedPriceSum = new BigNumber(0);
+            const BNNotional = new BigNumber(notional);
+
+            // --------------------------------------------
+            // Spend budget through the book (no avgEntry PnL)
+            // cost(linear)  = size * notional * price
+            // cost(inverse) = size * notional / price
+            // --------------------------------------------
             for (const level of orderbookSide) {
-                if (remaining <= 0) break;
+                if (remaining.lte(0)) break;
+                if (lossBudget.lte(0)) break;
 
-                const px = Number(level.price);
-                const sz = Number(level.size);
+                const px = new BigNumber(level.price || 0);
+                const sz = new BigNumber(level.size ?? level.amount ?? 0);
+                if (px.lte(0) || sz.lte(0)) continue;
 
-                const take = Math.min(remaining, sz);
+                const take = BigNumber.min(remaining, sz);
 
-                const isGood = !inverse 
-                    ? (px >= trueLiqPrice)   // long liquidation → bids must be >= bankruptcy
-                    : (px <= trueLiqPrice);  // short liquidation → asks must be <= bankruptcy
+                const cost = inverse
+                    ? take.multipliedBy(BNNotional).dividedBy(px)        // inverse
+                    : take.multipliedBy(BNNotional).multipliedBy(px);    // linear
 
-                if (isGood) {
-                    result.goodFilledSize += take;
-                    weightedPriceSum += take * px;
-                    result.fills.push({ price: px, size: take, good: true });
+                if (cost.lte(lossBudget)) {
+                    // take full level
+                    result.goodFilledSize += take.toNumber();
+                    weightedPriceSum = weightedPriceSum.plus(take.multipliedBy(px));
+                    remaining = remaining.minus(take);
+                    lossBudget = lossBudget.minus(cost);
                 } else {
-                    result.badFilledSize += take;
-                    result.fills.push({ price: px, size: take, good: false });
-                }
+                    // partial at this level
+                    const affordable = inverse
+                        ? lossBudget.multipliedBy(px).dividedBy(BNNotional)
+                        : lossBudget.dividedBy(px.multipliedBy(BNNotional));
 
-                remaining -= take;
+                    if (affordable.lte(0)) break;
+
+                    const partial = BigNumber.min(affordable, take);
+                    if (partial.lte(0)) break;
+
+                    result.goodFilledSize += partial.toNumber();
+                    weightedPriceSum = weightedPriceSum.plus(partial.multipliedBy(px));
+                    remaining = remaining.minus(partial);
+
+                    // budget fully spent
+                    lossBudget = new BigNumber(0);
+                    break;
+                }
             }
 
-            // ---------------------------------------------------------
-            // 2. GOOD fills determine whether liquidation happens
-            // ---------------------------------------------------------
             result.filledSize = result.goodFilledSize;
+            result.remainder = new BigNumber(size).minus(result.goodFilledSize).toNumber();
 
             if (result.goodFilledSize > 0) {
                 result.filled = true;
-                result.remainder = amount - result.goodFilledSize;
-                result.avgFillPrice = weightedPriceSum / result.goodFilledSize;
-            } else {
-                // NO good fills → NO liquidation execution
-                result.filled = false;
-                result.remainder = amount;
-                result.avgFillPrice = null;
+                result.avgFillPrice = weightedPriceSum
+                    .dividedBy(result.goodFilledSize)
+                    .decimalPlaces(8)
+                    .toNumber();
             }
 
             return result;
