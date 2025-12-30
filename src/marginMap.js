@@ -1517,6 +1517,9 @@ class MarginMap {
     ) {
       const BigNumber = require('bignumber.js');
       const bn = x => new BigNumber(x || 0);
+      const DB = require('./db.js');
+      const liquidationsDB = await DB.getDatabase('liquidations');
+
 
       const result = {
         contractId,
@@ -1611,6 +1614,26 @@ class MarginMap {
 
         remaining = remaining.minus(matchSize);
         result.totalDeleveraged += matchSize;
+
+        await liquidationsDB.updateAsync(
+          {
+            _id: `adl-${contractId}-${block}-${liquidatingAddress}-${cp.address}`
+          },
+          {
+            _id: `adl-${contractId}-${block}-${liquidatingAddress}-${cp.address}`,
+            block,
+            contractId,
+            liquidatingAddress,
+            counterparty: cp.address,
+            contractsReduced: matchSize,
+            contractsBefore: cp.contracts,
+            contractsAfter: updatedPos?.contracts ?? 0,
+            markPrice,
+            liqPrice,
+            reason: 'autoDeleverage'
+          },
+          { upsert: true }
+        );
 
         // NEW: capture weights for pool distribution
         result.counterparties.push({
