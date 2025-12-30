@@ -1223,90 +1223,154 @@ class Orderbook {
             return matchResult;
         }
 
-    async estimateLiquidation(
-  liq,            // 1st param: liquidation order (simulated incoming order)
-  notional,
-  liqPrice,
-  trueLiqPrice,
-  inverse,
-  tally,
-  contractId      // 7th param
-) {
-  const amount = Math.abs(Number(liq.amount || 0));
+         async estimateLiquidation(
+          liq,            // 1st param: liquidation order (simulated incoming order)
+          notional,
+          liqPrice,
+          trueLiqPrice,
+          inverse,
+          tally,
+          contractId      // 7th param
+        ) {
+          const amount = Math.abs(Number(liq.amount || 0));
 
-  const result = {
-    filled: false,
-    filledSize: 0,
-    goodFilledSize: 0,
-    badFilledSize: 0,
-    remainder: amount,
-    avgFillPrice: null,
-    fills: []
-  };
+          const result = {
+            filled: false,
+            filledSize: 0,
+            goodFilledSize: 0,
+            badFilledSize: 0,
+            remainder: amount,
+            avgFillPrice: null,
+            fills: []
+          };
 
-  // --------------------------------------------------
-  // Load orderbook for THIS contract
-  // --------------------------------------------------
-  const key = String(contractId);
-  let ob = this.orderBooks[key];
-  if (!ob) {
-    ob = await this.loadOrderBook(key);
-    this.orderBooks[key] = ob;
-  }
+          console.log(
+            "\n[EST_LIQ:start]",
+            "contract", contractId,
+            "amount", amount,
+            "sell", liq.sell,
+            "trueLiqPrice", trueLiqPrice,
+            "inverse", inverse
+          );
 
-  // Long liquidation → SELL into bids
-  // Short liquidation → BUY into asks
-  const orderbookSide = liq.sell ? ob.buy : ob.sell;
-  if (!orderbookSide || orderbookSide.length === 0) {
-    return result; // nothing on book → ADL
-  }
+          // --------------------------------------------------
+          // Load orderbook for THIS contract
+          // --------------------------------------------------
+          const key = String(contractId);
+          let ob = this.orderBooks[key];
+          if (!ob) {
+            console.log("[EST_LIQ] loading orderbook for contract", key);
+            ob = await this.loadOrderBook(key);
+            this.orderBooks[key] = ob;
+          }
 
-  let remaining = amount;
-  let weightedPriceSum = 0;
+          console.log(
+            "[EST_LIQ] book sizes",
+            "buy", ob.buy?.length,
+            "sell", ob.sell?.length
+          );
 
-  // --------------------------------------------------
-  // Sweep the book as-if `liq` were incoming
-  // --------------------------------------------------
-  for (const level of orderbookSide) {
-    if (remaining <= 0) break;
+          // Long liquidation → SELL into bids
+          // Short liquidation → BUY into asks
+          const orderbookSide = liq.sell ? ob.buy : ob.sell;
+          if (!orderbookSide || orderbookSide.length === 0) {
+            console.log("[EST_LIQ] no liquidity on side → ADL");
+            return result;
+          }
 
-    // skip self orders
-    if (liq.address && level.sender === liq.address) continue;
+          console.log(
+            "[EST_LIQ] sweeping side",
+            liq.sell ? "BUY (bids)" : "SELL (asks)",
+            "levels", orderbookSide.length,
+            "bestPx", orderbookSide[0]?.price,
+            "bestSz", orderbookSide[0]?.amount
+          );
 
-    const px = Number(level.price);
-    const sz = Number(level.amount);   // IMPORTANT: amount, not size
+          let remaining = amount;
+          let weightedPriceSum = 0;
 
-    if (!Number.isFinite(px) || !Number.isFinite(sz) || sz <= 0) continue;
+          // --------------------------------------------------
+          // Sweep the book as-if `liq` were incoming
+          // --------------------------------------------------
+          for (let i = 0; i < orderbookSide.length; i++) {
+            const level = orderbookSide[i];
+            if (remaining <= 0) {
+              console.log("[EST_LIQ] remaining exhausted");
+              break;
+            }
 
-    // Price legality (linear contracts)
-    const isGood = !inverse
-      ? (liq.sell ? px >= trueLiqPrice : px <= trueLiqPrice)
-      : (liq.sell ? px <= trueLiqPrice : px >= trueLiqPrice);
+            if (liq.address && level.sender === liq.address) {
+              console.log("[EST_LIQ] skip self order @", level.price);
+              continue;
+            }
 
-    if (!isGood) break; // book is price-sorted
+            const px = Number(level.price);
+            const sz = Number(level.amount);
 
-    const take = Math.min(remaining, sz);
+            if (!Number.isFinite(px) || !Number.isFinite(sz) || sz <= 0) {
+              console.log("[EST_LIQ] skip invalid level", level);
+              continue;
+            }
 
-    result.goodFilledSize += take;
-    weightedPriceSum += take * px;
-    result.fills.push({ price: px, size: take, good: true });
+            const isGood = !inverse
+              ? (liq.sell ? px >= trueLiqPrice : px <= trueLiqPrice)
+              : (liq.sell ? px <= trueLiqPrice : px >= trueLiqPrice);
 
-    remaining -= take;
-  }
+            console.log(
+              "[EST_LIQ] level",
+              i,
+              "px", px,
+              "sz", sz,
+              "remaining", remaining,
+              "isGood", isGood
+            );
 
-  // --------------------------------------------------
-  // Finalize result
-  // --------------------------------------------------
-  result.filledSize = result.goodFilledSize;
-  result.remainder = amount - result.goodFilledSize;
+            if (!isGood) {
+              console.log(
+                "[EST_LIQ] price fails threshold → stop sweep",
+                "px", px,
+                "threshold", trueLiqPrice
+              );
+              break;
+            }
 
-  if (result.goodFilledSize > 0) {
-    result.filled = true;
-    result.avgFillPrice = weightedPriceSum / result.goodFilledSize;
-  }
+            const take = Math.min(remaining, sz);
 
-  return result;
-}
+            console.log(
+              "[EST_LIQ] TAKE",
+              take,
+              "@", px
+            );
+
+            result.goodFilledSize += take;
+            weightedPriceSum += take * px;
+            result.fills.push({ price: px, size: take, good: true });
+
+            remaining -= take;
+          }
+
+          // --------------------------------------------------
+          // Finalize result
+          // --------------------------------------------------
+          result.filledSize = result.goodFilledSize;
+          result.remainder = amount - result.goodFilledSize;
+
+          if (result.goodFilledSize > 0) {
+            result.filled = true;
+            result.avgFillPrice = weightedPriceSum / result.goodFilledSize;
+          }
+
+          console.log(
+            "[EST_LIQ:end]",
+            "filled", result.filled,
+            "filledSize", result.filledSize,
+            "remainder", result.remainder,
+            "avgPx", result.avgFillPrice
+          );
+
+          return result;
+        }
+
 
     async matchContractOrders(orderBook) {
       // Base condition: if there are no buy or sell orders, return an empty match array.
