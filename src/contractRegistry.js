@@ -405,7 +405,7 @@ class ContractRegistry {
 
 
     static async getContractInfo(contractId) {
-        //console.log('retrieving db info for contract '+contractId)
+        console.log('retrieving db info for contract '+contractId)
         const contractListDB = await db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
         if (!doc) {
@@ -422,7 +422,8 @@ class ContractRegistry {
             // Assuming contractData is the data structure for the contract
 
         //console.log('inside get notional '+contractId)
-            const contractData = await this.getContractInfo(contractId);
+            const contractData = await ContractRegistry.getContractInfo(contractId);
+            console.log('blaiven '+JSON.stringify(contractData))
             const BNMark = new BigNumber(mark)
             const BNNotional = new BigNumber(contractData.notionalValue)
             console.log('checking notional and mark in getNotionalValue '+contractData.notionalValue +' '+mark)

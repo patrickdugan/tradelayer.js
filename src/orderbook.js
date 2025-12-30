@@ -2087,6 +2087,132 @@ class Orderbook {
             breakdown
         };
     }
+
+    async _pruneInstaLiqOrdersFromFreshBook(
+          thisPrice,
+          blockHeight,
+          contractId,
+          notional,
+          inverse
+        ) {
+          const Tally = require('./tally.js');
+          const ContractRegistry = require('./contractRegistry.js');
+
+          const key = String(contractId);
+          const collateralId = await ContractRegistry.getCollateralId(contractId);
+
+          // Use an instance so we can call loadOrderBook/saveOrderBook exactly like the rest of the file
+          const obInst = new Orderbook(key);
+
+          // ✅ always load fresh snapshot
+          const ob = await obInst.loadOrderBook(key);
+          if (!ob || (!Array.isArray(ob.buy) && !Array.isArray(ob.sell))) return 0;
+
+          let pruned = 0;
+
+          // Sweep both sides (fresh snapshot)
+          for (const sideName of ['buy', 'sell']) {
+            const side = Array.isArray(ob[sideName]) ? ob[sideName] : [];
+
+            // iterate backwards because we splice
+            for (let i = side.length - 1; i >= 0; i--) {
+              const order = side[i];
+              if (!order) continue;
+
+              const address = order.sender || order.address;
+              if (!address) continue;
+
+              const qty = Math.abs(Number(order.amount || 0));
+              if (!Number.isFinite(qty) || qty <= 0) continue;
+
+              // Lazy-load tally
+              const tally = await Tally.getTally(address, collateralId);
+              if (!tally) continue;
+
+              const avail = Number(tally.available || 0);
+              const margin = Number(tally.margin || 0);
+              const totalCollateral = avail + margin;
+
+              // no collateral => prune
+              if (!Number.isFinite(totalCollateral) || totalCollateral <= 0) {
+                // splice out order
+                side.splice(i, 1);
+                pruned++;
+
+                // refund reserve if present
+                const reserve = Number(order.initMargin || 0);
+                if (reserve > 0) {
+                  await Tally.updateBalance(
+                    address,
+                    collateralId,
+                    +reserve,
+                    -reserve,
+                    0,
+                    0,
+                    'contractCancel',
+                    blockHeight
+                  );
+                }
+                continue;
+              }
+
+              const px = Number(order.price);
+              if (!Number.isFinite(px) || px <= 0) continue;
+
+              // sideName decides direction (don’t rely on order.isSell)
+              const isSell = (sideName === 'sell');
+
+              let worstLoss = 0;
+
+              if (!inverse) {
+                // Linear
+                worstLoss = isSell
+                  ? qty * notional * Math.max(0, thisPrice - px)     // short loses on price ↑
+                  : qty * notional * Math.max(0, px - thisPrice);    // long loses on price ↓
+              } else {
+                // Inverse
+                worstLoss = isSell
+                  ? qty * notional * Math.max(0, (1 / px) - (1 / thisPrice))
+                  : qty * notional * Math.max(0, (1 / thisPrice) - (1 / px));
+              }
+
+              if (worstLoss > totalCollateral) {
+                // prune the order
+                side.splice(i, 1);
+                pruned++;
+
+                // refund reserved collateral (prefer stored initMargin)
+                let reserve = Number(order.initMargin || 0);
+                if (!Number.isFinite(reserve) || reserve <= 0) {
+                  // fallback: compute from registry if needed
+                  const imPer = await ContractRegistry.getInitialMargin(contractId, px);
+                  reserve = Number(imPer || 0) * qty;
+                }
+
+                if (reserve > 0) {
+                  await Tally.updateBalance(
+                    address,
+                    collateralId,
+                    +reserve,
+                    -reserve,
+                    0,
+                    0,
+                    'contractCancel',
+                    blockHeight
+                  );
+                }
+              }
+            }
+          }
+
+          if (pruned > 0) {
+            obInst.orderBooks[key] = ob;
+            await obInst.saveOrderBook(ob, key);
+          }
+
+          return pruned;
+        }
+
      
     async processContractMatches(matches, currentBlockHeight, channel, last=null){
             const TallyMap = require('./tally.js');

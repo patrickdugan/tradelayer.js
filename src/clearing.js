@@ -1301,6 +1301,31 @@ class Clearing {
       }
     }
 
+    // orderbook.js
+    static async pruneInstaLiqOrders(thisPrice, blockHeight,contractId) {
+      const Tally = require('./tally.js');
+      const ContractRegistry = require('./contractRegistry.js');
+
+      const inverse = await ContractRegistry.isInverse(contractId);
+
+      const notionalObj =
+        await ContractRegistry.getNotionalValue(contractId, thisPrice);
+      const notional =
+        notionalObj?.notionalPerContract ?? notionalObj ?? 1;
+
+        // ✅ delegate after notional stuff populates
+        const Orderbook = require('./orderbook.js')
+        const ob = await Orderbook.getOrderbookInstance(contractId)
+        return await ob._pruneInstaLiqOrdersFromFreshBook(
+          thisPrice,
+          blockHeight,
+          contractId,
+          notional,
+          inverse
+        );
+    }
+
+
     static async makeSettlement(blockHeight) {
         const ContractRegistry = require('./contractRegistry.js');
         const contracts = await ContractRegistry.loadContractSeries();
@@ -1310,6 +1335,7 @@ class Clearing {
             const id = contract[1].id;
             const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
             console.log('price info '+JSON.stringify(priceInfo))
+            await Clearing.pruneInstaLiqOrders(priceInfo.thisPrice, blockHeight,id)
             await Clearing.settleNewContracts(id,blockHeight,priceInfo)
             if (!priceInfo || !priceInfo.updated) continue;
 
