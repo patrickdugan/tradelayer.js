@@ -493,7 +493,7 @@ async calculateLIFOEntry(address, amount, contractId) {
     // Returns trade history rows for a contract within [startBlock, endBlock] inclusive.
     // This is a lightweight in-memory filter over loadTradeHistory(contractId),
     // which already handles single-doc, legacy, and fallback formats.
-    async getTradesForContractBetweenBlocks(contractId, startBlock, endBlock) {
+    static async getTradesForContractBetweenBlocks(contractId, startBlock, endBlock) {
       const tradeDB = await dbInstance.getDatabase('tradeHistory');
 
       const key = `contract-${contractId}`;
@@ -527,6 +527,25 @@ async calculateLIFOEntry(address, amount, contractId) {
               resolve(docs[0].blockHeight);
           });
       })
+    }
+
+    // ------------------------------------------------------------------
+    // Return liquidation trades for a contract at an exact block height
+    // Authoritative source for liquidation-stage accounting
+    // ------------------------------------------------------------------
+    static async getLiquidationTradesForContractAtBlock(contractId, blockHeight) {
+      const trades = await this.getTradesForContractBetweenBlocks(
+        contractId,
+        blockHeight,
+        blockHeight
+      );
+      console.log('trades in get liq trades '+JSON.stringify(trades))
+      if (!trades || !trades.length) return [];
+
+      // Normalize + filter
+      return trades
+        .map(t => t.trade ?? t)
+        .filter(t => t && t.liquidation === true);
     }
 }
 

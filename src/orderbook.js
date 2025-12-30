@@ -1229,7 +1229,6 @@ class Orderbook {
           liqPrice,
           trueLiqPrice,
           inverse,
-          tally,
           contractId      // 7th param
         ) {
           const amount = Math.abs(Number(liq.amount || 0));
@@ -2089,7 +2088,7 @@ class Orderbook {
         };
     }
      
-    async processContractMatches(matches, currentBlockHeight, channel){
+    async processContractMatches(matches, currentBlockHeight, channel, last=null){
             const TallyMap = require('./tally.js');
             const ContractRegistry = require('./contractRegistry.js')
             if (!Array.isArray(matches)) {
@@ -2109,7 +2108,7 @@ class Orderbook {
                   console.log('🛑 JSON.stringify match '+JSON.stringify(match))
 
                   let isLiquidation = false
-                  if(match.buyOrder.liq||match.sellOrder.liq){
+                  if(match.buyOrder.isLiq||match.sellOrder.isLiq){
                     isLiquidation=true
                   }
                     if(match.buyOrder.buyerAddress == match.sellOrder.sellerAddress){
@@ -2122,8 +2121,7 @@ class Orderbook {
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     let lastPrice = await ContractRegistry.getPriceAtBlock(match.sellOrder.contractId,currentBlockHeight-1)
-                    const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(match.sellOrder.contractId,currentBlockHeight)
-                    if(isLiquidation){lastPrice=priceInfo.lastPrice}
+                    if(isLiquidation&&last!=null){lastPrice=last}
                     match.inverse = isInverse
                     let collateralPropertyId = await ContractRegistry.getCollateralId(match.buyOrder.contractId)
                     const blob = await ContractRegistry.getNotionalValue(match.sellOrder.contractId,match.tradePrice)
@@ -2487,8 +2485,7 @@ class Orderbook {
                         //the closing trade and the opening trades reference happened in the same block (exceptional, will add later)
                         
                         let settlementPNL =
-                              buyerClosesAgainstLast > 0
-                                ? await marginMap.settlePNL(
+                                await marginMap.settlePNL(
                                     trade.buyerAddress,
                                     buyerClosesAgainstLast,
                                     trade.price,
@@ -2497,9 +2494,8 @@ class Orderbook {
                                     currentBlockHeight,
                                     isInverse,
                                     perContractNotional
-                                  )
-                                : 0;
-
+                                  );
+                        console.log('settlementPNL for buyer '+settlementPNL)
                         let sameBlockPNL = buyerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.buyerAddress,
@@ -2511,6 +2507,7 @@ class Orderbook {
                                 isInverse,
                                 perContractNotional
                             ) : 0
+                        console.log('vestigial settlementPNL '+sameBlockPNL)
 
                         settlementPNL += sameBlockPNL
                      
@@ -2575,8 +2572,7 @@ class Orderbook {
                         console.log('position before settlePNL '+JSON.stringify(match.sellerPosition))
                            
                         let settlementPNL =
-                              sellerClosesAgainstLast > 0
-                                ? await marginMap.settlePNL(
+                                await marginMap.settlePNL(
                                     trade.sellerAddress,
                                     sellerClosesAgainstLast,
                                     trade.price,
@@ -2586,7 +2582,6 @@ class Orderbook {
                                     isInverse,
                                     perContractNotional
                                   )
-                                : 0;
 
                         let sameBlockPNL = sellerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
@@ -2601,7 +2596,7 @@ class Orderbook {
                             ) : 0
 
                         settlementPNL += sameBlockPNL
-                     
+                        console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)

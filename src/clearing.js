@@ -1092,6 +1092,98 @@ class Clearing {
             };
         }
     }
+
+    static async settleLiqNewContractsFromDB(contractId, blockHeight, lastPrice) {
+      const BigNumber = require('bignumber.js');
+      const Tally = require('./tally.js');
+      const ContractRegistry = require('./contractRegistry.js');
+      const trades = await TradeHistory.getLiquidationTradesForContractAtBlock(contractId,blockHeight);
+      console.log('trades in settleNiqNewContractsFromDB '+JSON.stringify(trades))
+      // ------------------------------------------------------------
+      // 0) Reference price (last block price)
+      // ------------------------------------------------------------
+      const refPrice =lastPrice;
+
+      // ------------------------------------------------------------
+      // 1) Contract parameters
+      // ------------------------------------------------------------
+      const collateralId = await ContractRegistry.getCollateralId(contractId);
+      const inverse = await ContractRegistry.isInverse(contractId);
+      const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
+      const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
+
+      // ------------------------------------------------------------
+      // 2) Load authoritative liquidation trades for this block
+      // ------------------------------------------------------------
+      const liqTrades = trades
+
+
+      console.log('liq Trades in settleNew '+JSON.stringify(liqTrades))
+
+      if (!liqTrades?.length) return;
+
+      // ------------------------------------------------------------
+      // 3) Process each liquidation trade independently
+      // ------------------------------------------------------------
+      for (const trade of liqTrades) {
+        const entryPrice = Number(trade.price);
+        if (!entryPrice || entryPrice <= 0) continue;
+        console.log('entry price '+entryPrice)
+        // ---------- BUYER side ----------
+        const buyerOpened = Number(trade.amount) - Number(trade.buyerClose || 0);
+        console.log('buyer opened '+buyerOpened)
+        if (buyerOpened > 0) {
+          const qty = buyerOpened; // long
+          let pnl;
+
+          if (!inverse) {
+            pnl = qty * notional * (refPrice - entryPrice);
+          } else {
+            pnl = qty * notional * ((1 / entryPrice) - (1 / refPrice));
+          }
+          console.log('pnl '+pnl)
+          if (pnl !== 0) {
+            await Tally.updateBalance(
+              trade.buyerAddress,
+              collateralId,
+              pnl,
+              0,
+              0,
+              0,
+              'liqNewContractTieOff',
+              blockHeight
+            );
+          }
+        }
+
+        // ---------- SELLER side ----------
+        const sellerOpened = Number(trade.amount) - Number(trade.sellerClose || 0);
+        if (sellerOpened > 0) {
+          const qty = -sellerOpened; // short
+          let pnl;
+
+          if (!inverse) {
+            pnl = qty * notional * (refPrice - entryPrice);
+          } else {
+            pnl = qty * notional * ((1 / entryPrice) - (1 / refPrice));
+          }
+
+          if (pnl !== 0) {
+            await Tally.updateBalance(
+              trade.sellerAddress,
+              collateralId,
+              pnl,
+              0,
+              0,
+              0,
+              'liqNewContractTieOff',
+              blockHeight
+            );
+          }
+        }
+      }
+    }
+
     
     static async settleNewContracts(contractId, blockHeight, priceInfo) {
       const BigNumber = require('bignumber.js');
@@ -1559,7 +1651,8 @@ class Clearing {
           lastPrice,
           true,
           q.shortfall.toNumber(),
-          tally
+          tally,
+          priceInfo
         );
 
 
@@ -1932,7 +2025,8 @@ class Clearing {
         markPrice,
         applyDent,
         markShortfall,
-        tallySnapshot
+        tallySnapshot,
+        priceInfo
       ) {
         const Clearing = this;
         const MarginMap = require('./marginMap.js');
@@ -2040,7 +2134,8 @@ class Clearing {
         //------------------------------------------------------------
         // 4. Estimate book fill BEFORE inserting order
         //------------------------------------------------------------
-        const splat = await orderbook.estimateLiquidation(liq, notional, computedLiqPrice,computedLiqPrice,tally,contractId);
+        console.log('contractId before est Liq '+contractId)
+        const splat = await orderbook.estimateLiquidation(liq, notional, computedLiqPrice,computedLiqPrice,inverse,contractId);
         console.log("🔎 estimateLiquidation →", JSON.stringify(splat));
         const canObFill = (splat && Number(splat.goodFilledSize || 0) > 0);
         console.log('can Ob Fill '+canObFill+' '+splat.goodFilledSize)
@@ -2076,7 +2171,11 @@ class Clearing {
 
           obData = await orderbook.insertOrder(liqOb, obData, liqOb.sell, true);
 
-          const matchResult = await orderbook.matchContractOrders(obData);
+          const matchResult = await orderbook.matchContractOrders(obData);   
+          if (matchResult.matches && matchResult.matches.length > 0) {
+                await orderbook.processContractMatches(matchResult.matches, blockHeight, false,markPrice);
+          }
+
           console.log('liq match result '+JSON.stringify(matchResult))
           await orderbook.saveOrderBook(matchResult.orderBook, obKey);
 
@@ -2084,31 +2183,60 @@ class Clearing {
           let filledFromMatches = 0;
           if (matchResult && Array.isArray(matchResult.matches)) {
             for (const m of matchResult.matches) {
-              const amt = Number(
-                (m && (m.amount ?? m.size ?? m.filled ?? m.filledSize ?? m.qty)) ?? 0
-              );
-              if (amt > 0) filledFromMatches += amt;
+              console.log('match '+JSON.stringify(m))
+              const qty =
+              Number(m.sellOrder?.amount ?? m.buyOrder?.amount ?? 0);
+              
+              if (qty > 0) filledFromMatches += qty;
             }
           }
 
-          // Fallback: if we can't read amounts but matches exist, keep prior upper-bound behavior
-          if (filledFromMatches <= 0 && matchResult && Array.isArray(matchResult.matches) && matchResult.matches.length > 0) {
-            filledFromMatches = safeSize;
-          }
-
           // Never exceed requested liqAmount
-          obFill = new Big(Math.min(filledFromMatches, liqAmount)).dp(8);
-          console.log()
+          obFill = new Big(Math.min(filledFromMatches, liqAmount));
+          console.log('obFill after matches '+obFill.toNumber()+' '+filledFromMatches+' '+liqAmount)
         }
 
+        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice)
 
         //------------------------------------------------------------
         // 7. Determine ADL remainder
         //------------------------------------------------------------
         const adlSize = new Big(liqAmount).minus(obFill);
         const remainder = adlSize.gt(0) ? adlSize.toNumber() : 0;
-        
-        //------------------------------------------------------------
+
+        let residualLossBN = new Big(0);
+        if (remainder >= 0) {
+
+          //------------------------------------------------------------
+          // 7.5 Recompute residual loss for the UNFILLED size at thisPrice
+          // (This is the only loss that can justify a pool seizure)
+          //------------------------------------------------------------
+          const qtyBN = new Big(remainder || 0).dp(8);
+          const execBN = new Big(markPrice || 0);  
+          const bkBN   = new Big(computedLiqPrice || 0);
+          const notBN  = new Big(notional || 0);
+
+
+          if (qtyBN.gt(0)) {
+            if (!inverse) {
+              // If liquidation is SELL (liquidating long): loss if exec < bankruptcy
+              // If liquidation is BUY  (liquidating short): loss if exec > bankruptcy
+              const perUnitBN = isSell ? bkBN.minus(execBN) : execBN.minus(bkBN);
+              if (perUnitBN.gt(0)) residualLossBN = perUnitBN.times(qtyBN).times(notBN);
+            } else {
+              // Inverse version (keep it simple and explicit)
+              // loss per contract ≈ notional * max(0, (1/exec - 1/bk)) for one side, reversed for the other
+              // NOTE: Only do this if your inverse PnL model matches this; otherwise use your existing inverse loss helper here.
+              const invExecBN = execBN.gt(0) ? new Big(1).div(execBN) : new Big(0);
+              const invBkBN   = bkBN.gt(0)   ? new Big(1).div(bkBN)   : new Big(0);
+              const perUnitInvBN = isSell ? invExecBN.minus(invBkBN) : invBkBN.minus(invExecBN);
+              if (perUnitInvBN.gt(0)) residualLossBN = perUnitInvBN.times(qtyBN).times(notBN);
+            }
+          }
+          residualLossBN = residualLossBN.dp(8);
+        }        
+        console.log('residual loss for remainder '+residualLossBN.toNumber()+' '+remainder+' '+markPrice+' '+computedLiqPrice)
+          //------------------------------------------------------------
         // 8. Calculate liquidation pool BEFORE confiscation
         // PATCH 2: seize only what's needed to cover the residual loss
         //------------------------------------------------------------
@@ -2119,9 +2247,9 @@ class Clearing {
           .dp(8);
 
         // Seize only the amount needed to cover the residual loss (lossBN)
-        const seizureBN = Big.min(fullPoolBN, lossBN).dp(8);
+        const seizureBN = Big.min(fullPoolBN, residualLossBN).dp(8);
         const liquidationPool = seizureBN.toNumber();
-
+        console.log('liquidation pool '+liquidationPool)
         //------------------------------------------------------------
         // 9. Confiscate liquidation pool (seized amount only)
         // Debit available first, then margin
@@ -2154,7 +2282,6 @@ class Clearing {
         if (totalLossNeeded.gt(seizedBN)) {
           systemicLoss = totalLossNeeded.minus(seizedBN).dp(8);
         }
-
 
         //------------------------------------------------------------
         // 11. Apply ADL if needed - pass actual pool amount
