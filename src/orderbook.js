@@ -1223,80 +1223,90 @@ class Orderbook {
             return matchResult;
         }
 
-    
-        async estimateLiquidation({
-            orderbookSide,   // bids if long liq, asks if short liq
-            amount,          // contracts to liquidate
-            liqPrice,        // raw liquidation price input
-            trueLiqPrice,    // normalized price (correct tick space)
-            inverse,
-            notional
-        }) {
-            const result = {
-                filled: false,
-                filledSize: 0,
-                goodFilledSize: 0,
-                badFilledSize: 0,
-                remainder: amount,
-                avgFillPrice: null,
-                fills: []
-            };
+    async estimateLiquidation(
+  liq,            // 1st param: liquidation order (simulated incoming order)
+  notional,
+  liqPrice,
+  trueLiqPrice,
+  inverse,
+  tally,
+  contractId      // 7th param
+) {
+  const amount = Math.abs(Number(liq.amount || 0));
 
-            if (!orderbookSide || orderbookSide.length === 0) {
-                return result;            // nothing on book → skip to delev
-            }
+  const result = {
+    filled: false,
+    filledSize: 0,
+    goodFilledSize: 0,
+    badFilledSize: 0,
+    remainder: amount,
+    avgFillPrice: null,
+    fills: []
+  };
 
-            let remaining = amount;
-            let weightedPriceSum = 0;
+  // --------------------------------------------------
+  // Load orderbook for THIS contract
+  // --------------------------------------------------
+  const key = String(contractId);
+  let ob = this.orderBooks[key];
+  if (!ob) {
+    ob = await this.loadOrderBook(key);
+    this.orderBooks[key] = ob;
+  }
 
-            // ---------------------------------------------------------
-            // 1. Iterate through orderbook and collect GOOD fills only
-            //    Good fill condition:
-            //       - if liquidating a LONG → need bids >= trueLiqPrice
-            //       - if liquidating a SHORT → need asks <= trueLiqPrice
-            // ---------------------------------------------------------
-            for (const level of orderbookSide) {
-                if (remaining <= 0) break;
+  // Long liquidation → SELL into bids
+  // Short liquidation → BUY into asks
+  const orderbookSide = liq.sell ? ob.buy : ob.sell;
+  if (!orderbookSide || orderbookSide.length === 0) {
+    return result; // nothing on book → ADL
+  }
 
-                const px = Number(level.price);
-                const sz = Number(level.size);
+  let remaining = amount;
+  let weightedPriceSum = 0;
 
-                const take = Math.min(remaining, sz);
+  // --------------------------------------------------
+  // Sweep the book as-if `liq` were incoming
+  // --------------------------------------------------
+  for (const level of orderbookSide) {
+    if (remaining <= 0) break;
 
-                const isGood = !inverse 
-                    ? (px >= trueLiqPrice)   // long liquidation → bids must be >= bankruptcy
-                    : (px <= trueLiqPrice);  // short liquidation → asks must be <= bankruptcy
+    // skip self orders
+    if (liq.address && level.sender === liq.address) continue;
 
-                if (isGood) {
-                    result.goodFilledSize += take;
-                    weightedPriceSum += take * px;
-                    result.fills.push({ price: px, size: take, good: true });
-                } else {
-                    result.badFilledSize += take;
-                    result.fills.push({ price: px, size: take, good: false });
-                }
+    const px = Number(level.price);
+    const sz = Number(level.amount);   // IMPORTANT: amount, not size
 
-                remaining -= take;
-            }
+    if (!Number.isFinite(px) || !Number.isFinite(sz) || sz <= 0) continue;
 
-            // ---------------------------------------------------------
-            // 2. GOOD fills determine whether liquidation happens
-            // ---------------------------------------------------------
-            result.filledSize = result.goodFilledSize;
+    // Price legality (linear contracts)
+    const isGood = !inverse
+      ? (liq.sell ? px >= trueLiqPrice : px <= trueLiqPrice)
+      : (liq.sell ? px <= trueLiqPrice : px >= trueLiqPrice);
 
-            if (result.goodFilledSize > 0) {
-                result.filled = true;
-                result.remainder = amount - result.goodFilledSize;
-                result.avgFillPrice = weightedPriceSum / result.goodFilledSize;
-            } else {
-                // NO good fills → NO liquidation execution
-                result.filled = false;
-                result.remainder = amount;
-                result.avgFillPrice = null;
-            }
+    if (!isGood) break; // book is price-sorted
 
-            return result;
-        }
+    const take = Math.min(remaining, sz);
+
+    result.goodFilledSize += take;
+    weightedPriceSum += take * px;
+    result.fills.push({ price: px, size: take, good: true });
+
+    remaining -= take;
+  }
+
+  // --------------------------------------------------
+  // Finalize result
+  // --------------------------------------------------
+  result.filledSize = result.goodFilledSize;
+  result.remainder = amount - result.goodFilledSize;
+
+  if (result.goodFilledSize > 0) {
+    result.filled = true;
+    result.avgFillPrice = weightedPriceSum / result.goodFilledSize;
+  }
+
+  return result;
+}
 
     async matchContractOrders(orderBook) {
       // Base condition: if there are no buy or sell orders, return an empty match array.

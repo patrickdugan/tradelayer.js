@@ -2040,7 +2040,7 @@ class Clearing {
         //------------------------------------------------------------
         // 4. Estimate book fill BEFORE inserting order
         //------------------------------------------------------------
-        const splat = await orderbook.estimateLiquidation(liq, notional, computedLiqPrice,computedLiqPrice,tally);
+        const splat = await orderbook.estimateLiquidation(liq, notional, computedLiqPrice,computedLiqPrice,tally,contractId);
         console.log("🔎 estimateLiquidation →", JSON.stringify(splat));
         const canObFill = (splat && Number(splat.goodFilledSize || 0) > 0);
         console.log('can Ob Fill '+canObFill+' '+splat.goodFilledSize)
