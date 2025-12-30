@@ -1367,16 +1367,14 @@ class Orderbook {
       // sort sell orders ascending by price and ascending by blockTime.
       //
       // LITERAL PATCH: add a small priority bump for isMarket without touching existing logic
-      /*orderBook.buy.sort((a, b) =>
-        ((b.isMarket === true) - (a.isMarket === true)) ||
+      orderBook.buy.sort((a, b) =>
         BigNumber(b.price).comparedTo(a.price) ||
         a.blockTime - b.blockTime
       );
       orderBook.sell.sort((a, b) =>
-        ((b.isMarket === true) - (a.isMarket === true)) ||
         BigNumber(a.price).comparedTo(b.price) ||
         a.blockTime - b.blockTime
-      );*/
+      );
 
       // Process a round of matching
       for (let i = 0; i < maxIterations; i++) {
