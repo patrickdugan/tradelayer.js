@@ -19,11 +19,10 @@ const SPONSOR = "tltc1qstal4v4x96u8yftgcnpk88wsa8sps08dhwg446";
 
 
 const DUST_JOBS = [
-  { to: "tltc1q0s2jlc7lem36am6qavv5847564h8fgwke7c7gr", amount: 0.005 },
-  { to: "tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq", amount: 0.005 },
-  { to: "tltc1qngxa8d84at2286c8n9ss04kk3fc2fmnvdvtz5u", amount: 0.005 },
-  { to: "tltc1qemlplwusg44fnu8hjmn8gwrx5eygm0gz5dn6xa", amount: 0.005 },
-  { to: "tltc1qpqxydlyys2rdnc859q8a3a4a6449pxfke5rcq0", amount: 0.005 },
+  { to: "tltc1qzq5fruejqg844ulcqc4lfcdwwvfpnf3vf9l73y", amount: 0.005 },
+  { to: "tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6", amount: 0.005 },
+  { to: "tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u", amount: 0.005 },
+  { to: "tltc1qnx2cm5dfyhravee74tv6kk45lcyp3ll4eu5g7d", amount: 0.005 },
 ];
 
 // --------------------
@@ -34,10 +33,10 @@ function toSats(x) { return Math.round(x * 1e8); }
 
 const UTXOS = [
   {
-    txid: "f878645b2e721732bda1fb585a7206b2015c60d2da520be7f7b4777247c68492",
-    vout: 5,
+    txid: "76a47f97d0814d7bfdf974d03e1bfd1603c75b3038f531a41d61f5ed61fe1b8e",
+    vout: 1,
     scriptPubKey: "001482fbfab2a62eb8722568c4c3639dd0e9e0183ced",
-    satoshis: toSats(1.31652534)
+    satoshis: toSats(1.28012534)
   }
 ];
 

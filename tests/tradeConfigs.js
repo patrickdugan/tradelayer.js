@@ -29,7 +29,7 @@ const ADDR_LONG_2  = 'tltc1qngxa8d84at2286c8n9ss04kk3fc2fmnvdvtz5u';
 const ADDR_LONG_3  = 'tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2';
 
 // Prices
-const SEED_PRICE = 100;   // aligns with your avgPrice in the current mMap snapshot
+const SEED_PRICE = 75;   // aligns with your avgPrice in the current mMap snapshot
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

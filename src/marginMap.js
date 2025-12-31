@@ -200,7 +200,7 @@ class MarginMap {
     // Set initial margin for a new position in the MarginMap
     async setInitialMargin(sender, contractId, totalInitialMargin, block, position) {
             const BigNumber = require('bignumber.js');
-
+            if(sender=="")
             console.log(
                 `[MarginMap.setInitialMargin] sender=${sender} contractId=${contractId} totalInitialMargin=${totalInitialMargin} block=${block}`
             );
@@ -362,7 +362,7 @@ class MarginMap {
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
             match.tradePrice,
-            true,
+            match.sellOrder.sell,
             match.buyerPosition,
             match.inverse,
             buyerClose,
@@ -376,7 +376,7 @@ class MarginMap {
             match.sellOrder.sellerAddress,
             match.sellOrder.amount,
             match.tradePrice,
-            false,
+            match.sellOrder.sell,
             match.sellerPosition,
             match.inverse,
             sellerClose,
@@ -392,7 +392,7 @@ class MarginMap {
         address,
         amount,
         price,
-        isBuyOrder,
+        isSell,
         position,
         inverse,
         close,
@@ -404,12 +404,12 @@ class MarginMap {
     ) {
         console.log('pre-liq check in update contracts ' + amount + ' ' + JSON.stringify(position));
 
-        if (position.contracts == null) {
+        /*if (position.contracts == null) {
             position.contracts = 0;
         }
         if (position.newPosThisBlock === undefined) {
             position.newPosThisBlock = 0;
-        }
+        }*/
 
         // Capture old size BEFORE contract update
         const oldSize = position.contracts;
@@ -440,12 +440,12 @@ class MarginMap {
 
             // Extend existing same-side position (weighted avg)
             else if (
-                (oldSize > 0 && isBuyOrder) ||
-                (oldSize < 0 && !isBuyOrder)
+                (oldSize > 0 && !isSell) ||
+                (oldSize < 0 && isSell)
             ) {
                 console.log('Weighted avg update →', amount, price, contractId);
                 position.avgPrice = await this.updateAveragePrice(
-                    position, amount, price, contractId, isBuyOrder
+                    position, amount, price, contractId, isSell
                 );
                 console.log('Weighted avg result → avgPrice =', position.avgPrice);
             }
@@ -467,15 +467,16 @@ class MarginMap {
         console.log('position size before update ' + position.contracts);
 
         const amountBN = new BigNumber(amount);
-        let newPositionSize = isBuyOrder
-            ? new BigNumber(oldSize).plus(amountBN).toNumber()
-            : new BigNumber(oldSize).minus(amountBN).toNumber();
+         let newPositionSize = isSell
+          ? new BigNumber(oldSize).minus(amountBN).toNumber()  // SELL
+          : new BigNumber(oldSize).plus(amountBN).toNumber();  // BUY
+
 
         console.log(
             'newPositionSize ' + newPositionSize +
             ' address ' + address +
             ' amount ' + amount +
-            ' isBuyOrder ' + isBuyOrder
+            ' isSell ' + isSell
         );
 
         position.contracts = newPositionSize;
@@ -522,19 +523,6 @@ class MarginMap {
         } else {
             position.liqPrice = liquidationInfo.liquidationPrice || null;
             position.bankruptcyPrice = liquidationInfo.bankruptcyPrice;
-        }
-
-        // -----------------------------------------------------
-        // newPosThisBlock adjustments
-        // -----------------------------------------------------
-        if (!inClearing) {
-            if (isBuyOrder) {
-                if (flip > 0) position.newPosThisBlock += flip;
-                else if (close == 0) position.newPosThisBlock += amount;
-            } else {
-                if (flip > 0) position.newPosThisBlock -= flip;
-                else if (close == 0) position.newPosThisBlock -= amount;
-            }
         }
 
         // -----------------------------------------------------
@@ -636,16 +624,15 @@ class MarginMap {
         };
     }
 
-    async updateAveragePrice(position, amount, price, contractId, isBuyOrder) {
+    async updateAveragePrice(position, amount, price, contractId, isSell) {
         const oldSize = position.contracts;
         const oldAvg = new BigNumber(position.avgPrice || 0);
         const tradeSize = new BigNumber(amount);
 
         // Determine new total position size
-        const newSize = isBuyOrder
-            ? new BigNumber(oldSize).plus(tradeSize)
-            : new BigNumber(oldSize).minus(tradeSize);
-
+        const newSize = isSell
+            ? new BigNumber(oldSize).minus(tradeSize)
+            : new BigNumber(oldSize).plus(tradeSize);
         // If newSize is zero, the position is fully closed
         if (newSize.isZero()) {
             return null; // avgPrice resets in updateContractBalances
@@ -1107,33 +1094,75 @@ class MarginMap {
        *
        * NOTE: This only mints claim amount == delta (not full pnl), so it won't double-pay.
        */
-      applyIouClaimDelta(buyerAddress, sellerAddress, buyerPnl, sellerPnl, delta) {
-        const d = new BigNumber(delta || 0);
-        if (d.lte(0)) return; // only mint claims when imbalance is positive
+      /**
+         * Allocate IOU CLAIMs for an unfunded PnL imbalance.
+         *
+         * @param {string} buyerAddress   address of buyer in this match
+         * @param {string} sellerAddress  address of seller in this match
+         * @param {number} buyerPnl       realized PnL for buyer (can be negative)
+         * @param {number} sellerPnl      realized PnL for seller (can be negative)
+         * @param {number} imbalanceDelta unfunded profit amount to be represented as IOUs (>0 only)
+         */
+      async applyIouClaimDelta(
+          buyerAddress,
+          sellerAddress,
+          buyerPnl,
+          sellerPnl,
+          imbalanceDelta,
+          contractId
+        ) {
+          const totalImbalance = new BigNumber(imbalanceDelta || 0);
+          if (totalImbalance.lte(0)) return;
 
-        const bp = new BigNumber(buyerPnl || 0);
-        const sp = new BigNumber(sellerPnl || 0);
+          const buyerPnlBN = new BigNumber(buyerPnl || 0);
+          const sellerPnlBN = new BigNumber(sellerPnl || 0);
 
-        const bpPos = bp.gt(0) ? bp : new BigNumber(0);
-        const spPos = sp.gt(0) ? sp : new BigNumber(0);
-        const totalPos = bpPos.plus(spPos);
+          const buyerPositivePnl = buyerPnlBN.gt(0) ? buyerPnlBN : new BigNumber(0);
+          const sellerPositivePnl = sellerPnlBN.gt(0) ? sellerPnlBN : new BigNumber(0);
 
-        if (totalPos.lte(0)) return;
+          const totalPositivePnl = buyerPositivePnl.plus(sellerPositivePnl);
+          if (totalPositivePnl.lte(0)) return;
 
-        if (bpPos.gt(0) && buyerAddress) {
-          const share = d.times(bpPos).div(totalPos).decimalPlaces(8);
-          const pos = this._getOrInitPosition(buyerAddress);
-          pos.iouClaim = new BigNumber(pos.iouClaim || 0).plus(share).decimalPlaces(8).toNumber();
-          this.margins.set(buyerAddress, pos);
+          const allPositions = await this.getAllPositions(contractId);
+          if (!Array.isArray(allPositions)) return;
+
+          const findPosition = (addr) =>
+            allPositions.find(p => p.address === addr) || null;
+
+          // Allocate buyer share
+          if (buyerPositivePnl.gt(0) && buyerAddress) {
+            const buyerPosition = findPosition(buyerAddress);
+            if (buyerPosition) {
+              const buyerShare = totalImbalance
+                .times(buyerPositivePnl)
+                .div(totalPositivePnl)
+                .decimalPlaces(8);
+
+              buyerPosition.iouClaim = new BigNumber(buyerPosition.iouClaim || 0)
+                .plus(buyerShare)
+                .decimalPlaces(8)
+                .toNumber();
+            }
+          }
+
+          // Allocate seller share
+          if (sellerPositivePnl.gt(0) && sellerAddress) {
+            const sellerPosition = findPosition(sellerAddress);
+            if (sellerPosition) {
+              const sellerShare = totalImbalance
+                .times(sellerPositivePnl)
+                .div(totalPositivePnl)
+                .decimalPlaces(8);
+
+              sellerPosition.iouClaim = new BigNumber(sellerPosition.iouClaim || 0)
+                .plus(sellerShare)
+                .decimalPlaces(8)
+                .toNumber();
+            }
+          }
         }
 
-        if (spPos.gt(0) && sellerAddress) {
-          const share = d.times(spPos).div(totalPos).decimalPlaces(8);
-          const pos = this._getOrInitPosition(sellerAddress);
-          pos.iouClaim = new BigNumber(pos.iouClaim || 0).plus(share).decimalPlaces(8).toNumber();
-          this.margins.set(sellerAddress, pos);
-        }
-      }
+
 
     /*realizePnl(address, contracts, price, avgPrice, isInverse, notionalValue, pos) {
         //const pos = this.margins.get(address);

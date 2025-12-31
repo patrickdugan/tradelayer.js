@@ -30,7 +30,7 @@ const METADATA = "CL";
 // Every address attests itself
 
 const ADDRS = [
-  "tltc1qzawvfjaevklqj97k0erz32hmkah6r393fj6r6k",
+  /*"tltc1qzawvfjaevklqj97k0erz32hmkah6r393fj6r6k",
   "tltc1qga7lx3gvd5ze2reqppnk8p3wj3jajwkzv0vxhm",
   "tltc1q2j6mv4vjq8wl6a8q8mr95pvz274rsywxm5esdj",
   "tltc1qcww05prg969haw2nsj9gxnxd90hd2gksgqy5w9",
@@ -47,7 +47,11 @@ const ADDRS = [
   "tltc1qp0neu2tpy5mrc5sqxyhjklh7h5hjdp2a7qtvkz",
   "tltc1qsag9648568z36e5qhg82k6jy375w40gl3uwr94",
   "tltc1qer6agsu5ps6td8hz8wvqftrdjs74r2vank9gjz",
-  "tltc1qwsphhzq4sv9vylc20tlg0ahauphws9qjq5g9x9"
+  "tltc1qwsphhzq4sv9vylc20tlg0ahauphws9qjq5g9x9"*/
+  'tltc1qzq5fruejqg844ulcqc4lfcdwwvfpnf3vf9l73y',
+  'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6',
+  'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u',
+  'tltc1qnx2cm5dfyhravee74tv6kk45lcyp3ll4eu5g7d'
 ];
 
 

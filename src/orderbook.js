@@ -1370,7 +1370,6 @@ class Orderbook {
           return result;
         }
 
-
     async matchContractOrders(orderBook) {
       // Base condition: if there are no buy or sell orders, return an empty match array.
       if (!orderBook || orderBook.buy.length === 0 || orderBook.sell.length === 0) {
@@ -2802,12 +2801,13 @@ class Orderbook {
                     const delta = buyerPnl.plus(sellerPnl);
                     if (!isLiquidation) {
                       if (delta.gt(0) && (buyerPnl.gt(0) || sellerPnl.gt(0))) {
-                        marginMap.applyIouClaimDelta(
+                        await marginMap.applyIouClaimDelta(
                           trade.buyerAddress,
                           trade.sellerAddress,
                           buyerPnl,
                           sellerPnl,
-                          delta
+                          delta,
+                          trade.contractId
                         );
                       }
                       await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight);
