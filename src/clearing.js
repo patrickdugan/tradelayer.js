@@ -2296,51 +2296,45 @@ class Clearing {
         const remainder = adlSize.gt(0) ? adlSize.toNumber() : 0;
 
         let residualLossBN = new Big(0);
-        if (remainder >= 0) {
-
+        if (remainder > 0) {
           //------------------------------------------------------------
-          // 7.5 Recompute residual loss for the UNFILLED size at thisPrice
-          // (This is the only loss that can justify a pool seizure)
+          // 7.5 Recompute residual loss for the UNFILLED size
+          // Loss = remainder contracts moving from lastMark to thisPrice
           //------------------------------------------------------------
-          const qtyBN = new Big(remainder || 0).dp(8);
-          const execBN = new Big(markPrice || 0);  
-          const bkBN   = new Big(computedLiqPrice || 0);
-          const notBN  = new Big(notional || 0);
+          const qtyBN = new Big(remainder).dp(8);
+          const lastBN = new Big(priceInfo.lastPrice || markPrice);
+          const thisBN = new Big(priceInfo.thisPrice || markPrice);
+          const notBN = new Big(notional || 1);
 
-
-          if (qtyBN.gt(0)) {
-            if (!inverse) {
-              // If liquidation is SELL (liquidating long): loss if exec < bankruptcy
-              // If liquidation is BUY  (liquidating short): loss if exec > bankruptcy
-              const perUnitBN = isSell ? bkBN.minus(execBN) : execBN.minus(bkBN);
-              if (perUnitBN.gt(0)) residualLossBN = perUnitBN.times(qtyBN).times(notBN);
-            } else {
-              // Inverse version (keep it simple and explicit)
-              // loss per contract ≈ notional * max(0, (1/exec - 1/bk)) for one side, reversed for the other
-              // NOTE: Only do this if your inverse PnL model matches this; otherwise use your existing inverse loss helper here.
-              const invExecBN = execBN.gt(0) ? new Big(1).div(execBN) : new Big(0);
-              const invBkBN   = bkBN.gt(0)   ? new Big(1).div(bkBN)   : new Big(0);
-              const perUnitInvBN = isSell ? invExecBN.minus(invBkBN) : invBkBN.minus(invExecBN);
-              if (perUnitInvBN.gt(0)) residualLossBN = perUnitInvBN.times(qtyBN).times(notBN);
+          if (!inverse) {
+            // Linear: loss = qty * |lastMark - thisPrice| * notional
+            residualLossBN = qtyBN.times(lastBN.minus(thisBN).abs()).times(notBN);
+          } else {
+            // Inverse: loss = qty * |1/thisPrice - 1/lastMark| * notional
+            if (lastBN.gt(0) && thisBN.gt(0)) {
+              const invLast = new Big(1).div(lastBN);
+              const invThis = new Big(1).div(thisBN);
+              residualLossBN = qtyBN.times(invThis.minus(invLast).abs()).times(notBN);
             }
           }
           residualLossBN = residualLossBN.dp(8);
-        }        
-        console.log('residual loss for remainder '+residualLossBN.toNumber()+' '+remainder+' '+markPrice+' '+computedLiqPrice)
-          //------------------------------------------------------------
+        }
+
+        console.log('residual loss for remainder ' + residualLossBN.toNumber() + ' ' + remainder + ' last=' + priceInfo.lastPrice + ' this=' + priceInfo.thisPrice);
+
+        //------------------------------------------------------------
         // 8. Calculate liquidation pool BEFORE confiscation
-        // PATCH 2: seize only what's needed to cover the residual loss
+        // Pool = min(what we need, what's available)
         //------------------------------------------------------------
         const liqTally = await Tally.getTally(liquidatingAddress, collateralId);
-
         const fullPoolBN = new Big(liqTally.margin || 0)
           .plus(liqTally.available || 0)
           .dp(8);
 
-        // Seize only the amount needed to cover the residual loss (lossBN)
         const seizureBN = Big.min(fullPoolBN, residualLossBN).dp(8);
         const liquidationPool = seizureBN.toNumber();
-        console.log('liquidation pool '+liquidationPool)
+        console.log('liquidation pool ' + liquidationPool + ' (needed=' + residualLossBN.toNumber() + ' available=' + fullPoolBN.toNumber() + ')');
+
         //------------------------------------------------------------
         // 9. Confiscate liquidation pool (seized amount only)
         // Debit available first, then margin
