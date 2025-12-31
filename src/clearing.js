@@ -2287,7 +2287,7 @@ class Clearing {
 
       }
 
-        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.lastPrice)
+        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice)
 
         //------------------------------------------------------------
         // 7. Determine ADL remainder
