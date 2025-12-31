@@ -2508,8 +2508,8 @@ class Orderbook {
                     const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
 
                     const trade = {
-                        buyerPosition: match.buyerPosition,
-                        sellerPosition: match.sellerPosition,
+                        buyerPosition: positions.bp,
+                        sellerPosition: positions.sp,
                         buyerFee: buyerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
                         sellerFee: sellerFee.decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
                         contractId: match.sellOrder.contractId,

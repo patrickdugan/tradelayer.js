@@ -319,6 +319,22 @@ class Clearing {
         positions[idx] = updated;
     }
 
+    static addOrUpdatePositionInCache(ctxKey, address, position) {
+        const ctx = _positionCache.get(ctxKey);
+        if (!ctx) throw new Error(`No clearing context for ${ctxKey}`);
+        const positions = ctx.positions;
+
+        const idx = positions.findIndex(p => p.address === address);
+        if (idx === -1) {
+          // Add new position
+          positions.push({ ...position });
+          console.log(`[CACHE] Added new position for ${address}`);
+        } else {
+          // Update existing
+          positions[idx] = { ...position };
+        }
+    }
+
     static flushPositionCache(ctxKey) {
         const ctx = _positionCache.get(ctxKey);
         if (!ctx) throw new Error(`No clearing context for ${ctxKey}`);
@@ -1497,7 +1513,7 @@ class Clearing {
 
       let positions = Clearing.getPositionsFromCache(ctxKey);
       console.log(`[CACHE] positions.length=${Array.isArray(positions) ? positions.length : 'NOT ARRAY'}`);
-
+      console.log('positions before final '+JSON.stringify(positions))
       if (!Array.isArray(positions) || positions.length === 0) {
 
         console.log('[EXIT] no positions');
@@ -1526,6 +1542,7 @@ class Clearing {
       if (!lastPrice.gt(0)) {
         console.log('[EXIT] no lastPrice');
         const finalPositions = Clearing.flushPositionCache(ctxKey);
+        console.log('final positions '+JSON.stringify(finalPositions))
         await marginMap.mergePositions(finalPositions, contractId, true);
         return { positions, liqEvents: [], systemicLoss: new BigNumber(0), pnlDelta: new BigNumber(0) };
       }
@@ -2025,15 +2042,23 @@ class Clearing {
 
 
     static updatePositions(positions, updatedCounterparties) {
-        //console.log('updated counterparties '+JSON.stringify(updatedCounterparties))
-        if(!updatedCounterparties){return positions}
+        if (!updatedCounterparties) return positions;
+        
         const counterpartyMap = new Map(updatedCounterparties.map(pos => [pos.address, pos]));
-
-        return positions.map(pos => 
+        const result = positions.map(pos => 
             counterpartyMap.has(pos.address) 
-                ? { ...pos, ...counterpartyMap.get(pos.address) }  // Merge updated counterparty data
-                : pos  // Keep the original position if no update
+                ? { ...pos, ...counterpartyMap.get(pos.address) }
+                : pos
         );
+        
+        // Add any counterparties that weren't in original positions
+        for (const cp of updatedCounterparties) {
+            if (!positions.find(p => p.address === cp.address)) {
+                result.push({ ...cp });
+            }
+        }
+        
+        return result;
     }
 
        static async handleLiquidation(
@@ -2196,10 +2221,11 @@ class Clearing {
           console.log('safe size!? '+safeSize)
 
           obData = await orderbook.insertOrder(liqOb, obData, liqOb.sell, true);
+          let trades= []
 
           const matchResult = await orderbook.matchContractOrders(obData);   
           if (matchResult.matches && matchResult.matches.length > 0) {
-                await orderbook.processContractMatches(matchResult.matches, blockHeight, false,markPrice);
+                trades= await orderbook.processContractMatches(matchResult.matches, blockHeight, false,markPrice);
           }
 
           console.log('liq match result '+JSON.stringify(matchResult))
@@ -2220,7 +2246,35 @@ class Clearing {
           // Never exceed requested liqAmount
           obFill = new Big(Math.min(filledFromMatches, liqAmount));
           console.log('obFill after matches '+obFill.toNumber()+' '+filledFromMatches+' '+liqAmount)
+
+                
+      // ============================================================
+      // ✅ CANONICAL FIX: advance positionCache from TRADE RESULTS
+      // ============================================================
+      // ============================================================
+      // Apply ONLY the final position per address from this batch
+      // ============================================================
+      if (Array.isArray(trades)) {
+        const finalPositions = new Map(); // addr -> position
+
+          for (const t of trades) {
+            if (t.buyerAddress && t.buyerPosition) {
+              finalPositions.set(t.buyerAddress, t.buyerPosition);
+            }
+            if (t.sellerAddress && t.sellerPosition) {
+              finalPositions.set(t.sellerAddress, t.sellerPosition);
+            }
+          }
+
+          for (const [addr, pos] of finalPositions.entries()) {
+            Clearing.addOrUpdatePositionInCache(ctxKey, addr, pos);
+            console.log(
+              `[CACHE APPLY FINAL] ${addr} contracts=${pos.contracts}`
+            );
+          }
         }
+
+      }
 
         await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice)
 
