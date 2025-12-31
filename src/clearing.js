@@ -292,12 +292,23 @@ class Clearing {
     }
 
     static initPositionCache(contractId, blockHeight, positions) {
-        const key = `${contractId}:${blockHeight}`;
-        // Deep clone so nobody mutates marginMap’s internal structures
-        const cloned = JSON.parse(JSON.stringify(positions));
-        _positionCache.set(key, { positions: cloned });
-        return key;
-    }
+      const key = `${contractId}:${blockHeight}`;
+      
+      // Convert Map to Array if needed
+      let posArray;
+      if (positions instanceof Map) {
+          posArray = Array.from(positions.values());
+      } else if (Array.isArray(positions)) {
+          posArray = positions;
+      } else {
+          posArray = [];
+      }
+      
+      // Deep clone so nobody mutates marginMap's internal structures
+      const cloned = JSON.parse(JSON.stringify(posArray));
+      _positionCache.set(key, { positions: cloned });
+      return key;
+  }
 
     static getPositionsFromCache(ctxKey) {
         const ctx = _positionCache.get(ctxKey);
@@ -1714,10 +1725,10 @@ class Clearing {
           systemicLoss: liq.systemicLoss
         });
 
-        if (liq.counterparties?.length > 0) {
+        /*if (liq.counterparties?.length > 0) {
           console.log(`[LIQ UPDATE POSITIONS] counterparties=`, liq.counterparties);
           positions = Clearing.updatePositions(positions, liq.counterparties);
-        }
+        }*/
       }
 
       // ------------------------------------------------------------
@@ -2254,7 +2265,7 @@ class Clearing {
       // ============================================================
       // Apply ONLY the final position per address from this batch
       // ============================================================
-      if (Array.isArray(trades)) {
+      if (trades.length>0){
         const finalPositions = new Map(); // addr -> position
 
           for (const t of trades) {
@@ -2276,7 +2287,7 @@ class Clearing {
 
       }
 
-        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice)
+        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.lastPrice)
 
         //------------------------------------------------------------
         // 7. Determine ADL remainder
