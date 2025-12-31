@@ -1940,7 +1940,7 @@ class Clearing {
         inverse
       ) {
         const PRECISION = 30;
-
+        console.log('last price in compute liq price '+lastPrice+' '+equity+' '+contracts)
         const BNLast = new BigNumber(lastPrice);
         const BNEq = new BigNumber(equity);
         const BNContracts = new BigNumber(contracts);

@@ -231,7 +231,7 @@ function extractAvailable(tallyArray, address, propertyId = "5") {
   const contractParams = {
     contractId: CONTRACT_ID,
     sell: action,
-    amount: contracts,
+    amount: 20,//contracts,
     price: priceFloat,
   };
 
