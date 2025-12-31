@@ -389,170 +389,108 @@ class MarginMap {
     }
 
     async updateContractBalances(
-        address,
-        amount,
-        price,
-        isSell,
-        position,
-        inverse,
-        close,
-        flip,
-        contractId,
-        inClearing,
-        block,
-        initial
+      address,
+      amount,
+      price,
+      isSell,        // IMPORTANT: this is order.sell
+      position,
+      inverse,
+      close,
+      flip,
+      contractId,
+      inClearing,
+      block,
+      initial
     ) {
-        console.log('pre-liq check in update contracts ' + amount + ' ' + JSON.stringify(position));
+      const BigNumber = require('bignumber.js');
 
-        /*if (position.contracts == null) {
-            position.contracts = 0;
-        }
-        if (position.newPosThisBlock === undefined) {
-            position.newPosThisBlock = 0;
-        }*/
+      if (!position) return null;
 
-        // Capture old size BEFORE contract update
-        const oldSize = position.contracts;
+      // ------------------------------------------------------------
+      // 0) Normalize
+      // ------------------------------------------------------------
+      if (position.contracts == null) position.contracts = 0;
+      if (position.newPosThisBlock == null) position.newPosThisBlock = 0;
+      if (position.margin == null) position.margin = 0;
+      if (position.unrealizedPNL == null) position.unrealizedPNL = 0;
+      if (position.avgPrice == null) position.avgPrice = 0;
 
-        console.log(
-            'inside updateContractBalances ' + close + ' ' + flip + 
-            ' position ' + oldSize + ' avgPrice ' + position.avgPrice
+      const amountBN = new BigNumber(amount);
+      const oldSize = new BigNumber(position.contracts);
+
+      // ------------------------------------------------------------
+      // 1) Signed delta (CORE FIX)
+      // ------------------------------------------------------------
+      // BUY  => +amount
+      // SELL => -amount
+      const signedDelta = isSell
+        ? amountBN.negated()
+        : amountBN;
+
+      let delta = signedDelta;
+
+      // ------------------------------------------------------------
+      // 2) Close = clamp only (never flip sign)
+      // ------------------------------------------------------------
+      if (close) {
+        if (oldSize.isZero()) return position;
+
+        const reducible = BigNumber.min(
+          oldSize.abs(),
+          signedDelta.abs()
         );
 
-        // ----------------------------
-        // AVG PRICE LOGIC (correct)
-        // ----------------------------
+        delta = oldSize.isPositive()
+          ? reducible.negated()  // reducing long
+          : reducible;           // reducing short
+      }
 
-        // Case 1: Flip → full close + new open in opposite direction
-        if (flip > 0) {
-            position.avgPrice = price;
-            console.log('FLIP: avgPrice reset to', position.avgPrice);
-        }
+      const newSize = oldSize.plus(delta);
 
-        // Case 2: Not a flip, not a close → open or extend
-        else if (close === 0) {
+      // ------------------------------------------------------------
+      // 3) Avg price update (unchanged semantics)
+      // ------------------------------------------------------------
+      let newAvg = position.avgPrice;
 
-            // New open (flat → nonflat)
-            if (oldSize === 0) {
-                position.avgPrice = price;
-                console.log('NEW OPEN: avgPrice =', position.avgPrice);
-            }
-
-            // Extend existing same-side position (weighted avg)
-            else if (
-                (oldSize > 0 && !isSell) ||
-                (oldSize < 0 && isSell)
-            ) {
-                console.log('Weighted avg update →', amount, price, contractId);
-                position.avgPrice = await this.updateAveragePrice(
-                    position, amount, price, contractId, isSell
-                );
-                console.log('Weighted avg result → avgPrice =', position.avgPrice);
-            }
-
-            // Partial close (oldSize and trade sides differ)
-            else {
-                console.log('PARTIAL CLOSE: avgPrice unchanged:', position.avgPrice);
-            }
-        }
-
-        // Case 3: Explicit close trade
-        else {
-            console.log('CLOSE TRADE: avgPrice unchanged:', position.avgPrice);
-        }
-
-        // -----------------------------------------------------
-        // UPDATE CONTRACT COUNT AFTER avgPrice adjustments
-        // -----------------------------------------------------
-        console.log('position size before update ' + position.contracts);
-
-        const amountBN = new BigNumber(amount);
-         let newPositionSize = isSell
-          ? new BigNumber(oldSize).minus(amountBN).toNumber()  // SELL
-          : new BigNumber(oldSize).plus(amountBN).toNumber();  // BUY
-
-
-        console.log(
-            'newPositionSize ' + newPositionSize +
-            ' address ' + address +
-            ' amount ' + amount +
-            ' isSell ' + isSell
+      if (!newSize.isZero()) {
+        const updated = await this.updateAveragePrice(
+          position,
+          amount,
+          price,
+          contractId,
+          isSell          // updateAveragePrice expects isSell
         );
+        if (updated != null) newAvg = updated;
+      } else {
+        newAvg = null;
+      }
 
-        position.contracts = newPositionSize;
+      // ------------------------------------------------------------
+      // 4) Apply
+      // ------------------------------------------------------------
+      position.contracts = newSize.toNumber();
+      position.newPosThisBlock += delta.toNumber();
+      position.avgPrice = newAvg;
 
-        // -----------------------------------------------------
-        // NOW fetch contract info and compute liquidation
-        // -----------------------------------------------------
-        const ContractList = require('./contractRegistry.js');
-        const TallyMap = require('./tally.js');
+      // ------------------------------------------------------------
+      // 5) RECORD SIGNED DELTA (THIS FIXES SUPPLY)
+      // ------------------------------------------------------------
+      await this.recordMarginMapDelta(
+        address,
+        contractId,
+        position.contracts,      // totalPosition
+        delta.toNumber(),        // SIGNED position delta
+        0,                       // margin delta
+        0,                       // uPNL
+        position.avgPrice || 0,
+        'updateContractBalances',
+        block,
+        position.bankruptcyPrice
+      );
 
-        const contractInfo = await ContractList.getContractInfo(contractId);
-        const notionalValue = contractInfo.notionalValue;
-        const collateralId = contractInfo.collateralPropertyId;
-
-        const balances = await TallyMap.getTally(address, collateralId);
-        const available = balances.available;
-
-        const isLong = position.contracts > 0;
-
-        console.log('about to calc liq for pos ' + JSON.stringify(position));
-        const liquidationInfo = this.calculateLiquidationPrice(
-            available,
-            position.margin,
-            position.contracts,
-            notionalValue,
-            inverse,
-            isLong,
-            position.avgPrice
-        );
-
-        console.log('liquidation info ' + JSON.stringify(liquidationInfo));
-
-        // -----------------------------------------------------
-        // Liquidation / reset logic
-        // -----------------------------------------------------
-        if (!liquidationInfo || position.contracts === 0) {
-            position.liqPrice = 0;
-            position.bankruptcyPrice = 0;
-
-            // If flat, avgPrice must be reset to null
-            if (position.contracts === 0) {
-                position.avgPrice = null;
-            }
-        } else {
-            position.liqPrice = liquidationInfo.liquidationPrice || null;
-            position.bankruptcyPrice = liquidationInfo.bankruptcyPrice;
-        }
-
-        // -----------------------------------------------------
-        // SAVE POSITION TO MARGIN MAP
-        // -----------------------------------------------------
-        console.log('Saving position', JSON.stringify(position));
-        this.margins.set(address, position);
-
-        let tag = 'updateContractBalances';
-        if (inClearing) {
-            tag = initial ? 'initialLiq' : 'liquidatingContract';
-        }
-
-        await this.saveMarginMap(block);
-
-        await this.recordMarginMapDelta(
-            address,
-            contractId,
-            newPositionSize,
-            amount,
-            0,
-            0,
-            0,
-            tag,
-            block,
-            position.bankruptcyPrice
-        );
-
-        return position;
+      return position;
     }
+
 
     
     calculateLiquidationPrice(available, margin, contracts, notionalValue, isInverse, isLong, avgPrice,uPNL) {
