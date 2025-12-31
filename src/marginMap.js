@@ -344,7 +344,7 @@ class MarginMap {
             const key = JSON.stringify({ seriesId: this.seriesId });
             const marginMapsDB = await db.getDatabase('marginMaps');
             const value = JSON.stringify([...this.margins]);
-            console.log(value)
+            //console.log(value)
                     // Save the margin map to the database
             await marginMapsDB.updateAsync({ _id: key }, { $set: {block: block, value: value}},{upsert: true})
             //await marginMapsDB.loadDatabase();
@@ -362,7 +362,7 @@ class MarginMap {
             match.buyOrder.buyerAddress,
             match.buyOrder.amount,
             match.tradePrice,
-            match.sellOrder.sell,
+            match.buyOrder.sell,
             match.buyerPosition,
             match.inverse,
             buyerClose,
@@ -403,7 +403,7 @@ class MarginMap {
         initial
     ) {
         console.log('pre-liq check in update contracts ' + amount + ' ' + JSON.stringify(position));
-
+        console.log('checking isSell in match update '+isSell)
         /*if (position.contracts == null) {
             position.contracts = 0;
         }

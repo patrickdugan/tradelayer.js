@@ -384,7 +384,7 @@ class Orderbook {
                             p.stop,
                             orderbook      // ✅ pass the existing instance through
                         );
-                        console.log(' match result ' + JSON.stringify(matchResult));
+                        //console.log(' match result ' + JSON.stringify(matchResult));
                     }
                 }
 
@@ -1399,7 +1399,6 @@ class Orderbook {
         let sellOrder = orderBook.sell[0];
         let buyOrder = orderBook.buy[0];
 
-        console.log('remaining sells ' + JSON.stringify(orderBook.sell));
         console.log('sell order ' + JSON.stringify(sellOrder));
 
         // Remove orders with zero amounts
