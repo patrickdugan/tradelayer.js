@@ -2611,7 +2611,7 @@ class Orderbook {
                         let settlementPNL =
                                 await marginMap.settlePNL(
                                     trade.buyerAddress,
-                                    buyerClosesAgainstLast,
+                                    -buyerClosesAgainstLast,
                                     trade.price,
                                     lastPrice,
                                     trade.contractId,
@@ -2720,7 +2720,7 @@ class Orderbook {
                             ) : 0
 
                         settlementPNL += sameBlockPNL*/
-                        console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
+                        //console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
