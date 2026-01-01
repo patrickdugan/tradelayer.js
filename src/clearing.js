@@ -1119,12 +1119,11 @@ class Clearing {
             };
         }
     }
-    
+
     static async settleLiqNewContractsFromDB(contractId, blockHeight, lastPrice) {
       const BigNumber = require('bignumber.js');
       const Tally = require('./tally.js');
       const ContractRegistry = require('./contractRegistry.js');
-      const MarginMap = require('./marginMap.js');
       
       const trades = await TradeHistory.getLiquidationTradesForContractAtBlock(contractId, blockHeight);
       console.log('trades in settleLiqNewContractsFromDB ' + JSON.stringify(trades));
@@ -1135,104 +1134,81 @@ class Clearing {
       const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
       const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
       
-      const liqTrades = trades;
-      if (!liqTrades?.length) return;
+      if (!trades?.length) return;
       
-      // Track running position changes to handle multiple trades per address
-      const positionDeltas = new Map();
+      // Track running position for each address (starts as undefined = unknown)
+      const runningPosition = new Map();
       
       for (const trade of liqTrades) {
         const entryPrice = Number(trade.price);
         if (!entryPrice || entryPrice <= 0) continue;
-        console.log('entry price ' + entryPrice);
-        
         const amount = Number(trade.amount);
         
         // ---------- BUYER side ----------
-        // Get buyer's position BEFORE this block's trades
         const buyerAddr = trade.buyerAddress;
-        let buyerContractsBefore = positionDeltas.get(buyerAddr);
-        if (buyerContractsBefore === undefined) {
-          // First trade for this address - get from buyerPosition.contracts MINUS amount bought
-          // OR look at the position state before trades
-          const buyerPos = trade.buyerPosition;
-          // buyerPosition.contracts is AFTER the trade, so subtract to get before
-          buyerContractsBefore = (buyerPos?.contracts || 0) - amount;
-          positionDeltas.set(buyerAddr, buyerPos?.contracts || 0);
+        let buyerBefore;
+        
+        if (runningPosition.has(buyerAddr)) {
+          // We've processed a trade for this address already
+          buyerBefore = runningPosition.get(buyerAddr);
         } else {
-          // We've seen this address before, adjust
-          const contractsAfter = buyerContractsBefore + amount;
-          positionDeltas.set(buyerAddr, contractsAfter);
+          // First trade - derive "before" from "after" in trade data
+          const buyerAfter = trade.buyerPosition?.contracts || 0;
+          buyerBefore = buyerAfter - amount;  // buyer bought, so before = after - amount
         }
         
-        // If buyer was short (negative), they're closing
-        const buyerClose = buyerContractsBefore < 0 
-          ? Math.min(amount, Math.abs(buyerContractsBefore)) 
+        // Update running position
+        const buyerAfter = buyerBefore + amount;
+        runningPosition.set(buyerAddr, buyerAfter);
+        
+        // Calculate how much they closed vs opened
+        const buyerClose = buyerBefore < 0 
+          ? Math.min(amount, Math.abs(buyerBefore)) 
           : 0;
         const buyerOpened = amount - buyerClose;
         
-        console.log(`buyer ${buyerAddr.slice(-8)} before=${buyerContractsBefore} close=${buyerClose} opened=${buyerOpened}`);
+        console.log(`buyer ${buyerAddr.slice(-8)} before=${buyerBefore} after=${buyerAfter} close=${buyerClose} opened=${buyerOpened}`);
         
         if (buyerOpened > 0) {
-          const qty = buyerOpened;
-          let pnl;
-          if (!inverse) {
-            pnl = qty * notional * (refPrice - entryPrice);
-          } else {
-            pnl = qty * notional * ((1 / entryPrice) - (1 / refPrice));
-          }
-          console.log('buyer pnl ' + pnl);
+          let pnl = !inverse
+            ? buyerOpened * notional * (refPrice - entryPrice)
+            : buyerOpened * notional * ((1 / entryPrice) - (1 / refPrice));
+          
           if (pnl !== 0) {
-            await Tally.updateBalance(
-              buyerAddr,
-              collateralId,
-              pnl,
-              0, 0, 0,
-              'liqNewContractTieOff',
-              blockHeight
-            );
+            await Tally.updateBalance(buyerAddr, collateralId, pnl, 0, 0, 0, 'liqNewContractTieOff', blockHeight);
           }
         }
         
         // ---------- SELLER side ----------
         const sellerAddr = trade.sellerAddress;
-        let sellerContractsBefore = positionDeltas.get(sellerAddr);
-        if (sellerContractsBefore === undefined) {
-          const sellerPos = trade.sellerPosition;
-          // sellerPosition.contracts is AFTER the trade, so add back to get before
-          sellerContractsBefore = (sellerPos?.contracts || 0) + amount;
-          positionDeltas.set(sellerAddr, sellerPos?.contracts || 0);
+        let sellerBefore;
+        
+        if (runningPosition.has(sellerAddr)) {
+          sellerBefore = runningPosition.get(sellerAddr);
         } else {
-          const contractsAfter = sellerContractsBefore - amount;
-          positionDeltas.set(sellerAddr, contractsAfter);
+          const sellerAfter = trade.sellerPosition?.contracts || 0;
+          sellerBefore = sellerAfter + amount;  // seller sold, so before = after + amount
         }
         
-        // If seller was long (positive), they're closing
-        const sellerClose = sellerContractsBefore > 0
-          ? Math.min(amount, sellerContractsBefore)
+        // Update running position
+        const sellerAfter = sellerBefore - amount;
+        runningPosition.set(sellerAddr, sellerAfter);
+        
+        // Calculate how much they closed vs opened
+        const sellerClose = sellerBefore > 0
+          ? Math.min(amount, sellerBefore)
           : 0;
         const sellerOpened = amount - sellerClose;
         
-        console.log(`seller ${sellerAddr.slice(-8)} before=${sellerContractsBefore} close=${sellerClose} opened=${sellerOpened}`);
+        console.log(`seller ${sellerAddr.slice(-8)} before=${sellerBefore} after=${sellerAfter} close=${sellerClose} opened=${sellerOpened}`);
         
         if (sellerOpened > 0) {
-          const qty = -sellerOpened;
-          let pnl;
-          if (!inverse) {
-            pnl = qty * notional * (refPrice - entryPrice);
-          } else {
-            pnl = qty * notional * ((1 / entryPrice) - (1 / refPrice));
-          }
-          console.log('seller pnl ' + pnl);
+          let pnl = !inverse
+            ? -sellerOpened * notional * (refPrice - entryPrice)
+            : -sellerOpened * notional * ((1 / entryPrice) - (1 / refPrice));
+          
           if (pnl !== 0) {
-            await Tally.updateBalance(
-              sellerAddr,
-              collateralId,
-              pnl,
-              0, 0, 0,
-              'liqNewContractTieOff',
-              blockHeight
-            );
+            await Tally.updateBalance(sellerAddr, collateralId, pnl, 0, 0, 0, 'liqNewContractTieOff', blockHeight);
           }
         }
       }
