@@ -2588,6 +2588,11 @@ class Orderbook {
                     let buyerPnl = new BigNumber(0), sellerPnl = new BigNumber(0);
                     console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
                     let closedShorts=0
+                    let realizedBuyerLoss = 0
+                    let realizedSellerLoss = 0
+                    let realizedBuyerProfit = 0
+                    let realizedSellerProfit = 0
+
                     if((isBuyerReducingPosition||isBuyerFlippingPosition)/*&&!match.buyOrder.liq*/){
                         closedShorts = match.buyOrder.amount
 
@@ -2655,6 +2660,8 @@ class Orderbook {
                             trade.contractId
                           );
 
+                          realizedBuyerLoss=recovery
+
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Buyer still short ${recovery.remaining}`);
                             // optional: escalate to insurance/liquidation path
@@ -2662,27 +2669,7 @@ class Orderbook {
 
                           }
                         } else {
-                          const positive = new BigNumber(settlementPNL);
-
-                          // cap immediate payout by realized loss funding
-                          const immediate = BigNumber.min(positive, realizedLossFunded);
-                          const deferred  = positive.minus(immediate);
-
-                          if (immediate.gt(0)) {
-                            await TallyMap.updateBalance(
-                              match.buyOrder.buyerAddress,
-                              collateralPropertyId,
-                              immediate.toNumber(),
-                              0, 0, 0,
-                              'contractTradeSettlement',
-                              currentBlockHeight
-                            );
-                          }
-
-                          // defer the rest as IOU
-                          if (deferred.gt(0)) {
-                            trade.sellerDeferredPnl = deferred;
-                          }
+                            realizedSellerProfit= settlementPNL
                         }
 
 
@@ -2757,17 +2744,51 @@ class Orderbook {
                             currentBlockHeight,
                             trade.contractId
                           );
-
+                            realizedSellerLoss=recovery
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Seller still short ${recovery.remaining}`);
                             trade.remainderLiq = recovery.remainder
                           }
                         } else {
-                          const positive = new BigNumber(settlementPNL);
+                            realizedSellerProfit= settlementPNL
+                        }
 
+                        sellerPnl=new BigNumber(settlementPNL) 
+                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
+                            address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
+                            timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
+                        //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
+                        tradeHistoryManager.savePNL(savePNLParams)
+                    }
+
+                    if(realizedBuyerProfit>0){
+                            const realizedBuyerProfitBN = new BigNumber(realizedBuyerProfit)
                           // cap immediate payout by realized loss funding
-                          const immediate = BigNumber.min(positive, realizedLossFunded);
-                          const deferred  = positive.minus(immediate);
+                          const immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
+                          const deferred  = realizedBuyerProfitBN.minus(immediate);
+
+                          if (immediate.gt(0)) {
+                            await TallyMap.updateBalance(
+                              match.buyOrder.buyerAddress,
+                              collateralPropertyId,
+                              immediate.toNumber(),
+                              0, 0, 0,
+                              'contractTradeSettlement',
+                              currentBlockHeight
+                            );
+                          }
+
+                          // defer the rest as IOU
+                          if (deferred.gt(0)) {
+                            trade.sellerDeferredPnl = deferred.toNumber();
+                          }
+                    }
+
+                    if(realizedSellerProfit>0){
+                            const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
+                          // cap immediate payout by realized loss funding
+                          const immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
+                          const deferred  = realizedSellerProfitBN.minus(immediate);
 
                           if (immediate.gt(0)) {
                             await TallyMap.updateBalance(
@@ -2782,16 +2803,8 @@ class Orderbook {
 
                           // defer the rest as IOU
                           if (deferred.gt(0)) {
-                            trade.sellerDeferredPnl = deferred;
+                            trade.sellerDeferredPnl = deferred.toNumber();
                           }
-                        }
-
-                        sellerPnl=new BigNumber(settlementPNL) 
-                        const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
-                            address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
-                            timestamp: new Date().toISOString(), txid: match.sellOrder.sellerTx, settlementPNL: settlementPNL, marginReduction:reduction, avgEntry: avgEntry}
-                        //console.log('preparing to call savePNL with params '+JSON.stringify(savePNLParams))
-                        tradeHistoryManager.savePNL(savePNLParams)
                     }
 
                     const contractLTCValue = await VolumeIndex.getContractUnitLTCValue(trade.contractId)
