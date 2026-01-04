@@ -41,6 +41,93 @@ class PnlIou {
         }
     }
 
+        static claimKey(contractId, propertyId) {
+            return `claims:${Number(contractId)}:${Number(propertyId)}`;
+        }
+
+        static async getClaimMap(db, contractId, propertyId) {
+          const db = await dbInstance.getDatabase('iou');
+          return await db.findOneAsync({
+            _id: claimsId(contractId, propertyId)
+          });
+        }
+
+        static async saveClaimMap(db, doc) {
+          const db = await dbInstance.getDatabase('iou');
+          await db.updateAsync(
+            { _id: doc._id },
+            doc,
+            { upsert: true }
+          );
+        }
+
+        static async addIouClaims(
+            contractId,
+            propertyId,
+            block,
+            buyerAddr,
+            sellerAddr,
+            buyerPnl,
+            sellerPnl,
+            delta
+        ) {
+            const d = new BigNumber(delta || 0);
+            if (d.lte(0)) return null;
+
+            const bP = new BigNumber(buyerPnl || 0);
+            const sP = new BigNumber(sellerPnl || 0);
+
+            const posBuyer  = BigNumber.max(bP, 0);
+            const posSeller = BigNumber.max(sP, 0);
+            const sumPos = posBuyer.plus(posSeller);
+            if (sumPos.lte(0)) return null;
+
+            const buyerShare  = posBuyer.gt(0)  ? d.times(posBuyer.div(sumPos))  : new BigNumber(0);
+            const sellerShare = posSeller.gt(0) ? d.times(posSeller.div(sumPos)) : new BigNumber(0);
+
+            let doc = await PnlIou.getClaimMap(contractId, propertyId);
+
+            if (!doc) {
+                doc = {
+                    _id: PnlIou.claimKey(contractId, propertyId),
+                    contractId: Number(contractId),
+                    propertyId: Number(propertyId),
+                    claims: {},
+                    lastBlock: block
+                };
+            }
+
+            if (buyerShare.gt(0)) {
+                doc.claims[buyerAddr] = new BigNumber(doc.claims[buyerAddr] || 0)
+                    .plus(buyerShare)
+                    .toString(10);
+            }
+
+            if (sellerShare.gt(0)) {
+                doc.claims[sellerAddr] = new BigNumber(doc.claims[sellerAddr] || 0)
+                    .plus(sellerShare)
+                    .toString(10);
+            }
+
+            doc.lastBlock = block;
+            await PnlIou.saveClaimMap(doc);
+
+            // optional but recommended for traceability
+            await PnlIou.audit({
+                event: 'claim_accrual',
+                block,
+                contractId: Number(contractId),
+                propertyId: Number(propertyId),
+                delta: d.toString(10),
+                buyerAddr,
+                sellerAddr,
+                buyerShare: buyerShare.toString(10),
+                sellerShare: sellerShare.toString(10)
+            });
+
+            return doc;
+        }
+
     // -----------------------
     // Add ∆IOU
     // delta > 0 → system owes traders
@@ -115,35 +202,43 @@ class PnlIou {
         if (deficit.gte(0)) return;
         if (markDelta.lte(0)) return;
 
-        const payout = BigNumber.min(markDelta, deficit);
-        await this.addDelta(contractId, propertyId, payout, blockHeight);
+        const payout = BigNumber.min(markDelta, deficit.abs());
+        await this.addDelta(contractId, propertyId, payout.negated(), blockHeight);
     }
-
+    
     static async payOutstandingIous(contractId, propertyId, markDelta, blockHeight) {
+        const BigNumber = require('bignumber.js');
         const MarginMap = require('./marginMap.js');
-        const mm = await MarginMap.getInstance(contractId);
-        const positions = await mm.getAllPositions(contractId);
 
-        let surplus = await this.get(contractId, propertyId);
-        if (surplus.lte(0)) return;
+        const d = new BigNumber(markDelta || 0);
+        if (d.lte(0)) return;
 
-        let payout = BigNumber.min(markDelta, surplus);
+        // Load bucket surplus
+        const surplus = await this.get(contractId, propertyId);
+        if (!surplus || surplus.lte(0)) return;
 
-        const claimants = positions
-            .filter(p => p.iouClaim && p.iouClaim.gt(0))
-            .map(p => ({ address: p.address, claim: p.iouClaim }));
+        const payoutCap = BigNumber.min(d, surplus);
 
-        if (claimants.length === 0) return;
+        // Load claim map from IOU DB
+        const claimDoc = await this.getClaimMap(contractId, propertyId);
+        if (!claimDoc || !claimDoc.claims) return;
 
-        const totalClaims = claimants.reduce(
+        const entries = Object.entries(claimDoc.claims)
+            .map(([address, v]) => ({ address, claim: new BigNumber(v || 0) }))
+            .filter(c => c.claim.gt(0));
+
+        if (entries.length === 0) return;
+
+        const totalClaims = entries.reduce(
             (acc, c) => acc.plus(c.claim),
             new BigNumber(0)
         );
 
-        payout = BigNumber.min(totalClaims, surplus);
+        const payout = BigNumber.min(payoutCap, totalClaims);
+        if (payout.lte(0)) return;
 
         // -----------------------
-        // NEW: payout summary audit
+        // payout summary audit
         // -----------------------
         await PnlIou.audit({
             event: 'payout_summary',
@@ -152,23 +247,28 @@ class PnlIou {
             propertyId,
             payout: payout.toString(10),
             totalClaims: totalClaims.toString(10),
-            claimants: claimants.length
+            claimants: entries.length
         });
 
-        for (let c of claimants) {
+        const mm = await MarginMap.getInstance(contractId);
+
+        for (const c of entries) {
             const share = payout.times(c.claim).div(totalClaims);
-            const pos = await mm.getPositionForAddress(c.address, contractId);
 
-            const before = new BigNumber(pos.iouClaim || 0);
+            // real balance movement
+            await mm.credit(c.address, propertyId, share);
 
-            pos.realizedPnL = new BigNumber(pos.realizedPnL || 0).plus(share);
-            pos.iouClaim = before.minus(share).decimalPlaces(8);
-            if (pos.iouClaim.lt(0)) pos.iouClaim = new BigNumber(0);
+            const before = c.claim;
+            const remaining = before.minus(share);
 
-            await mm.writePositionToMap(contractId, pos);
+            if (remaining.lte(0)) {
+                delete claimDoc.claims[c.address];
+            } else {
+                claimDoc.claims[c.address] = remaining.toString(10);
+            }
 
             // -----------------------
-            // NEW: per-address payout audit
+            // per-address payout audit
             // -----------------------
             await PnlIou.audit({
                 event: 'payout_item',
@@ -178,12 +278,17 @@ class PnlIou {
                 address: c.address,
                 paid: share.toString(10),
                 claimBefore: before.toString(10),
-                claimAfter: pos.iouClaim.toString(10)
+                claimAfter: BigNumber.max(remaining, 0).toString(10)
             });
         }
 
+        claimDoc.lastBlock = blockHeight;
+        await this.saveClaimMap(claimDoc);
+
+        // bucket moves toward zero
         await this.addDelta(contractId, propertyId, payout, blockHeight);
     }
+
 
     static async get(contractId, propertyId) {
         const key = PnlIou.key(contractId, propertyId);

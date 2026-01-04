@@ -2620,7 +2620,7 @@ class Orderbook {
                                     perContractNotional
                                   );
                         console.log('settlementPNL for buyer '+settlementPNL)
-                        /*let sameBlockPNL = buyerClosesAgainstAvg>0 
+                        let sameBlockPNL = buyerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.buyerAddress,
                                 buyerClosesAgainstAvg,
@@ -2633,7 +2633,7 @@ class Orderbook {
                             ) : 0
                         console.log('vestigial settlementPNL '+sameBlockPNL)
 
-                        settlementPNL += sameBlockPNL*/
+                        settlementPNL += sameBlockPNL
                      
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedShorts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
@@ -2707,7 +2707,7 @@ class Orderbook {
                                     perContractNotional
                                   )
 
-                        /*let sameBlockPNL = sellerClosesAgainstAvg>0 
+                        let sameBlockPNL = sellerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.sellerAddress,
                                 sellerClosesAgainstAvg,
@@ -2719,7 +2719,7 @@ class Orderbook {
                                 perContractNotional
                             ) : 0
 
-                        settlementPNL += sameBlockPNL*/
+                        settlementPNL += sameBlockPNL
                         //console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
@@ -2799,19 +2799,29 @@ class Orderbook {
                     await marginMap.saveMarginMap(currentBlockHeight);
                     const delta = buyerPnl.plus(sellerPnl);
                     if (!isLiquidation) {
-                      if (delta.gt(0) && (buyerPnl.gt(0) || sellerPnl.gt(0))) {
-                        await marginMap.applyIouClaimDelta(
-                          trade.buyerAddress,
-                          trade.sellerAddress,
-                          buyerPnl,
-                          sellerPnl,
-                          delta,
-                          trade.contractId
-                        );
-                      }
-                      await PnlIou.addDelta(trade.contractId, collateralPropertyId, delta.negated(), currentBlockHeight);
-                    }
-                    
+
+                          if (delta.gt(0)) {
+                            await PnlIou.addIouClaims(
+                              trade.contractId,
+                              collateralPropertyId,
+                              currentBlockHeight,
+                              trade.buyerAddress,
+                              trade.sellerAddress,
+                              buyerPnl,
+                              sellerPnl,
+                              delta
+                            );
+                          }
+
+                          // Bucket tracks aggregate deficit (negative means owed)
+                          await PnlIou.addDelta(
+                            trade.contractId,
+                            collateralPropertyId,
+                            delta.negated(),
+                            currentBlockHeight
+                          );
+                        }  // NEW: record unfunded gains as IOU claims
+
                     trade.delta=delta  
                     trades.push(trade)                     
             }
