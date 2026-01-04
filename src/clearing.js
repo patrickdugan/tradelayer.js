@@ -1386,13 +1386,19 @@ class Clearing {
             console.log('price info '+JSON.stringify(priceInfo))
             await Clearing.pruneInstaLiqOrders(priceInfo.thisPrice, blockHeight,id)
             await Clearing.settleNewContracts(id,blockHeight,priceInfo)
+            const collateralId = await ContractRegistry.getCollateralId(id);
+            await Clearing.settleIousForBlock(
+                id,
+                collateralId,
+                blockHeight
+            );
+
             if (!priceInfo || !priceInfo.updated) continue;
 
             const newPrice = priceInfo.thisPrice;
             console.log('new price ' + newPrice);
             console.log('Making settlement for positions at block height:', JSON.stringify(contract) + ' ' + blockHeight);
 
-            const collateralId = await ContractRegistry.getCollateralId(id);
             const inverse = await ContractRegistry.isInverse(id);
 
             const notionalValue = await ContractRegistry.getNotionalValue(id, newPrice);
@@ -2672,26 +2678,41 @@ class Clearing {
         }
     }
 
-    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLossSN,collateralId,pnlDelta){        
-          const doc = await PnlIou.getDoc(contractId, collateralId); // whatever you have
-          const payAmount = PnlIou.blockReductionTowardZero(doc);
-          let allocations = []
-          if (payAmount.gt(0)) {
-             allocations = await PnlIou.payOutstandingIous(
-                                      contractId,
-                                      collateralId,
-                                      payAmount,
-                                      blockHeight
-                                  );
-                                }
+    static async settleIousForBlock(contractId, collateralId, blockHeight) {
+        const doc = await PnlIou.getDoc(contractId, collateralId);
+        if (!doc) return;
+        const TallyMap = require('./tally.js')
+        console.log('doc in settleIous'+JSON.stringify(doc))
+        const payAmount = PnlIou.blockReductionTowardZero(doc);
+        console.log('payout '+payAmount.toNumber())
+        if (payAmount.lte(0)) return;
+
+        const allocations = await PnlIou.payOutstandingIous(
+            contractId,
+            collateralId,
+            payAmount.toNumber(),
+            blockHeight
+        );
+        console.log('allocations '+JSON.stringify(allocations) )
 
         if (!allocations.length) return;
 
-      // 2️⃣ Apply tally credits + IOU cache reduction
-      for (const a of allocations) {
-        // credit real balance
-          await TallyMap.updateBalance(a.address, collateralId, a.amount, 0,0, 0, 'iouPayout', blockHeight,'')
+        for (const a of allocations) {
+            await TallyMap.updateBalance(
+                a.address,
+                collateralId,
+                a.amount,
+                0, 0, 0,
+                'iouPayout',
+                blockHeight,
+                ''
+            );
         }
+    }
+
+
+    static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLossSN,collateralId,pnlDelta){        
+         
           const totalLoss= new BigNumber(totalLossSN)
        //try {
                 // Step 2: Check if insurance fund payout is needed

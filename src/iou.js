@@ -234,15 +234,17 @@ class PnlIou {
         const MarginMap = require('./marginMap.js');
 
         const d = new BigNumber(markDelta || 0);
+        console.log('mark delta in payOutstandingIous'+markDelta)
         if (d.lte(0)) return [];
 
         // ------------------------------------
         // 1) Load bucket (truth already written earlier)
         // ------------------------------------
         const bucketDoc = await PnlIou.getBucket(contractId, propertyId);
+        console.log('bucket Doc '+JSON.stringify(bucketDoc))
         if (!bucketDoc || !bucketDoc.amount) return [];
 
-        const surplus = bucketDoc.amount;
+        const surplus = bucketDoc.blockDelta;
         if (surplus.lte(0)) return [];
 
         // markDelta ∩ surplus
@@ -253,6 +255,7 @@ class PnlIou {
         // 2) Load claim map
         // ------------------------------------
         const claimDoc = await PnlIou.getClaimMap(contractId, propertyId);
+        console.log('claimDoc '+JSON.stringify(claimDoc))
         if (!claimDoc || !claimDoc.claims) return [];
 
         const entries = Object.entries(claimDoc.claims)
@@ -291,11 +294,10 @@ class PnlIou {
         // ------------------------------------
         // 4) Allocate + credit + reduce claims
         // ------------------------------------
+        console.log('entries in payout '+JSON.stringify(entries))
+        console.log('total claims '+totalClaims.toNumber())
         for (const c of entries) {
             const share = payout.times(c.claim).div(totalClaims);
-
-            // real balance movement
-            await mm.credit(c.address, propertyId, share);
 
             const remaining = c.claim.minus(share);
             if (remaining.lte(0)) {
@@ -303,6 +305,7 @@ class PnlIou {
             } else {
                 claimDoc.claims[c.address] = remaining.toString(10);
             }
+            console.log('allocation to push '+c.address+' '+share)
 
             allocations.push({
                 address: c.address,
@@ -372,7 +375,7 @@ class PnlIou {
                 total = total.plus(doc.amount || 0);
             }
         }
-        return total;
+        if(total.gte(0)){return total}else{return 0}
     }
 
     static async delete(contractId, propertyId) {

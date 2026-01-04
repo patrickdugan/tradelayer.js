@@ -2662,14 +2662,29 @@ class Orderbook {
 
                           }
                         } else {
-                          await TallyMap.updateBalance(
-                            match.buyOrder.buyerAddress,
-                            collateralPropertyId,
-                            settlementPNL, 0, 0, 0,
-                            'contractTradeSettlement',
-                            currentBlockHeight
-                          );
+                          const positive = new BigNumber(settlementPNL);
+
+                          // cap immediate payout by realized loss funding
+                          const immediate = BigNumber.min(positive, realizedLossFunded);
+                          const deferred  = positive.minus(immediate);
+
+                          if (immediate.gt(0)) {
+                            await TallyMap.updateBalance(
+                              match.buyOrder.buyerAddress,
+                              collateralPropertyId,
+                              immediate.toNumber(),
+                              0, 0, 0,
+                              'contractTradeSettlement',
+                              currentBlockHeight
+                            );
+                          }
+
+                          // defer the rest as IOU
+                          if (deferred.gt(0)) {
+                            trade.sellerDeferredPnl = deferred;
+                          }
                         }
+
 
 
                         buyerPnl=new BigNumber(settlementPNL)       
@@ -2748,14 +2763,29 @@ class Orderbook {
                             trade.remainderLiq = recovery.remainder
                           }
                         } else {
-                          await TallyMap.updateBalance(
-                            match.sellOrder.sellerAddress,
-                            collateralPropertyId,
-                            settlementPNL, 0, 0, 0,
-                            'contractTradeSettlement',
-                            currentBlockHeight
-                          );
+                          const positive = new BigNumber(settlementPNL);
+
+                          // cap immediate payout by realized loss funding
+                          const immediate = BigNumber.min(positive, realizedLossFunded);
+                          const deferred  = positive.minus(immediate);
+
+                          if (immediate.gt(0)) {
+                            await TallyMap.updateBalance(
+                              match.sellOrder.sellerAddress,
+                              collateralPropertyId,
+                              immediate.toNumber(),
+                              0, 0, 0,
+                              'contractTradeSettlement',
+                              currentBlockHeight
+                            );
+                          }
+
+                          // defer the rest as IOU
+                          if (deferred.gt(0)) {
+                            trade.sellerDeferredPnl = deferred;
+                          }
                         }
+
                         sellerPnl=new BigNumber(settlementPNL) 
                         const savePNLParams = {height:currentBlockHeight, contractId:match.sellOrder.contractId, accountingPNL: match.sellerPosition.realizedPNL, isBuyer:false, 
                             address: match.sellOrder.sellerAddress, amount: closedContracts, tradePrice: match.tradePrice, collateralPropertyId: collateralPropertyId,
