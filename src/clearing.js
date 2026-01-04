@@ -2675,10 +2675,23 @@ class Clearing {
     static async performAdditionalSettlementTasks(blockHeight,positions, contractId, mark,totalLossSN,collateralId,pnlDelta){        
           const doc = await PnlIou.getDoc(contractId, collateralId); // whatever you have
           const payAmount = PnlIou.blockReductionTowardZero(doc);
-
+          let allocations = []
           if (payAmount.gt(0)) {
-            await PnlIou.payOutstandingIous(contractId, collateralId, payAmount, blockHeight /*, positions */);
-          }
+             allocations = await PnlIou.payOutstandingIous(
+                                      contractId,
+                                      collateralId,
+                                      payAmount,
+                                      blockHeight
+                                  );
+                                }
+
+        if (!allocations.length) return;
+
+      // 2️⃣ Apply tally credits + IOU cache reduction
+      for (const a of allocations) {
+        // credit real balance
+          await TallyMap.updateBalance(a.address, collateralId, a.amount, 0,0, 0, 'iouPayout', blockHeight,'')
+        }
           const totalLoss= new BigNumber(totalLossSN)
        //try {
                 // Step 2: Check if insurance fund payout is needed

@@ -45,14 +45,14 @@ class PnlIou {
             return `claims:${Number(contractId)}:${Number(propertyId)}`;
         }
 
-        static async getClaimMap(db, contractId, propertyId) {
+        static async getClaimMap(contractId, propertyId) {
           const db = await dbInstance.getDatabase('iou');
           return await db.findOneAsync({
-            _id: claimsId(contractId, propertyId)
+            _id: PnlIou.claimKey(contractId, propertyId)
           });
         }
 
-        static async saveClaimMap(db, doc) {
+        static async saveClaimMap(doc) {
           const db = await dbInstance.getDatabase('iou');
           await db.updateAsync(
             { _id: doc._id },
@@ -60,6 +60,28 @@ class PnlIou {
             { upsert: true }
           );
         }
+
+        static async getBucket(contractId, propertyId) {
+            const key = PnlIou.key(contractId, propertyId);
+            const db = await PnlIou._db();
+
+            let doc = null;
+            try {
+                doc = await db.findOneAsync({ _id: key });
+            } catch (e) {
+                return null;
+            }
+
+            if (!doc) return null;
+
+            return {
+                ...doc,
+                amount: new BigNumber(doc.amount || 0),
+                blockStartAmount: new BigNumber(doc.blockStartAmount || 0),
+                blockDelta: new BigNumber(doc.blockDelta || 0)
+            };
+        }
+
 
         static async addIouClaims(
             contractId,
@@ -206,28 +228,41 @@ class PnlIou {
         await this.addDelta(contractId, propertyId, payout.negated(), blockHeight);
     }
     
+    // returns: [{ address, amount }]
     static async payOutstandingIous(contractId, propertyId, markDelta, blockHeight) {
         const BigNumber = require('bignumber.js');
         const MarginMap = require('./marginMap.js');
 
         const d = new BigNumber(markDelta || 0);
-        if (d.lte(0)) return;
+        if (d.lte(0)) return [];
 
-        // Load bucket surplus
-        const surplus = await this.get(contractId, propertyId);
-        if (!surplus || surplus.lte(0)) return;
+        // ------------------------------------
+        // 1) Load bucket (truth already written earlier)
+        // ------------------------------------
+        const bucketDoc = await PnlIou.getBucket(contractId, propertyId);
+        if (!bucketDoc || !bucketDoc.amount) return [];
 
+        const surplus = bucketDoc.amount;
+        if (surplus.lte(0)) return [];
+
+        // markDelta ∩ surplus
         const payoutCap = BigNumber.min(d, surplus);
+        if (payoutCap.lte(0)) return [];
 
-        // Load claim map from IOU DB
-        const claimDoc = await this.getClaimMap(contractId, propertyId);
-        if (!claimDoc || !claimDoc.claims) return;
+        // ------------------------------------
+        // 2) Load claim map
+        // ------------------------------------
+        const claimDoc = await PnlIou.getClaimMap(contractId, propertyId);
+        if (!claimDoc || !claimDoc.claims) return [];
 
         const entries = Object.entries(claimDoc.claims)
-            .map(([address, v]) => ({ address, claim: new BigNumber(v || 0) }))
+            .map(([address, v]) => ({
+                address,
+                claim: new BigNumber(v || 0)
+            }))
             .filter(c => c.claim.gt(0));
 
-        if (entries.length === 0) return;
+        if (!entries.length) return [];
 
         const totalClaims = entries.reduce(
             (acc, c) => acc.plus(c.claim),
@@ -235,11 +270,11 @@ class PnlIou {
         );
 
         const payout = BigNumber.min(payoutCap, totalClaims);
-        if (payout.lte(0)) return;
+        if (payout.lte(0)) return [];
 
-        // -----------------------
-        // payout summary audit
-        // -----------------------
+        // ------------------------------------
+        // 3) Audit payout summary
+        // ------------------------------------
         await PnlIou.audit({
             event: 'payout_summary',
             block: blockHeight,
@@ -251,25 +286,29 @@ class PnlIou {
         });
 
         const mm = await MarginMap.getInstance(contractId);
+        const allocations = [];
 
+        // ------------------------------------
+        // 4) Allocate + credit + reduce claims
+        // ------------------------------------
         for (const c of entries) {
             const share = payout.times(c.claim).div(totalClaims);
 
             // real balance movement
             await mm.credit(c.address, propertyId, share);
 
-            const before = c.claim;
-            const remaining = before.minus(share);
-
+            const remaining = c.claim.minus(share);
             if (remaining.lte(0)) {
                 delete claimDoc.claims[c.address];
             } else {
                 claimDoc.claims[c.address] = remaining.toString(10);
             }
 
-            // -----------------------
-            // per-address payout audit
-            // -----------------------
+            allocations.push({
+                address: c.address,
+                amount: share
+            });
+
             await PnlIou.audit({
                 event: 'payout_item',
                 block: blockHeight,
@@ -277,18 +316,18 @@ class PnlIou {
                 propertyId,
                 address: c.address,
                 paid: share.toString(10),
-                claimBefore: before.toString(10),
                 claimAfter: BigNumber.max(remaining, 0).toString(10)
             });
         }
 
+        // ------------------------------------
+        // 5) Persist updated claim map
+        // ------------------------------------
         claimDoc.lastBlock = blockHeight;
-        await this.saveClaimMap(claimDoc);
+        await PnlIou.saveClaimMap(claimDoc);
 
-        // bucket moves toward zero
-        await this.addDelta(contractId, propertyId, payout, blockHeight);
+        return allocations;
     }
-
 
     static async get(contractId, propertyId) {
         const key = PnlIou.key(contractId, propertyId);
