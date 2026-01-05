@@ -2722,7 +2722,7 @@ class Orderbook {
                             ) : 0
 
                         settlementPNL += sameBlockPNL
-                        //console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
+                        console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
@@ -2761,51 +2761,75 @@ class Orderbook {
                         tradeHistoryManager.savePNL(savePNLParams)
                     }
 
-                    if(realizedBuyerProfit>0){
-                            const realizedBuyerProfitBN = new BigNumber(realizedBuyerProfit)
-                          // cap immediate payout by realized loss funding
-                          const immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
-                          const deferred  = realizedBuyerProfitBN.minus(immediate);
+                    if(realizedSellerProfit > 0) {
+                 const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
+    
+            if (isLiquidation) {
+                // Liquidation: credit full profit - funded by counterparty loss or tie-off
+                await TallyMap.updateBalance(
+                    match.sellOrder.sellerAddress,
+                    collateralPropertyId,
+                    realizedSellerProfitBN.toNumber(),
+                    0, 0, 0,
+                    'liquidationProfit',
+                    currentBlockHeight
+                );
+            } else {
+                // Normal trade: cap immediate payout by realized loss funding
+                const immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
+                const deferred  = realizedSellerProfitBN.minus(immediate);
 
-                          if (immediate.gt(0)) {
-                            await TallyMap.updateBalance(
-                              match.buyOrder.buyerAddress,
-                              collateralPropertyId,
-                              immediate.toNumber(),
-                              0, 0, 0,
-                              'contractTradeSettlement',
-                              currentBlockHeight
-                            );
-                          }
-
-                          // defer the rest as IOU
-                          if (deferred.gt(0)) {
-                            trade.sellerDeferredPnl = deferred.toNumber();
-                          }
+                    if (immediate.gt(0)) {
+                        await TallyMap.updateBalance(
+                            match.sellOrder.sellerAddress,
+                            collateralPropertyId,
+                            immediate.toNumber(),
+                            0, 0, 0,
+                            'contractTradeSettlement',
+                            currentBlockHeight
+                        );
                     }
 
-                    if(realizedSellerProfit>0){
-                            const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
-                          // cap immediate payout by realized loss funding
-                          const immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
-                          const deferred  = realizedSellerProfitBN.minus(immediate);
-
-                          if (immediate.gt(0)) {
-                            await TallyMap.updateBalance(
-                              match.sellOrder.sellerAddress,
-                              collateralPropertyId,
-                              immediate.toNumber(),
-                              0, 0, 0,
-                              'contractTradeSettlement',
-                              currentBlockHeight
-                            );
-                          }
-
-                          // defer the rest as IOU
-                          if (deferred.gt(0)) {
-                            trade.sellerDeferredPnl = deferred.toNumber();
-                          }
+                    if (deferred.gt(0)) {
+                        trade.sellerDeferredPnl = deferred.toNumber();
                     }
+                }
+            }
+
+        if(realizedBuyerProfit > 0) {
+            const realizedBuyerProfitBN = new BigNumber(realizedBuyerProfit)
+            
+            if (isLiquidation) {
+                // Liquidation: credit full profit
+                await TallyMap.updateBalance(
+                    match.buyOrder.buyerAddress,
+                    collateralPropertyId,
+                    realizedBuyerProfitBN.toNumber(),
+                    0, 0, 0,
+                    'liquidationProfit',
+                    currentBlockHeight
+                );
+            } else {
+                // Normal trade: cap immediate payout by realized loss funding
+                const immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
+                const deferred  = realizedBuyerProfitBN.minus(immediate);
+
+                if (immediate.gt(0)) {
+                    await TallyMap.updateBalance(
+                        match.buyOrder.buyerAddress,
+                        collateralPropertyId,
+                        immediate.toNumber(),
+                        0, 0, 0,
+                        'contractTradeSettlement',
+                        currentBlockHeight
+                    );
+                }
+
+                if (deferred.gt(0)) {
+                    trade.buyerDeferredPnl = deferred.toNumber();
+                }
+            }
+        }
 
                     const contractLTCValue = await VolumeIndex.getContractUnitLTCValue(trade.contractId)
                     const totalContractsLTCValue = new BigNumber(contractLTCValue).times(trade.amount).decimalPlaces(8).toNumber()

@@ -242,6 +242,12 @@ class PnlIou {
         // ------------------------------------
         const bucketDoc = await PnlIou.getBucket(contractId, propertyId);
         console.log('bucket Doc '+JSON.stringify(bucketDoc))
+           // CRITICAL FIX: Only pay if the bucket was updated THIS block
+        if (Number(bucketDoc.lastBlock) !== Number(blockHeight)) {
+            console.log(`[settleIous] Skipping - bucket last updated in block ${bucketDoc.lastBlock}, current is ${blockHeight}`);
+            return [];
+        }
+        
         if (!bucketDoc || !bucketDoc.amount) return [];
 
         const surplus = bucketDoc.blockDelta;

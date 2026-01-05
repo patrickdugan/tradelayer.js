@@ -1116,6 +1116,7 @@ class Clearing {
                 isOracle: false,
                 oracleId: null,
                 error: error.message
+          
             };
         }
     }
@@ -1545,7 +1546,8 @@ class Clearing {
       // 1) Load positions
       // ------------------------------------------------------------
       const rawPositions = await marginMap.getAllPositions(contractId);
-
+      console.log('JSON of positions starting clearing '+JSON.stringify(rawPositions))
+      //if(blockHeight==4494797){throw new Error()}
       console.log(`[LOAD] rawPositions.size=${rawPositions?.size}`);
       const ctxKey = Clearing.initPositionCache(contractId, blockHeight, rawPositions);
       console.log(`[CACHE] initPositionCache ctxKey=${ctxKey}`);
