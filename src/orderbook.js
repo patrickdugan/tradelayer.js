@@ -2863,33 +2863,46 @@ class Orderbook {
                     }
                     // Save the updated margin map
                     await marginMap.saveMarginMap(currentBlockHeight);
-                    const delta = buyerPnl.plus(sellerPnl);
+                    
+                            const delta = buyerPnl.plus(sellerPnl);
+                    
                     if (!isLiquidation) {
-
-                          if (delta.gt(0)) {
+                        if (delta.gt(0)) {
+                            // Net profit in this trade (winner with no/partial loser to fund)
+                            // Creates IOU claims for the unfunded portion
                             await PnlIou.addIouClaims(
-                              trade.contractId,
-                              collateralPropertyId,
-                              currentBlockHeight,
-                              trade.buyerAddress,
-                              trade.sellerAddress,
-                              buyerPnl,
-                              sellerPnl,
-                              delta
+                                trade.contractId,
+                                collateralPropertyId,
+                                currentBlockHeight,
+                                trade.buyerAddress,
+                                trade.sellerAddress,
+                                buyerPnl,
+                                sellerPnl,
+                                delta
                             );
-                          }
+                            
+                            // Record as profit (system owes more)
+                            await PnlIou.addProfit(
+                                trade.contractId,
+                                collateralPropertyId,
+                                delta,
+                                currentBlockHeight
+                            );
+                        } else if (delta.lt(0)) {
+                            // Net loss in this trade (loser with no/partial winner)
+                            // Real tokens were debited - available for IOU payout
+                            await PnlIou.addLoss(
+                                trade.contractId,
+                                collateralPropertyId,
+                                delta.abs(),
+                                currentBlockHeight
+                            );
+                        }
+                        // If delta === 0, trade was fully offset internally, nothing to track
+                    }
 
-                          // Bucket tracks aggregate deficit (negative means owed)
-                          await PnlIou.addDelta(
-                            trade.contractId,
-                            collateralPropertyId,
-                            delta.negated(),
-                            currentBlockHeight
-                          );
-                        }  // NEW: record unfunded gains as IOU claims
-
-                    trade.delta=delta  
-                    trades.push(trade)                     
+                    trade.delta = delta;
+                    trades.push(trade);                    
             }
              return trades
 		}
