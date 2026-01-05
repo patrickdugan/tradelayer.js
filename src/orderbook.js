@@ -2659,7 +2659,7 @@ class Orderbook {
                             trade.contractId
                           );
 
-                          realizedBuyerLoss=recovery
+                          realizedBuyerLoss=recovery.totalUsed
 
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Buyer still short ${recovery.remaining}`);
@@ -2743,7 +2743,7 @@ class Orderbook {
                             currentBlockHeight,
                             trade.contractId
                           );
-                            realizedSellerLoss=recovery
+                            realizedSellerLoss=recovery.totalUsed
                           if (recovery.remaining > 0) {
                             console.log(`⚠️ Seller still short ${recovery.remaining}`);
                             trade.remainderLiq = recovery.remainder
@@ -2775,8 +2775,10 @@ class Orderbook {
                 );
             } else {
                 // Normal trade: cap immediate payout by realized loss funding
+                console.log('real profit '+realizedSellerProfit+' '+realizedBuyerLoss)
                 const immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
                 const deferred  = realizedSellerProfitBN.minus(immediate);
+                console.log("BASDFSDF deffered and immediate in seller contract profit settlement "+deferred+' '+immediate)
 
                     if (immediate.gt(0)) {
                         await TallyMap.updateBalance(

@@ -2680,25 +2680,37 @@ class Clearing {
         }
     }
 
-    static async settleIousForBlock(contractId, collateralId, blockHeight) {
+     static async settleIousForBlock(contractId, collateralId, blockHeight) {
         const doc = await PnlIou.getDoc(contractId, collateralId);
         if (!doc) return;
-        const TallyMap = require('./tally.js')
-        console.log('doc in settleIous'+JSON.stringify(doc))
-        const payAmount = PnlIou.blockReductionTowardZero(doc);
-        console.log('payout '+payAmount.toNumber())
-        if (payAmount.lte(0)) return;
-
+        
+        const TallyMap = require('./tally.js');
+        const BigNumber = require('bignumber.js');
+        
+        console.log('doc in settleIous: ' + JSON.stringify(doc));
+        
+        // CRITICAL FIX: Use blockLosses directly instead of blockReductionTowardZero
+        // blockLosses = real tokens debited from losers this block, available for payout
+        const blockLosses = new BigNumber(doc.blockLosses || 0);
+        
+        console.log('blockLosses for payout: ' + blockLosses.toNumber());
+        
+        if (blockLosses.lte(0)) {
+            console.log('[settleIous] No losses this block to pay out');
+            return;
+        }
+        
         const allocations = await PnlIou.payOutstandingIous(
             contractId,
             collateralId,
-            payAmount.toNumber(),
+            blockLosses.toNumber(),
             blockHeight
         );
-        console.log('allocations '+JSON.stringify(allocations) )
-
+        
+        console.log('allocations: ' + JSON.stringify(allocations));
+        
         if (!allocations.length) return;
-
+        
         for (const a of allocations) {
             await TallyMap.updateBalance(
                 a.address,

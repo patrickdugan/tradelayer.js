@@ -165,8 +165,8 @@ class PnlIou {
         if (loss.lte(0)) return null;
 
         const key = PnlIou.key(contractId, propertyId);
-        const db = await PnlIou._db();
-
+        const db = await dbInstance.getDatabase('iou');
+        
         let existing = null;
         try { existing = await db.findOneAsync({ _id: key }); } catch (e) {}
 
@@ -232,8 +232,8 @@ class PnlIou {
         if (profit.lte(0)) return null;
 
         const key = PnlIou.key(contractId, propertyId);
-        const db = await PnlIou._db();
-
+        const db = await dbInstance.getDatabase('iou');
+        
         let existing = null;
         try { existing = await db.findOneAsync({ _id: key }); } catch (e) {}
 

@@ -426,6 +426,28 @@ async function seedE16() {
   console.log('\n[E16] Expected: FRESH at 0, realized PNL +1.25');
 }
 
+async function seedE15() {
+  const buyAddr = 'tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx';
+  const side = 'BUY';
+  const priceFloat = 68.1;
+  const contracts = 2;
+
+  await sendType18Order(
+    buyAddr,
+    side,
+    priceFloat,
+    contracts
+  );
+
+   await sendType18Order(
+    buyAddr,
+    'SELL',
+    67.5,
+    2
+  );
+}
+
+
 async function main() {
   await init();
 
@@ -448,6 +470,7 @@ async function main() {
     case 'E12': return seedE12();
     case 'E13': return seedE13()
     case 'E14': return seedE14()
+    case 'E15': return seedE15()
     case 'E16': return seedE16()
     default:
       console.log('Options: E3 | E4 | E6 | E7 | E8 | E9-P1 | E9-P2 | E10-P1 | E10-P2 | E11');
