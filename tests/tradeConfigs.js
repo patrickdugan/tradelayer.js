@@ -36,15 +36,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let _inited = false;
 
 async function sendType18Order(traderAddr, side, priceFloat, contracts) {
-  const action = (side === 'BUY') ? 1 : 2;
+  const action = (side === 'BUY') ? 0 : 1;
+  console.log('sell value '+action)
   const contractParams = {
     contractId: CONTRACT_ID,
-    action: action,
+    sell: action,
     amount: contracts,
     price: priceFloat,
   };
 
-  console.log(`[tx18] ${traderAddr} ${side} ${contracts} @ ${priceFloat}`);
+  console.log(`[tx18] ${traderAddr} ${action} ${contracts} @ ${priceFloat}`);
   return TxUtils.createContractOnChainTradeTransaction(traderAddr, contractParams);
 }
 
@@ -153,17 +154,6 @@ async function init() {
   _inited = true;
 }
 
-async function sendType18Order(traderAddr, side, priceFloat, contracts) {
-  const action = (side === 'BUY') ? 1 : 2;
-  const contractParams = {
-    contractId: CONTRACT_ID,
-    action: action,
-    amount: contracts,
-    price: priceFloat,
-  };
-  console.log(`[tx18] ${traderAddr.slice(-8)} ${side} ${contracts} @ ${priceFloat}`);
-  return TxUtils.createContractOnChainTradeTransaction(traderAddr, contractParams);
-}
 
 async function matchedTrade(buyAddr, sellAddr, priceFloat, contracts) {
   await sendType18Order(buyAddr, 'BUY', priceFloat, contracts);
@@ -320,6 +310,122 @@ async function seedE11() {
   console.log('\n[E11] Check that flip recorded AND IOU recorded for close portion');
 }
 
+// ------------------------------------------------------------
+// E12: Same-Block Open/Close (Full Round Trip)
+// Self-contained matched pairs within spread
+// ------------------------------------------------------------
+
+async function seedE12() {
+  console.log('\n[E12] Same-block open & close across spread (guaranteed PNL)');
+  
+  const TRADER = 'tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx'; // 8gvnl
+  const MAKER  = 'tltc1q07ux9uzzgtkfykz67hy4z3530aks247emkxhj7'; // vg6q9
+
+  // Step 1: Open long by lifting best ask
+  // Crosses SELL @ 68.05
+  console.log('1) OPEN: 8gvnl BUYS 5 @ 68.05');
+  await matchedTrade(TRADER, MAKER, 68.05, 5);
+
+  // tiny delay to stay same block
+  await sleep(50);
+
+  // Step 2: Close long by hitting best bid
+  // Crosses BUY @ 67.50
+  console.log('2) CLOSE: 8gvnl SELLS 5 @ 67.50');
+  await matchedTrade(MAKER, TRADER, 67.50, 5);
+
+  console.log('\n[E12 EXPECTED]');
+  console.log('Position delta: 0');
+  console.log('Realized PNL: (67.50 - 68.05) * 5 = -2.75');
+  console.log('No oracle, no IOU, no ADL');
+}
+
+// ------------------------------------------------------------
+// E13: Same-Block Complex Sequence
+// All matched pairs at prices between 67-69
+// ------------------------------------------------------------
+
+async function seedE13() {
+  console.log('\n[E13] Complex same-block sequence');
+  
+  const ADDR_FRESH = 'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u';
+  const ADDR_VG6Q9 = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+  
+  console.log('FRESH starts at 0 contracts\n');
+  
+  // 1. Open 10 long @ 67
+  console.log('1. FRESH buys 10 @ 67');
+  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 68.01, 10);
+  await sleep(100);
+  
+  // 2. Close 3 @ 67.50
+  console.log('2. FRESH sells 3 @ 67.50 (partial close)');
+  await matchedTrade(ADDR_VG6Q9, ADDR_FRESH, 68.05, 3);
+  await sleep(100);
+  
+  // 3. Open 5 more @ 68
+  console.log('3. FRESH buys 5 @ 68 (open more)');
+  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 68.02, 5);
+  await sleep(100);
+  
+  // 4. Close all 12 @ 68.50
+  console.log('4. FRESH sells 12 @ 68.50 (close all)');
+  await matchedTrade(ADDR_VG6Q9, ADDR_FRESH, 68.08, 12);
+  
+  console.log('\n[E13] Expected: FRESH ends at 0 contracts');
+  console.log('Realized PNL: 3*(67.50-67) + 7*(68.50-67) + 5*(68.50-68) = 1.50 + 10.50 + 2.50 = 14.50');
+}
+
+// ------------------------------------------------------------
+// E14: Double Flip (Long -> Short -> Long)
+// ------------------------------------------------------------
+
+async function seedE14() {
+  console.log('\n[E14] Double flip in same block');
+  
+  const ADDR_8GVNL = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';  // +15 long
+  const ADDR_VG6Q9 = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';  // -15 short
+  
+  console.log('Starting: 8gvnl has +15 long @ ~66.33\n');
+  
+  // Flip 1: sell 20 @ 68 -> closes 15, opens 5 short
+  console.log('1. 8gvnl SELLS 20 @ 68 (flip +15 -> -5)');
+  await matchedTrade(ADDR_VG6Q9, ADDR_8GVNL, 68, 20);
+  await sleep(100);
+  
+  // Flip 2: buy 10 @ 67.50 -> closes 5 short, opens 5 long
+  console.log('2. 8gvnl BUYS 10 @ 67.50 (flip -5 -> +5)');
+  await matchedTrade(ADDR_8GVNL, ADDR_VG6Q9, 67.50, 10);
+  
+  console.log('\n[E14] Expected: 8gvnl ends at +5 long');
+  console.log('avgPrice for final 5 should be 67.50');
+}
+
+// ------------------------------------------------------------
+// E16: Same-Block Opposing Trades (wash)
+// ------------------------------------------------------------
+
+async function seedE16() {
+  console.log('\n[E16] Trader both sides same block - net zero');
+  
+  const ADDR_FRESH = 'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u';
+  const ADDR_VG6Q9 = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+  const ADDR_8GVNL = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  
+  console.log('FRESH (0 pos) buys then sells same size same block\n');
+  
+  // Buy 5 from vg6q9
+  console.log('1. FRESH BUYS 5 @ 67');
+  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 67, 5);
+  await sleep(50);
+  
+  // Sell 5 to 8gvnl
+  console.log('2. FRESH SELLS 5 @ 67.25');
+  await matchedTrade(ADDR_8GVNL, ADDR_FRESH, 67.25, 5);
+  
+  console.log('\n[E16] Expected: FRESH at 0, realized PNL +1.25');
+}
+
 async function main() {
   await init();
 
@@ -339,6 +445,10 @@ async function main() {
     case 'E10-P1': return seedE10_phase1();
     case 'E10-P2': return seedE10_phase2();
     case 'E11': return seedE11();
+    case 'E12': return seedE12();
+    case 'E13': return seedE13()
+    case 'E14': return seedE14()
+    case 'E16': return seedE16()
     default:
       console.log('Options: E3 | E4 | E6 | E7 | E8 | E9-P1 | E9-P2 | E10-P1 | E10-P2 | E11');
   }

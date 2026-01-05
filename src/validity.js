@@ -35,9 +35,13 @@ const Validity = {
         },
 
         isValidNumber(x) {
-          return typeof x === 'number' && Number.isFinite(x) && !isNaN(x) && x > 0;
-        },
+            // Add to validation
+            const MAX_SAFE_AMOUNT = 9007199254740991; // 2^53 - 1
+            const MAX_PRICE = 1e15; // 1 quadrillion - reasonable upper bound
 
+                if (x <= 0 || x > MAX_SAFE_AMOUNT) return false;
+                return (typeof x === 'number' && Number.isFinite(x) && !isNaN(x) && x > 0)
+        },
         //Type 0: Activation
         validateActivateTradeLayer: async (sender, params, txid) => {
             params.valid = true;

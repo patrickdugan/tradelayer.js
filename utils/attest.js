@@ -48,10 +48,8 @@ const ADDRS = [
   "tltc1qsag9648568z36e5qhg82k6jy375w40gl3uwr94",
   "tltc1qer6agsu5ps6td8hz8wvqftrdjs74r2vank9gjz",
   "tltc1qwsphhzq4sv9vylc20tlg0ahauphws9qjq5g9x9"*/
-  'tltc1qzq5fruejqg844ulcqc4lfcdwwvfpnf3vf9l73y',
-  'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6',
-  'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u',
-  'tltc1qnx2cm5dfyhravee74tv6kk45lcyp3ll4eu5g7d'
+  'tltc1q07ux9uzzgtkfykz67hy4z3530aks247emkxhj7',
+  'tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx'
 ];
 
 

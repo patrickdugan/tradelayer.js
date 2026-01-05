@@ -347,6 +347,7 @@ const Encode = {
     // Encode Trade Contract On-chain Transaction
     // **✅ Encode Trade Contract Onchain**
     encodeTradeContractOnchain: (params) => {
+        console.log('encoding payload for trade '+JSON.stringify(params))
         const payload = [
             params.contractId?.toString(36) ?? '0',
             new BigNumber(params.price).times(1e8).integerValue().toString(36),

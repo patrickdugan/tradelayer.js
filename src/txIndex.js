@@ -179,10 +179,11 @@ class TxIndex {
 
                 // 🔥 FIX: store **one tx per document** instead of the whole txDetails array
                 try {
-                    await txIndexDB.insertAsync({
-                        _id: `tx-${blockHeight}-${txId}`,
-                        value: thisTx
-                    });
+                   await txIndexDB.updateAsync(
+                        { _id: `tx-${blockHeight}-${txId}` },
+                        { _id: `tx-${blockHeight}-${txId}`, value: thisTx },
+                        { upsert: true }
+                    );
                 } catch (dbError) {
                     console.error(`Error inserting transaction data for txId ${txId} at blockHeight ${blockHeight}:`, dbError);
                 }
