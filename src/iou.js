@@ -4,6 +4,11 @@
 // Records PnL mismatch or loss shortfalls per (contractId, propertyId).
 // No instance state. No RAM caching.
 // Compatible with NeDB or Mongo via your db.js wrapper.
+//
+// KEY CHANGE: Track blockLosses and blockProfits separately.
+// - blockLosses: real tokens debited from losers (available to pay IOU holders)
+// - blockProfits: unfunded gains that become IOU claims
+// - blockDelta: kept for backward compat (= blockLosses - blockProfits from bucket perspective)
 
 const BigNumber = require('bignumber.js');
 const dbInstance = require('./db.js');
@@ -21,7 +26,7 @@ class PnlIou {
     }
 
     // -----------------------
-    // NEW: audit helper (same DB)
+    // Audit helper (same DB)
     // -----------------------
     static async audit(event) {
         const db = await PnlIou._db();
@@ -41,123 +46,123 @@ class PnlIou {
         }
     }
 
-        static claimKey(contractId, propertyId) {
-            return `claims:${Number(contractId)}:${Number(propertyId)}`;
-        }
+    static claimKey(contractId, propertyId) {
+        return `claims:${Number(contractId)}:${Number(propertyId)}`;
+    }
 
-        static async getClaimMap(contractId, propertyId) {
-          const db = await dbInstance.getDatabase('iou');
-          return await db.findOneAsync({
+    static async getClaimMap(contractId, propertyId) {
+        const db = await dbInstance.getDatabase('iou');
+        return await db.findOneAsync({
             _id: PnlIou.claimKey(contractId, propertyId)
-          });
-        }
+        });
+    }
 
-        static async saveClaimMap(doc) {
-          const db = await dbInstance.getDatabase('iou');
-          await db.updateAsync(
+    static async saveClaimMap(doc) {
+        const db = await dbInstance.getDatabase('iou');
+        await db.updateAsync(
             { _id: doc._id },
             doc,
             { upsert: true }
-          );
+        );
+    }
+
+    static async getBucket(contractId, propertyId) {
+        const key = PnlIou.key(contractId, propertyId);
+        const db = await PnlIou._db();
+
+        let doc = null;
+        try {
+            doc = await db.findOneAsync({ _id: key });
+        } catch (e) {
+            return null;
         }
 
-        static async getBucket(contractId, propertyId) {
-            const key = PnlIou.key(contractId, propertyId);
-            const db = await PnlIou._db();
+        if (!doc) return null;
 
-            let doc = null;
-            try {
-                doc = await db.findOneAsync({ _id: key });
-            } catch (e) {
-                return null;
-            }
+        return {
+            ...doc,
+            amount: new BigNumber(doc.amount || 0),
+            blockStartAmount: new BigNumber(doc.blockStartAmount || 0),
+            blockDelta: new BigNumber(doc.blockDelta || 0),
+            blockLosses: new BigNumber(doc.blockLosses || 0),
+            blockProfits: new BigNumber(doc.blockProfits || 0)
+        };
+    }
 
-            if (!doc) return null;
+    static async addIouClaims(
+        contractId,
+        propertyId,
+        block,
+        buyerAddr,
+        sellerAddr,
+        buyerPnl,
+        sellerPnl,
+        delta
+    ) {
+        const d = new BigNumber(delta || 0);
+        if (d.lte(0)) return null;
 
-            return {
-                ...doc,
-                amount: new BigNumber(doc.amount || 0),
-                blockStartAmount: new BigNumber(doc.blockStartAmount || 0),
-                blockDelta: new BigNumber(doc.blockDelta || 0)
+        const bP = new BigNumber(buyerPnl || 0);
+        const sP = new BigNumber(sellerPnl || 0);
+
+        const posBuyer  = BigNumber.max(bP, 0);
+        const posSeller = BigNumber.max(sP, 0);
+        const sumPos = posBuyer.plus(posSeller);
+        if (sumPos.lte(0)) return null;
+
+        const buyerShare  = posBuyer.gt(0)  ? d.times(posBuyer.div(sumPos))  : new BigNumber(0);
+        const sellerShare = posSeller.gt(0) ? d.times(posSeller.div(sumPos)) : new BigNumber(0);
+
+        let doc = await PnlIou.getClaimMap(contractId, propertyId);
+
+        if (!doc) {
+            doc = {
+                _id: PnlIou.claimKey(contractId, propertyId),
+                contractId: Number(contractId),
+                propertyId: Number(propertyId),
+                claims: {},
+                lastBlock: block
             };
         }
 
-
-        static async addIouClaims(
-            contractId,
-            propertyId,
-            block,
-            buyerAddr,
-            sellerAddr,
-            buyerPnl,
-            sellerPnl,
-            delta
-        ) {
-            const d = new BigNumber(delta || 0);
-            if (d.lte(0)) return null;
-
-            const bP = new BigNumber(buyerPnl || 0);
-            const sP = new BigNumber(sellerPnl || 0);
-
-            const posBuyer  = BigNumber.max(bP, 0);
-            const posSeller = BigNumber.max(sP, 0);
-            const sumPos = posBuyer.plus(posSeller);
-            if (sumPos.lte(0)) return null;
-
-            const buyerShare  = posBuyer.gt(0)  ? d.times(posBuyer.div(sumPos))  : new BigNumber(0);
-            const sellerShare = posSeller.gt(0) ? d.times(posSeller.div(sumPos)) : new BigNumber(0);
-
-            let doc = await PnlIou.getClaimMap(contractId, propertyId);
-
-            if (!doc) {
-                doc = {
-                    _id: PnlIou.claimKey(contractId, propertyId),
-                    contractId: Number(contractId),
-                    propertyId: Number(propertyId),
-                    claims: {},
-                    lastBlock: block
-                };
-            }
-
-            if (buyerShare.gt(0)) {
-                doc.claims[buyerAddr] = new BigNumber(doc.claims[buyerAddr] || 0)
-                    .plus(buyerShare)
-                    .toString(10);
-            }
-
-            if (sellerShare.gt(0)) {
-                doc.claims[sellerAddr] = new BigNumber(doc.claims[sellerAddr] || 0)
-                    .plus(sellerShare)
-                    .toString(10);
-            }
-
-            doc.lastBlock = block;
-            await PnlIou.saveClaimMap(doc);
-
-            // optional but recommended for traceability
-            await PnlIou.audit({
-                event: 'claim_accrual',
-                block,
-                contractId: Number(contractId),
-                propertyId: Number(propertyId),
-                delta: d.toString(10),
-                buyerAddr,
-                sellerAddr,
-                buyerShare: buyerShare.toString(10),
-                sellerShare: sellerShare.toString(10)
-            });
-
-            return doc;
+        if (buyerShare.gt(0)) {
+            doc.claims[buyerAddr] = new BigNumber(doc.claims[buyerAddr] || 0)
+                .plus(buyerShare)
+                .toString(10);
         }
 
+        if (sellerShare.gt(0)) {
+            doc.claims[sellerAddr] = new BigNumber(doc.claims[sellerAddr] || 0)
+                .plus(sellerShare)
+                .toString(10);
+        }
+
+        doc.lastBlock = block;
+        await PnlIou.saveClaimMap(doc);
+
+        // optional but recommended for traceability
+        await PnlIou.audit({
+            event: 'claim_accrual',
+            block,
+            contractId: Number(contractId),
+            propertyId: Number(propertyId),
+            delta: d.toString(10),
+            buyerAddr,
+            sellerAddr,
+            buyerShare: buyerShare.toString(10),
+            sellerShare: sellerShare.toString(10)
+        });
+
+        return doc;
+    }
+
     // -----------------------
-    // Add ∆IOU
-    // delta > 0 → system owes traders
-    // delta < 0 → traders owe system
+    // Add a LOSS to the bucket (positive amount = real tokens debited from loser)
+    // These tokens are available to pay out to IOU claimants
     // -----------------------
-    static async addDelta(contractId, propertyId, delta, block) {
-        const d = new BigNumber(delta || 0);
-        if (d.isZero()) return null;
+    static async addLoss(contractId, propertyId, lossAmount, block) {
+        const loss = new BigNumber(lossAmount || 0);
+        if (loss.lte(0)) return null;
 
         const key = PnlIou.key(contractId, propertyId);
         const db = await PnlIou._db();
@@ -166,7 +171,6 @@ class PnlIou {
         try { existing = await db.findOneAsync({ _id: key }); } catch (e) {}
 
         const current = new BigNumber((existing && existing.amount) || 0);
-
         const isNewBlock = !(existing && Number(existing.lastBlock) === Number(block));
 
         const blockStart = isNewBlock
@@ -177,8 +181,18 @@ class PnlIou {
             ? new BigNumber(0)
             : new BigNumber((existing && existing.blockDelta) || 0);
 
-        const nextBlockDelta = prevBlockDelta.plus(d);
-        const updated = current.plus(d);
+        const prevBlockLosses = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockLosses) || 0);
+
+        const prevBlockProfits = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockProfits) || 0);
+
+        // Loss adds to bucket (positive delta from bucket's perspective - tokens flowed in)
+        const nextBlockDelta = prevBlockDelta.plus(loss);
+        const nextBlockLosses = prevBlockLosses.plus(loss);
+        const updated = current.plus(loss);
 
         const doc = {
             _id: key,
@@ -187,27 +201,110 @@ class PnlIou {
             amount: updated.toString(10),
             lastBlock: block,
             blockStartAmount: blockStart.toString(10),
-            blockDelta: nextBlockDelta.toString(10)
+            blockDelta: nextBlockDelta.toString(10),
+            blockLosses: nextBlockLosses.toString(10),
+            blockProfits: prevBlockProfits.toString(10)
         };
 
         await db.updateAsync({ _id: key }, doc, { upsert: true });
 
-        // -----------------------
-        // NEW: audit bucket movement
-        // -----------------------
         await PnlIou.audit({
-            event: 'bucket_delta',
+            event: 'bucket_loss',
             block,
             contractId: Number(contractId),
             propertyId: Number(propertyId),
-            delta: d.toString(10),
+            loss: loss.toString(10),
             amountBefore: current.toString(10),
             amountAfter: updated.toString(10),
-            blockStartAmount: blockStart.toString(10),
-            blockDelta: nextBlockDelta.toString(10)
+            blockLosses: nextBlockLosses.toString(10),
+            blockProfits: prevBlockProfits.toString(10)
         });
 
         return doc;
+    }
+
+    // -----------------------
+    // Add a PROFIT to the bucket (positive amount = unfunded gains, creates IOU obligation)
+    // These are tracked separately and do NOT reduce the payout pool
+    // -----------------------
+    static async addProfit(contractId, propertyId, profitAmount, block) {
+        const profit = new BigNumber(profitAmount || 0);
+        if (profit.lte(0)) return null;
+
+        const key = PnlIou.key(contractId, propertyId);
+        const db = await PnlIou._db();
+
+        let existing = null;
+        try { existing = await db.findOneAsync({ _id: key }); } catch (e) {}
+
+        const current = new BigNumber((existing && existing.amount) || 0);
+        const isNewBlock = !(existing && Number(existing.lastBlock) === Number(block));
+
+        const blockStart = isNewBlock
+            ? current
+            : new BigNumber((existing && existing.blockStartAmount) || current);
+
+        const prevBlockDelta = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockDelta) || 0);
+
+        const prevBlockLosses = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockLosses) || 0);
+
+        const prevBlockProfits = isNewBlock
+            ? new BigNumber(0)
+            : new BigNumber((existing && existing.blockProfits) || 0);
+
+        // Profit subtracts from bucket (negative delta - system owes more)
+        const nextBlockDelta = prevBlockDelta.minus(profit);
+        const nextBlockProfits = prevBlockProfits.plus(profit);
+        const updated = current.minus(profit);
+
+        const doc = {
+            _id: key,
+            contractId: Number(contractId),
+            propertyId: Number(propertyId),
+            amount: updated.toString(10),
+            lastBlock: block,
+            blockStartAmount: blockStart.toString(10),
+            blockDelta: nextBlockDelta.toString(10),
+            blockLosses: prevBlockLosses.toString(10),
+            blockProfits: nextBlockProfits.toString(10)
+        };
+
+        await db.updateAsync({ _id: key }, doc, { upsert: true });
+
+        await PnlIou.audit({
+            event: 'bucket_profit',
+            block,
+            contractId: Number(contractId),
+            propertyId: Number(propertyId),
+            profit: profit.toString(10),
+            amountBefore: current.toString(10),
+            amountAfter: updated.toString(10),
+            blockLosses: prevBlockLosses.toString(10),
+            blockProfits: nextBlockProfits.toString(10)
+        });
+
+        return doc;
+    }
+
+    // -----------------------
+    // DEPRECATED: Use addLoss/addProfit instead
+    // Kept for backward compatibility
+    // -----------------------
+    static async addDelta(contractId, propertyId, delta, block) {
+        const d = new BigNumber(delta || 0);
+        if (d.isZero()) return null;
+
+        // Positive delta = loss (tokens flowed into bucket)
+        // Negative delta = profit (system owes more)
+        if (d.gt(0)) {
+            return await PnlIou.addLoss(contractId, propertyId, d, block);
+        } else {
+            return await PnlIou.addProfit(contractId, propertyId, d.abs(), block);
+        }
     }
 
     static blockReductionTowardZero(doc) {
@@ -228,40 +325,51 @@ class PnlIou {
         await this.addDelta(contractId, propertyId, payout.negated(), blockHeight);
     }
     
-    // returns: [{ address, amount }]
+    // -----------------------
+    // Pay outstanding IOUs using blockLosses (not blockDelta)
+    // This ensures profits don't reduce the payout pool
+    // -----------------------
     static async payOutstandingIous(contractId, propertyId, markDelta, blockHeight) {
         const BigNumber = require('bignumber.js');
         const MarginMap = require('./marginMap.js');
 
         const d = new BigNumber(markDelta || 0);
-        console.log('mark delta in payOutstandingIous'+markDelta)
+        console.log('mark delta in payOutstandingIous: ' + markDelta);
         if (d.lte(0)) return [];
 
         // ------------------------------------
-        // 1) Load bucket (truth already written earlier)
+        // 1) Load bucket
         // ------------------------------------
         const bucketDoc = await PnlIou.getBucket(contractId, propertyId);
-        console.log('bucket Doc '+JSON.stringify(bucketDoc))
-           // CRITICAL FIX: Only pay if the bucket was updated THIS block
+        console.log('bucket Doc: ' + JSON.stringify(bucketDoc));
+        
+        if (!bucketDoc) return [];
+        
+        // CRITICAL: Only pay if the bucket was updated THIS block
         if (Number(bucketDoc.lastBlock) !== Number(blockHeight)) {
             console.log(`[settleIous] Skipping - bucket last updated in block ${bucketDoc.lastBlock}, current is ${blockHeight}`);
             return [];
         }
+
+        // KEY CHANGE: Use blockLosses instead of blockDelta
+        // blockLosses = real tokens debited from losers this block
+        const availablePayout = bucketDoc.blockLosses || new BigNumber(0);
+        console.log('blockLosses available for payout: ' + availablePayout.toString());
         
-        if (!bucketDoc || !bucketDoc.amount) return [];
+        if (availablePayout.lte(0)) {
+            console.log('[settleIous] No losses this block to pay out');
+            return [];
+        }
 
-        const surplus = bucketDoc.blockDelta;
-        if (surplus.lte(0)) return [];
-
-        // markDelta ∩ surplus
-        const payoutCap = BigNumber.min(d, surplus);
+        // markDelta ∩ availablePayout
+        const payoutCap = BigNumber.min(d, availablePayout);
         if (payoutCap.lte(0)) return [];
 
         // ------------------------------------
         // 2) Load claim map
         // ------------------------------------
         const claimDoc = await PnlIou.getClaimMap(contractId, propertyId);
-        console.log('claimDoc '+JSON.stringify(claimDoc))
+        console.log('claimDoc: ' + JSON.stringify(claimDoc));
         if (!claimDoc || !claimDoc.claims) return [];
 
         const entries = Object.entries(claimDoc.claims)
@@ -290,6 +398,7 @@ class PnlIou {
             contractId,
             propertyId,
             payout: payout.toString(10),
+            blockLosses: availablePayout.toString(10),
             totalClaims: totalClaims.toString(10),
             claimants: entries.length
         });
@@ -300,8 +409,10 @@ class PnlIou {
         // ------------------------------------
         // 4) Allocate + credit + reduce claims
         // ------------------------------------
-        console.log('entries in payout '+JSON.stringify(entries))
-        console.log('total claims '+totalClaims.toNumber())
+        console.log('entries in payout: ' + JSON.stringify(entries));
+        console.log('total claims: ' + totalClaims.toNumber());
+        console.log('payout amount: ' + payout.toNumber());
+        
         for (const c of entries) {
             const share = payout.times(c.claim).div(totalClaims);
 
@@ -311,7 +422,7 @@ class PnlIou {
             } else {
                 claimDoc.claims[c.address] = remaining.toString(10);
             }
-            console.log('allocation to push '+c.address+' '+share)
+            console.log('allocation to push: ' + c.address + ' ' + share);
 
             allocations.push({
                 address: c.address,
@@ -366,7 +477,6 @@ class PnlIou {
         }
     }
 
-
     static async getTotalForProperty(propertyId) {
         const db = await PnlIou._db();
         const pId = Number(propertyId);
@@ -381,7 +491,7 @@ class PnlIou {
                 total = total.plus(doc.amount || 0);
             }
         }
-        if(total.gte(0)){return total}else{return 0}
+        if (total.gte(0)) { return total; } else { return 0; }
     }
 
     static async delete(contractId, propertyId) {

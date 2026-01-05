@@ -2210,7 +2210,6 @@ class Orderbook {
 
           return pruned;
         }
-
      
     async processContractMatches(matches, currentBlockHeight, channel, last=null){
             const TallyMap = require('./tally.js');
