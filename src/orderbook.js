@@ -2502,6 +2502,13 @@ class Orderbook {
 
                     console.log('close? flip? '+close+' '+flip)
 
+                    // ========== FIX: Capture avgPrice BEFORE position update ==========
+                    // This is critical for same-block closes where the position may flip
+                    // and then close, causing avgPrice to be set to null before we can use it
+                    const buyerAvgPriceBeforeUpdate = match.buyerPosition.avgPrice;
+                    const sellerAvgPriceBeforeUpdate = match.sellerPosition.avgPrice;
+                    // ===================================================================
+
                     let positions = await marginMap.updateContractBalancesWithMatch(match, channel, buyerClosed,flipLong,sellerClosed,flipShort,currentBlockHeight)
                  
                     const isLiq = Boolean(match.sellOrder.liq||match.buyOrder.liq)
@@ -2604,7 +2611,13 @@ class Orderbook {
                         //console.log('about to call trade history manager '+match.buyOrder.contractId)
                         //const LIFO = tradeHistoryManager.calculateLIFOEntry(match.buyOrder.buyerAddress, closedContracts, match.buyOrder.contractId)
                         //{AvgEntry,blockTimes}
-                        let avgEntry = match.buyerPosition.avgPrice 
+                        
+                        // ========== FIX: Use pre-update avgPrice for settlement ==========
+                        // After updateContractBalancesWithMatch, avgPrice may be null if the
+                        // position closed. Use the captured value from before the update.
+                        let avgEntry = buyerAvgPriceBeforeUpdate || match.buyerPosition.avgPrice;
+                        // ===================================================================
+                        
                         //then we take that avg. entry price, not for the whole position but for the chunk that is being closed
                         //and we figure what is the PNL that one would show on their taxes, to save a record.
                 
@@ -2624,18 +2637,28 @@ class Orderbook {
                                     perContractNotional
                                   );
                         console.log('settlementPNL for buyer '+settlementPNL)
+                        
+                        // ========== FIX: Use same-block entry price for sameBlockPNL ==========
+                        // When closing contracts opened in the same block, use the entry price
+                        // from that same-block open rather than the oracle mark price (lastPrice).
+                        // For flips: the entry price is the trade price at which we flipped earlier in block.
+                        // The buyerAvgPriceBeforeUpdate captures the avgPrice AFTER any earlier same-block
+                        // trades but BEFORE this close zeroed it out.
+                        const buyerSameBlockEntryPrice = buyerAvgPriceBeforeUpdate || match.tradePrice;
+                        
                         let sameBlockPNL = buyerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.buyerAddress,
                                 buyerClosesAgainstAvg,
                                 trade.price,
-                                lastPrice,
+                                buyerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
                                 trade.contractId,
                                 currentBlockHeight,
                                 isInverse,
                                 perContractNotional
                             ) : 0
-                        console.log('vestigial settlementPNL '+sameBlockPNL)
+                        console.log('sameBlockPNL for buyer (entry: '+buyerSameBlockEntryPrice+') = '+sameBlockPNL)
+                        // ===================================================================
 
                         settlementPNL += sameBlockPNL
                      
@@ -2687,7 +2710,12 @@ class Orderbook {
                         if(isSellerFlippingPosition){
                             closedContracts-=flipShort
                         }
-                        let avgEntry = match.sellerPosition.avgPrice
+                        
+                        // ========== FIX: Use pre-update avgPrice for settlement ==========
+                        // After updateContractBalancesWithMatch, avgPrice may be null if the
+                        // position closed. Use the captured value from before the update.
+                        let avgEntry = sellerAvgPriceBeforeUpdate || match.sellerPosition.avgPrice;
+                        // ===================================================================
                       
                         console.log('position before realizePnl '+JSON.stringify(match.sellerPosition))
                         match.sellerPosition = await marginMap.realizePnl(match.sellOrder.sellerAddress, closedContracts, match.tradePrice, avgEntry, isInverse, perContractNotional, match.sellerPosition, false,match.sellOrder.contractId);
@@ -2708,17 +2736,24 @@ class Orderbook {
                                     perContractNotional
                                   )
 
+                        // ========== FIX: Use same-block entry price for sameBlockPNL ==========
+                        // When closing contracts opened in the same block, use the entry price
+                        // from that same-block open rather than the oracle mark price (lastPrice).
+                        const sellerSameBlockEntryPrice = sellerAvgPriceBeforeUpdate || match.tradePrice;
+                        
                         let sameBlockPNL = sellerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.sellerAddress,
                                 sellerClosesAgainstAvg,
                                 trade.price,
-                                lastPrice,
+                                sellerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
                                 trade.contractId,
                                 currentBlockHeight,
                                 isInverse,
                                 perContractNotional
                             ) : 0
+                        console.log('sameBlockPNL for seller (entry: '+sellerSameBlockEntryPrice+') = '+sameBlockPNL)
+                        // ===================================================================
 
                         settlementPNL += sameBlockPNL
                         console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
