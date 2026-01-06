@@ -1256,7 +1256,9 @@ class Clearing {
       
       // ------------------------------------------------------------
       // 2) Tie-off NEW trades from THIS block (ZERO-SUM)
-      //    MUST be per-trade, not per-position
+      //    Use the POOL REMAINDER after all same-block netting.
+      //    Only the net opened position that survives into next block
+      //    should be marked against the reference price.
       // ------------------------------------------------------------
       for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
         if (!key.startsWith(`${contractId}:`)) continue;
@@ -1264,89 +1266,87 @@ class Clearing {
         const address = key.split(':')[1];
         const entry = Clearing._normalizeEntry(entryRaw);
         
-        if (!entry?.trades?.length) continue;
+        // Use computeOpenedRemainderFromTrades to get the NET opened position
+        // that wasn't closed within the same block
+        const { openedSigned, openedAvg } = Clearing.computeOpenedRemainderFromTrades(entry.trades);
         
-        for (const t of entry.trades) {
-          const opened = Number(t.opened || 0);
-          if (!opened) continue;
+        if (!openedSigned || openedSigned === 0) continue;
+        if (!openedAvg || openedAvg <= 0) continue;
+        
+        // --------------------------------------------------------
+        // Compute PnL for the NET REMAINDER only
+        // Same-block closes were already settled via sameBlockPNL
+        // --------------------------------------------------------
+        const pnlBN = Clearing.calculateNewContractPNL({
+          newContracts: openedSigned,      // signed net remainder
+          avgEntryPrice: openedAvg,        // weighted avg entry of remainder
+          lastPrice: refPrice,
+          inverse,
+          notional
+        });
+        
+        if (!pnlBN || pnlBN.isZero()) continue;
+        
+        console.log(`[settleNewContracts] ${address} netOpened=${openedSigned} avgEntry=${openedAvg} ref=${refPrice} pnl=${pnlBN.toFixed()}`);
+        
+        // --------------------------------------------------------
+        // Apply PnL: Take from available first, then margin
+        // --------------------------------------------------------
+        const tally = await Tally.getTally(address, collateralId);
+        const avail = new BigNumber(tally?.available ?? 0);
+        const mar = new BigNumber(tally?.margin ?? 0);
+        
+        let availCh = new BigNumber(0);
+        let marCh = new BigNumber(0);
+        
+        if (pnlBN.gt(0)) {
+          // Winner: credit available
+          availCh = pnlBN;
+          console.log(`[settleNewContracts] Winner: crediting ${availCh.toFixed()} to available`);
+        } else {
+          // Loser: debit available first, then margin if needed
+          const loss = pnlBN.abs();
           
-          const avgEntry = Number(t.price);
-          if (!avgEntry || avgEntry <= 0) continue;
-          
-          // --------------------------------------------------------
-          // Compute PnL for THIS TRADE only
-          // --------------------------------------------------------
-          const pnlBN = Clearing.calculateNewContractPNL({
-            newContracts: opened,      // signed
-            avgEntryPrice: avgEntry,
-            lastPrice: refPrice,
-            inverse,
-            notional
-          });
-          
-          if (!pnlBN || pnlBN.isZero()) continue;
-          
-          console.log(`[settleNewContracts] ${address} opened=${opened} entry=${avgEntry} ref=${refPrice} pnl=${pnlBN.toFixed()}`);
-          
-          // --------------------------------------------------------
-          // Apply PnL: Take from available first, then margin
-          // --------------------------------------------------------
-          const tally = await Tally.getTally(address, collateralId);
-          const avail = new BigNumber(tally?.available ?? 0);
-          const mar = new BigNumber(tally?.margin ?? 0);
-          
-          let availCh = new BigNumber(0);
-          let marCh = new BigNumber(0);
-          
-          if (pnlBN.gt(0)) {
-            // Winner: credit available
-            availCh = pnlBN;
-            console.log(`[settleNewContracts] Winner: crediting ${availCh.toFixed()} to available`);
+          if (avail.gte(loss)) {
+            // Sufficient available balance - take it all from available
+            availCh = loss.negated();
+            console.log(`[settleNewContracts] Loser: debiting ${loss.toFixed()} from available`);
           } else {
-            // Loser: debit available first, then margin if needed
-            const loss = pnlBN.abs();
+            // Insufficient available - take what we can, then tap margin
+            const takeAvail = avail;
+            const remaining = loss.minus(takeAvail);
             
-            if (avail.gte(loss)) {
-              // Sufficient available balance - take it all from available
-              availCh = loss.negated();
-              console.log(`[settleNewContracts] Loser: debiting ${loss.toFixed()} from available`);
+            if (mar.gte(remaining)) {
+              // Sufficient margin to cover remainder
+              availCh = takeAvail.negated();
+              marCh = remaining.negated();
+              console.log(`[settleNewContracts] Loser: debiting ${takeAvail.toFixed()} from available + ${remaining.toFixed()} from margin`);
             } else {
-              // Insufficient available - take what we can, then tap margin
-              const takeAvail = avail;
-              const remaining = loss.minus(takeAvail);
-              
-              if (mar.gte(remaining)) {
-                // Sufficient margin to cover remainder
-                availCh = takeAvail.negated();
-                marCh = remaining.negated();
-                console.log(`[settleNewContracts] Loser: debiting ${takeAvail.toFixed()} from available + ${remaining.toFixed()} from margin`);
-              } else {
-                // Even margin isn't enough - take all available + all margin
-                availCh = takeAvail.negated();
-                marCh = mar.negated();
-                const badDebt = remaining.minus(mar);
-                console.error(`[settleNewContracts] WARNING: Insufficient funds for ${address}. Loss=${loss.toFixed()}, Avail=${avail.toFixed()}, Margin=${mar.toFixed()}, BadDebt=${badDebt.toFixed()}`);
-                // TODO: Handle bad debt (insurance fund, socialized loss, etc.)
-              }
+              // Even margin isn't enough - take all available + all margin
+              availCh = takeAvail.negated();
+              marCh = mar.negated();
+              const badDebt = remaining.minus(mar);
+              console.error(`[settleNewContracts] WARNING: Insufficient funds for ${address}. Loss=${loss.toFixed()}, Avail=${avail.toFixed()}, Margin=${mar.toFixed()}, BadDebt=${badDebt.toFixed()}`);
+              // TODO: Handle bad debt (insurance fund, socialized loss, etc.)
             }
           }
+        }
+        
+        if (!availCh.isZero() || !marCh.isZero()) {
+          console.log(`[settleNewContracts] Calling updateBalance: availCh=${availCh.toNumber()}, marCh=${marCh.toNumber()}`);
           
-          if (!availCh.isZero() || !marCh.isZero()) {
-            console.log(`[settleNewContracts] Calling updateBalance: availCh=${availCh.toNumber()}, marCh=${marCh.toNumber()}`);
-            
-            await Tally.updateBalance(
-              address,
-              collateralId,
-              availCh.toNumber(),
-              0,
-              marCh.toNumber(),
-              0,
-              'newContractTieOff',
-              blockHeight
-            );
-            
-            console.log(`[settleNewContracts] Successfully updated balance for ${address}`);
-          }
+          await Tally.updateBalance(
+            address,
+            collateralId,
+            availCh.toNumber(),
+            0,
+            marCh.toNumber(),
+            0,
+            'newContractTieOff',
+            blockHeight
+          );
+          
+          console.log(`[settleNewContracts] Successfully updated balance for ${address}`);
         }
       }
     }
