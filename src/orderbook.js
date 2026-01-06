@@ -1880,7 +1880,8 @@ class Orderbook {
                     0,
                     0,
                     0,
-                    'loss_from_cross_contract_reserve'
+                    'loss_from_cross_contract_reserve',
+                    block
                 );
 
                 breakdown.fromCrossReserve += useX.toNumber();
@@ -1986,7 +1987,7 @@ class Orderbook {
         // 1️⃣ Available balance
         const availUse = BigNumber.min(remaining, tally.available || 0);
         if (availUse.gt(0)) {
-            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available');
+            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available',block);
             breakdown.fromAvailable = availUse.toNumber();
             remaining = remaining.minus(availUse);
         }
@@ -1996,7 +1997,7 @@ class Orderbook {
             const marginCap = new BigNumber(tally.margin || 0).multipliedBy(0.49);
             const marginUse = BigNumber.min(remaining, marginCap);
             if (marginUse.gt(0)) {
-                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap');
+                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap',block);
                 breakdown.fromMarginCap = marginUse.toNumber();
                 remaining = remaining.minus(marginUse);
             }
@@ -2042,7 +2043,8 @@ class Orderbook {
                 0,
                 0,
                 0,
-                'loss_from_reserve'
+                'loss_from_reserve',
+                block
             );
             breakdown.fromReserve = (breakdown.fromReserve || 0) + reserveUse.toNumber();
             remaining = remaining.minus(reserveUse);
