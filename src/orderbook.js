@@ -2907,7 +2907,7 @@ class Orderbook {
                     
                             const delta = buyerPnl.plus(sellerPnl);
                     
-                    if (!isLiquidation) {
+                    if (!isLiquidation&&(isSellerReducingPosition||isSellerFlippingPosition)&&(isBuyerReducingPosition||isBuyerFlippingPosition)) {
                         if (delta.gt(0)) {
                             // Net profit in this trade (winner with no/partial loser to fund)
                             // Creates IOU claims for the unfunded portion
