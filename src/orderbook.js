@@ -1986,7 +1986,7 @@ class Orderbook {
         // 1️⃣ Available balance
         const availUse = BigNumber.min(remaining, tally.available || 0);
         if (availUse.gt(0)) {
-            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available', block);
+            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available');
             breakdown.fromAvailable = availUse.toNumber();
             remaining = remaining.minus(availUse);
         }
@@ -1996,7 +1996,7 @@ class Orderbook {
             const marginCap = new BigNumber(tally.margin || 0).multipliedBy(0.49);
             const marginUse = BigNumber.min(remaining, marginCap);
             if (marginUse.gt(0)) {
-                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap', block);
+                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap');
                 breakdown.fromMarginCap = marginUse.toNumber();
                 remaining = remaining.minus(marginUse);
             }
@@ -2042,8 +2042,7 @@ class Orderbook {
                 0,
                 0,
                 0,
-                'loss_from_reserve',
-                block
+                'loss_from_reserve'
             );
             breakdown.fromReserve = (breakdown.fromReserve || 0) + reserveUse.toNumber();
             remaining = remaining.minus(reserveUse);
@@ -2595,9 +2594,6 @@ class Orderbook {
 
                     // Realize PnL if the trade reduces the position size
                     let buyerPnl = new BigNumber(0), sellerPnl = new BigNumber(0);
-                    // Track sameBlockPNL separately - this is already settled via newContractTieOff asymmetry
-                    // and should NOT go to IOU to avoid double-counting
-                    let buyerSameBlockPnl = new BigNumber(0), sellerSameBlockPnl = new BigNumber(0);
                     console.log('do we realize PNL? '+isBuyerReducingPosition+' '+isBuyerFlippingPosition+' '+match.buyOrder.liq+' '+isSellerReducingPosition+' '+isSellerFlippingPosition+' '+match.sellOrder.liq)
                     let closedShorts=0
                     let realizedBuyerLoss = 0
@@ -2655,7 +2651,7 @@ class Orderbook {
                         let sameBlockPNL = buyerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.buyerAddress,
-                                -buyerClosesAgainstAvg,  // FIX: Negate for buyer closing shorts (same as buyerClosesAgainstLast)
+                                -buyerClosesAgainstAvg,
                                 trade.price,
                                 buyerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
                                 trade.contractId,
@@ -2666,9 +2662,6 @@ class Orderbook {
                         console.log('sameBlockPNL for buyer (entry: '+buyerSameBlockEntryPrice+') = '+sameBlockPNL)
                         // ===================================================================
 
-                        // Track sameBlockPNL separately for IOU exclusion
-                        buyerSameBlockPnl = new BigNumber(sameBlockPNL || 0);
-                        
                         settlementPNL += sameBlockPNL
                      
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
@@ -2764,9 +2757,6 @@ class Orderbook {
                         console.log('sameBlockPNL for seller (entry: '+sellerSameBlockEntryPrice+') = '+sameBlockPNL)
                         // ===================================================================
 
-                        // Track sameBlockPNL separately for IOU exclusion
-                        sellerSameBlockPnl = new BigNumber(sameBlockPNL || 0);
-                        
                         settlementPNL += sameBlockPNL
                         console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
                     
@@ -2915,15 +2905,8 @@ class Orderbook {
                     
                             const delta = buyerPnl.plus(sellerPnl);
                     
-                    // For IOU tracking, exclude sameBlockPNL as it's already settled via
-                    // newContractTieOff entry price asymmetry - including it would double-count
-                    const buyerPnlForIou = buyerPnl.minus(buyerSameBlockPnl);
-                    const sellerPnlForIou = sellerPnl.minus(sellerSameBlockPnl);
-                    const deltaForIou = buyerPnlForIou.plus(sellerPnlForIou);
-                    console.log(`[IOU] delta=${delta.toNumber()} deltaForIou=${deltaForIou.toNumber()} buyerSameBlock=${buyerSameBlockPnl.toNumber()} sellerSameBlock=${sellerSameBlockPnl.toNumber()}`);
-                    
                     if (!isLiquidation) {
-                        if (deltaForIou.gt(0)) {
+                        if (delta.gt(0)) {
                             // Net profit in this trade (winner with no/partial loser to fund)
                             // Creates IOU claims for the unfunded portion
                             await PnlIou.addIouClaims(
@@ -2932,29 +2915,29 @@ class Orderbook {
                                 currentBlockHeight,
                                 trade.buyerAddress,
                                 trade.sellerAddress,
-                                buyerPnlForIou,
-                                sellerPnlForIou,
-                                deltaForIou
+                                buyerPnl,
+                                sellerPnl,
+                                delta
                             );
                             
                             // Record as profit (system owes more)
                             await PnlIou.addProfit(
                                 trade.contractId,
                                 collateralPropertyId,
-                                deltaForIou,
+                                delta,
                                 currentBlockHeight
                             );
-                        } else if (deltaForIou.lt(0)) {
+                        } else if (delta.lt(0)) {
                             // Net loss in this trade (loser with no/partial winner)
                             // Real tokens were debited - available for IOU payout
                             await PnlIou.addLoss(
                                 trade.contractId,
                                 collateralPropertyId,
-                                deltaForIou.abs(),
+                                delta.abs(),
                                 currentBlockHeight
                             );
                         }
-                        // If deltaForIou === 0, trade was fully offset internally, nothing to track
+                        // If delta === 0, trade was fully offset internally, nothing to track
                     }
 
                     trade.delta = delta;
