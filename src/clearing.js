@@ -1234,64 +1234,200 @@ class Clearing {
           }
         }
       }
-          
+    
     static async settleNewContracts(contractId, blockHeight, priceInfo) {
       const BigNumber = require('bignumber.js');
       const Tally = require('./tally.js');
       const ContractRegistry = require('./contractRegistry.js');
+      const TradeHistoryManager = require('./tradeHistoryManager.js');
       
-      // ------------------------------------------------------------
-      // 0) Resolve reference price for tie-off
-      // ------------------------------------------------------------
       const refPrice = priceInfo?.lastPrice ?? null;
       if (refPrice == null) return;
       
-      // ------------------------------------------------------------
-      // 1) Contract parameters
-      // ------------------------------------------------------------
       const collateralId = await ContractRegistry.getCollateralId(contractId);
       const inverse = await ContractRegistry.isInverse(contractId);
       const notionalObj = await ContractRegistry.getNotionalValue(contractId, refPrice);
       const notional = notionalObj?.notionalPerContract ?? notionalObj ?? 1;
       
-      // ------------------------------------------------------------
-      // 2) Tie-off NEW trades from THIS block (ZERO-SUM)
-      //    Use the POOL REMAINDER after all same-block netting.
-      //    Only the net opened position that survives into next block
-      //    should be marked against the reference price.
-      // ------------------------------------------------------------
-      for (const [key, entryRaw] of Clearing.blockTrades.entries()) {
-        if (!key.startsWith(`${contractId}:`)) continue;
+      // --------------------------------------------------------
+      // Fetch actual trade records for this block
+      // --------------------------------------------------------
+      const trades = await TradeHistoryManager.getTradesForContractBetweenBlocks(contractId, blockHeight, blockHeight);
+      
+      if (!trades || trades.length === 0) {
+        console.log(`[settleNewContracts] No trades for contract ${contractId} at block ${blockHeight}`);
+        return;
+      }
+      
+      console.log(`[settleNewContracts] Processing ${trades.length} trades for contract ${contractId}`);
+      
+      // --------------------------------------------------------
+      // First pass: collect opens and closes per address
+      // We need to track same-block netting properly
+      // --------------------------------------------------------
+      // Structure: address -> { 
+      //   longOpens: [{qty, price}], shortOpens: [{qty, price}],
+      //   longCloses: number, shortCloses: number 
+      // }
+      const addressData = new Map();
+      
+      function getOrCreate(addr) {
+        if (!addressData.has(addr)) {
+          addressData.set(addr, { 
+            longOpens: [], 
+            shortOpens: [], 
+            longCloses: 0, 
+            shortCloses: 0 
+          });
+        }
+        return addressData.get(addr);
+      }
+      
+      for (const trade of trades) {
+        const { buyerAddress, sellerAddress, amount, price, buyerClose, sellerClose } = trade;
         
-        const address = key.split(':')[1];
-        const entry = Clearing._normalizeEntry(entryRaw);
+        // Buyer side
+        const buyerData = getOrCreate(buyerAddress);
+        const buyerOpened = amount - (buyerClose || 0);
+        const buyerClosed = buyerClose || 0;
         
-        // Use computeOpenedRemainderFromTrades to get the NET opened position
-        // that wasn't closed within the same block
-        const { openedSigned, openedAvg } = Clearing.computeOpenedRemainderFromTrades(entry.trades);
+        if (buyerOpened > 0) {
+          // Buyer opens LONG
+          buyerData.longOpens.push({ qty: buyerOpened, price });
+        }
+        if (buyerClosed > 0) {
+          // Buyer closing means they had SHORT before
+          buyerData.shortCloses += buyerClosed;
+        }
         
-        if (!openedSigned || openedSigned === 0) continue;
-        if (!openedAvg || openedAvg <= 0) continue;
+        // Seller side
+        const sellerData = getOrCreate(sellerAddress);
+        const sellerOpened = amount - (sellerClose || 0);
+        const sellerClosed = sellerClose || 0;
         
-        // --------------------------------------------------------
-        // Compute PnL for the NET REMAINDER only
-        // Same-block closes were already settled via sameBlockPNL
-        // --------------------------------------------------------
-        const pnlBN = Clearing.calculateNewContractPNL({
-          newContracts: openedSigned,      // signed net remainder
-          avgEntryPrice: openedAvg,        // weighted avg entry of remainder
-          lastPrice: refPrice,
-          inverse,
-          notional
-        });
+        if (sellerOpened > 0) {
+          // Seller opens SHORT
+          sellerData.shortOpens.push({ qty: sellerOpened, price });
+        }
+        if (sellerClosed > 0) {
+          // Seller closing means they had LONG before
+          sellerData.longCloses += sellerClosed;
+        }
+      }
+      
+      // --------------------------------------------------------
+      // Second pass: calculate tie-off PnL with same-block netting
+      // Opens within same block can be netted against closes
+      // --------------------------------------------------------
+      const pnlByAddress = new Map();
+      
+      for (const [address, data] of addressData.entries()) {
+        const { longOpens, shortOpens, longCloses, shortCloses } = data;
         
-        if (!pnlBN || pnlBN.isZero()) continue;
+        // Process LONG opens (netted against shortCloses if any same-block close of longs happened)
+        // Wait - longCloses means closing longs (selling), shortCloses means closing shorts (buying)
+        // If someone opens long AND closes short in same block, those don't net
+        // If someone opens short AND closes that short in same block, THOSE net
         
-        console.log(`[settleNewContracts] ${address} netOpened=${openedSigned} avgEntry=${openedAvg} ref=${refPrice} pnl=${pnlBN.toFixed()}`);
+        // Actually: shortCloses = closing shorts by buying = person was short, now buying
+        //           longCloses = closing longs by selling = person was long, now selling
+        // 
+        // If in same block you OPEN SHORT then CLOSE SHORT:
+        //   shortOpens has qty, shortCloses has qty -> they net
+        // If in same block you OPEN LONG then CLOSE LONG:
+        //   longOpens has qty, longCloses has qty -> they net
         
-        // --------------------------------------------------------
-        // Apply PnL: Take from available first, then margin
-        // --------------------------------------------------------
+        // Net long opens = sum(longOpens.qty) - longCloses (can't be negative)
+        let totalLongOpened = 0;
+        for (const o of longOpens) totalLongOpened += o.qty;
+        const netLongOpened = Math.max(0, totalLongOpened - longCloses);
+        
+        // Net short opens = sum(shortOpens.qty) - shortCloses (can't be negative)
+        let totalShortOpened = 0;
+        for (const o of shortOpens) totalShortOpened += o.qty;
+        const netShortOpened = Math.max(0, totalShortOpened - shortCloses);
+        
+        console.log(`[settleNewContracts] ${address}: longOpened=${totalLongOpened} longCloses=${longCloses} -> netLong=${netLongOpened}`);
+        console.log(`[settleNewContracts] ${address}: shortOpened=${totalShortOpened} shortCloses=${shortCloses} -> netShort=${netShortOpened}`);
+        
+        let totalPnl = new BigNumber(0);
+        
+        // Tie-off net LONG opens (FIFO: consume from earliest opens first for closes)
+        if (netLongOpened > 0 && longOpens.length > 0) {
+          // Skip the first `longCloses` worth of opens (they were closed same-block)
+          let remaining = netLongOpened;
+          let skipped = longCloses;
+          
+          for (const o of longOpens) {
+            if (skipped >= o.qty) {
+              skipped -= o.qty;
+              continue;
+            }
+            const useQty = Math.min(remaining, o.qty - skipped);
+            skipped = 0;
+            
+            if (useQty > 0) {
+              let pnl;
+              if (inverse) {
+                const invEntry = new BigNumber(1).div(o.price);
+                const invRef = new BigNumber(1).div(refPrice);
+                pnl = new BigNumber(useQty).times(notional).times(invEntry.minus(invRef));
+              } else {
+                pnl = new BigNumber(useQty).times(notional).times(
+                  new BigNumber(refPrice).minus(o.price)
+                );
+              }
+              totalPnl = totalPnl.plus(pnl);
+              console.log(`[settleNewContracts] ${address} LONG ${useQty} @ ${o.price} -> pnl=${pnl.toFixed()}`);
+              remaining -= useQty;
+            }
+            if (remaining <= 0) break;
+          }
+        }
+        
+        // Tie-off net SHORT opens
+        if (netShortOpened > 0 && shortOpens.length > 0) {
+          let remaining = netShortOpened;
+          let skipped = shortCloses;
+          
+          for (const o of shortOpens) {
+            if (skipped >= o.qty) {
+              skipped -= o.qty;
+              continue;
+            }
+            const useQty = Math.min(remaining, o.qty - skipped);
+            skipped = 0;
+            
+            if (useQty > 0) {
+              let pnl;
+              if (inverse) {
+                const invEntry = new BigNumber(1).div(o.price);
+                const invRef = new BigNumber(1).div(refPrice);
+                pnl = new BigNumber(useQty).times(notional).times(invRef.minus(invEntry));
+              } else {
+                pnl = new BigNumber(useQty).times(notional).times(
+                  new BigNumber(o.price).minus(refPrice)
+                );
+              }
+              totalPnl = totalPnl.plus(pnl);
+              console.log(`[settleNewContracts] ${address} SHORT ${useQty} @ ${o.price} -> pnl=${pnl.toFixed()}`);
+              remaining -= useQty;
+            }
+            if (remaining <= 0) break;
+          }
+        }
+        
+        if (!totalPnl.isZero()) {
+          pnlByAddress.set(address, totalPnl);
+        }
+      }
+      
+      // --------------------------------------------------------
+      // Apply PnL to each address
+      // --------------------------------------------------------
+      for (const [address, pnlBN] of pnlByAddress.entries()) {
+        console.log(`[settleNewContracts] ${address} total PnL=${pnlBN.toFixed()}`);
+        
         const tally = await Tally.getTally(address, collateralId);
         const avail = new BigNumber(tally?.available ?? 0);
         const mar = new BigNumber(tally?.margin ?? 0);
@@ -1300,41 +1436,26 @@ class Clearing {
         let marCh = new BigNumber(0);
         
         if (pnlBN.gt(0)) {
-          // Winner: credit available
           availCh = pnlBN;
-          console.log(`[settleNewContracts] Winner: crediting ${availCh.toFixed()} to available`);
         } else {
-          // Loser: debit available first, then margin if needed
           const loss = pnlBN.abs();
-          
           if (avail.gte(loss)) {
-            // Sufficient available balance - take it all from available
             availCh = loss.negated();
-            console.log(`[settleNewContracts] Loser: debiting ${loss.toFixed()} from available`);
           } else {
-            // Insufficient available - take what we can, then tap margin
             const takeAvail = avail;
             const remaining = loss.minus(takeAvail);
-            
             if (mar.gte(remaining)) {
-              // Sufficient margin to cover remainder
               availCh = takeAvail.negated();
               marCh = remaining.negated();
-              console.log(`[settleNewContracts] Loser: debiting ${takeAvail.toFixed()} from available + ${remaining.toFixed()} from margin`);
             } else {
-              // Even margin isn't enough - take all available + all margin
               availCh = takeAvail.negated();
               marCh = mar.negated();
-              const badDebt = remaining.minus(mar);
-              console.error(`[settleNewContracts] WARNING: Insufficient funds for ${address}. Loss=${loss.toFixed()}, Avail=${avail.toFixed()}, Margin=${mar.toFixed()}, BadDebt=${badDebt.toFixed()}`);
-              // TODO: Handle bad debt (insurance fund, socialized loss, etc.)
+              console.error(`[settleNewContracts] BAD DEBT: ${address} owes ${remaining.minus(mar).toFixed()}`);
             }
           }
         }
         
         if (!availCh.isZero() || !marCh.isZero()) {
-          console.log(`[settleNewContracts] Calling updateBalance: availCh=${availCh.toNumber()}, marCh=${marCh.toNumber()}`);
-          
           await Tally.updateBalance(
             address,
             collateralId,
@@ -1345,12 +1466,9 @@ class Clearing {
             'newContractTieOff',
             blockHeight
           );
-          
-          console.log(`[settleNewContracts] Successfully updated balance for ${address}`);
         }
       }
     }
-
     // orderbook.js
     static async pruneInstaLiqOrders(thisPrice, blockHeight,contractId) {
       const Tally = require('./tally.js');

@@ -2246,7 +2246,7 @@ class Orderbook {
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(match.sellOrder.contractId,currentBlockHeight);
-                    const lastPrice = priceInfo.lastPrice
+                    let lastPrice = priceInfo.lastPrice
                     if(isLiquidation&&last!=null){lastPrice=last}
                         console.log('last price in process contracts '+lastPrice)
                     match.inverse = isInverse
@@ -2800,8 +2800,10 @@ class Orderbook {
                     }
 
                     if(realizedSellerProfit > 0) {
-                 const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
-    
+                        const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
+                    }
+            
+                const realizedSellerProfitBN = new BigNumber(realizedSellerProfit)
             if (isLiquidation) {
                 // Liquidation: credit full profit - funded by counterparty loss or tie-off
                 await TallyMap.updateBalance(
@@ -2815,8 +2817,11 @@ class Orderbook {
             } else {
                 // Normal trade: cap immediate payout by realized loss funding
                 console.log('real profit '+realizedSellerProfit+' '+realizedBuyerLoss)
-                const immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
+                let immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
                 const deferred  = realizedSellerProfitBN.minus(immediate);
+                if(!isBuyerReducingPosition||isBuyerFlippingPosition){
+                    immediate = realizedSellerProfitBN
+                }
                 console.log("BASDFSDF deffered and immediate in seller contract profit settlement "+deferred+' '+immediate)
 
                     if (immediate.gt(0)) {
@@ -2833,7 +2838,6 @@ class Orderbook {
                     if (deferred.gt(0)) {
                         trade.sellerDeferredPnl = deferred.toNumber();
                     }
-                }
             }
 
         if(realizedBuyerProfit > 0) {
@@ -2851,9 +2855,12 @@ class Orderbook {
                 );
             } else {
                 // Normal trade: cap immediate payout by realized loss funding
-                const immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
+                const realizedSellerProfitBN = new BigNumber(realizedBuyerProfit)
+                let immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
                 const deferred  = realizedBuyerProfitBN.minus(immediate);
-
+                if(!isBuyerReducingPosition||isBuyerFlippingPosition){
+                    immediate = realizedBuyerProfitBN
+                }
                 if (immediate.gt(0)) {
                     await TallyMap.updateBalance(
                         match.buyOrder.buyerAddress,
