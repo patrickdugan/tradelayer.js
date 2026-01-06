@@ -2649,7 +2649,7 @@ class Orderbook {
                         let sameBlockPNL = buyerClosesAgainstAvg>0 
                             ? await marginMap.settlePNL(
                                 trade.buyerAddress,
-                                buyerClosesAgainstAvg,
+                                -buyerClosesAgainstAvg,
                                 trade.price,
                                 buyerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
                                 trade.contractId,
@@ -3066,29 +3066,37 @@ class Orderbook {
             const afterSeller  = match.sellerPosition.contracts;
 
             // ------------------------------------------------------------
-            // Compute opened ONCE, symmetrically
+            // Compute opened INDEPENDENTLY for buyer and seller
+            // A party "opens" when they're not closing existing positions
             // ------------------------------------------------------------
-            let opened = 0;
-
+            const tradeAmount = match.buyOrder.amount;
+            
+            // Buyer opens = trade amount minus what they closed
+            // If buyer closed 3 of 5, they opened 2 new longs
+            let buyerOpened = tradeAmount - buyerClosed;
             if (flipLong > 0) {
-                opened = flipLong;
-            } else if (flipShort > 0) {
-                opened = flipShort;
-            } else if (buyerClosed === 0 && sellerClosed === 0) {
-                // pure open on both sides
-                opened = match.buyOrder.amount;
+                // Flip case: they closed all shorts and opened new longs
+                buyerOpened = flipLong;
+            }
+            
+            // Seller opens = trade amount minus what they closed  
+            // If seller closed 3 of 5, they opened 2 new shorts
+            let sellerOpened = tradeAmount - sellerClosed;
+            if (flipShort > 0) {
+                // Flip case: they closed all longs and opened new shorts
+                sellerOpened = flipShort;
             }
 
             return {
                 buyer: {
                     delta: match.buyOrder.amount,
-                    opened: opened,
+                    opened: buyerOpened,
                     wasLong: beforeBuyer > 0,
                     isLong: afterBuyer > 0
                 },
                 seller: {
                     delta: -match.sellOrder.amount,
-                    opened: opened,
+                    opened: sellerOpened,
                     wasLong: beforeSeller > 0,
                     isLong: afterSeller > 0
                 }
