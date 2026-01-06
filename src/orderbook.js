@@ -2244,7 +2244,7 @@ class Orderbook {
                     // Load the margin map for the given series ID and block height
                     const marginMap = await MarginMap.loadMarginMap(match.sellOrder.contractId);
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
-                    const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
+                    const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(match.sellOrder.contractId,currentBlockHeight);
                     const lastPrice = priceInfo.lastPrice
                     if(isLiquidation&&last!=null){lastPrice=last}
                         console.log('last price in process contracts '+lastPrice)
