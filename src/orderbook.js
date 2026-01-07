@@ -2009,7 +2009,7 @@ class Orderbook {
         const before = await TallyMap.getTally(address, propertyId);
         const beforeAvail = new BigNumber(before.available || 0);
         const beforeReserved = new BigNumber(before.reserved || 0);
-
+        console.log('before reserved '+ beforeAvail +' ' +beforeReserved)
         // Always try to cancel up to the shortfall.
         // cancelExcessOrders should internally clamp to available reserved.
         if (beforeReserved.gt(0)) {
@@ -2022,7 +2022,7 @@ class Orderbook {
         const after = await TallyMap.getTally(address, propertyId);
         const afterAvail = new BigNumber(after.available || 0);
         const afterReserved = new BigNumber(after.reserved || 0);
-
+        console.log('after cancel '+afterAvail+' '+afterReserved)
         // Tokens freed from reserve are the *increase* in available
         // (assuming cancelExcessOrders moves reserved -> available without touching supply)
         let freedFromReserve = afterAvail.minus(beforeAvail);
@@ -2033,6 +2033,7 @@ class Orderbook {
 
         // Only use what we actually freed, and cap by remaining shortfall
         const reserveUse = BigNumber.min(remaining, freedFromReserve);
+        console.log('reserve use '+reserveUse)
         if (reserveUse.gt(0)) {
             // This call should *not* create or destroy global supply:
             // losers lose reserveUse, winners gain reserveUse elsewhere.
@@ -2848,7 +2849,7 @@ class Orderbook {
                 console.log('real profit '+realizedSellerProfit+' '+realizedBuyerLoss)
                 let immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
                 const deferred  = realizedSellerProfitBN.minus(immediate);
-                if(!isBuyerReducingPosition){
+                if(!isBuyerReducingPosition||isBuyerFlippingPosition){
                     immediate = realizedSellerProfitBN
                 }
                 console.log("BASDFSDF deffered and immediate in seller contract profit settlement "+deferred+' '+immediate)
@@ -2886,7 +2887,7 @@ class Orderbook {
                 // Normal trade: cap immediate payout by realized loss funding
                 let immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
                 const deferred  = realizedBuyerProfitBN.minus(immediate);
-                if(!isSellerReducingPosition){
+                if(!isSellerReducingPosition||isSellerFlippingPosition){
                     immediate = realizedBuyerProfitBN
                     if(isSellerFlippingPosition){
 

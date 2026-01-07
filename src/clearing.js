@@ -1892,7 +1892,7 @@ class Clearing {
           delete pos._wasProfitable;
           continue;
         }
-        console.log('profit PNL in 3rd pass '+pos.contracts+' '+lastPrice+' '+thisPrice+' '+inverse+' '+notional)
+        console.log('profit PNL in 3rd pass '+pos.contracts+' '+pos.address+' '+lastPrice+' '+thisPrice+' '+inverse+' '+notional)
         const profit = Clearing.calculateClearingPNL({
           oldContracts: pos.contracts,
           previousMarkPrice: lastPrice,
