@@ -1375,7 +1375,7 @@ const Validity = {
           const deviation = priceBN.minus(markBN).abs().div(markBN);
 
           // 1 / leverage
-          const maxMove = new BigNumber(1).div(leverage);
+          const maxMove = new BigNumber(1).div(leverage).div(2);
 
           // buffer in decimal (65 bps = 0.0065)
           const buffer = new BigNumber(bufferBps).div(10_000);

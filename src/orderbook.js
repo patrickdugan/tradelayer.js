@@ -1972,7 +1972,7 @@ class Orderbook {
       return { closed, flipped, newPos };
     }
 
-    async sourceFundsForLoss(address, propertyId, lossAmount, block, contractId) {
+    async sourceFundsForLoss(address, propertyId, lossAmount, block, contractId,tie) {
         const TallyMap = require('./tally.js')
         const tally = await TallyMap.getTally(address, propertyId);
         if (!tally) {
@@ -1986,18 +1986,22 @@ class Orderbook {
 
         // 1️⃣ Available balance
         const availUse = BigNumber.min(remaining, tally.available || 0);
+        let type = 'loss_from_available'
+        if(tie){type+='_tieOff'}
         if (availUse.gt(0)) {
-            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, 'loss_from_available',block);
+            await TallyMap.updateBalance(address, propertyId, -availUse, 0, 0, 0, type,block);
             breakdown.fromAvailable = availUse.toNumber();
             remaining = remaining.minus(availUse);
         }
 
+        type = 'loss_from_margin'
+        if(tie){type+='_tieOff'}
         // 2️⃣ 49% of margin
         if (remaining.gt(0)) {
-            const marginCap = new BigNumber(tally.margin || 0).multipliedBy(0.49);
+            const marginCap = new BigNumber(tally.margin || 0).multipliedBy(0.499);
             const marginUse = BigNumber.min(remaining, marginCap);
             if (marginUse.gt(0)) {
-                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, 'loss_from_margin_cap',block);
+                await TallyMap.updateBalance(address, propertyId, 0, 0, -marginUse, 0, type,block);
                 breakdown.fromMarginCap = marginUse.toNumber();
                 remaining = remaining.minus(marginUse);
             }
@@ -2073,7 +2077,7 @@ class Orderbook {
         // - global (amount+reserved+margin+vesting) stays invariant, except for the
         //   separate credit to counterparties which should be balancing this debit.
     }
-
+    
         const success = remaining.lte(0);
         remaining.decimalPlaces(8).toNumber();
         const reason = success ? '' : 'Insufficient total balance after all buckets';
@@ -2620,12 +2624,13 @@ class Orderbook {
                                 currentBlockHeight
                                 );
                             }else{
-                                this.sourceFundsForLoss( 
+                                await this.sourceFundsForLoss( 
                                     trade.buyerAddress,
                                     collateralPropertyId,
                                     Math.abs(buyerOpenMarkPNL),
                                     currentBlockHeight,
-                                    trade.contractId)
+                                    trade.contractId,
+                                    true)
                             }                            
                           }
 
@@ -2651,12 +2656,13 @@ class Orderbook {
                                 currentBlockHeight
                                 );
                             }else{
-                                this.sourceFundsForLoss( 
+                                await this.sourceFundsForLoss( 
                                     trade.sellerAddress,
                                     collateralPropertyId,
                                     Math.abs(sellerOpenMarkPNL),
                                     currentBlockHeight,
-                                    trade.contractId)
+                                    trade.contractId,
+                                    true)
                             }
 
                             
