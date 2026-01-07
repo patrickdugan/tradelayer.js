@@ -2642,25 +2642,49 @@ class Orderbook {
                                   );
                         console.log('settlementPNL for buyer '+settlementPNL)
                         
-                        // ========== FIX: Use same-block entry price for sameBlockPNL ==========
-                        // When closing contracts opened in the same block, use the entry price
-                        // from that same-block open rather than the oracle mark price (lastPrice).
-                        // For flips: the entry price is the trade price at which we flipped earlier in block.
-                        // The buyerAvgPriceBeforeUpdate captures the avgPrice AFTER any earlier same-block
-                        // trades but BEFORE this close zeroed it out.
-                        const buyerSameBlockEntryPrice = buyerAvgPriceBeforeUpdate || match.tradePrice;
-                        
-                        let sameBlockPNL = buyerClosesAgainstAvg>0 
-                            ? await marginMap.settlePNL(
+                                                // ========== MARK BASIS (A): realize any OPENED portion to lastPrice ==========
+                        // This rebases same-block opens to mark immediately, so later closes can use lastPrice.
+                        const buyerOpened = Number(deltas?.buyer?.opened || 0);
+                        if (buyerOpened > 0) {
+                            const buyerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.buyerAddress,
-                                -buyerClosesAgainstAvg,
-                                trade.price,
-                                buyerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
+                                buyerOpened,      // long opened
+                                lastPrice,         // exit = mark
+                                trade.price,       // entry = fill
                                 trade.contractId,
                                 currentBlockHeight,
                                 isInverse,
                                 perContractNotional
-                            ) : 0
+                            );
+                            settlementPNL += buyerOpenMarkPNL;
+
+                            // Rebase avgPrice to mark for remaining position (keeps downstream logic coherent)
+                            if (match.buyerPosition && Number(match.buyerPosition.contracts || 0) !== 0) {
+                                match.buyerPosition.avgPrice = lastPrice;
+                            }
+
+                            console.log('buyer open->mark PNL (opened=' + buyerOpened + '): ' + buyerOpenMarkPNL);
+                        }
+
+                        // ========== MARK BASIS (A): sameBlockPNL closes also use lastPrice ==========
+                        // Because opens were rebased above, the correct entry for same-block closes is lastPrice.
+                        const buyerSameBlockEntryPrice = lastPrice;
+
+                        let sameBlockPNL = buyerClosesAgainstAvg>0
+                            ? await marginMap.settlePNL(
+                                trade.buyerAddress,
+                                -buyerClosesAgainstAvg,
+                                trade.price,
+                                buyerSameBlockEntryPrice,
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                              )
+                            : 0;
+
+                        const buyerSameBlockEntryPrice = buyerAvgPriceBeforeUpdate || match.tradePrice; 
+                       
                         console.log('sameBlockPNL for buyer (entry: '+buyerSameBlockEntryPrice+') = '+sameBlockPNL)
                         // ===================================================================
 
@@ -2739,6 +2763,32 @@ class Orderbook {
                                     isInverse,
                                     perContractNotional
                                   )
+
+                                                        // ========== MARK BASIS (A): realize any OPENED portion to lastPrice ==========
+                        const sellerOpened = Number(deltas?.seller?.opened || 0);
+                        if (sellerOpened > 0) {
+                            const sellerOpenMarkPNL = await marginMap.settlePNL(
+                                trade.sellerAddress,
+                                -sellerOpened,     // short opened
+                                lastPrice,         // exit = mark
+                                trade.price,       // entry = fill
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+                            settlementPNL += sellerOpenMarkPNL;
+
+                            if (match.sellerPosition && Number(match.sellerPosition.contracts || 0) !== 0) {
+                                match.sellerPosition.avgPrice = lastPrice;
+                            }
+
+                            console.log('seller open->mark PNL (opened=' + sellerOpened + '): ' + sellerOpenMarkPNL);
+                        }
+
+                        // ========== MARK BASIS (A): sameBlockPNL closes also use lastPrice ==========
+                        const sellerSameBlockEntryPrice = lastPrice;
+
 
                         // ========== FIX: Use same-block entry price for sameBlockPNL ==========
                         // When closing contracts opened in the same block, use the entry price
