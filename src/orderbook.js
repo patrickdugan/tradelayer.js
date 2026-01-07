@@ -2252,6 +2252,7 @@ class Orderbook {
                     const isInverse = await ContractRegistry.isInverse(match.sellOrder.contractId)
                     const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(match.sellOrder.contractId,currentBlockHeight);
                     let lastPrice = priceInfo.lastPrice
+                    let thisPrice = priceInfo.thisPrice
                     if(isLiquidation&&last!=null){lastPrice=last}
                         console.log('last price in process contracts '+lastPrice)
                     match.inverse = isInverse
@@ -2605,10 +2606,15 @@ class Orderbook {
                         console.log('seller opened '+sellerOpened+' '+amount+ ' '+sellerClose+' '+flipShort)
 
                         if (buyerOpened > 0) {
+                            let exit = lastPrice   
+                            let type = 'buyerNewContractTieOff'
+                            if(isLiquidation){
+                                type+= 'Liq'
+                                exit=thisPrice}
                             buyerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.buyerAddress,
                                 buyerOpened,      // long opened
-                                lastPrice,         // exit = mark
+                                exit,         // exit = mark
                                 trade.price,       // entry = fill
                                 trade.contractId,
                                 currentBlockHeight,
@@ -2637,6 +2643,11 @@ class Orderbook {
                           }
 
                         if (sellerOpened > 0) {
+                            let exit = lastPrice
+                            let type = 'sellerNewContractTieOff'
+                             if(isLiquidation){
+                                type+= 'Liq'
+                                exit=thisPrice}
                             sellerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.sellerAddress,
                                 -sellerOpened,     // short opened
@@ -2654,7 +2665,7 @@ class Orderbook {
                                 collateralPropertyId,
                                 sellerOpenMarkPNL,
                                 0, 0, 0,
-                                'sellerNewContractTieOff',
+                                type,
                                 currentBlockHeight
                                 );
                             }else{
