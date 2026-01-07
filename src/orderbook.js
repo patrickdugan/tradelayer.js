@@ -2599,9 +2599,11 @@ class Orderbook {
                         const sellerClose = Number(trade.sellerClose || 0);
 
                         // “Opened” is what’s left after close + flip allocation
-                        const buyerOpened  = Math.max(0, amount - buyerClose  - flipLong);
-                        const sellerOpened = Math.max(0, amount - sellerClose - flipShort);
-                        
+                        const buyerOpened  = Math.max(0, amount - buyerClose );
+                        const sellerOpened = Math.max(0, amount - sellerClose);
+                        console.log('buyer opened '+buyerOpened+' '+amount+ ' '+buyerClose+' '+flipLong)
+                        console.log('seller opened '+sellerOpened+' '+amount+ ' '+sellerClose+' '+flipShort)
+
                         if (buyerOpened > 0) {
                             buyerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.buyerAddress,
