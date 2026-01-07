@@ -1504,7 +1504,7 @@ class Clearing {
             const priceInfo = await Clearing.isPriceUpdatedForBlockHeight(id, blockHeight);
             console.log('price info '+JSON.stringify(priceInfo))
             await Clearing.pruneInstaLiqOrders(priceInfo.thisPrice, blockHeight,id)
-            await Clearing.settleNewContracts(id,blockHeight,priceInfo)
+            //await Clearing.settleNewContracts(id,blockHeight,priceInfo)
             const collateralId = await ContractRegistry.getCollateralId(id);
             await Clearing.settleIousForBlock(
                 id,
@@ -1892,7 +1892,7 @@ class Clearing {
           delete pos._wasProfitable;
           continue;
         }
-
+        console.log('profit PNL in 3rd pass '+pos.contracts+' '+lastPrice+' '+thisPrice+' '+inverse+' '+notional)
         const profit = Clearing.calculateClearingPNL({
           oldContracts: pos.contracts,
           previousMarkPrice: lastPrice,
@@ -2435,7 +2435,7 @@ class Clearing {
 
       }
 
-        await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice,ctxKey,preTradePositions)
+        //await Clearing.settleLiqNewContractsFromDB(contractId, blockHeight, priceInfo.thisPrice,ctxKey,preTradePositions)
 
         //------------------------------------------------------------
         // 7. Determine ADL remainder
