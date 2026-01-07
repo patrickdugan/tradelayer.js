@@ -2578,18 +2578,90 @@ class Orderbook {
                         const buyerAvg = match.buyerPosition.avgPrice;
                         let sellerClosesAgainstLast = sellerClosed- sellerClosesAgainstAvg;
                         let buyerClosesAgainstLast = buyerClosed- buyerClosesAgainstAvg
-                        if(!sellerClosesAgainstAvg||isNaN(sellerClosesAgainstAvg)){sellerClosesAgainstLast=sellerClosed}
-                        if(!buyerClosesAgainstAvg||isNaN(buyerClosesAgainstAvg)){buyerClosesAgainstLast=buyerClosed}
-                        const sellerAvg = match.sellerPosition.avgPrice;
-                        const newBuyerAvg = positions.bp.avgPrice
-                        const newSellerAvg = positions.sp.avgPrice
-                        console.log('closing two different ways '+sellerClosesAgainstAvg+' '+sellerClosesAgainstLast+' '+buyerClosesAgainstAvg+' '+buyerClosesAgainstLast)
                     console.log('trade '+JSON.stringify(trade))
                     match.buyerPosition = positions.bp
                     match.sellerPosition = positions.sp
                     console.log('checking positions based on mMap vs. return of object in contract update '+JSON.stringify(positions)+' '+JSON.stringify(match.buyerPosition) + ' '+JSON.stringify(match.sellerPosition))
 
                     console.log('checking positions after contract adjustment, seller '+JSON.stringify(match.sellerPosition) + ' buyer '+JSON.stringify(match.buyerPosition))
+                    let buyerOpenMarkPNL = 0
+                    let sellerOpenMarkPNL = 0
+                         // ========== MARK BASIS (A): realize any OPENED portion to lastPrice ==========
+                        // This rebases same-block opens to mark immediately, so later closes can use lastPrice.
+                        const amount = Number(trade.amount || 0);
+
+                        const buyerClose = Number(trade.buyerClose || 0);
+                        const sellerClose = Number(trade.sellerClose || 0);
+
+                        // “Opened” is what’s left after close + flip allocation
+                        const buyerOpened  = Math.max(0, amount - buyerClose  - flipLong);
+                        const sellerOpened = Math.max(0, amount - sellerClose - flipShort);
+                        
+                        if (buyerOpened > 0) {
+                            buyerOpenMarkPNL = await marginMap.settlePNL(
+                                trade.buyerAddress,
+                                buyerOpened,      // long opened
+                                lastPrice,         // exit = mark
+                                trade.price,       // entry = fill
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+
+                            if(buyerOpenMarkPNL>0){
+                                await TallyMap.updateBalance(
+                                trade.buyerAddress,
+                                collateralPropertyId,
+                                buyerOpenMarkPNL,
+                                0, 0, 0,
+                                'buyerNewContractTieOff',
+                                currentBlockHeight
+                                );
+                            }else{
+                                this.sourceFundsForLoss( 
+                                    trade.buyerAddress,
+                                    collateralPropertyId,
+                                    Math.abs(buyerOpenMarkPNL),
+                                    currentBlockHeight,
+                                    trade.contractId)
+                            }                            
+                          }
+
+                        if (sellerOpened > 0) {
+                            sellerOpenMarkPNL = await marginMap.settlePNL(
+                                trade.sellerAddress,
+                                -sellerOpened,     // short opened
+                                lastPrice,         // exit = mark
+                                trade.price,       // entry = fill
+                                trade.contractId,
+                                currentBlockHeight,
+                                isInverse,
+                                perContractNotional
+                            );
+
+                            if(sellerOpenMarkPNL>0){
+                                await TallyMap.updateBalance(
+                                trade.sellerAddress,
+                                collateralPropertyId,
+                                sellerOpenMarkPNL,
+                                0, 0, 0,
+                                'sellerNewContractTieOff',
+                                currentBlockHeight
+                                );
+                            }else{
+                                this.sourceFundsForLoss( 
+                                    trade.sellerAddress,
+                                    collateralPropertyId,
+                                    Math.abs(sellerOpenMarkPNL),
+                                    currentBlockHeight,
+                                    trade.contractId)
+                            }
+
+                            
+                        }    
+
+                    console.log('seller and buyer tie offs'+sellerOpenMarkPNL+' '+buyerOpenMarkPNL+' '+sellerOpened+' '+buyerOpened)
 
                     // Record the contract trade
                     await this.recordContractTrade(trade, currentBlockHeight);
@@ -2632,7 +2704,7 @@ class Orderbook {
                         let settlementPNL =
                                 await marginMap.settlePNL(
                                     trade.buyerAddress,
-                                    -buyerClosesAgainstLast,
+                                    -buyerClosed,
                                     trade.price,
                                     lastPrice,
                                     trade.contractId,
@@ -2642,54 +2714,6 @@ class Orderbook {
                                   );
                         console.log('settlementPNL for buyer '+settlementPNL)
                         
-                                                // ========== MARK BASIS (A): realize any OPENED portion to lastPrice ==========
-                        // This rebases same-block opens to mark immediately, so later closes can use lastPrice.
-                        const buyerOpened = Number(deltas?.buyer?.opened || 0);
-                        if (buyerOpened > 0) {
-                            const buyerOpenMarkPNL = await marginMap.settlePNL(
-                                trade.buyerAddress,
-                                buyerOpened,      // long opened
-                                lastPrice,         // exit = mark
-                                trade.price,       // entry = fill
-                                trade.contractId,
-                                currentBlockHeight,
-                                isInverse,
-                                perContractNotional
-                            );
-                            settlementPNL += buyerOpenMarkPNL;
-
-                            // Rebase avgPrice to mark for remaining position (keeps downstream logic coherent)
-                            if (match.buyerPosition && Number(match.buyerPosition.contracts || 0) !== 0) {
-                                match.buyerPosition.avgPrice = lastPrice;
-                            }
-
-                            console.log('buyer open->mark PNL (opened=' + buyerOpened + '): ' + buyerOpenMarkPNL);
-                        }
-
-                        // ========== MARK BASIS (A): sameBlockPNL closes also use lastPrice ==========
-                        // Because opens were rebased above, the correct entry for same-block closes is lastPrice.
-                        const buyerSameBlockEntryPrice = lastPrice;
-
-                        let sameBlockPNL = buyerClosesAgainstAvg>0
-                            ? await marginMap.settlePNL(
-                                trade.buyerAddress,
-                                -buyerClosesAgainstAvg,
-                                trade.price,
-                                buyerSameBlockEntryPrice,
-                                trade.contractId,
-                                currentBlockHeight,
-                                isInverse,
-                                perContractNotional
-                              )
-                            : 0;
-
-                        const buyerSameBlockEntryPrice = buyerAvgPriceBeforeUpdate || match.tradePrice; 
-                       
-                        console.log('sameBlockPNL for buyer (entry: '+buyerSameBlockEntryPrice+') = '+sameBlockPNL)
-                        // ===================================================================
-
-                        settlementPNL += sameBlockPNL
-                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         const reduction = await marginMap.reduceMargin(match.buyerPosition, closedShorts, initialMarginPerContract, match.buyOrder.contractId, match.buyOrder.buyerAddress, false, feeInfo.buyFeeFromMargin,buyerFee)
                         //{netMargin,mode}
@@ -2719,7 +2743,7 @@ class Orderbook {
 
                           }
                         } else {
-                            realizedSellerProfit= settlementPNL
+                            realizedBuyerProfit= settlementPNL
                         }
 
 
@@ -2755,7 +2779,7 @@ class Orderbook {
                         let settlementPNL =
                                 await marginMap.settlePNL(
                                     trade.sellerAddress,
-                                    sellerClosesAgainstLast,
+                                    sellerClosed,
                                     trade.price,
                                     lastPrice,
                                     trade.contractId,
@@ -2764,53 +2788,8 @@ class Orderbook {
                                     perContractNotional
                                   )
 
-                                                        // ========== MARK BASIS (A): realize any OPENED portion to lastPrice ==========
-                        const sellerOpened = Number(deltas?.seller?.opened || 0);
-                        if (sellerOpened > 0) {
-                            const sellerOpenMarkPNL = await marginMap.settlePNL(
-                                trade.sellerAddress,
-                                -sellerOpened,     // short opened
-                                lastPrice,         // exit = mark
-                                trade.price,       // entry = fill
-                                trade.contractId,
-                                currentBlockHeight,
-                                isInverse,
-                                perContractNotional
-                            );
-                            settlementPNL += sellerOpenMarkPNL;
 
-                            if (match.sellerPosition && Number(match.sellerPosition.contracts || 0) !== 0) {
-                                match.sellerPosition.avgPrice = lastPrice;
-                            }
-
-                            console.log('seller open->mark PNL (opened=' + sellerOpened + '): ' + sellerOpenMarkPNL);
-                        }
-
-                        // ========== MARK BASIS (A): sameBlockPNL closes also use lastPrice ==========
-                        const sellerSameBlockEntryPrice = lastPrice;
-
-
-                        // ========== FIX: Use same-block entry price for sameBlockPNL ==========
-                        // When closing contracts opened in the same block, use the entry price
-                        // from that same-block open rather than the oracle mark price (lastPrice).
-                        const sellerSameBlockEntryPrice = sellerAvgPriceBeforeUpdate || match.tradePrice;
-                        
-                        let sameBlockPNL = sellerClosesAgainstAvg>0 
-                            ? await marginMap.settlePNL(
-                                trade.sellerAddress,
-                                sellerClosesAgainstAvg,
-                                trade.price,
-                                sellerSameBlockEntryPrice,  // FIX: Use same-block entry, not lastPrice
-                                trade.contractId,
-                                currentBlockHeight,
-                                isInverse,
-                                perContractNotional
-                            ) : 0
-                        console.log('sameBlockPNL for seller (entry: '+sellerSameBlockEntryPrice+') = '+sameBlockPNL)
-                        // ===================================================================
-
-                        settlementPNL += sameBlockPNL
-                        console.log('settlementPNL for seller '+settlementPNL+' '+sameBlockPNL)
+                        console.log('settlementPNL for seller '+settlementPNL)
                     
                         //then we figure out the aggregate position's margin situation and liberate margin on a pro-rata basis 
                         console.log('position before going into reduce Margin '+closedContracts+' '+flipShort+' '+match.sellOrder.amount/*JSON.stringify(match.sellerPosition)*/)
@@ -2869,7 +2848,7 @@ class Orderbook {
                 console.log('real profit '+realizedSellerProfit+' '+realizedBuyerLoss)
                 let immediate = BigNumber.min(realizedSellerProfitBN, realizedBuyerLoss);
                 const deferred  = realizedSellerProfitBN.minus(immediate);
-                if(!isBuyerReducingPosition||isBuyerFlippingPosition){
+                if(!isBuyerReducingPosition){
                     immediate = realizedSellerProfitBN
                 }
                 console.log("BASDFSDF deffered and immediate in seller contract profit settlement "+deferred+' '+immediate)
@@ -2892,7 +2871,7 @@ class Orderbook {
 
         if(realizedBuyerProfit > 0) {
             const realizedBuyerProfitBN = new BigNumber(realizedBuyerProfit)
-            
+            console.log('realizing buyer profit maybe '+realizedBuyerProfit)
             if (isLiquidation) {
                 // Liquidation: credit full profit
                 await TallyMap.updateBalance(
@@ -2905,11 +2884,13 @@ class Orderbook {
                 );
             } else {
                 // Normal trade: cap immediate payout by realized loss funding
-                const realizedSellerProfitBN = new BigNumber(realizedBuyerProfit)
                 let immediate = BigNumber.min(realizedBuyerProfitBN, realizedSellerLoss);
                 const deferred  = realizedBuyerProfitBN.minus(immediate);
-                if(!isBuyerReducingPosition||isBuyerFlippingPosition){
+                if(!isSellerReducingPosition){
                     immediate = realizedBuyerProfitBN
+                    if(isSellerFlippingPosition){
+
+                    }
                 }
                 if (immediate.gt(0)) {
                     await TallyMap.updateBalance(
