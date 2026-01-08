@@ -9,7 +9,6 @@ const ClearList = require('./clearlist.js')
 const Consensus = require('./consensus.js')
 const PnlIou = require('./iou.js')
 const Clearing = require('./clearing.js')
-const TxIndex = require('./txIndex.js')
 
 // Helper: rank a single character with "alphabetical then numerical"
 function addressCharRank(ch) {
@@ -51,37 +50,6 @@ function compareSenderAddresses(a, b, txidA = null, txidB = null) {
 
     return 0;
 }
-
-class BlockTally {
-  constructor() {
-    this.byAddress = new Map();
-  }
-
-  get(addr, propertyId) {
-    const key = `${addr}:${propertyId}`;
-    if (!this.byAddress.has(key)) {
-      this.byAddress.set(key, {
-        availableDelta: 0,
-        marginDelta: 0,
-        realizedPNLDelta: 0
-      });
-    }
-    return this.byAddress.get(key);
-  }
-
-  effectiveAvailable(tally, delta) {
-    return (tally.available || 0) + delta.availableDelta;
-  }
-
-  reserveMargin(delta, amount) {
-    delta.marginDelta -= amount;
-  }
-
-  creditAvailable(delta, amount) {
-    delta.availableDelta += amount;
-  }
-}
-
 
 
 class Orderbook {
@@ -260,31 +228,6 @@ class Orderbook {
             await db.loadDatabase();
         }
 
-        static async checkAndReserveMargin({
-              sender,
-              collateralPropertyId,
-              requiredMargin,
-              blockTally
-            }) {
-             const TallyMap = require('./tally.js')
-              const dbTally = await TallyMap.getTally(sender, collateralPropertyId);
-              const delta = blockTally.get(sender, collateralPropertyId);
-
-              const effectiveAvailable =
-                (dbTally.available || 0) + delta.availableDelta;
-
-              if (effectiveAvailable < requiredMargin) {
-                return { ok: false, shortfall: requiredMargin - effectiveAvailable };
-              }
-
-              // Reserve immediately
-              blockTally.reserveMargin(delta, requiredMargin);
-              blockTally.creditAvailable(delta, -requiredMargin);
-
-              return { ok: true };
-            }
-
-
         /**
          * Queue a token:token on-chain order (tx type 5) under key "queue-<pairKey>".
          */
@@ -355,7 +298,6 @@ class Orderbook {
         static async processQueuedOnChainOrdersForBlock(blockHeight) {
             const height = Number(blockHeight);
             const db = await this._getOrderbookDB();
-            const blockTally = new BlockTally();
 
             const activeDoc = await db.findOneAsync({ _id: 'activePairs' });
             if (!activeDoc || !Array.isArray(activeDoc.pairs) || activeDoc.pairs.length === 0) {
@@ -369,6 +311,7 @@ class Orderbook {
                 const qDoc = await db.findOneAsync({ _id: queueId });
 
                 if (!qDoc || !Array.isArray(qDoc.orders) || qDoc.orders.length === 0) {
+                    // Nothing queued; ensure the pair doesn't linger in activePairs
                     activePairs = activePairs.filter(k => k !== pairKey);
                     await db.updateAsync(
                         { _id: queueId },
@@ -382,13 +325,18 @@ class Orderbook {
                 const ready = [];
                 const future = [];
 
+                // ✅ process all orders whose blockHeight <= current height
                 for (const entry of entries) {
                     const entryHeight = Number(entry.blockHeight);
-                    if (!isNaN(entryHeight) && entryHeight <= height) ready.push(entry);
-                    else future.push(entry);
+                    if (!isNaN(entryHeight) && entryHeight <= height) {
+                        ready.push(entry);
+                    } else {
+                        future.push(entry);
+                    }
                 }
 
                 if (ready.length === 0) {
+                    // No work for this height for this pair; still persist shrunk queue if needed
                     if (future.length !== entries.length) {
                         await db.updateAsync(
                             { _id: queueId },
@@ -402,11 +350,12 @@ class Orderbook {
                     continue;
                 }
 
+                // Deterministic ordering: first by blockHeight, then by sender
                 ready.sort((a, b) => {
                     const ha = Number(a.blockHeight);
                     const hb = Number(b.blockHeight);
                     if (ha !== hb) return ha - hb;
-                    return compareSenderAddresses(a.sender, b.sender, a.txid, b.txid);
+                    return compareSenderAddresses(a.sender, b.sender,a.txid,b.txid);
                 });
 
                 const orderbook = await Orderbook.getOrderbookInstance(pairKey);
@@ -420,60 +369,44 @@ class Orderbook {
                         );
                     } else if (entry.kind === 'contract') {
                         const p = entry.params;
-
-                        if (!p.isLiq) {
-                            const contract = await ContractRegistry.getContractInfo(p.contractId);
-                            const im = await ContractRegistry.getInitialMargin(p.contractId, p.price);
-                            const requiredMargin = BigNumber(im).times(p.amount).toNumber();
-
-                            const res = await Orderbook.checkAndReserveMargin({
-                                sender: entry.sender,
-                                collateralPropertyId: contract.collateralPropertyId,
-                                requiredMargin,
-                                blockTally
-                            });
-
-                            if (!res.ok) {
-                                await TxIndex.upsertTxValidityAndReason(entry.txid, 18, false, 'mid-block overload not enough tokens for init margin');
-
-                                continue;
-                            }
-                        }
-
-                        await orderbook.addContractOrder(
+                        const matchResult = await orderbook.addContractOrder(
                             p.contractId,
                             p.price,
                             p.amount,
                             p.sell,
                             p.insurance,
-                            p.blockTime,
+                            p.blockTime,   // using blockTime as you had it
                             entry.txid,
                             entry.sender,
                             p.isLiq || false,
                             p.reduce,
                             p.post,
                             p.stop,
-                            orderbook
+                            orderbook      // ✅ pass the existing instance through
                         );
+                        //console.log(' match result ' + JSON.stringify(matchResult));
                     }
                 }
 
-                await orderbook.loadOrderBook(pairKey);
-
+                // Debug: show loaded book & height, preserve your throw
+                const data = await orderbook.loadOrderBook(pairKey);
+                
+                // ✅ Write back only truly future entries for this pair
                 await db.updateAsync(
                     { _id: queueId },
                     { _id: queueId, orders: future },
                     { upsert: true }
                 );
 
+                // If nothing left queued at all for this pair, drop it from activePairs
                 if (future.length === 0) {
                     activePairs = activePairs.filter(k => k !== pairKey);
                 }
             }
 
+            // Persist the shrunk activePairs set
             await this._updateActivePairs(activePairs);
         }
-
 
         /**
          * Queue a CHANNEL trade (token or contract) for deterministic processing.
@@ -504,10 +437,10 @@ class Orderbook {
             await this._addActivePair(`channel-${pairKey}`);
         }
 
+
         static async processQueuedChannelTradesForBlock(blockHeight) {
             const height = Number(blockHeight);
             const db = await this._getOrderbookDB();
-            const blockTally = new BlockTally();
 
             const activeDoc = await db.findOneAsync({ _id: 'activePairs' });
             if (!activeDoc?.pairs?.length) return;
@@ -536,11 +469,12 @@ class Orderbook {
 
                 if (ready.length === 0) continue;
 
+                // ✅ CANONICAL SIEVE (same rule everywhere)
                 ready.sort((a, b) => {
                     if (a.blockHeight !== b.blockHeight) {
                         return a.blockHeight - b.blockHeight;
                     }
-                    const s = compareSenderAddresses(a.sender, b.sender, a.txid, b.txid);
+                    const s = compareSenderAddresses(a.sender, b.sender,a.txid,b.txid);
                     if (s !== 0) return s;
                     return a.txid.localeCompare(b.txid);
                 });
@@ -556,38 +490,8 @@ class Orderbook {
                             true
                         );
                     } else if (entry.kind === 'contract') {
-                        const p = entry.payload.match;
-
-                        if (!p.isLiq) {
-                            const contract = await ContractRegistry.getContractInfo(p.contractId);
-                            const im = await ContractRegistry.getInitialMargin(p.contractId, p.price);
-                            const requiredMargin = BigNumber(im).times(p.amount).toNumber();
-
-                            const { commitAddressA, commitAddressB } =
-                                await Channels.getCommitAddresses(entry.sender);
-
-                            const resA = await Orderbook.checkAndReserveMargin({
-                                sender: commitAddressA,
-                                collateralPropertyId: contract.collateralPropertyId,
-                                requiredMargin,
-                                blockTally
-                            });
-
-                            const resB = await Orderbook.checkAndReserveMargin({
-                                sender: commitAddressB,
-                                collateralPropertyId: contract.collateralPropertyId,
-                                requiredMargin,
-                                blockTally
-                            });
-
-                            if (!resA.ok || !resB.ok) {
-                                await TxIndex.upsertTxValidityAndReason(entry.txid, 19, false, 'mid-block overload not enough tokens for init margin');
-                                continue;
-                            }
-                        }
-
                         await orderbook.processContractMatches(
-                            [p],
+                            [entry.payload.match],
                             entry.blockHeight,
                             true
                         );
@@ -607,7 +511,6 @@ class Orderbook {
 
             await this._updateActivePairs(activePairs);
         }
-
 
         // Adds a token order to the order book
         async addTokenOrder(order, blockHeight, txid) {
