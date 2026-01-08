@@ -2611,6 +2611,7 @@ class Orderbook {
                             if(isLiquidation){
                                 type+= 'Liq'
                                 exit=thisPrice}
+                                console.log('tie off in liquidation? '+isLiquidation+' '+exit+' '+lastPrice+' '+thisPrice)
                             buyerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.buyerAddress,
                                 buyerOpened,      // long opened
@@ -2648,10 +2649,13 @@ class Orderbook {
                              if(isLiquidation){
                                 type+= 'Liq'
                                 exit=thisPrice}
+                               console.log('tie off in liquidation? '+isLiquidation+' '+exit+' '+lastPrice+' '+thisPrice)
+
+
                             sellerOpenMarkPNL = await marginMap.settlePNL(
                                 trade.sellerAddress,
                                 -sellerOpened,     // short opened
-                                lastPrice,         // exit = mark
+                                exit,         // exit = mark
                                 trade.price,       // entry = fill
                                 trade.contractId,
                                 currentBlockHeight,
