@@ -402,12 +402,11 @@ class ContractRegistry {
         return contractInfo ? contractInfo.native : false;
     }
 
-
-
     static async getContractInfo(contractId) {
         console.log('retrieving db info for contract '+contractId)
         const contractListDB = await db.getDatabase('contractList');
         const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
+        console.log('doc in get contract '+JSON.stringify(doc))
         if (!doc) {
             //console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
 

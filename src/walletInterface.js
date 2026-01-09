@@ -23,6 +23,38 @@ const expressInterface = {
         }
     },
 
+    async getContractInfo(contractId) {
+      try {
+        const response = await axios.get(`${serverUrl}/tl_getContractInfo`, {
+          params: { contractId }
+        });
+        return response.data;
+      } catch (error) {
+        console.error(
+          'Error in getContractInfo:',
+          error.response ? error.response.data : error.message
+        );
+        throw error;
+      }
+    },
+
+    async getInitialMargin(contractId, price) {
+      try {
+        const response = await axios.get(`${serverUrl}/tl_getInitMargin`, {
+          params: { contractId, price }
+        });
+        return Number(response.data);
+      } catch (error) {
+        console.error(
+          'Error in getInitialMargin:',
+          error.response ? error.response.data : error.message
+        );
+        throw error;
+      }
+    },
+
+
+
     async getAllBalancesForAddress(address) {
         try {
             const response = await axios.post(`${serverUrl}/tl_getAllBalancesForAddress`, { params: address });

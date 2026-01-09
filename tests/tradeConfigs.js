@@ -29,7 +29,7 @@ const ADDR_LONG_2  = 'tltc1qngxa8d84at2286c8n9ss04kk3fc2fmnvdvtz5u';
 const ADDR_LONG_3  = 'tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2';
 
 // Prices
-const SEED_PRICE = 75;   // aligns with your avgPrice in the current mMap snapshot
+const SEED_PRICE = 108;   // aligns with your avgPrice in the current mMap snapshot
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -290,7 +290,7 @@ async function seedE11() {
   
   // A goes long 10 @ 60
   console.log('A LONG 10 @ 60 vs B SHORT');
-  await matchedTrade(ADDR_A, ADDR_B, 60, 10);
+  await matchedTrade(ADDR_A, ADDR_B, 108, 10);
   
   await sleep(2000);
   
@@ -305,7 +305,7 @@ async function seedE11() {
   console.log('Close portion: A gains +100, C opens (no PNL yet)');
   console.log('Delta = +100 from A close only -> IOU');
   
-  await matchedTrade(ADDR_C, ADDR_A, 70, 15);
+  await matchedTrade(ADDR_C, ADDR_A, 109, 15);
   
   console.log('\n[E11] Check that flip recorded AND IOU recorded for close portion');
 }
@@ -324,7 +324,7 @@ async function seedE12() {
   // Step 1: Open long by lifting best ask
   // Crosses SELL @ 68.05
   console.log('1) OPEN: 8gvnl BUYS 5 @ 68.05');
-  await matchedTrade(TRADER, MAKER, 68.05, 5);
+  await matchedTrade(TRADER, MAKER, 108.5, 5);
 
   // tiny delay to stay same block
   await sleep(50);
@@ -332,7 +332,7 @@ async function seedE12() {
   // Step 2: Close long by hitting best bid
   // Crosses BUY @ 67.50
   console.log('2) CLOSE: 8gvnl SELLS 5 @ 67.50');
-  await matchedTrade(MAKER, TRADER, 67.50, 5);
+  await matchedTrade(MAKER, TRADER, 107.50, 5);
 
   console.log('\n[E12 EXPECTED]');
   console.log('Position delta: 0');
@@ -355,12 +355,12 @@ async function seedE13() {
   
   // 1. Open 10 long @ 67
   console.log('1. FRESH buys 10 @ 67');
-  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 68.01, 10);
+  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 108.01, 10);
   await sleep(100);
   
   // 2. Close 3 @ 67.50
   console.log('2. FRESH sells 3 @ 67.50 (partial close)');
-  await matchedTrade(ADDR_VG6Q9, ADDR_FRESH, 68.05, 3);
+  await matchedTrade(ADDR_VG6Q9, ADDR_FRESH, 108.05, 3);
   await sleep(100);
   
   // 3. Open 5 more @ 68
@@ -390,12 +390,12 @@ async function seedE14() {
   
   // Flip 1: sell 20 @ 68 -> closes 15, opens 5 short
   console.log('1. 8gvnl SELLS 20 @ 68 (flip +15 -> -5)');
-  await matchedTrade(ADDR_VG6Q9, ADDR_8GVNL, 68, 20);
+  await matchedTrade(ADDR_VG6Q9, ADDR_8GVNL, 108, 20);
   await sleep(100);
   
   // Flip 2: buy 10 @ 67.50 -> closes 5 short, opens 5 long
   console.log('2. 8gvnl BUYS 10 @ 67.50 (flip -5 -> +5)');
-  await matchedTrade(ADDR_8GVNL, ADDR_VG6Q9, 67.50, 10);
+  await matchedTrade(ADDR_8GVNL, ADDR_VG6Q9, 107.50, 10);
   
   console.log('\n[E14] Expected: 8gvnl ends at +5 long');
   console.log('avgPrice for final 5 should be 67.50');
@@ -416,12 +416,12 @@ async function seedE16() {
   
   // Buy 5 from vg6q9
   console.log('1. FRESH BUYS 5 @ 67');
-  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 67, 5);
+  await matchedTrade(ADDR_FRESH, ADDR_VG6Q9, 107, 5);
   await sleep(50);
   
   // Sell 5 to 8gvnl
   console.log('2. FRESH SELLS 5 @ 67.25');
-  await matchedTrade(ADDR_8GVNL, ADDR_FRESH, 67.25, 5);
+  await matchedTrade(ADDR_8GVNL, ADDR_FRESH, 107.25, 5);
   
   console.log('\n[E16] Expected: FRESH at 0, realized PNL +1.25');
 }
@@ -446,6 +446,182 @@ async function seedE15() {
     2
   );
 }
+
+async function seedE17() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+
+  console.log('\n[E17] IOU asymmetry setup');
+
+  console.log('LONG buys 5 @ 95 (deep ITM tranche)');
+  await matchedTrade(LONG, SHORT, 106.5, 5);
+  await sleep(1500);
+
+  console.log('SHORT sells 5 @ 115 (shallow ITM tranche)');
+  await matchedTrade(LONG, SHORT, 110, 5);
+  await sleep(1500);
+
+  console.log('[E17] Asymmetric entry prices established');
+}
+
+async function seedE18() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+
+  console.log('\n[E18] Canonical IOU close');
+
+  console.log('BOTH close 5 @ 110');
+  console.log('LONG: 95 → 110 = +75');
+  console.log('SHORT: 115 → 110 = +25');
+  console.log('delta = +100 → IOU EXPECTED');
+
+  await matchedTrade(
+    SHORT,  // buyer closes short
+    LONG,   // seller closes long
+    110,
+    5
+  );
+
+  console.log('[E18] Check IOU DB for +100');
+}
+
+async function seedE19() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+
+  console.log('\n[E19] Second IOU stacking test');
+
+  console.log('BOTH close 5 @ 105');
+  console.log('LONG: +50');
+  console.log('SHORT: +50');
+  console.log('delta = +100 → SECOND IOU');
+
+  await matchedTrade(
+    SHORT,
+    LONG,
+    105,
+    5
+  );
+
+  console.log('[E19] Two IOU entries should now exist');
+}
+
+async function seedE20() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+
+  console.log('\n[E20] Lossy close (no IOU)');
+
+  console.log('BOTH close bad tranches @ 105');
+  console.log('LONG: 115 → 105 = -50');
+  console.log('SHORT: 95 → 105 = -50');
+  console.log('delta = -100 → NO IOU');
+
+  await matchedTrade(
+    LONG,   // buyer closes bad long
+    SHORT,  // seller closes bad short
+    105,
+    5
+  );
+
+  console.log('[E20] Confirm NO IOU entry added');
+}
+
+async function seedE21() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq';
+
+  console.log('\n[E21] IOU recovery after losses');
+
+  console.log('BOTH close 5 @ 112');
+  console.log('LONG: +85');
+  console.log('SHORT: +15');
+  console.log('delta = +100 → IOU');
+
+  await matchedTrade(
+    SHORT,
+    LONG,
+    112,
+    5
+  );
+
+  console.log('[E21] IOU after loss recovery expected');
+}
+
+async function seedE22() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6'; // +13
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq'; // -21
+
+  console.log('\n[E22] Forced close on both sides (IOU must fire)');
+
+  // LONG closes 5 by SELLING
+  // SHORT closes 5 by BUYING
+  await sendType18Order(SHORT, 'BUY', 110, 5);
+  await sleep(800);
+  await sendType18Order(LONG, 'SELL', 110, 5);
+  await sleep(1200);
+
+  console.log('[E22] Expect: buyerClose=5, sellerClose=5, IOU entry');
+}
+
+async function seedE23() {
+  const LONG  = 'tltc1q8gvnl4z8tmjtl8hggyqdt59h3n0cg873zjqwp6';
+  const MAKER = 'tltc1q07ux9uzzgtkfykz67hy4z3530aks247emkxhj7'; // fresh
+
+  console.log('\n[E23] One-sided close with positive delta');
+
+  // LONG closes 5, MAKER opens fresh
+  await sendType18Order(MAKER, 'BUY', 111, 5);
+  await sleep(800);
+  await sendType18Order(LONG, 'SELL', 111, 5);
+  await sleep(1200);
+
+  console.log('[E23] buyerClose>0 only — IOU depends on delta logic');
+}
+
+async function seedE24() {
+  console.log('\n[E24] vg6q9 closes short vs 6007 closes long (IOU candidate)');
+
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq'; // -16
+  const LONG  = 'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u'; // +7
+
+  console.log('SHORT buys 7, LONG sells 7 @ 108');
+  await matchedTrade(SHORT, LONG, 108, 7);
+
+  console.log(`
+Expect:
+- both sides closing
+- IOU only if realizedPNL(long) > abs(realizedPNL(short))
+- otherwise silent (correct)
+`);
+}
+
+async function seedE25() {
+  console.log('\n[E25] Partial bilateral close (no IOU by design)');
+
+  const SHORT = 'tltc1qvg6q9lyxz5xx328q099g2grh8pynfwwws3l6fq'; // -9 after E24
+  const LONG  = 'tltc1q600749ge73rqmef52drmemsgvrk4797e2a7m0u'; // 0 or reduced
+
+  console.log('SHORT buys 3, LONG sells 3 @ 108');
+  await matchedTrade(SHORT, LONG, 108, 3);
+
+  console.log('Expect: no IOU (partial close)');
+}
+
+async function seedE26() {
+  console.log('\n[E26] 07ux9 partial close vs 49sx open (NO IOU)');
+
+  const CLOSER = 'tltc1q07ux9uzzgtkfykz67hy4z3530aks247emkxhj7'; // +5
+  const OPENER = 'tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx'; // fresh / opens
+
+  console.log('CLOSER sells 1, OPENER buys 1 @ 109');
+  await matchedTrade(OPENER, CLOSER, 109, 1);
+
+  console.log('Expect: no IOU, even if CLOSER profits');
+}
+
+
+
 
 
 async function main() {
@@ -472,6 +648,16 @@ async function main() {
     case 'E14': return seedE14()
     case 'E15': return seedE15()
     case 'E16': return seedE16()
+    case 'E17': return seedE17()
+    case 'E18': return seedE18()
+    case 'E19': return seedE19()
+    case 'E20': return seedE20()
+    case 'E21': return seedE21()
+    case 'E22': return seedE22()
+    case 'E23': return seedE23()
+    case 'E24': return seedE24()
+    case 'E25': return seedE25()
+    case 'E26': return seedE26()
     default:
       console.log('Options: E3 | E4 | E6 | E7 | E8 | E9-P1 | E9-P2 | E10-P1 | E10-P2 | E11');
   }

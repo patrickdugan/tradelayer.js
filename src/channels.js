@@ -497,7 +497,7 @@ static async getChannelBalancesForAddress(address, propertyId) {
     static async assignColumnBasedOnAddress(channel, newCommitAddress, cpAddress,block){
         const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);   
         // 1) If the channel isn't initialized yet, fall back to last-character rule
-        if (!channel.participants.A&&!channel.participants.B) {
+        if (!channel.participants?.A&&!channel?.participants.B) {
             channel.participants[column]=newCommitAddress
             await Channels.recordParticipantChange(
                 channel.channel,      // channelId
@@ -564,19 +564,30 @@ static async getChannelBalancesForAddress(address, propertyId) {
       return null;
     }
 
-    static assignColumnBasedOnLastCharacter(address, last=1) {
-        // Get the last character of the address
-        const lastChar = address[address.length - last];
-        console.log('last char in assign column based on last character '+lastChar)
-        // Define the characters considered odd
-        const oddCharacters = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O', 'Q', 'S', 'U', 'W', 'Y', '1', '3', '5', '7', '9'];
+    static assignColumnBasedOnLastCharacter(address, last = 1) {
+      if (typeof address !== 'string' || address.length === 0) {
+        console.warn('[assignColumnBasedOnLastCharacter] invalid address, defaulting to A');
+        return 'A'; // deterministic fallback
+      }
 
-        // Check if the last character is an odd character
-        const isOdd = oddCharacters.includes(lastChar.toUpperCase());
-        console.log(isOdd)
-        // If the last character is odd, assign to Column A, otherwise assign to Column B
-        return isOdd ? 'A' : 'B';
+      const idx = address.length - last;
+      if (idx < 0) {
+        console.warn('[assignColumnBasedOnLastCharacter] address too short, defaulting to A');
+        return 'A';
+      }
+
+      const lastChar = address[idx];
+      console.log('last char in assign column based on last character', lastChar);
+
+      const oddCharacters = [
+        'A','C','E','G','I','K','M','O','Q','S','U','W','Y',
+        '1','3','5','7','9'
+      ];
+
+      const isOdd = oddCharacters.includes(lastChar.toUpperCase());
+      return isOdd ? 'A' : 'B';
     }
+
 
   /**
  * Tie-breaker to assign addresses to columns based on their last N characters' parity.
@@ -621,7 +632,7 @@ static async getChannelBalancesForAddress(address, propertyId) {
 
     static predictColumnForAddress(channel, newCommitAddress, cpAddress) {
     // 1) If channel is empty, fallback to last-character rule
-    if (!channel.participants.A && !channel.participants.B) {
+    if (!channel.participants?.A && !channel.participants?.B) {
         return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
     }
 

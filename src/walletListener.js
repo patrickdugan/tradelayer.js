@@ -583,6 +583,20 @@ app.get('/tl_getInitMargin', async (req, res) => {
     }
 });
 
+app.get('/tl_getContractInfo', async (req, res) => {
+  try {
+    const { contractId } = req.query;
+    const info = await ContractRegistry.getContractInfo(contractId);
+    if (!info) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    res.json(info);
+  } catch (error) {
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+
 // Get contract trade history
 app.get('/tl_contractTradeHistory', async (req, res) => {
     try {
