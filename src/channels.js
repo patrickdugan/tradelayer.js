@@ -565,7 +565,7 @@ static async getChannelBalancesForAddress(address, propertyId) {
     }
 
     static assignColumnBasedOnLastCharacter(address, last = 1) {
-      if (typeof address !== 'string' || address.length === 0) {
+      if (!address || typeof address !== 'string' || address.length === 0) {
         console.warn('[assignColumnBasedOnLastCharacter] invalid address, defaulting to A');
         return 'A'; // deterministic fallback
       }
@@ -629,35 +629,40 @@ static async getChannelBalancesForAddress(address, propertyId) {
             loserColumn: column === 'A' ? 'B' : 'A'
         };
     }
+    
+      static predictColumnForAddress(channel, newCommitAddress, cpAddress) {
 
-    static predictColumnForAddress(channel, newCommitAddress, cpAddress) {
-    // 1) If channel is empty, fallback to last-character rule
-    if (!channel.participants?.A && !channel.participants?.B) {
-        return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-    }
+                // 0) Channel missing or malformed → fallback
+              if (!channel || !channel.participants) {
+                  return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+              }
 
-    // 2) If already present, preserve
-    if (channel.participants.A === newCommitAddress) return 'A';
-    if (channel.participants.B === newCommitAddress) return 'B';
+              // 1) If channel is empty, fallback to last-character rule
+              if (!channel.participants.A && !channel.participants.B) {
+                  return Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+              }
+              // 2) If already present, preserve
+              if (channel.participants.A === newCommitAddress) return 'A';
+              if (channel.participants.B === newCommitAddress) return 'B';
 
-    // 3) If the computed column is free (not cpAddress), assign
-    const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
-    if (channel.participants[column] !== cpAddress && !channel.participants[column]) {
-        return column;
-    }
+              // 3) If the computed column is free (not cpAddress), assign
+              const column = Channels.assignColumnBasedOnLastCharacter(newCommitAddress);
+              if (channel.participants[column] !== cpAddress && !channel.participants[column]) {
+                  return column;
+              }
 
-    // 4) Crowded, tie-break logic
-    if (
-        channel.participants[column] === cpAddress ||
-        (channel.participants[column] && channel.participants[column] !== newCommitAddress)
-    ) {
-        const tiebreak = Channels.tieBreakerByBackChar(newCommitAddress, cpAddress, column);
-        return tiebreak.winnerColumn;
-    }
+              // 4) Crowded, tie-break logic
+              if (
+                  channel.participants[column] === cpAddress ||
+                  (channel.participants[column] && channel.participants[column] !== newCommitAddress)
+              ) {
+                  const tiebreak = Channels.tieBreakerByBackChar(newCommitAddress, cpAddress, column);
+                  return tiebreak.winnerColumn;
+              }
 
-    // fallback: no assignment possible (shouldn't hit)
-    return null;
-}
+              // fallback: no assignment possible (shouldn't hit)
+              return null;
+          }
 
 static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
   if (!channel) throw new Error('Channel object is required for bumpColumnAssignment');

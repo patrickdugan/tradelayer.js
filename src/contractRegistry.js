@@ -403,18 +403,18 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-        console.log('retrieving db info for contract '+contractId)
-        const contractListDB = await db.getDatabase('contractList');
-        const doc = await contractListDB.findOneAsync({ id: contractId, type: 'contractSeries' });
-        console.log('doc in get contract '+JSON.stringify(doc))
-        if (!doc) {
-            //console.log('Contract information not found for contract ID:' + JSON.stringify(contractId));
-
-            return null;
+            console.log('retrieving db info for contract ' + contractId);
+            const contractListDB = await db.getDatabase('contractList');
+            const doc = await contractListDB.findOneAsync({ 
+                id: parseInt(contractId, 10),  // <-- coerce to number
+                type: 'contractSeries' 
+            });
+            if (!doc) {
+                return null;
+            }
+            console.log(doc);
+            return doc.data;
         }
-        //console.log(doc)
-        return doc.data;
-    }
 
     static async getNotionalValue(contractId, mark) {
         

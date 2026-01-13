@@ -115,16 +115,25 @@ const expressInterface = {
         }
     },
 
-    async getColumn(params){
+    async getColumn(params) {
         try {
-            const { addressA, addressB } = params;
-            const response = await axios.get(`${serverUrl}/tl_getChannelColumn`, { addressA, addressB});
+            const { channel, addressA, addressB } = params;
+            const response = await axios.get(
+                `${serverUrl}/tl_getChannelColumn`,
+                {
+                    params: { channel,addressA,addressB }
+                }
+            );
             return response.data;
         } catch (error) {
-            console.error('Error in getContractPositionForAddressAndContractId:', error.response ? error.response.data : error.message);
+            console.error(
+                'Error in getContractPositionForAddressAndContractId:',
+                error.response ? error.response.data : error.message
+            );
             throw error;
         }
     },
+
 
     async getContractPositionForAddressAndContractId(params) {
         try {

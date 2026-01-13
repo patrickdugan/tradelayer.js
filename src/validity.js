@@ -1577,7 +1577,7 @@ const Validity = {
             console.log('calling get contract Info in validate channel trade'+params.block)
             const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
 
-            if(params.amount <= 1){
+            if(params.amount < 1){
                 params.valid=false
                 params.reason += 'Contract amount must be a whole integer'
             }
