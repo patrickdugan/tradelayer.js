@@ -35,6 +35,13 @@ const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
 
+const SettleType = {
+    KEEP_ALIVE: 0,
+    CLOSE_POSITION: 1,
+    NET_SETTLE: 2,
+    KING_SETTLE: 3
+};
+
 // logic.js
 const Logic = {
     //here we have a kinda stupid structure where instead of passing the params obj. I break it down into its sub-properties
@@ -1656,41 +1663,374 @@ const Logic = {
 		    );
 	},
 
-    batchSettlement(sender, params, txid, block){
+    /**
+ * L2 Scaling Logic
+ * 
+ * Preserves existing case format:
+ *   case 23: await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block, params.txid);
+ *   case 31: Logic.batchSettlement(params);
+ * 
+ * Internal enum switch routes to specific handlers
+ */
 
-    },
+        /**
+         * Type 23: Settle Channel PNL
+         * Routes internally based on settleType enum
+         */
+        async settleChannelPNL(channelAddress, txParams, block, txid) {
+            const {
+                txidNeutralized1,
+                txidNeutralized2,
+                markPrice,
+                settleType,
+                columnAIsSeller,
+                columnAIsMaker,
+                netAmount,
+                expiryBlock
+            } = txParams;
 
-    publishNewTx(ordinalRevealJSON, jsCode) {
-    // Validate the input JSON and JavaScript code
-    if (!isValidJSON(ordinalRevealJSON)) {
-        throw new Error('Invalid Ordinal Reveal JSON');
-    }
-    if (!isValidJavaScript(jsCode)) {
-        throw new Error('Invalid JavaScript code');
-    }
+            const channel = await Channels.getChannel(channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
 
-    // Minify the JavaScript code (assuming a minification function exists)
-    const minifiedJsCode = minifyJavaScript(jsCode);
+            console.log(`Processing settleType=${settleType} for channel ${channelAddress}`);
 
-    // Assign a new transaction type ID
-    const newTxTypeId = getNextTxTypeId();
+            // Enum switch for settle type routing
+            switch (settleType) {
+                case SettleType.KEEP_ALIVE:
+                    await ScalingLogic.processKeepAlive(channelAddress, txidNeutralized1, block, txid);
+                    break;
 
-    // Construct the new transaction with the ordinal reveal JSON and minified JS code
-    const newTx = {
-        txTypeId: newTxTypeId,
-        ordinalRevealJSON: ordinalRevealJSON,
-        smartContractCode: minifiedJsCode
-    };
+                case SettleType.CLOSE_POSITION:
+                    await ScalingLogic.processClosePosition(
+                        channelAddress,
+                        txidNeutralized1,
+                        txidNeutralized2,
+                        markPrice,
+                        columnAIsSeller,
+                        block,
+                        txid
+                    );
+                    break;
 
-        // Save the new transaction to the system's registry
-        // Assuming a function to save the transaction exists
-        saveNewTransaction(newTx);
+                case SettleType.NET_SETTLE:
+                    await ScalingLogic.processNetSettle(
+                        channelAddress,
+                        txidNeutralized1,
+                        txidNeutralized2,
+                        netAmount,
+                        columnAIsSeller,
+                        block,
+                        txid
+                    );
+                    break;
 
-        console.log(`Published new transaction type ID ${newTxTypeId}`);
+                default:
+                    console.error(`Unknown settleType: ${settleType}`);
+                    return;
+            }
 
-        // Return the new transaction type ID and details
-        return { newTxTypeId, newTx };
-    },
+            await ScalingLogic.recordSettlement(channelAddress, txid, settleType, block);
+            console.log(`Settlement type ${settleType} completed for channel ${channelAddress}`);
+        },
+
+        /**
+         * Type 31: King Settlement (batch settlement sweep)
+         */
+        async batchSettlement(params) {
+            const {
+                senderAddress,
+                blockStart,
+                blockEnd,
+                propertyId,
+                netAmount,
+                aPaysBDirection,
+                channelRoot,
+                totalContracts,
+                neutralizedCount,
+                block,
+                txid
+            } = params;
+
+            const channelAddress = senderAddress;
+
+            console.log(`King Settlement: channel=${channelAddress}, blocks=${blockStart}-${blockEnd}`);
+
+            const channel = await Channels.getChannel(channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+            const scalingDb = await db.getDatabase('scaling');
+
+            // 1. Sweep all L2 state in the block range
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (doc) {
+                let sweptCount = 0;
+                for (const arr of ['trades', 'keepAlives', 'settlements', 'closes', 'netSettles']) {
+                    if (doc[arr]) {
+                        for (const item of doc[arr]) {
+                            if (item.block >= blockStart && 
+                                item.block <= blockEnd &&
+                                item.status !== 'neutralized' &&
+                                item.status !== 'swept') {
+                                item.status = 'swept';
+                                item.sweptBy = txid;
+                                sweptCount++;
+                            }
+                        }
+                    }
+                }
+                await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+                console.log(`Swept ${sweptCount} L2 items`);
+            }
+
+            // 2. Execute the net PnL transfer on channel balances
+            const colKey = propertyId.toString();
+            const absAmount = Math.abs(netAmount);
+
+            if (aPaysBDirection) {
+                channel.A[colKey] = (channel.A[colKey] || 0) - absAmount;
+                channel.B[colKey] = (channel.B[colKey] || 0) + absAmount;
+                console.log(`King settle: A pays B ${absAmount} of property ${propertyId}`);
+            } else {
+                channel.B[colKey] = (channel.B[colKey] || 0) - absAmount;
+                channel.A[colKey] = (channel.A[colKey] || 0) + absAmount;
+                console.log(`King settle: B pays A ${absAmount} of property ${propertyId}`);
+            }
+
+            await Channels.updateChannel(channelAddress, channel);
+
+            // 3. Record the king settlement
+            if (!doc) {
+                doc = { _id: channelAddress, kingSettlements: [] };
+            }
+            if (!doc.kingSettlements) doc.kingSettlements = [];
+            
+            doc.kingSettlements.push({
+                txid,
+                blockStart,
+                blockEnd,
+                propertyId,
+                netAmount,
+                aPaysBDirection,
+                channelRoot,
+                totalContracts,
+                neutralizedCount,
+                settledAtBlock: block,
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+
+            console.log(`King Settlement complete: ${totalContracts} contracts, ${neutralizedCount} txs swept, net=${netAmount}`);
+        },
+
+        /**
+         * Tx 2: Keep-Alive
+         */
+        async processKeepAlive(channelAddress, tradeTxid, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                doc = {
+                    _id: channelAddress,
+                    trades: [],
+                    keepAlives: [],
+                    settlements: [],
+                    closes: [],
+                    netSettles: [],
+                    kingSettlements: []
+                };
+            }
+
+            if (!doc.keepAlives) doc.keepAlives = [];
+            doc.keepAlives.push({
+                tradeTxid,
+                settleTxid,
+                block,
+                timestamp: Date.now()
+            });
+
+            if (doc.trades) {
+                const tradeIdx = doc.trades.findIndex(t => t.txid === tradeTxid);
+                if (tradeIdx >= 0) {
+                    doc.trades[tradeIdx].status = 'live';
+                    doc.trades[tradeIdx].keepAliveBlock = block;
+                }
+            }
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Keep-alive recorded: trade=${tradeTxid}, settle=${settleTxid}`);
+        },
+        /**
+         * Tx 3: Close Position
+         */
+        async processClosePosition(channelAddress, tradeTxid, keepAliveTxid, markPrice, columnAIsSeller, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                console.error(`No channel doc found for ${channelAddress}`);
+                return;
+            }
+
+            let originalTrade = null;
+            if (doc.trades) {
+                originalTrade = doc.trades.find(t => t.txid === tradeTxid);
+            }
+
+            if (!originalTrade) {
+                console.error(`Original trade ${tradeTxid} not found`);
+                return;
+            }
+
+            // Calculate PnL
+            const entryPrice = originalTrade.params?.price || 0;
+            const contracts = originalTrade.params?.amount || 0;
+            const priceDiff = markPrice - entryPrice;
+            const pnlAmount = Math.abs(priceDiff * contracts);
+            
+            let pnlDirection;
+            if (columnAIsSeller) {
+                pnlDirection = priceDiff < 0 ? 'BtoA' : 'AtoB';
+            } else {
+                pnlDirection = priceDiff > 0 ? 'BtoA' : 'AtoB';
+            }
+
+            // Neutralize original trade and keep-alive
+            if (doc.trades) {
+                const tradeIdx = doc.trades.findIndex(t => t.txid === tradeTxid);
+                if (tradeIdx >= 0) {
+                    doc.trades[tradeIdx].status = 'neutralized';
+                    doc.trades[tradeIdx].neutralizedBy = settleTxid;
+                }
+            }
+
+            if (doc.keepAlives) {
+                const kaIdx = doc.keepAlives.findIndex(k => k.settleTxid === keepAliveTxid);
+                if (kaIdx >= 0) {
+                    doc.keepAlives[kaIdx].status = 'neutralized';
+                    doc.keepAlives[kaIdx].neutralizedBy = settleTxid;
+                }
+            }
+
+            if (!doc.closes) doc.closes = [];
+            doc.closes.push({
+                settleTxid,
+                tradeTxid,
+                keepAliveTxid,
+                markPrice,
+                entryPrice,
+                contracts,
+                pnlAmount,
+                pnlDirection,
+                columnAIsSeller,
+                block,
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Close position: trade=${tradeTxid}, mark=${markPrice}, pnl=${pnlAmount} ${pnlDirection}`);
+
+            // Generate offset trade for clearing engine
+            if (originalTrade.params?.contractId) {
+                const closeParams = {
+                    ...originalTrade.params,
+                    price: markPrice,
+                    columnAIsSeller: !columnAIsSeller,
+                    isClose: true
+                };
+
+                await Logic.tradeContractChannel(
+                    closeParams.contractId,
+                    closeParams.price,
+                    closeParams.amount,
+                    closeParams.columnAIsSeller,
+                    block + 10,
+                    false,
+                    channelAddress,
+                    block,
+                    settleTxid + '_close',
+                    closeParams.columnAIsMaker
+                );
+            }
+        },
+
+        /**
+         * Tx 4: Net Settle
+         */
+        async processNetSettle(channelAddress, txidNeutralized1, txidNeutralized2, netAmount, columnAIsSeller, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                doc = {
+                    _id: channelAddress,
+                    trades: [],
+                    keepAlives: [],
+                    settlements: [],
+                    closes: [],
+                    netSettles: [],
+                    kingSettlements: []
+                };
+            }
+
+            // Neutralize referenced settlements
+            const neutralizeTxid = (txid) => {
+                for (const arr of ['trades', 'keepAlives', 'settlements', 'closes']) {
+                    if (doc[arr]) {
+                        const idx = doc[arr].findIndex(item => 
+                            item.txid === txid || item.settleTxid === txid
+                        );
+                        if (idx >= 0) {
+                            doc[arr][idx].status = 'neutralized';
+                            doc[arr][idx].neutralizedBy = settleTxid;
+                        }
+                    }
+                }
+            };
+
+            if (txidNeutralized1) neutralizeTxid(txidNeutralized1);
+            if (txidNeutralized2) neutralizeTxid(txidNeutralized2);
+
+            if (!doc.netSettles) doc.netSettles = [];
+            doc.netSettles.push({
+                settleTxid,
+                txidNeutralized1,
+                txidNeutralized2,
+                netAmount,
+                columnAIsSeller,
+                direction: (columnAIsSeller && netAmount >= 0) || (!columnAIsSeller && netAmount < 0) 
+                    ? 'AtoB' : 'BtoA',
+                block,
+                status: 'pending',
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Net settle recorded: amount=${netAmount}, direction=${columnAIsSeller ? 'seller' : 'buyer'}`);
+        },
+
+        /**
+         * Record settlement in tracking
+         */
+        async recordSettlement(channelAddress, txid, settleType, block) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            await scalingDb.updateAsync(
+                { _id: channelAddress },
+                {
+                    $push: {
+                        settlements: {
+                            txid,
+                            settleType,
+                            block,
+                            status: 'live',
+                            timestamp: Date.now()
+                        }
+                    }
+                },
+                { upsert: true }
+            );
+        },
 
     bindSmartContract(){},
 

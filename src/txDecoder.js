@@ -526,25 +526,55 @@ const Decode = {
     },
 
     decodeOptionTrade: (payload) => {
-    const parts = payload.split(',');
+        const parts = payload.split(',');
 
-    const result = {
-        ticker: parts[0],                                      // keep full ticker string
-        price: Decode.decodeAmount(parts[1] || '0'),
-        amount: parseInt(parts[2] || '0', 36),
-        columnAIsSeller: parts[3]=== '1',
-        expiryBlock: parseInt(parts[4] || '0', 36),
-        columnAIsMaker: parts[5] === '1'
-    };
+        const result = {
+            ticker: parts[0],                                      // keep full ticker string
+            price: Decode.decodeAmount(parts[1] || '0'),
+            amount: parseInt(parts[2] || '0', 36),
+            columnAIsSeller: parts[3]=== '1',
+            expiryBlock: parseInt(parts[4] || '0', 36),
+            columnAIsMaker: parts[5] === '1'
+        };
 
-    if (parts.length > 6) {
-        result.comboTicker = parts[6];
-        result.comboPrice = Decode.decodeAmount(parts[7] || '0');
-        result.comboAmount = parseInt(parts[8] || '0', 36);
-    }
+        if (parts.length > 6) {
+            result.comboTicker = parts[6];
+            result.comboPrice = Decode.decodeAmount(parts[7] || '0');
+            result.comboAmount = parseInt(parts[8] || '0', 36);
+        }
 
-    return result;
-},
+        return result;
+    },
+
+        // Type 23: Settle Channel PNL (polymorphic)
+    decodeSettleChannelPNL: (payload) => {
+        const parts = payload.split(',');
+        return {
+            txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''),
+            txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''),
+            markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '0')),
+            settleType: parseInt(parts[3] || '0'),
+            columnAIsSeller: parts[4] === '1',
+            columnAIsMaker: parts[5] === '1',
+            netAmount: parseFloat(Base94Converter.fromBase94(parts[6] || '0')),
+            expiryBlock: parseInt(Base94Converter.fromBase94(parts[7] || '0'))
+        };
+    },
+
+    // Type 31: King Settlement
+    decodeKingSettle: (payload) => {
+            const parts = payload.split(',');
+            return {
+                blockStart: parseInt(Base94Converter.fromBase94(parts[0] || '0')),
+                blockEnd: parseInt(Base94Converter.fromBase94(parts[1] || '0')),
+                propertyId: parseInt(Base94Converter.fromBase94(parts[2] || '0')),
+                netAmount: parseFloat(Base94Converter.fromBase94(parts[3] || '0')),
+                aPaysBDirection: parts[4] === '1',
+                channelRoot: Base256Converter.base256ToHex(parts[5] || ''),
+                totalContracts: parseInt(Base94Converter.fromBase94(parts[6] || '0')),
+                neutralizedCount: parseInt(Base94Converter.fromBase94(parts[7] || '0'))
+            };
+        },
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };

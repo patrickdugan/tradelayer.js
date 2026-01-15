@@ -3,6 +3,13 @@ const base94 = require('./base94.js');
 const base256 = require('./base256.js');
 const marker = 'tl';
 
+const SettleType = {
+    KEEP_ALIVE: 0,
+    CLOSE_POSITION: 1,
+    NET_SETTLE: 2,
+    KING_SETTLE: 3
+};
+
 const Encode = {
 
     encodeAmount: (amt) => {
@@ -441,6 +448,8 @@ const Encode = {
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
     },
+
+
 
     // Encode Mint Synthetic Transaction
     encodeMintSynthetic: (params) => {

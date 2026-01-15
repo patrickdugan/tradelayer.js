@@ -19,6 +19,63 @@ const Scaling = require('./scaling.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 const OptionsEngine = require('./options.js');
 
+// npm i bitcoinjs-lib bip32 tiny-secp256k1
+const bitcoin = require('bitcoinjs-lib');
+const ecc = require('tiny-secp256k1');
+const { BIP32Factory } = require('bip32');
+const bip32 = BIP32Factory(ecc);
+const { ScalingL2, SettleType, SettleStatus } = require('./scaling.js');
+
+/**
+ * Derive a child address from an account-level xpub.
+ *
+ * Assumes xpub is already at the account level, e.g.:
+ *   m/84'/0'/0'  (mainnet segwit account)  OR
+ *   m/84'/1'/0'  (testnet)
+ *
+ * Then you derive: change/index  =>  m/.../change/index
+ */
+function addressFromXpubP2WPKH({
+  xpub,
+  network = bitcoin.networks.bitcoin, // or bitcoin.networks.testnet
+  change = 0, // 0 = external receive, 1 = internal change
+  index = 0
+}) {
+  if (change !== 0 && change !== 1) throw new Error('change must be 0 or 1');
+  if (!Number.isInteger(index) || index < 0) throw new Error('index must be a non-negative integer');
+
+  const node = bip32.fromBase58(xpub, network);
+
+  // From xpub: only non-hardened derives are possible
+  const child = node.derive(change).derive(index);
+
+  const { address } = bitcoin.payments.p2wpkh({
+    pubkey: child.publicKey,
+    network
+  });
+
+  if (!address) throw new Error('failed to derive address');
+  return address;
+}
+
+// Example
+// const addr = addressFromXpubP2WPKH({ xpub: 'xpub...', network: bitcoin.networks.bitcoin, change: 0, index: 0 });
+// console.log(addr);
+function belongsToXpubP2WPKH({
+  xpub,
+  address,
+  network = bitcoin.networks.bitcoin,
+  change = 0,
+  maxIndex = 5000
+}) {
+  for (let i = 0; i <= maxIndex; i++) {
+    const derived = addressFromXpubP2WPKH({ xpub, network, change, index: i });
+    if (derived === address) return { ok: true, index: i };
+  }
+  return { ok: false };
+}
+
+
 const Validity = {
 
         isActivated: async (block,txid,txType) => {
@@ -2406,50 +2463,6 @@ const Validity = {
             return params;
         },
 
-        // 23: Settle Channel PNL
-        validateSettleChannelPNL: async (sender, params, txid) => {
-            params.reason = '';
-            params.valid = true;
-
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(23);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
-            }
-
-            const is = await Validity.isActivated(params.block,txid,23)
-            console.log(is)
-            if (!is) {
-                params.valid = false;
-                params.reason = 'Transaction type activated after tx';
-            }
-
-            const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-            if (!isValidChannel) {
-                params.valid = false;
-                params.reason += 'Invalid channel; ';
-            }
-
-            const isValidContract = marginMap.isValidContract(params.contractId);
-            if (!isValidContract) {
-                params.valid = false;
-                params.reason += 'Invalid contract for settlement; ';
-            }
-
-            const canSettle = marginMap.canSettlePNL(params.channelAddress, params.contractId, params.amountSettled);
-            if (!canSettle) {
-                params.valid = false;
-                params.reason += 'Cannot settle PNL; terms not met; ';
-            }
-
-            const isNuetralized = await Scaling.isThisSettlementAlreadyNuetralized(sender, txid)
-            if(isNuetralized){
-                params.valid = false
-                params.reason += "Settlement already invalidated by later settlement that updates it. "
-            }
-            return params;
-        },
-
       // 24: Mint Synthetic
     validateMintSynthetic: async (sender, params, txid) => {
         params.reason = '';
@@ -2850,10 +2863,289 @@ const Validity = {
         return hasSufficientBalance.hasSufficient && isValidInvoiceTerms;
     },
 
-    //31: BatchSettlement
-    validateBatchSettlement: (sender, params, txid, block) =>{
+    /**
+ * Validity.js Integration Patch for L2 Scaling
+ * 
+ * Replace your existing validateSettleChannelPNL (lines ~2465-2507)
+ * Add validateKingSettle for type 31
+ */
 
+
+    validateSettleChannelPNL: async (sender, params, txid) => {
+        params.reason = '';
+        params.valid = true;
+
+        // Activation check
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(23);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated; ';
+            return params;
+        }
+
+        const is = await Validity.isActivated(params.block, txid, 23);
+        if (!is) {
+            params.valid = false;
+            params.reason = 'Transaction type activated after tx';
+            return params;
+        }
+
+        // Validate settleType enum (0=KEEP_ALIVE, 1=CLOSE_POSITION, 2=NET_SETTLE)
+        const validSettleTypes = [0, 1, 2]; // SettleType enum values
+        if (!validSettleTypes.includes(params.settleType)) {
+            params.valid = false;
+            params.reason += `Invalid settleType: ${params.settleType}, expected 0-2; `;
+            return params;
+        }
+
+        // Validate channel exists
+        const channel = await Channels.getChannel(sender);
+        if (!channel) {
+            params.valid = false;
+            params.reason += 'Channel not found for sender; ';
+            return params;
+        }
+
+        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+        if (!commitAddressA && !commitAddressB) {
+            params.valid = false;
+            params.reason += 'Sender is not a channel participant; ';
+            return params;
+        }
+
+        // txidNeutralized1 required for all settle types
+        if (!params.txidNeutralized1) {
+            params.valid = false;
+            params.reason += 'Missing txidNeutralized1 (trade reference); ';
+            return params;
+        }
+
+        // Check if already neutralized by later settlement
+        const isNeutralized = await Scaling.isThisSettlementAlreadyNeutralized(sender, params.txidNeutralized1);
+        if (isNeutralized) {
+            params.valid = false;
+            params.reason += 'Settlement already superseded by later settlement; ';
+            return params;
+        }
+
+        // Type-specific validation
+        switch (params.settleType) {
+            case 0: // KEEP_ALIVE
+                // Tx 2: Just needs valid trade reference
+                const tradeStatus = await Scaling.isTradePublished(params.txidNeutralized1);
+                if (tradeStatus.status === 'expired') {
+                    params.valid = false;
+                    params.reason += 'Cannot keep-alive an expired trade; ';
+                }
+                break;
+
+            case 1: // CLOSE_POSITION
+                // Tx 3: Needs mark price and txidNeutralized2
+                if (!params.markPrice || params.markPrice <= 0) {
+                    params.valid = false;
+                    params.reason += 'Invalid mark price for close; ';
+                }
+                if (!params.txidNeutralized2) {
+                    params.valid = false;
+                    params.reason += 'Missing txidNeutralized2 (keep-alive reference); ';
+                }
+                // Validate mark price is within bounds
+                if (params.contractId) {
+                    const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+                    if (contractDetails) {
+                        const priceCheck = Validity.isTradePriceWithinLeverageBounds({
+                            tradePrice: params.markPrice,
+                            markPrice: await Validity.hasReferencePrice(params.contractId, params.block),
+                            leverage: contractDetails.leverage,
+                            bufferBps: 100 // Wider buffer for settlements
+                        });
+                        if (!priceCheck.valid) {
+                            params.valid = false;
+                            params.reason += 'Mark price outside leverage bounds; ';
+                        }
+                    }
+                }
+                break;
+
+            case 2: // NET_SETTLE
+                // Tx 4: PnL direction and amount required
+                if (params.netAmount === undefined || params.netAmount === null) {
+                    params.valid = false;
+                    params.reason += 'Missing netAmount for NET_SETTLE; ';
+                }
+                if (params.columnAIsSeller === undefined) {
+                    params.valid = false;
+                    params.reason += 'Missing columnAIsSeller direction flag; ';
+                }
+                // Verify the net amount doesn't exceed channel balances
+                if (channel && params.propertyId) {
+                    const colKey = params.propertyId.toString();
+                    const payerBalance = params.columnAIsSeller ? 
+                        (channel.A[colKey] || 0) : (channel.B[colKey] || 0);
+                    if (Math.abs(params.netAmount) > payerBalance) {
+                        params.valid = false;
+                        params.reason += `Net amount ${params.netAmount} exceeds payer balance ${payerBalance}; `;
+                    }
+                }
+                break;
+        }
+
+        // Block expiry check - anti-free-option mechanism
+        if (params.expiryBlock && params.block > params.expiryBlock) {
+            params.valid = false;
+            params.reason += `Settlement expired at block ${params.expiryBlock}, current: ${params.block}; `;
+        }
+
+        return params;
     },
+
+        /**
+         * Type 31: King Settlement (the sweep)
+         * Collapses all L2 state to a single on-chain settlement
+         */
+        validateKingSettle: async (sender, params, txid) => {
+            params.reason = '';
+            params.valid = true;
+
+            // Activation check
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(31);
+            if (!isAlreadyActivated) {
+                params.valid = false;
+                params.reason += 'Tx type not yet activated; ';
+                return params;
+            }
+
+            const is = await Validity.isActivated(params.block, txid, 31);
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+                return params;
+            }
+
+            // Must have block range
+            if (!params.blockStart || !params.blockEnd) {
+                params.valid = false;
+                params.reason += 'Missing block range (blockStart/blockEnd); ';
+                return params;
+            }
+
+            if (params.blockStart > params.blockEnd) {
+                params.valid = false;
+                params.reason += 'Invalid block range: start > end; ';
+                return params;
+            }
+
+            // Current block must be within or after the range
+            if (params.block < params.blockStart) {
+                params.valid = false;
+                params.reason += 'Cannot settle future block range; ';
+                return params;
+            }
+
+            // Validate channel
+            const channel = await Channels.getChannel(sender);
+            if (!channel) {
+                params.valid = false;
+                params.reason += 'Channel not found; ';
+                return params;
+            }
+
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+            if (!commitAddressA || !commitAddressB) {
+                params.valid = false;
+                params.reason += 'Invalid channel participants; ';
+                return params;
+            }
+
+            // Property ID must be valid
+            if (!params.propertyId || params.propertyId < 1) {
+                params.valid = false;
+                params.reason += 'Invalid propertyId; ';
+                return params;
+            }
+
+            // Net amount required
+            if (params.netAmount === undefined) {
+                params.valid = false;
+                params.reason += 'Missing netAmount; ';
+                return params;
+            }
+
+            // Payment direction required
+            if (params.aPaysBDirection === undefined) {
+                params.valid = false;
+                params.reason += 'Missing payment direction (aPaysBDirection); ';
+                return params;
+            }
+
+            // Channel root reference required
+            if (!params.channelRoot) {
+                params.valid = false;
+                params.reason += 'Missing channelRoot (founding UTXO reference); ';
+                return params;
+            }
+
+            // Validate payer has sufficient balance
+            const colKey = params.propertyId.toString();
+            const payerBalance = params.aPaysBDirection ? 
+                (channel.A[colKey] || 0) : (channel.B[colKey] || 0);
+            
+            if (Math.abs(params.netAmount) > payerBalance) {
+                params.valid = false;
+                params.reason += `Net amount ${params.netAmount} exceeds payer balance ${payerBalance}; `;
+                return params;
+            }
+
+            // Count pending settlements that will be neutralized
+            const scalingDb = await db.getDatabase('scaling');
+            const doc = await scalingDb.findOneAsync({ _id: sender });
+            let neutralizedCount = 0;
+            
+            if (doc) {
+                for (const arr of ['settlements', 'trades', 'netSettles']) {
+                    if (doc[arr]) {
+                        for (const item of doc[arr]) {
+                            if (item.block >= params.blockStart && 
+                                item.block <= params.blockEnd &&
+                                item.status !== 'neutralized' &&
+                                item.status !== 'swept') {
+                                neutralizedCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Store count for audit
+            params.neutralizedCount = neutralizedCount;
+
+            return params;
+        },
+
+// ============================================
+// INTEGRATION: Add to your Validity object
+// ============================================
+
+/*
+In your Validity object (validity.js), update the methods:
+
+1. Replace the existing validateSettleChannelPNL with the new one above
+
+2. Add validateKingSettle:
+
+    // 31: King Settlement
+    validateKingSettle: validateKingSettle,
+
+3. Update the Validity object export to include both
+
+Example integration point (around line 2900 in your file):
+
+    //31: BatchSettlement -> rename to KingSettle
+    validateKingSettle: async (sender, params, txid) => {
+        // Use the validateKingSettle function above
+    },
+
+*/
 
     // 32: Batch Move Zk Rollup
     validateBatchMoveZkRollup: (params, zkVerifier, tallyMap) => {
