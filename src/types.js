@@ -190,7 +190,7 @@ const Types = {
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
-                params = await Validity.validateCommitToken(sender, params, txId, reference, referenceAmount)
+                params = await Validity.validateCommit(sender, params, txId, reference, referenceAmount)
                 console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 5:
