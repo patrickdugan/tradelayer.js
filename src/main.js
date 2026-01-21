@@ -816,6 +816,7 @@ class Main {
                 //console.log(`[CLEARING] Skipped for block ${blockHeight} (no new TL work)`);
             }
 
+            await Channels.processWithdrawals(blockHeight);
             // Always return block number for chain continuity
             return blockHeight;
         }
@@ -835,7 +836,6 @@ class Main {
                     await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
                     }   
                 }
-                await Channels.processWithdrawals(blockHeight);
  
         return //console.log('block finish '+blockHeight)
     }

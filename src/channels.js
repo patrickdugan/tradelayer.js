@@ -927,6 +927,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             column: column
         };
         this.pendingWithdrawals.push(withdrawalObj);
+        console.log('add withdraw '+withdrawalObj)
         await this.savePendingWithdrawalToDB(withdrawalObj);
     }
 
@@ -945,7 +946,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
                 this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
             }
         }
-        //console.log('about to process withdrawals '+blockHeight)
+        console.log('about to process withdrawals '+blockHeight)
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
@@ -1074,7 +1075,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
-      //console.log('in processWithdrawal '+channel[column][propertyId])
+      console.log('in processWithdrawal '+channel[column][propertyId])
       const TallyLazy = require('./tally.js')
       let has = await TallyLazy.hasSufficientChannel(channel.channel,propertyId,amount)
       console.log(amount, has.hasSufficient)
