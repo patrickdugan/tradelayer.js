@@ -143,7 +143,7 @@ static async getChannelBalancesForAddress(address, propertyId) {
           : (data?.participants?.A || ''),
         lastCommitmentBlock: data?.lastCommitmentTime ?? null,
         commitCount: Array.isArray(data?.commits) ? data.commits.length : 0,
-        // did *we* ever mark payEnabled=true in a commit? (handy hint for UI)
+        // ever mark payEnabled=true in a commit? (handy hint for UI)
         payEnabled: !!(Array.isArray(data?.commits) && data.commits.some(
           c => String(c.senderAddress || '').toLowerCase() === addrLC && c.payEnabled === true
         )),
@@ -184,18 +184,20 @@ static async getChannelBalancesForAddress(address, propertyId) {
       return m;
     }
 
-    static async loadChannelsRegistry() {
-        // Load the channels registry from NeDB
+    static async loadChannelsRegistry(){
         const channelsDB = await dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
-            //console.log('loading channel DB '+JSON.stringify(entries))
-            this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
-            //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
-            return
+
+            if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
+                console.log('[loadChannelsRegistry] Loading from DB');
+                this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
+            } else {
+                console.log('[loadChannelsRegistry] Already loaded, skipping reload');
+            }    
+            return;
         } catch (error) {
             if (error.message.includes('does not exist')) {
-                // If the collection does not exist, initialize an empty registry
                 this.channelsRegistry = new Map();
             } else {
                 throw error;
@@ -329,22 +331,20 @@ static async getChannelBalancesForAddress(address, propertyId) {
         }
     }
 
-
     static async getChannel(channelId) {
-        // Ensure the channels registry is loaded
-        let channel = this.channelsRegistry.get(channelId)
-        //console.log('inside getChannel '+channelId+' '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
-        console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
-        if(!channel||channel==undefined||channel==null){
+        // Load registry once if empty
+        if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
             await this.loadChannelsRegistry();
-            channel = this.channelsRegistry.get(channelId)
-            console.log('in getChannel 2nd hit '+JSON.stringify(channel));
-            if(!channel){
-              channel=null
-            }
         }
+        
+        let channel = this.channelsRegistry.get(channelId);
+        console.log(Boolean(!channel), Boolean(channel==undefined), JSON.stringify(channel));
 
-        return channel
+        if (!channel || channel === undefined || channel === null) {
+            console.log('in getChannel - channel not found:', channelId);
+            channel = null;
+        }
+        return channel;
     }
 
     static async isValidChannel(channelAddress) {
@@ -363,26 +363,32 @@ static async getChannelBalancesForAddress(address, propertyId) {
     }
 
     static async getCommitAddresses(channelAddress) {
-        console.log('channel addr '+channelAddress)
-        let channel = this.channelsRegistry.get(channelAddress);
-        console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
-        if(!channel||channel==undefined||channel==null){
-          console.log('channel not found, loading from db')
-          await Channels.loadChannelsRegistry()
-          channel = this.channelsRegistry.get(channelAddress);
-          console.log('checking channel obj again '+JSON.stringify(channel))
+        console.log('channel addr ' + channelAddress);
+        
+        // Only load if registry is empty
+        if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
+            await this.loadChannelsRegistry();
         }
+        
+        let channel = this.channelsRegistry.get(channelAddress);
+        
+        if (!channel || channel === undefined || channel === null) {
+            console.log('channel not found in registry:', channelAddress);
+            return { commitAddressA: null, commitAddressB: null };
+        }
+        
         if (channel && channel.participants) {
             const participants = channel.participants;
-            console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
+            console.log('inside getCommitAddresses ' + participants.A + ' ' + participants.B);
             return {
                 commitAddressA: participants.A,
                 commitAddressB: participants.B
             };
         } else {
-            return {commitAddressA: null,commitAddressB: null}; // Return null if the channel or participants data is not found
+            return { commitAddressA: null, commitAddressB: null };
         }
     }
+
 
     static async addCommitment(channelId, commitment) {
         await this.db.updateAsync(
@@ -799,7 +805,6 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         //}
     }
 
-
     static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid){
         console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight+ txid)
           if (!this.channelsRegistry) {
@@ -933,11 +938,13 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
 
     // Function to process withdrawals
     static async processWithdrawals(blockHeight) {
+        console.log('withdrawQueue length '+this.pendingWithdrawals.length)
         if (this.pendingWithdrawals.length === 0) {
             // Load pending withdrawals from the database if the array is empty
             const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
+            console.log('withdrawQueue length db'+pendingWithdrawalsFromDB.length)
             if(pendingWithdrawalsFromDB.length!=0){
-               //console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
+               console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
                 }
             if (pendingWithdrawalsFromDB.length === 0) {
                 return; // No pending withdrawals to process

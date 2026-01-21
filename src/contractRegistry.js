@@ -403,7 +403,7 @@ class ContractRegistry {
     }
 
     static async getContractInfo(contractId) {
-            console.log('retrieving db info for contract ' + contractId);
+            //console.log('retrieving db info for contract ' + contractId);
             const contractListDB = await db.getDatabase('contractList');
             const doc = await contractListDB.findOneAsync({ 
                 id: parseInt(contractId, 10),  // <-- coerce to number
@@ -412,7 +412,7 @@ class ContractRegistry {
             if (!doc) {
                 return null;
             }
-            console.log(doc);
+            //console.log(doc);
             return doc.data;
         }
 

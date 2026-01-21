@@ -2225,7 +2225,7 @@ const Validity = {
             }
             
             if (balance < params.amount) {
-                 params.valid = false;
+                params.amount=balance
                 params.reason += 'Insufficient balance for withdrawal; ';
             }
 
