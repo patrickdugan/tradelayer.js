@@ -296,13 +296,12 @@ const TxUtils = {
         if(!this.client){
             console.log('awaiting client in get raw tx')
             this.client = await clientPromise;
-
         }
-
+        
         try {
             const tx = await this.client.getRawTransaction(txId);
             return tx.vout.map(output => ({
-                address: output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null,
+                address: output.scriptPubKey.address || (output.scriptPubKey.addresses && output.scriptPubKey.addresses[0]) || null,
                 satoshis: Math.round(output.value * COIN),
                 vout: output.n
             })).filter(output => output.address);  // Filter out outputs without addresses (OP_RETURN)

@@ -835,6 +835,7 @@ class Main {
                     await TallyMap.applyVesting(3,updateVesting.three,blockHeight)
                     }   
                 }
+                await Channels.processWithdrawals(blockHeight);
  
         return //console.log('block finish '+blockHeight)
     }

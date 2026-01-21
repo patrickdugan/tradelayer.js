@@ -14,8 +14,8 @@ const clientConfig = /*test ?*/ {
 
 const client = new litecoin.Client(clientConfig);
 // Assuming standard fee and other constants are defined
-const STANDARD_FEE = 10000; // Standard fee in satoshis
-const DUST_THRESHOLD = 54600;
+const STANDARD_FEE = 2000 // Standard fee in satoshis
+const DUST_THRESHOLD = 5460;
 
 // Promisify client functions
 const listUnspentAsync = util.promisify(client.cmd.bind(client, 'listunspent'));
@@ -55,7 +55,7 @@ async function sendLitecoin(senderAddress, recipientAddress, amountToSend) {
 
 // Replace with actual values
 const senderAddress = "tltc1qstal4v4x96u8yftgcnpk88wsa8sps08dhwg446"; //tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr
-const recipientAddress = "tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx"//tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw"
+const recipientAddress = "tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw"//"tltc1q49sxgvvtpr7p6d4azcv68tgfdaf0mykyhlsexx"//tltc1qtee90ysf57393hfqyn79syj9mkekm7hq0epqzw"
 //tltc1qp5z2la8sy69np798pc36up5zk2vg0fw2g7pml2"//tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m" //"tltc1qpgenrwmg9hxgv23mnvd2t7085prjkge2xw7myz"
 const amountToSend = 0.005; // Amount of LTC to send
 

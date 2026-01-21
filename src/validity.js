@@ -2145,18 +2145,18 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
-             if(params.ref){
-                //console.log(params.ref)
+             if(params.ref !== false && params.ref !== null && params.ref !== undefined){
+                console.log('ref '+ params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
 
                 let matchingOutput = null;
-                //console.log(JSON.stringify(outputs)) 
+                console.log(JSON.stringify(outputs)) 
                 // Loop through the outputs array to find the one with the matching vout
                 for (let i = 0; i < outputs.length; i++) {
-                    //console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
+                    console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
                     if (outputs[i].vout === Number(params.ref)) {
                         matchingOutput = outputs[i];
-                        //console.log('match output '+matchingOutput)
+                        console.log('match output '+matchingOutput)
                         break; // Exit loop once the matching output is found
                     }
                 }
@@ -2189,9 +2189,9 @@ const Validity = {
                 params.reason += 'propertyId or amount not specified while withdrawAll is false'
        
             }
-
+            console.log('channel address '+params.channelAddress)
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
-          
+            console.log('commit addresses in validate withdrawal '+commitAddressA+' '+commitAddressB)
             if (!commitAddressA&&!commitAddressB) {
                 params.valid = false;
                 params.reason += 'Channel not instantiated; ';
@@ -2199,31 +2199,24 @@ const Validity = {
             }
 
             const channel = await Channels.getChannel(params.channelAddress)
-            let isColumnA = params.column
-            let balance 
+            let isColumnA;
+            let balance;
+
             console.log('inside validate withdrawal '+sender+' '+Boolean(sender==channel.participants.A)+Boolean(sender==channel.participants.B))
-            if (sender!=channel.participants.A&&sender!=channel.participants.B) {
+
+            if(sender!=channel.participants.A && sender!=channel.participants.B) {
                 params.valid = false;
                 params.reason += 'Sender not authorized for the channel';
             }else{
                 if(sender==channel.participants.A){
-                    isColumnA=true
-                    balance=channel.A[params.propertyId]
-                    console.log('column ' +params.column)
-                    if(params.column==false){
-                        params.valid = false;
-                        params.reason += 'Sender does not match with column';
-                    }
-                }else if(sender==channel.participants.B){
-                    console.log('checking this column disqualification logic works '+params.column)
-                    isColumnA=false
-                    balance=channel.B[params.propertyId]
-                    if(params.column==true){
-                        params.valid = false;
-                        params.reason += 'Sender does not match with column';
-                    }
+                    isColumnA = true;
+                    balance = channel.A[params.propertyId];
+                } else if(sender==channel.participants.B){
+                    isColumnA = false;
+                    balance = channel.B[params.propertyId];
                 }
             }
+
             //if column is true then it's column B because 0 comes before 1 and A before B
             console.log('inside validate withdrawal '+params.column +'isColumnA '+isColumnA+' balance '+balance+' withdraw amount '+params.amount)
              if(params.column==undefined){

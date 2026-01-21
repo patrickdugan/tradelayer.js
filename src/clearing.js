@@ -377,7 +377,7 @@ class Clearing {
        //Clearing.recordClearingRun(blockHeight,realtime)
         // 1. Fee Cache Buy
         //await Clearing.feeCacheBuy(blockHeight);
-
+        await Channels.processWithdrawals(blockHeight);
         // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels(blockHeight);
 

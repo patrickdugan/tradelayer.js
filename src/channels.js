@@ -363,17 +363,18 @@ static async getChannelBalancesForAddress(address, propertyId) {
     }
 
     static async getCommitAddresses(channelAddress) {
+        console.log('channel addr '+channelAddress)
         let channel = this.channelsRegistry.get(channelAddress);
-        //console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
+        console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
         if(!channel||channel==undefined||channel==null){
           console.log('channel not found, loading from db')
           await Channels.loadChannelsRegistry()
           channel = this.channelsRegistry.get(channelAddress);
-          //console.log('checking channel obj again '+JSON.stringify(channel))
+          console.log('checking channel obj again '+JSON.stringify(channel))
         }
         if (channel && channel.participants) {
             const participants = channel.participants;
-            //console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
+            console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
             return {
                 commitAddressA: participants.A,
                 commitAddressB: participants.B
@@ -962,18 +963,18 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
-            //console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
+            console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
             if (blockHeight >= withdrawal.blockHeight + 7) {
                 // Check if sender has sufficient balance for withdrawal
                 
-                //console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
+                console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
                 let column
                 if(thisChannel.participants.A==senderAddress){
                   column = "A"
                 }else if(thisChannel.participants.B==senderAddress){
                   column = "B"
                 }else{
-                  //console.log('sender not found on channel '+senderAddress + ' '+channel)
+                  console.log('sender not found on channel '+senderAddress + ' '+channel)
                   continue
                 }
                     if(withdrawAll==true){
@@ -1075,7 +1076,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
       //console.log('in processWithdrawal '+channel[column][propertyId])
       const TallyLazy = require('./tally.js')
-      let has = await TallyLazy.hasSufficientReserve(channel.channel,propertyId,amount)
+      let has = await TallyLazy.hasSufficientChannel(channel.channel,propertyId,amount)
       console.log(amount, has.hasSufficient)
       if(has.hasSufficient==false){
          amount-=has.shortfall
