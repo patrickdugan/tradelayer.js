@@ -34,6 +34,7 @@ const opcodes = require('./opcodes');
 const witness = require('./witness');
 const generator = require('./generator');
 const merkle = require('./merkle');
+const utxoReferee = require('./utxo_referee');
 
 module.exports = {
   // Core circuit builder
@@ -59,5 +60,12 @@ module.exports = {
   MerkleCircuitBuilder: merkle.MerkleCircuitBuilder,
   proofToWitness: merkle.proofToWitness,
   updateProofToWitness: merkle.updateProofToWitness,
-  bufToHex: merkle.bufToHex
+  bufToHex: merkle.bufToHex,
+
+  // UTXO Referee (sweep verification)
+  utxoReferee,
+  verifySweep: utxoReferee.verifySweep,
+  CommitmentPackage: utxoReferee.CommitmentPackage,
+  PayoutLeaf: utxoReferee.PayoutLeaf,
+  SweepObject: utxoReferee.SweepObject
 };
