@@ -1194,7 +1194,7 @@ class MarginMap {
                 const priceBN = new BigNumber(price)
                 const contractsBN = new BigNumber(contracts)
                 if (!pos) return 0;
-                const ContractRegistry = require('./ContractRegistry.js')
+                const ContractRegistry = require('./contractRegistry.js')
                 if (notional == null || isNaN(Number(notional))) {
                     // Lazy fetch from ContractRegistry
                     const info = await ContractRegistry.getContractInfo(contractId);
