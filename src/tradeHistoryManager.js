@@ -92,10 +92,10 @@ static async getContractTradeHistoryForAddress(contractId, address) {
       { key },
       {
         $or: [
-          { 'trade.buyer': addr },
-          { 'trade.seller': addr },
-          { 'trade.buyer': addrL },
-          { 'trade.seller': addrL },
+          { 'trade.buyerAddress': addr },
+          { 'trade.sellerAddress': addr },
+          { 'trade.buyerAddress': addrL },
+          { 'trade.sellerAddress': addrL },
         ]
       }
     ]
