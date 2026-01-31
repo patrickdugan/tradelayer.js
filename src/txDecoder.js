@@ -526,25 +526,25 @@ const Decode = {
     },
 
     decodeOptionTrade: (payload) => {
-    const parts = payload.split(',');
+        const parts = payload.split(',');
 
-    const result = {
-        ticker: parts[0],                                      // keep full ticker string
-        price: Decode.decodeAmount(parts[1] || '0'),
-        amount: parseInt(parts[2] || '0', 36),
-        columnAIsSeller: parts[3]=== '1',
-        expiryBlock: parseInt(parts[4] || '0', 36),
-        columnAIsMaker: parts[5] === '1'
-    };
+        const result = {
+            ticker: parts[0],                                      // keep full ticker string
+            price: Decode.decodeAmount(parts[1] || '0'),
+            amount: parseInt(parts[2] || '0', 36),
+            columnAIsSeller: parts[3]=== '1',
+            expiryBlock: parseInt(parts[4] || '0', 36),
+            columnAIsMaker: parts[5] === '1'
+        };
 
-    if (parts.length > 6) {
-        result.comboTicker = parts[6];
-        result.comboPrice = Decode.decodeAmount(parts[7] || '0');
-        result.comboAmount = parseInt(parts[8] || '0', 36);
-    }
+        if (parts.length > 6) {
+            result.comboTicker = parts[6];
+            result.comboPrice = Decode.decodeAmount(parts[7] || '0');
+            result.comboAmount = parseInt(parts[8] || '0', 36);
+        }
 
-    return result;
-},
+        return result;
+    },
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };
