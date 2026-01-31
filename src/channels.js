@@ -813,6 +813,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
                 commits: [],
                 A: {},
                 B: {},
+                clearLists: { A: [], B: [] },
+                payEnabled: { A: false, B: false },
                 lastCommitmentTime: blockHeight,
                 lastUsedColumn: null, // Initialize lastUsedColumn to null
                 channelPubkeys: {A:'',B:''}
@@ -884,9 +886,14 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         });
 
 
-        if(payEnabled){        
-          channel.clearLists[channelColumn]=clearLists
-          channel.payEnabled[channelColumn]
+        // Always store clearLists on commit (controls counterparty restrictions)
+        if (!channel.clearLists) channel.clearLists = { A: [], B: [] };
+        if (!channel.payEnabled) channel.payEnabled = { A: false, B: false };
+        if (Array.isArray(clearLists) && clearLists.length > 0) {
+            channel.clearLists[channelColumn] = clearLists;
+        }
+        if (payEnabled) {
+            channel.payEnabled[channelColumn] = true;
         }
         channel.participants[channelColumn]=senderAddress;
         channel.commits.push(commitRecord);
@@ -1097,7 +1104,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
     }
 
 
-    static processTransfer(transaction) {
+    static async processTransfer(transaction) {
+      const clearlistManager = require('./clearlist.js');
       // Process a transfer within a trade channel
       const { fromChannel, toChannel, amount, propertyId, transferorIsColumnA, destinationColumn } = transaction;
       const sourceChannel = this.channelsRegistry.get(fromChannel);
@@ -1105,6 +1113,25 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
 
       if (!sourceChannel || !destinationChannel) {
         throw new Error('Channel(s) not found');
+      }
+
+      // Enforce channel clearLists: source column's clearLists must approve destination committer
+      const sourceColumn = transferorIsColumnA ? 'A' : 'B';
+      const sourceClearLists = sourceChannel.clearLists?.[sourceColumn] || [];
+      if (sourceClearLists.length > 0) {
+          const destCommitter = destinationChannel.participants?.[destinationColumn];
+          if (destCommitter) {
+              let approved = false;
+              for (const listId of sourceClearLists) {
+                  if (await clearlistManager.isAddressInClearlistOrDerived(listId, destCommitter)) {
+                      approved = true;
+                      break;
+                  }
+              }
+              if (!approved) {
+                  throw new Error(`Destination committer ${destCommitter} is not attested in source column clearLists [${sourceClearLists}]`);
+              }
+          }
       }
 
       // Update balances and logic for transfer

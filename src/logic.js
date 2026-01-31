@@ -82,7 +82,7 @@ const Logic = {
                 await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
                 break;
             case 9:
-                await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block);
+                await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block, params.merkleRoot);
                 break;
             case 10:
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
@@ -668,7 +668,7 @@ const Logic = {
 	},
 
 
-    async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block) {
+    async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block, merkleRoot) {
         const admin = activation.getAdmin()
         if(sender==admin&&clearlistId==0){
             console.log('admin updating banlist')
@@ -676,8 +676,15 @@ const Logic = {
             return
         }
         if(!revoke){
-            console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block)
-             await ClearList.addAttestation(clearlistId, targetAddress,metaData, block);
+            console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block,merkleRoot)
+            await ClearList.addAttestation(clearlistId, targetAddress, metaData, block);
+
+            // If a merkle root is provided, store it for xpub batch attestation
+            if (merkleRoot) {
+                await ClearList.storeMerkleRoot(clearlistId, merkleRoot, targetAddress, block);
+                console.log(`Merkle root ${merkleRoot} stored for clearlist ${clearlistId}`);
+            }
+
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
             await ClearList.revokeAttestation(clearlistId,targetAddress,metaData, block)

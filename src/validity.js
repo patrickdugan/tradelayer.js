@@ -950,7 +950,25 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            if (typeof params.targetAddress !== 'string') {
+            // Resolve ref:N to address from tx outputs
+            if (params.ref !== false && params.ref !== undefined) {
+                const outputs = await TxUtils.getTransactionOutputs(txid);
+                let matchingOutput = null;
+                for (let i = 0; i < outputs.length; i++) {
+                    if (outputs[i].vout === Number(params.ref)) {
+                        matchingOutput = outputs[i];
+                        break;
+                    }
+                }
+                if (matchingOutput && matchingOutput.address) {
+                    params.targetAddress = matchingOutput.address;
+                } else {
+                    params.valid = false;
+                    params.reason += `Could not resolve ref:${params.ref} to an address; `;
+                }
+            }
+
+            if (typeof params.targetAddress !== 'string' || params.targetAddress === '') {
                 params.valid = false;
                 params.reason += 'Invalid target address; ';
             }
@@ -1719,8 +1737,43 @@ const Validity = {
                     params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
                 }
             }
-            
-            
+
+            // --- Channel clearList enforcement ---
+            if (channel.clearLists) {
+                const clearListsA = channel.clearLists.A || [];
+                const clearListsB = channel.clearLists.B || [];
+
+                if (clearListsA.length > 0 && commitAddressB) {
+                    let bApproved = false;
+                    for (const listId of clearListsA) {
+                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                            break;
+                        }
+                    }
+                    if (!bApproved) {
+                        params.valid = false;
+                        params.reason += `Committer B (${commitAddressB}) not attested in channel clearLists A [${clearListsA}]; `;
+                    }
+                }
+
+                if (clearListsB.length > 0 && commitAddressA) {
+                    let aApproved = false;
+                    for (const listId of clearListsB) {
+                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                            aApproved = true;
+                            break;
+                        }
+                    }
+                    if (!aApproved) {
+                        params.valid = false;
+                        params.reason += `Committer A (${commitAddressA}) not attested in channel clearLists B [${clearListsB}]; `;
+                    }
+                }
+            }
+
+            if (!params.valid) return params;
+
               const collateralPropertyId = contractDetails.collateralPropertyId
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
@@ -2065,11 +2118,48 @@ const Validity = {
 
             const channel = await Channels.getChannel(sender)
             console.log('channel returned ' +JSON.stringify(channel))
+
+            // --- Channel clearList enforcement ---
+            if (channel && channel.clearLists) {
+                const clearListsA = channel.clearLists.A || [];
+                const clearListsB = channel.clearLists.B || [];
+
+                if (clearListsA.length > 0 && commitAddressB) {
+                    let bApproved = false;
+                    for (const listId of clearListsA) {
+                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                            break;
+                        }
+                    }
+                    if (!bApproved) {
+                        params.valid = false;
+                        params.reason += `Committer B (${commitAddressB}) not attested in channel clearLists A [${clearListsA}]; `;
+                    }
+                }
+
+                if (clearListsB.length > 0 && commitAddressA) {
+                    let aApproved = false;
+                    for (const listId of clearListsB) {
+                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                            aApproved = true;
+                            break;
+                        }
+                    }
+                    if (!aApproved) {
+                        params.valid = false;
+                        params.reason += `Committer A (${commitAddressA}) not attested in channel clearLists B [${clearListsB}]; `;
+                    }
+                }
+
+                if (!params.valid) return params;
+            }
+
             let balanceA
             let balanceB
             let propertyIdOfferedString = params.propertyIdOffered.toString()
             let propertyIdDesiredString = params.propertyIdDesired.toString()
-            let sufficientOffered 
+            let sufficientOffered
             let sufficientDesired
            
             if(params.columnAIsOfferer==true){
