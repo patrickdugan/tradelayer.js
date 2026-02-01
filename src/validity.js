@@ -1739,35 +1739,31 @@ const Validity = {
             }
 
             // --- Channel clearList enforcement ---
+            // At least one counterparty must be attested in any declared clearlist.
+            // Two non-cleared parties must not trade; a non-cleared party may trade with a cleared one.
             if (channel.clearLists) {
-                const clearListsA = channel.clearLists.A || [];
-                const clearListsB = channel.clearLists.B || [];
+                const allLists = [
+                    ...(channel.clearLists.A || []),
+                    ...(channel.clearLists.B || [])
+                ];
 
-                if (clearListsA.length > 0 && commitAddressB) {
-                    let bApproved = false;
-                    for (const listId of clearListsA) {
-                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
-                            bApproved = true;
-                            break;
-                        }
-                    }
-                    if (!bApproved) {
-                        params.valid = false;
-                        params.reason += `Committer B (${commitAddressB}) not attested in channel clearLists A [${clearListsA}]; `;
-                    }
-                }
-
-                if (clearListsB.length > 0 && commitAddressA) {
+                if (allLists.length > 0) {
                     let aApproved = false;
-                    for (const listId of clearListsB) {
-                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                    let bApproved = false;
+
+                    for (const listId of allLists) {
+                        if (!aApproved && commitAddressA && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
                             aApproved = true;
-                            break;
                         }
+                        if (!bApproved && commitAddressB && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                        }
+                        if (aApproved || bApproved) break;
                     }
-                    if (!aApproved) {
+
+                    if (!aApproved && !bApproved) {
                         params.valid = false;
-                        params.reason += `Committer A (${commitAddressA}) not attested in channel clearLists B [${clearListsB}]; `;
+                        params.reason += `Neither committer A (${commitAddressA}) nor B (${commitAddressB}) is attested in channel clearLists [${allLists}]; `;
                     }
                 }
             }
@@ -2120,35 +2116,31 @@ const Validity = {
             console.log('channel returned ' +JSON.stringify(channel))
 
             // --- Channel clearList enforcement ---
+            // At least one counterparty must be attested in any declared clearlist.
+            // Two non-cleared parties must not trade; a non-cleared party may trade with a cleared one.
             if (channel && channel.clearLists) {
-                const clearListsA = channel.clearLists.A || [];
-                const clearListsB = channel.clearLists.B || [];
+                const allLists = [
+                    ...(channel.clearLists.A || []),
+                    ...(channel.clearLists.B || [])
+                ];
 
-                if (clearListsA.length > 0 && commitAddressB) {
-                    let bApproved = false;
-                    for (const listId of clearListsA) {
-                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
-                            bApproved = true;
-                            break;
-                        }
-                    }
-                    if (!bApproved) {
-                        params.valid = false;
-                        params.reason += `Committer B (${commitAddressB}) not attested in channel clearLists A [${clearListsA}]; `;
-                    }
-                }
-
-                if (clearListsB.length > 0 && commitAddressA) {
+                if (allLists.length > 0) {
                     let aApproved = false;
-                    for (const listId of clearListsB) {
-                        if (await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                    let bApproved = false;
+
+                    for (const listId of allLists) {
+                        if (!aApproved && commitAddressA && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
                             aApproved = true;
-                            break;
                         }
+                        if (!bApproved && commitAddressB && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                        }
+                        if (aApproved || bApproved) break;
                     }
-                    if (!aApproved) {
+
+                    if (!aApproved && !bApproved) {
                         params.valid = false;
-                        params.reason += `Committer A (${commitAddressA}) not attested in channel clearLists B [${clearListsB}]; `;
+                        params.reason += `Neither committer A (${commitAddressA}) nor B (${commitAddressB}) is attested in channel clearLists [${allLists}]; `;
                     }
                 }
 

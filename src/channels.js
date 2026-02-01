@@ -1115,22 +1115,33 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         throw new Error('Channel(s) not found');
       }
 
-      // Enforce channel clearLists: source column's clearLists must approve destination committer
+      // Enforce channel clearLists: at least one side must be attested in any declared clearlist
       const sourceColumn = transferorIsColumnA ? 'A' : 'B';
-      const sourceClearLists = sourceChannel.clearLists?.[sourceColumn] || [];
-      if (sourceClearLists.length > 0) {
-          const destCommitter = destinationChannel.participants?.[destinationColumn];
-          if (destCommitter) {
-              let approved = false;
-              for (const listId of sourceClearLists) {
-                  if (await clearlistManager.isAddressInClearlistOrDerived(listId, destCommitter)) {
-                      approved = true;
-                      break;
-                  }
+      const sourceAddr = sourceChannel.participants?.[sourceColumn];
+      const destAddr = destinationChannel.participants?.[destinationColumn];
+      const allLists = [
+          ...(sourceChannel.clearLists?.A || []),
+          ...(sourceChannel.clearLists?.B || []),
+          ...(destinationChannel.clearLists?.A || []),
+          ...(destinationChannel.clearLists?.B || [])
+      ];
+
+      if (allLists.length > 0) {
+          let sourceApproved = false;
+          let destApproved = false;
+
+          for (const listId of allLists) {
+              if (!sourceApproved && sourceAddr && await clearlistManager.isAddressInClearlistOrDerived(listId, sourceAddr)) {
+                  sourceApproved = true;
               }
-              if (!approved) {
-                  throw new Error(`Destination committer ${destCommitter} is not attested in source column clearLists [${sourceClearLists}]`);
+              if (!destApproved && destAddr && await clearlistManager.isAddressInClearlistOrDerived(listId, destAddr)) {
+                  destApproved = true;
               }
+              if (sourceApproved || destApproved) break;
+          }
+
+          if (!sourceApproved && !destApproved) {
+              throw new Error(`Neither transferor (${sourceAddr}) nor destination (${destAddr}) is attested in channel clearLists [${allLists}]`);
           }
       }
 
