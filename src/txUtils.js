@@ -776,7 +776,7 @@ async addInputs(utxos, rawTx) {
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-            //transaction.change(fromAddress);
+            transaction.change(fromAddress);
 
             let payload = Encode.encodeSend({
                 sendAll: sendAll,
