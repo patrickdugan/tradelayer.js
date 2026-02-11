@@ -5,7 +5,7 @@ const TxUtils = require('../src/txUtils.js');
 
 const clientConfig = {
     host: '127.0.0.1',
-    port: 18332,
+    port: 19332,
     user: 'user',
     pass: 'pass',
     timeout: 10000
@@ -76,10 +76,10 @@ async function sendTransactionWithParams(fromAddress, toAddress, propertyid, amo
 
 // Example usage
 sendTransactionWithParams(
-    'tltc1qfffvwpftp8w3kv6gg6273ejtsfnu2dara5x4tr',
-    'tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m',
+    'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8',
+    'tltc1q8x9wxp79axgs8045vuh5d3xzafez9qmatf7q5r',//'tltc1qn3src8lgu50gxhndn5hnd6zrc9yv2364wu858m',
     5,
-    10000,
+    50000,
     false
 );
 

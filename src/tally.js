@@ -5,6 +5,7 @@ const uuid = require('uuid');
 const BigNumber = require('bignumber.js');
 const Insurance = require('./insurance.js')
 const Orderbooks = require('./orderbook.js')
+const ContractRegistry = require('./contractRegistry.js')
 
 const SATS = new BigNumber(1e8);
 const RD = BigNumber.ROUND_DOWN;
@@ -19,6 +20,10 @@ function toSats(x) {
 }
 function fromSats(s) {
   return new BigNumber(s).div(SATS);
+}
+
+function q8(value) {
+  return new BigNumber(value || 0).decimalPlaces(8, BigNumber.ROUND_HALF_UP);
 }
 
     /**
@@ -304,7 +309,11 @@ class TallyMap {
         }
 
         static calculateTotal(balanceObj) {
-            return BigNumber(balanceObj.available).plus(balanceObj.reserved).plus(balanceObj.margin).plus(balanceObj.channel).decimalPlaces(8).toNumber();
+            return q8(balanceObj.available)
+                .plus(q8(balanceObj.reserved))
+                .plus(q8(balanceObj.margin))
+                .plus(q8(balanceObj.channelBalance))
+                .toNumber();
         }
 
         static async setInitializationFlag() {
@@ -371,26 +380,33 @@ class TallyMap {
     static async getTotalTally(propertyId) {
         const instance = await TallyMap.getInstance();
         const totalTally = {
-            amount: 0,
-            available: 0,
-            reserved: 0,
-            margin: 0,
-            vesting: 0,
-            channelBalance: 0
+            amount: new BigNumber(0),
+            available: new BigNumber(0),
+            reserved: new BigNumber(0),
+            margin: new BigNumber(0),
+            vesting: new BigNumber(0),
+            channelBalance: new BigNumber(0)
         };
 
         for (const properties of TallyMap.addresses.values()) {
             if (properties[propertyId]) {
-                totalTally.amount += properties[propertyId].amount || 0;
-                totalTally.available += properties[propertyId].available || 0;
-                totalTally.reserved += properties[propertyId].reserved || 0;
-                totalTally.margin += properties[propertyId].margin || 0;
-                totalTally.vesting += properties[propertyId].vesting || 0;
-                totalTally.channelBalance += properties[propertyId].channelBalance || 0;
+                totalTally.amount = totalTally.amount.plus(properties[propertyId].amount || 0);
+                totalTally.available = totalTally.available.plus(properties[propertyId].available || 0);
+                totalTally.reserved = totalTally.reserved.plus(properties[propertyId].reserved || 0);
+                totalTally.margin = totalTally.margin.plus(properties[propertyId].margin || 0);
+                totalTally.vesting = totalTally.vesting.plus(properties[propertyId].vesting || 0);
+                totalTally.channelBalance = totalTally.channelBalance.plus(properties[propertyId].channelBalance || 0);
             }
         }
 
-        return totalTally;
+        return {
+            amount: q8(totalTally.amount).toNumber(),
+            available: q8(totalTally.available).toNumber(),
+            reserved: q8(totalTally.reserved).toNumber(),
+            margin: q8(totalTally.margin).toNumber(),
+            vesting: q8(totalTally.vesting).toNumber(),
+            channelBalance: q8(totalTally.channelBalance).toNumber()
+        };
     }
 
     /**
@@ -690,11 +706,11 @@ class TallyMap {
      * - Logs sat math: raw, rounded, half-split, dust.
      * - Logs stash/insurance writes with exact integer sats.
      */static async updateFeeCache(propertyId, amount, contractId, block) {
-    const ContractRegistry = require('./contractRegistry.js');
+    const blockArg = arguments.length >= 6 ? arguments[5] : block;
+    // Canonical fee routing lives in accrueFee; keep updateFeeCache as compatibility wrapper.
+    return await TallyMap.accrueFee(propertyId, amount, contractId, blockArg);
 
     try {
-        const blockArg = arguments.length >= 6 ? arguments[5] : block;
-
         console.log(`\n====== updateFeeCache() @ block ${blockArg} ======`);
         console.log(`INPUT propertyId=${propertyId}, amount=${amount}, contractId=${contractId}`);
 
@@ -880,7 +896,9 @@ class TallyMap {
 
     /**
      * accrueFee:
-     * - SPOT (contractId null/undefined): 50/50 split in integer sats → half Insurance NOW, half -> VALUE.
+     * - SPOT (contractId null/undefined):
+     *    - propertyId != 1: 100% to VALUE cache (awaits buyback path before insurance accounting).
+     *    - propertyId == 1: direct to insurance for property 1.
      * - CONTRACT:
      *    - Native -> 100% to VALUE (no insurance now).
      *    - Oracle  -> 50/50 split in integer sats → half Insurance NOW, half -> STASH.
@@ -903,6 +921,17 @@ class TallyMap {
       // Accumulate conversion dust
       const convDust = rawSats.minus(feeSats); // [0,1)
       await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
+        const isSpotNonOne = isSpot && String(propertyId) !== '1';
+        if (isSpotNonOne) {
+          // Keep non-1 spot dust in cache until buyback conversion occurs.
+          const dustRow = await TallyMap.loadFeeRow(db, cacheId);
+          await TallyMap.saveFeeRow(db, cacheId, {
+            value: dustRow.value.plus(fromSats(wholeSats)),
+            stash: dustRow.stash,
+            contract: '1',
+          });
+          return;
+        }
         const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
         await insurance.deposit(propertyId, fromSats(wholeSats).toNumber(), blk);
       });
@@ -910,22 +939,24 @@ class TallyMap {
       const row = await TallyMap.loadFeeRow(db, cacheId);
 
       if (isSpot) {
-        // 50/50 split in integer sats
-        const insuranceSats = feeSats.idiv(2);
-        const valueSats     = feeSats.minus(insuranceSats);
+        const isPropertyOne = String(propertyId) === '1';
+        if (!isPropertyOne) {
+          // Non-1 spot fees stay in cache until orderbook buyback converts them into property 1.
+          await TallyMap.saveFeeRow(db, cacheId, {
+            value: row.value.plus(fromSats(feeSats)),
+            stash: row.stash,
+            contract: '1',
+          });
+          return;
+        }
 
+        // Property 1 fee can go directly to insurance (no conversion step needed).
         try {
           const ins = await Insurance.getInstance('1', false);
-          await ins.deposit('1', fromSats(insuranceSats).toNumber(), blk);
+          await ins.deposit('1', fromSats(feeSats).toFixed(8), blk);
         } catch (e) {
           console.error('❌ Spot fee insurance deposit failed:', e);
         }
-
-        await TallyMap.saveFeeRow(db, cacheId, {
-          value: row.value.plus(fromSats(valueSats)),
-          stash: row.stash,
-          contract: '1',
-        });
         return;
       }
 
@@ -1060,7 +1091,7 @@ class TallyMap {
         deltaKey+='-'+block
         const tally = TallyMap.getTally(address, propertyId)
         if(!txid){txid=''}
-        total = tally.available+tally.reserved+tally.margin+tally.channel+tally.vesting
+        total = q8(tally.available).plus(tally.reserved).plus(tally.margin).plus(tally.channel).plus(tally.vesting).toNumber()
         const delta = { address, block, property: propertyId, total: total, avail: availableChange, res: reservedChange, mar: marginChange, vest: vestingChange, channel: channelChange, type, tx: txid };
         
         console.log('saving delta ' + JSON.stringify(delta));

@@ -15,6 +15,15 @@ const PnlIou = require('./iou.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 
 const _positionCache = new Map(); 
+const SATS = new BigNumber(1e8);
+
+function toSatsInt(value) {
+    return new BigNumber(value || 0).times(SATS).integerValue(BigNumber.ROUND_HALF_UP);
+}
+
+function fromSats(sats) {
+    return new BigNumber(sats || 0).div(SATS);
+}
 
 class Clearing {
     // ... other methods ...
@@ -439,41 +448,49 @@ class Clearing {
         for (const propertyData of propertyIndex) {
             const propertyId = propertyData.id;
             let propertyTotal = new BigNumber(0);
+            let propertyTotalSats = new BigNumber(0);
 
             // ✅ 1️⃣ Fetch total balance from TallyMap
             const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
             console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
             propertyTotal = propertyTotal.plus(tallyTotal);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(tallyTotal));
 
             // ✅ 2️⃣ Add feeCache balance
             const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
             console.log('fee cache balance '+feeCacheBalance)
             propertyTotal = propertyTotal.plus(feeCacheBalance);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(feeCacheBalance));
 
             // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
             const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
             propertyTotal = propertyTotal.plus(insuranceBalance);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(insuranceBalance));
             console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
             if(typeof propertyId=="number"){
                 const vaultTotal = await Vaults.getTotalBalanceForProperty(propertyId)
                 console.log('vaultTotal '+vaultTotal)
                 propertyTotal = propertyTotal.plus(vaultTotal)
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vaultTotal));
             }
 
             // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
             if (propertyId === 1) {
                 const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
                 propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vestingTLVEST.vesting));
                 console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
             }
             if (propertyId === 4) {
                 const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI
                 propertyTotal = propertyTotal.plus(vestingTLI.vesting);
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vestingTLI.vesting));
                 //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
             }
             const propertyInIou =await PnlIou.getTotalForProperty(propertyId)
             console.log('adding Iou '+propertyTotal.toNumber()+' Iou'+propertyInIou)
             propertyTotal= propertyTotal.plus(propertyInIou)
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(propertyInIou));
 
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
             let expectedCirculation = new BigNumber(propertyData.totalInCirculation);
@@ -482,20 +499,22 @@ class Clearing {
                 expectedCirculation = await Vaults.getTotalOutstandingForProperty(propertyId);
                 console.log('vault diversion ')
             }
-            console.log('total '+propertyTotal.toNumber()+' expected '+expectedCirculation.toNumber())
-            if(!propertyTotal.eq(expectedCirculation)){
+            const expectedSats = toSatsInt(expectedCirculation);
+            const differenceSats = propertyTotalSats.minus(expectedSats);
+            console.log('total '+fromSats(propertyTotalSats).toFixed(8)+' expected '+fromSats(expectedSats).toFixed(8))
+            if(!differenceSats.isZero()){
                 if(!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
-                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                    if(difference>0.00000001||difference<-0.00000001){
-                         throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
-                    }else if(difference==-0.00000001){
-                        TallyMap.recordTallyMapDelta('system',block,propertyId,difference,0,0,0,0,0,'salvageDust','')
+                    const difference = fromSats(differenceSats).toFixed(8)
+                    if(differenceSats.gt(1)||differenceSats.lt(-1)){
+                         throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${fromSats(expectedSats).toFixed(8)}, Found ${fromSats(propertyTotalSats).toFixed(8)}`+' on block '+block);
+                    }else if(differenceSats.eq(-1)){
+                        TallyMap.recordTallyMapDelta('system',block,propertyId,Number(difference),0,0,0,0,0,'salvageDust','')
                         const fund = await InsuranceFund.getInstance(propertyId,false)
-                        await fund.deposit(1,0.00000001,block)
+                        await fund.deposit(String(propertyId), '0.00000001', block)
                     }
                 } else {
-                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                    console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+                    const difference = fromSats(differenceSats).toFixed(8)
+                    console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${fromSats(expectedSats).toFixed(8)}, Found: ${fromSats(propertyTotalSats).toFixed(8)}), but it's allowed.`);
                 }
             }
         }

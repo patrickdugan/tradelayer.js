@@ -2,6 +2,10 @@ const db = require('./db.js');
 const path = require('path');
 const BigNumber = require('bignumber.js')
 
+function quantize8(value) {
+    return new BigNumber(value || 0).decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
+}
+
 class PropertyManager {
     static instance = null;
 
@@ -101,7 +105,9 @@ class PropertyManager {
 
         if (existingProperty) {
             // If property exists, update totalInCirculation and other fields if necessary
-            existingProperty.totalInCirculation = BigNumber(existingProperty.totalInCirculation).plus(totalInCirculation).toNumber();
+            existingProperty.totalInCirculation = quantize8(
+                BigNumber(existingProperty.totalInCirculation).plus(totalInCirculation)
+            );
             existingProperty.ticker = ticker || existingProperty.ticker;
             existingProperty.type = propertyTypeIndexes[type];
             existingProperty.whitelistId = whitelistId || existingProperty.whitelistId;
@@ -111,7 +117,7 @@ class PropertyManager {
             // If property does not exist, create a new one
             existingProperty = {
                 ticker,
-                totalInCirculation,
+                totalInCirculation: quantize8(totalInCirculation),
                 type: propertyTypeIndexes[type],
                 whitelistId: whitelistId,
                 issuer: issuer,
@@ -121,7 +127,7 @@ class PropertyManager {
 
         let blob =  {
             ticker,
-            totalInCirculation,
+            totalInCirculation: quantize8(totalInCirculation),
             type: propertyTypeIndexes[type],
             whitelistId: whitelistId,
             issuer: issuer,
@@ -202,7 +208,9 @@ class PropertyManager {
             throw new Error('Property not found');
         }
 
-        propertyData.totalInCirculation = BigNumber(propertyData.totalInCirculation).plus(amountChange).toNumber();
+        propertyData.totalInCirculation = quantize8(
+            BigNumber(propertyData.totalInCirculation).plus(amountChange)
+        );
 
         // Update the property data in the database
         const base= await db.getDatabase('propertyList')
@@ -298,7 +306,9 @@ class PropertyManager {
         }
 
         // Update managed supply
-        propertyData.totalInCirculation += amount;
+        propertyData.totalInCirculation = quantize8(
+            new BigNumber(propertyData.totalInCirculation).plus(amount)
+        );
 
         // Update tally map to credit the amount to recipient
         await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
@@ -315,12 +325,14 @@ class PropertyManager {
         }
 
         // Ensure enough managed tokens available for redemption
-        if (propertyData.totalInCirculation < amount) {
+        if (new BigNumber(propertyData.totalInCirculation).lt(amount)) {
             throw new Error(`Insufficient managed tokens for redemption for property ${propertyId}.`);
         }
 
         // Update managed supply
-        propertyData.totalInCirculation -= amount;
+        propertyData.totalInCirculation = quantize8(
+            new BigNumber(propertyData.totalInCirculation).minus(amount)
+        );
 
         // Update tally map to debit the amount from recipient
         await TallyMap.updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
