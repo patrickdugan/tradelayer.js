@@ -96,8 +96,32 @@ const Types = {
             case 26:
                 payload += Encode.encodePayToTokens(params);
                 break;
+            case 27:
+                payload += Encode.encodeOptionTrade(params);
+                break;
+            case 28:
+                payload += Encode.encodeTradeBaiUrbun(params);
+                break;
+            case 29:
+                payload += Encode.encodeTradeMurabaha(params);
+                break;
+            case 30:
+                payload += Encode.encodeStakeFraudProof(params);
+                break;
             case 31:
                 payload += Encode.encodeKingSettle(params);
+                break;
+            case 32:
+                payload += Encode.encodeBatchMoveZkRollup(params);
+                break;
+            case 33:
+                payload += Encode.encodeColoredCoin(params);
+                break;
+            case 34:
+                payload += Encode.encodeAbstractionBridge(params);
+                break;
+            case 35:
+                payload += Encode.encodeBindSmartContract(params);
                 break;
            
       default:
