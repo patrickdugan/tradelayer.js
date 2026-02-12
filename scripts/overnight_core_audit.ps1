@@ -63,11 +63,23 @@ function Run-Step {
   }
 }
 
+function Stop-Port3000 {
+  $pids = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess -Unique
+  if ($pids) {
+    foreach ($pid in $pids) {
+      try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+    }
+  }
+}
+
 for ($r = 1; $r -le $Rounds; $r++) {
   $round = [ordered]@{
     round = $r
     steps = @()
   }
+
+  Stop-Port3000
 
   if (-not $SkipWipe) {
     $round.steps += Run-Step -Name "round${r}_wipe_db_not_tx" -Command "node utils/wipeDBNotTx.js" -TimeoutSec 120
@@ -98,8 +110,8 @@ for ($r = 1; $r -le $Rounds; $r++) {
   }
 
   $round.steps += Run-Step -Name "round${r}_contract_interface_test" -Command "node tests/contractInterfaceTest.js" -TimeoutSec $ContractTimeoutSec
-  $round.steps += Run-Step -Name "round${r}_consensus_hash_test" -Command "node tests/testConsensusHash.js" -TimeoutSec 600
-  $round.steps += Run-Step -Name "round${r}_vesting_test" -Command "node tests/vestingTest.js" -TimeoutSec 600
+  $round.steps += Run-Step -Name "round${r}_channel_contract_fuzz_test" -Command "node tests/channelContractTradeFuzz.js" -TimeoutSec 600
+  $round.steps += Run-Step -Name "round${r}_tx_type_coverage_test" -Command "node tests/txTypeCoverageAudit.js" -TimeoutSec 600
 
   try { Stop-Process -Id $listener.Id -Force -ErrorAction SilentlyContinue } catch {}
   $round.steps += [ordered]@{
