@@ -2790,6 +2790,8 @@ const Validity = {
           // --- Parse primary & combo ---
           const tA = OptionsEngine.parseTicker(params.contractId);
           if (!tA) { params.valid=false; params.reason+='Invalid primary ticker; '; return params; }
+          const seriesIdNum = Number(tA.seriesId);
+          if (!Number.isFinite(seriesIdNum)) { params.valid=false; params.reason+='Invalid option series id; '; return params; }
           let tB = null;
           if (params.comboTicker) {
             tB = OptionsEngine.parseTicker(params.comboTicker);
@@ -2797,7 +2799,7 @@ const Validity = {
           }
 
           // --- Series existence ---
-          const seriesInfo = await ContractRegistry.getContractInfo(tA.seriesId);
+          const seriesInfo = await ContractRegistry.getContractInfo(seriesIdNum);
           if (!seriesInfo) { params.valid=false; params.reason+='Option series not found; '; return params; }
           const collateralPropertyId = seriesInfo.collateralPropertyId;
           const inverse = !!seriesInfo.inverse;
@@ -2849,7 +2851,7 @@ const Validity = {
           params.netPremium = netPremium;
 
           // --- Reduce/Flip & rPNL (per side) for the OPTION ticker itself ---
-          const mm = await MarginMap.getInstance(tA.seriesId);
+          const mm = await MarginMap.getInstance(seriesIdNum);
 
           // Find who is seller/buyer in *this* tx by your columnA flag
           const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");

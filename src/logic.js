@@ -1364,7 +1364,11 @@ const Logic = {
 
       const tMeta = OptionsEngine.parseTicker(params.contractId);
       const blockHeight = Number(params.blockHeight || 0);
-      const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
+      const seriesIdNum = Number(tMeta?.seriesId);
+      if (!Number.isFinite(seriesIdNum)) {
+        return { valid: false, reason: 'Invalid option series id; ' };
+      }
+      const seriesInfo = await ContractRegistry.getContractInfo(seriesIdNum);
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
       // Resolve commits
@@ -1425,7 +1429,7 @@ const Logic = {
       }
 
       // 4) Record positions into margin map (hybrid, nested by ticker)
-      const mm = await MarginMap.getInstance(tMeta.seriesId);
+      const mm = await MarginMap.getInstance(seriesIdNum);
       await mm.applyOptionTrade(
         sellerAddr,              // we write positions for both sides below
         params.contractId,
@@ -1477,6 +1481,10 @@ const Logic = {
           }, txid);
         }
       }
+
+      // Persist hybrid option/perp position updates so readers that reload from DB
+      // (e.g. liquidation/coverage reporting) observe the latest option legs.
+      await mm.saveMarginMap(blockHeight);
 
       // 6) (Optional) Persist trade history w/ rPNL fields for auditing
       if (typeof TradeHistory?.recordTrade === 'function') {

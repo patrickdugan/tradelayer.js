@@ -2,6 +2,7 @@
 const db = require('./db.js');
 const BigNumber = require('bignumber.js')
 const { v4: uuidv4 } = require('uuid');
+const Options = require('./options.js');
 
 
 class MarginMap {

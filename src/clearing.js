@@ -3021,7 +3021,23 @@ class Clearing {
     async computeOptionAdjustments(seriesId, address, spot, currentBlockHeight, blocksPerDay) {
       const mm = await MarginMap.getInstance(seriesId);
       const pos = mm.margins.get(address) || {};
-      const optionsBag = pos.options || {};
+      const optionsBag = { ...(pos.options || {}) };
+
+      const numericSeries = Number(seriesId);
+      const altSeriesId = Number.isFinite(numericSeries) ? String(numericSeries) : seriesId;
+      if (altSeriesId !== seriesId) {
+        const alt = await MarginMap.getInstance(altSeriesId);
+        const altPos = alt.margins.get(address) || {};
+        const altBag = altPos.options || {};
+        for (const [ticker, o] of Object.entries(altBag)) {
+          const cur = optionsBag[ticker] || { contracts: 0, avgPrice: 0, margin: 0 };
+          optionsBag[ticker] = {
+            contracts: Number(cur.contracts || 0) + Number(o.contracts || 0),
+            avgPrice: Number(o.avgPrice ?? cur.avgPrice ?? 0),
+            margin: Number(cur.margin || 0) + Number(o.margin || 0)
+          };
+        }
+      }
       const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
       // If you store a vol index on the series, grab it; else fallback conservatively
       const volAnnual = Number(seriesInfo?.volAnnual || 0); // e.g. 0.6 means 60% annualized
@@ -3057,7 +3073,7 @@ class Clearing {
       }
 
       const maintNaked = Options.portfolioMaintenance(legs, Number(spot || 0));
-      return { premiumMTM, intrinsicNet, maintNaked };
+      return { premiumMTM, intrinsicNet, maintNaked, optionCount: legs.length };
     }
 
     static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {

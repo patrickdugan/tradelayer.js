@@ -23,6 +23,9 @@ const Tally = require('../src/tally');
 const Channels = require('../src/channels');
 const ContractRegistry = require('../src/contractRegistry');
 const MarginMap = require('../src/marginMap');
+const Types = require('../src/types');
+const Logic = require('../src/logic');
+const Activation = require('../src/activation');
 
 function nenv(name, fallback) {
   const raw = process.env[name];
@@ -43,6 +46,53 @@ function cappedMove(fromPrice, toPrice, maxMovePct) {
   if (toPrice > up) return Number(up.toFixed(4));
   if (toPrice < down) return Number(down.toFixed(4));
   return Number(toPrice.toFixed(4));
+}
+
+function extractTlPayloadFromHex(scriptHex) {
+  const markerHex = '746c'; // "tl"
+  const pos = scriptHex.indexOf(markerHex);
+  if (pos < 0) return null;
+  const ascii = Buffer.from(scriptHex.slice(pos), 'hex').toString();
+  if (!ascii.startsWith('tl')) return null;
+  const typeChar = ascii.slice(2, 3);
+  const type = parseInt(typeChar, 36);
+  if (!Number.isFinite(type)) return null;
+  return {
+    marker: 'tl',
+    type,
+    encodedPayload: ascii.slice(3)
+  };
+}
+
+async function applyTxNow(txid, senderAddress, blockHeight) {
+  const tx = await TxUtils.getRawTransaction(txid);
+  if (!tx || !Array.isArray(tx.vout)) {
+    throw new Error(`Unable to fetch tx ${txid}`);
+  }
+  const opret = tx.vout.find((v) => v?.scriptPubKey?.type === 'nulldata');
+  const scriptHex = opret?.scriptPubKey?.hex;
+  if (!scriptHex) throw new Error(`No OP_RETURN payload found for ${txid}`);
+  const parsed = extractTlPayloadFromHex(scriptHex);
+  if (!parsed) throw new Error(`No TL marker/type in OP_RETURN for ${txid}`);
+
+  const decoded = await Types.decodePayload(
+    txid,
+    parsed.type,
+    parsed.marker,
+    parsed.encodedPayload,
+    senderAddress,
+    null,
+    0,
+    0,
+    blockHeight
+  );
+  decoded.block = blockHeight;
+
+  if (decoded.valid !== true) {
+    throw new Error(`Immediate apply invalid tx ${txid}: ${decoded.reason || 'unknown reason'}`);
+  }
+  await Logic.typeSwitch(parsed.type, decoded);
+  return parsed.type;
 }
 
 async function waitBlocks(delta) {
@@ -72,7 +122,7 @@ async function reportCoverage(seriesId, writerAddress, spot, block) {
   );
   const mm = await MarginMap.getInstance(seriesId);
   const pos = mm.margins.get(writerAddress) || {};
-  const optionCount = Object.keys(pos.options || {}).length;
+  const optionCount = Number(optionAdj.optionCount || Object.keys(pos.options || {}).length);
   return {
     collateralId,
     available: tally?.available || 0,
@@ -95,17 +145,25 @@ async function main() {
   const price = nenv('TL_PRICE', 0);
   const maxStep = nenv('TL_MAX_STEP_PCT', 0.05);
   const waitDelta = nenv('TL_WAIT_BLOCKS', 0);
+  const applyImmediate = String(process.env.TL_APPLY_IMMEDIATE || 'true').toLowerCase() === 'true';
   const activateTypes = splitNums('TL_ACTIVATE_TYPES', '14,27');
 
   await TxUtils.init();
+  const activation = Activation.getInstance();
+  await activation.init();
   let block = await TxUtils.getBlockCount();
 
   console.log('--- options naked liquidation walk ---');
-  console.log({ admin, channel, seriesId, oracleId, startSpot, targets, strike, amount, price, maxStep, waitDelta });
+  console.log({ admin, channel, seriesId, oracleId, startSpot, targets, strike, amount, price, maxStep, waitDelta, applyImmediate });
 
   for (const t of activateTypes) {
     const txid = await TxUtils.activationTransaction(admin, t);
     console.log(`[activate] type=${t} txid=${txid}`);
+    if (applyImmediate) {
+      const tip = await TxUtils.getBlockCount();
+      const appliedType = await applyTxNow(txid, admin, tip);
+      console.log(`[apply-now] txid=${txid} type=${appliedType}`);
+    }
   }
   await waitBlocks(waitDelta);
 
@@ -122,6 +180,11 @@ async function main() {
     columnAIsMaker: true
   });
   console.log(`[option] txid=${optionTxid} ticker=${ticker}`);
+  if (applyImmediate) {
+    const tip = await TxUtils.getBlockCount();
+    const appliedType = await applyTxNow(optionTxid, channel, tip);
+    console.log(`[apply-now] txid=${optionTxid} type=${appliedType}`);
+  }
   await waitBlocks(waitDelta);
 
   const commits = await Channels.getCommitAddresses(channel);
@@ -137,6 +200,11 @@ async function main() {
         price: next
       });
       console.log(`[oracle] ${cur} -> ${next} txid=${oracleTxid}`);
+      if (applyImmediate) {
+        const tip = await TxUtils.getBlockCount();
+        const appliedType = await applyTxNow(oracleTxid, admin, tip);
+        console.log(`[apply-now] txid=${oracleTxid} type=${appliedType}`);
+      }
       cur = next;
 
       await waitBlocks(waitDelta);
