@@ -475,35 +475,77 @@ const Logic = {
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
             TallyMap.updateFeeCache(propertyId,fee,1,block)
-            const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
-            const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
-            let isTokenListed = false
+            const rewardAddressListId = Number(process.env.LIQUIDITY_REWARD_ADDRESS_CLEARLIST_ID || 2);
+            const rewardIssuerListId = Number(process.env.LIQUIDITY_REWARD_ISSUER_CLEARLIST_ID || 1);
+            const allowlistRaw = String(process.env.LIQUIDITY_REWARD_PROPERTY_ALLOWLIST || "");
+            const allowlist = new Set(
+                allowlistRaw
+                    .split(",")
+                    .map(s => Number(s.trim()))
+                    .filter(n => Number.isFinite(n))
+            );
+
+            const isListedA = await ClearList.isAddressInClearlist(rewardAddressListId, senderAddress).catch(() => false);
+            const isListedB = await ClearList.isAddressInClearlist(rewardAddressListId, receiverAddress).catch(() => false);
+
+            let isTokenListed = false;
             if (String(propertyId).startsWith('s-')) {
-                isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
-                                    // and then look up if those tokens are listed
-            }else{
-                let propertyInfo = PropertyManager.getPropertyData(propertyId)
-                if(propertyInfo.issuer){
-                    isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
+                isTokenListed = allowlist.size === 0 || allowlist.has(Number(propertyId));
+            } else {
+                const propertyInfo = await PropertyManager.getPropertyData(propertyId);
+                const allowById = allowlist.size === 0 || allowlist.has(Number(propertyId));
+                const allowByIssuer = propertyInfo?.issuer
+                    ? await ClearList.isAddressInClearlist(rewardIssuerListId, propertyInfo.issuer).catch(() => false)
+                    : false;
+                isTokenListed = allowById && (allowlist.size > 0 || allowByIssuer);
+            }
+
+            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed);
+
+            const eligibleParticipants = (isListedA ? 1 : 0) + (isListedB ? 1 : 0);
+            if (isTokenListed && eligibleParticipants > 0) {
+                const cumulative = await VolumeIndex.getCumulativeVolumes(block + 1).catch(() => null);
+                const cumulativeLtc = Number(cumulative?.ltcPairTotalVolume || cumulative?.globalCumulativeVolume || 0);
+
+                const rewardBudget = await VolumeIndex.calculateLiquidityReward(tokenAmount, propertyId, {
+                    feePaid: fee,
+                    cumulativeLtc,
+                    block,
+                    maxShare: Number(process.env.LIQUIDITY_REWARD_MAX_SHARE || 0.35),
+                    minShare: Number(process.env.LIQUIDITY_REWARD_MIN_SHARE || 0.02),
+                    pivotLtc: Number(process.env.LIQUIDITY_REWARD_PIVOT_LTC || 1000),
+                    slope: Number(process.env.LIQUIDITY_REWARD_SLOPE || 1)
+                });
+
+                if (rewardBudget > 0) {
+                    const perAddress = new BigNumber(rewardBudget)
+                        .div(eligibleParticipants)
+                        .decimalPlaces(8, BigNumber.ROUND_DOWN);
+                    const spent = perAddress.times(eligibleParticipants);
+                    const remainder = new BigNumber(rewardBudget).minus(spent).decimalPlaces(8, BigNumber.ROUND_DOWN);
+
+                    if (isListedA) {
+                        await TallyMap.updateBalance(senderAddress, 3, perAddress.toNumber(), 0, 0, 0, 'liquidityReward', block, txid);
+                    }
+                    if (isListedB) {
+                        const extra = remainder.gt(0) && !isListedA ? remainder : new BigNumber(0);
+                        await TallyMap.updateBalance(
+                            receiverAddress,
+                            3,
+                            perAddress.plus(extra).toNumber(),
+                            0,
+                            0,
+                            0,
+                            'liquidityReward',
+                            block,
+                            txid
+                        );
+                    } else if (isListedA && remainder.gt(0)) {
+                        await TallyMap.updateBalance(senderAddress, 3, remainder.toNumber(), 0, 0, 0, 'liquidityRewardRemainder', block, txid);
+                    }
                 }
             }
-            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
-                if(isTokenListed){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
-                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline1,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline2,0,0,0,'baselineLiquidityReward')
-                }
-                if(isListedA){
-                    const liqReward1= await VolumeIndex.calculateLiquidityReward(satsReceived,0)    
-                    TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                }
-                if(isListedB){
-                    const liqReward2= await VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
-                    TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
-
-                }
-                return
+            return
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {

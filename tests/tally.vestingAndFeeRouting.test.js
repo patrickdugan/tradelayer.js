@@ -183,13 +183,18 @@ describe("TallyMap fee cache / buyback routing tests", () => {
     expect(insuranceDeposits.length).toBe(0);
   });
 
-  test("SPOT fee for property 1 goes directly to insurance", async () => {
-    const { TallyMap, insuranceDeposits } = createHarness();
+  test("SPOT fee for property 1 splits 50/50: insurance + tail-emission stash", async () => {
+    const { TallyMap, insuranceDeposits, feeRows } = createHarness();
 
     await TallyMap.accrueFee(1, 0.02, null, 1002);
 
     expect(insuranceDeposits.length).toBe(1);
-    expect(insuranceDeposits[0]).toEqual(["1", "0.02000000", 1002]);
+    expect(insuranceDeposits[0]).toEqual(["1", "0.01000000", 1002]);
+    const row = feeRows.get("1-1");
+    expect(row).toBeDefined();
+    expect(row.value).toBeCloseTo(0, 8);
+    expect(row.stash).toBeCloseTo(0.01, 8);
+    expect(row.contract).toBe("1");
   });
 
   test("non-native contract splits fee 50/50: insurance now, stash in fee cache (TLI collateral path)", async () => {

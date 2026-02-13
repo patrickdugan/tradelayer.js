@@ -898,7 +898,7 @@ class TallyMap {
      * accrueFee:
      * - SPOT (contractId null/undefined):
      *    - propertyId != 1: 100% to VALUE cache (awaits buyback path before insurance accounting).
-     *    - propertyId == 1: direct to insurance for property 1.
+     *    - propertyId == 1: 50/50 split in sats -> insurance now + stash (tail-emission pool).
      * - CONTRACT:
      *    - Native -> 100% to VALUE (no insurance now).
      *    - Oracle  -> 50/50 split in integer sats → half Insurance NOW, half -> STASH.
@@ -922,6 +922,7 @@ class TallyMap {
       const convDust = rawSats.minus(feeSats); // [0,1)
       await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
         const isSpotNonOne = isSpot && String(propertyId) !== '1';
+        const isSpotOne = isSpot && String(propertyId) === '1';
         if (isSpotNonOne) {
           // Keep non-1 spot dust in cache until buyback conversion occurs.
           const dustRow = await TallyMap.loadFeeRow(db, cacheId);
@@ -930,6 +931,24 @@ class TallyMap {
             stash: dustRow.stash,
             contract: '1',
           });
+          return;
+        }
+        if (isSpotOne) {
+          // Property 1 dust follows tail-emission split: 50% insurance, 50% stash.
+          const insuranceSats = wholeSats.idiv(2);
+          const stashSats = wholeSats.minus(insuranceSats);
+          if (insuranceSats.gt(0)) {
+            const insurance = await Insurance.getInstance('1', false);
+            await insurance.deposit('1', fromSats(insuranceSats).toFixed(8), blk);
+          }
+          if (stashSats.gt(0)) {
+            const dustRow = await TallyMap.loadFeeRow(db, cacheId);
+            await TallyMap.saveFeeRow(db, cacheId, {
+              value: dustRow.value,
+              stash: dustRow.stash.plus(fromSats(stashSats)),
+              contract: '1',
+            });
+          }
           return;
         }
         const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
@@ -950,10 +969,21 @@ class TallyMap {
           return;
         }
 
-        // Property 1 fee can go directly to insurance (no conversion step needed).
+        // Property 1 fee is split 50/50 between insurance and tail-emission stash.
         try {
           const ins = await Insurance.getInstance('1', false);
-          await ins.deposit('1', fromSats(feeSats).toFixed(8), blk);
+          const insuranceSats = feeSats.idiv(2);
+          const stashSats = feeSats.minus(insuranceSats);
+          if (insuranceSats.gt(0)) {
+            await ins.deposit('1', fromSats(insuranceSats).toFixed(8), blk);
+          }
+          if (stashSats.gt(0)) {
+            await TallyMap.saveFeeRow(db, cacheId, {
+              value: row.value,
+              stash: row.stash.plus(fromSats(stashSats)),
+              contract: '1',
+            });
+          }
         } catch (e) {
           console.error('❌ Spot fee insurance deposit failed:', e);
         }
