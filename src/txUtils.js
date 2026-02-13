@@ -992,8 +992,7 @@ async addInputs(utxos, rawTx) {
 
     async publishDataTransaction(thisAddress, contractParams) {
         try {
-            var txNumber = 14;
-            payload += Encode.encodePublishOracleData(contractParams);
+            const payload = Encode.encodePublishOracleData(contractParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
