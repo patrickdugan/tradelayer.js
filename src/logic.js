@@ -1373,7 +1373,7 @@ const Logic = {
 
       // Resolve commits
       const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
-      const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+      const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1" || params.columnAIsSeller==="true");
       const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
       const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
 
