@@ -1,5 +1,9 @@
 function createHarness(options = {}) {
-  const { isNativeContract = false } = options;
+  const {
+    isNativeContract = false,
+    feeCacheBuyHasSell = false,
+    feeCacheBuyMatches = true,
+  } = options;
 
   jest.resetModules();
 
@@ -27,7 +31,9 @@ function createHarness(options = {}) {
       dustRows.set(key, value);
       return true;
     }),
-    findAsync: jest.fn(async () => []),
+    findAsync: jest.fn(async () =>
+      Array.from(feeRows.entries()).map(([key, value]) => ({ _id: key, ...value }))
+    ),
   };
 
   const consensusDb = {
@@ -75,11 +81,34 @@ function createHarness(options = {}) {
     isNativeContract: jest.fn(async () => isNativeContract),
   };
 
+  const orderbookInstances = new Map();
+  const orderbookModuleMock = {
+    getOrderbookInstance: jest.fn(async (orderBookKey) => {
+      if (orderbookInstances.has(orderBookKey)) return orderbookInstances.get(orderBookKey);
+
+      const instance = {
+        orderBooks: {
+          [orderBookKey]: {
+            buy: [],
+            sell: feeCacheBuyHasSell ? [{ id: "sell-1" }] : [],
+          },
+        },
+        calculatePrice: jest.fn(() => 1),
+        insertOrder: jest.fn(async (order) => ({ ...order, id: "fee-buy-1" })),
+        matchTokenOrders: jest.fn(async () => (feeCacheBuyMatches ? { matches: [{ id: "m1" }] } : { matches: [] })),
+        processTokenMatches: jest.fn(async () => true),
+        saveOrderBook: jest.fn(async () => true),
+      };
+      orderbookInstances.set(orderBookKey, instance);
+      return instance;
+    }),
+  };
+
   jest.doMock("../src/db.js", () => dbMock);
   jest.doMock("../src/txUtils.js", () => ({}));
   jest.doMock("../src/property.js", () => propertyMock);
   jest.doMock("../src/insurance.js", () => insuranceMock);
-  jest.doMock("../src/orderbook.js", () => ({}));
+  jest.doMock("../src/orderbook.js", () => orderbookModuleMock);
   jest.doMock("../src/contractRegistry.js", () => contractRegistryMock);
 
   const TallyMap = require("../src/tally.js");
@@ -89,6 +118,8 @@ function createHarness(options = {}) {
     propertyMock,
     insuranceMock,
     contractRegistryMock,
+    orderbookModuleMock,
+    orderbookInstances,
     feeRows,
     insuranceDeposits,
   };
@@ -177,5 +208,37 @@ describe("TallyMap fee cache / buyback routing tests", () => {
     expect(insuranceDeposits[0][1]).toBeCloseTo(0.5, 8);
     expect(insuranceDeposits[0][2]).toBe(1003);
   });
-});
 
+  test("feeCacheBuy executes a buy against 1-property orderbook and clears value+stash on match", async () => {
+    const { TallyMap, feeRows, orderbookInstances } = createHarness({ feeCacheBuyHasSell: true });
+
+    feeRows.set("5-1", { value: 1.25, stash: 0.75, contract: "1" });
+    await TallyMap.feeCacheBuy(1004);
+
+    const ob = orderbookInstances.get("1-5");
+    expect(ob).toBeDefined();
+    expect(ob.insertOrder).toHaveBeenCalledTimes(1);
+    expect(ob.insertOrder.mock.calls[0][0]).toMatchObject({
+      offeredPropertyId: "5",
+      desiredPropertyId: 1,
+      amountOffered: 2,
+      sender: "feeCache",
+    });
+    expect(ob.processTokenMatches).toHaveBeenCalledTimes(1);
+
+    const row = feeRows.get("5-1");
+    expect(row.value).toBeCloseTo(0, 8);
+    expect(row.stash).toBeCloseTo(0, 8);
+  });
+
+  test("oracle split stash is spendable via drawOnFeeCache(allowStash) for downstream TLI distribution", async () => {
+    const { TallyMap, feeRows } = createHarness({ isNativeContract: false });
+
+    await TallyMap.accrueFee(4, 1.00000001, 9, 1005);
+    const spent = await TallyMap.drawOnFeeCache(4, 9, { max: 0.25, allowStash: true });
+    expect(spent.spent.toFixed(8)).toBe("0.25000000");
+
+    const row = feeRows.get("4-9");
+    expect(row.stash).toBeCloseTo(0.25000001, 8);
+  });
+});
