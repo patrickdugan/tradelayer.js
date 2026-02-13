@@ -1375,8 +1375,21 @@ inferChannelAddrType(addr) {
 },
 
 async findSuitableUTXO(address, minAmount) {
+    const minConfEnv = Number(process.env.TL_UTXO_MINCONF || 0);
+    const minConf = Number.isFinite(minConfEnv) && minConfEnv >= 0 ? minConfEnv : 0;
     const utxos = await this.client.listUnspent(0, 9999999, [address]);
-    const suitableUtxo = utxos.find(utxo => (utxo.amount >=0.00002))//* COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
+    const candidates = (utxos || [])
+        .filter((u) => Number(u?.amount || 0) >= 0.00002)
+        .sort((a, b) => {
+            const ca = Number(a?.confirmations || 0);
+            const cb = Number(b?.confirmations || 0);
+            if (cb !== ca) return cb - ca;
+            const sa = a?.safe === false ? 0 : 1;
+            const sb = b?.safe === false ? 0 : 1;
+            if (sb !== sa) return sb - sa;
+            return Number(b?.amount || 0) - Number(a?.amount || 0);
+        });
+    const suitableUtxo = candidates.find((u) => Number(u?.confirmations || 0) >= minConf) || candidates[0];
     if (!suitableUtxo) {
         throw new Error('No suitable UTXO found.');
     }
