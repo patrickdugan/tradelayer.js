@@ -358,6 +358,8 @@ class Main {
                 }
                 if(blockHeight%10000==0){skip=false}
                 if(skip==false){ //we don't do any post-processing on state for this block if it's already done, no replay of vesting, clearing
+                    await TallyMap.flushQueuedFeeAccruals(blockHeight);
+                    await Logic.settleLiquidityRewards(blockHeight);
                     await Orderbook.processQueuedOnChainOrdersForBlock(blockHeight);
                     await Orderbook.processQueuedChannelTradesForBlock(blockHeight);
                     const cumulativeVolumes = await VolumeIndex.getCumulativeVolumes(blockHeight);
@@ -808,6 +810,8 @@ class Main {
 
             // Run clearing only if there was actual new TL work done
             if (didWork) {
+                await TallyMap.flushQueuedFeeAccruals(blockHeight);
+                await Logic.settleLiquidityRewards(blockHeight);
                 await Orderbook.processQueuedOnChainOrdersForBlock(blockHeight);
                 await Orderbook.processQueuedChannelTradesForBlock(blockHeight);
                 console.log(`[CLEARING] Running for block ${blockHeight} (new TL work detected)`);

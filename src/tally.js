@@ -700,6 +700,65 @@ class TallyMap {
       );
     }
 
+    static getFeeAccrualBuffer() {
+      if (!this._feeAccrualBuffer) this._feeAccrualBuffer = new Map();
+      return this._feeAccrualBuffer;
+    }
+
+    static async queueFeeAccrual(propertyId, amount, contractId, block) {
+      const resolved = await TallyMap.resolveBlock(block);
+      if (resolved == null || Number.isNaN(Number(resolved))) {
+        return await TallyMap.accrueFee(propertyId, amount, contractId, block);
+      }
+
+      const blockKey = String(resolved);
+      const effContractId = (contractId === null || contractId === undefined) ? "1" : String(contractId);
+      const key = `${propertyId}-${effContractId}`;
+      const amountBN = new BigNumber(amount || 0).decimalPlaces(8);
+      if (amountBN.lte(0)) return;
+
+      const buffer = this.getFeeAccrualBuffer();
+      let byBlock = buffer.get(blockKey);
+      if (!byBlock) {
+        byBlock = new Map();
+        buffer.set(blockKey, byBlock);
+      }
+
+      const prev = byBlock.get(key);
+      if (!prev) {
+        byBlock.set(key, { propertyId, contractId: effContractId, amount: amountBN });
+      } else {
+        prev.amount = prev.amount.plus(amountBN).decimalPlaces(8);
+        byBlock.set(key, prev);
+      }
+    }
+
+    static async flushQueuedFeeAccruals(block) {
+      const resolved = await TallyMap.resolveBlock(block);
+      const blockKey = String(resolved);
+      const buffer = this.getFeeAccrualBuffer();
+      const byBlock = buffer.get(blockKey);
+      if (!byBlock || byBlock.size === 0) return;
+
+      for (const [, entry] of byBlock.entries()) {
+        await TallyMap.accrueFee(
+          entry.propertyId,
+          entry.amount.toNumber(),
+          entry.contractId,
+          resolved
+        );
+      }
+      buffer.delete(blockKey);
+    }
+
+    static async flushAllQueuedFeeAccruals() {
+      const buffer = this.getFeeAccrualBuffer();
+      const blocks = Array.from(buffer.keys()).sort((a, b) => Number(a) - Number(b));
+      for (const block of blocks) {
+        await TallyMap.flushQueuedFeeAccruals(Number(block));
+      }
+    }
+
      /*
      * updateFeeCache with full tracing:
      * - Logs every decision point: spot, TL-spot, derivative, oracle/non-oracle.
@@ -707,8 +766,8 @@ class TallyMap {
      * - Logs stash/insurance writes with exact integer sats.
      */static async updateFeeCache(propertyId, amount, contractId, block) {
     const blockArg = arguments.length >= 6 ? arguments[5] : block;
-    // Canonical fee routing lives in accrueFee; keep updateFeeCache as compatibility wrapper.
-    return await TallyMap.accrueFee(propertyId, amount, contractId, blockArg);
+    // Canonical fee routing lives in accrueFee; queue by block to reduce feeCache write pressure.
+    return await TallyMap.queueFeeAccrual(propertyId, amount, contractId, blockArg);
 
     try {
         console.log(`\n====== updateFeeCache() @ block ${blockArg} ======`);

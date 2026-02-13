@@ -262,4 +262,19 @@ describe("TallyMap fee cache / buyback routing tests", () => {
     expect(feeRows.get("1-9").value).toBeCloseTo(0, 8);
     expect(feeRows.get("1-9").stash).toBeCloseTo(0, 8);
   });
+
+  test("updateFeeCache queues same-block accruals and flush compacts to one accrueFee call per key", async () => {
+    const { TallyMap } = createHarness();
+    const accrueSpy = jest.spyOn(TallyMap, "accrueFee").mockResolvedValue(undefined);
+
+    await TallyMap.updateFeeCache(5, 0.1, 1, 2000);
+    await TallyMap.updateFeeCache(5, 0.2, 1, 2000);
+    await TallyMap.updateFeeCache(5, 0.05, 1, 2000);
+
+    expect(accrueSpy).toHaveBeenCalledTimes(0);
+    await TallyMap.flushQueuedFeeAccruals(2000);
+
+    expect(accrueSpy).toHaveBeenCalledTimes(1);
+    expect(accrueSpy).toHaveBeenCalledWith(5, 0.35, "1", 2000);
+  });
 });

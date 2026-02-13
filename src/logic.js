@@ -369,6 +369,49 @@ const Logic = {
         return
 	},
 
+    _liquidityRewardQueue: new Map(),
+    _liquidityRewardVolumeCache: new Map(),
+
+    queueLiquidityReward(address, amount, block, txid, reason = 'liquidityReward') {
+        const amt = new BigNumber(amount || 0).decimalPlaces(8, BigNumber.ROUND_DOWN);
+        if (amt.lte(0)) return;
+        const blockKey = String(block);
+        let byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock) {
+            byBlock = new Map();
+            this._liquidityRewardQueue.set(blockKey, byBlock);
+        }
+        const prev = byBlock.get(address);
+        if (!prev) {
+            byBlock.set(address, { amount: amt, txid, reason });
+        } else {
+            prev.amount = prev.amount.plus(amt).decimalPlaces(8, BigNumber.ROUND_DOWN);
+            byBlock.set(address, prev);
+        }
+    },
+
+    async settleLiquidityRewards(block) {
+        const blockKey = String(block);
+        const byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock || byBlock.size === 0) return;
+        for (const [address, entry] of byBlock.entries()) {
+            if (entry.amount.lte(0)) continue;
+            await TallyMap.updateBalance(
+                address,
+                3,
+                entry.amount.toNumber(),
+                0,
+                0,
+                0,
+                entry.reason || 'liquidityReward',
+                block,
+                entry.txid
+            );
+        }
+        this._liquidityRewardQueue.delete(blockKey);
+        this._liquidityRewardVolumeCache.delete(blockKey);
+    },
+
 	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -474,20 +517,15 @@ const Logic = {
             };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
-            TallyMap.updateFeeCache(propertyId,fee,1,block)
             const rewardAddressListId = Number(process.env.LIQUIDITY_REWARD_ADDRESS_CLEARLIST_ID || 2);
             const rewardIssuerListId = Number(process.env.LIQUIDITY_REWARD_ISSUER_CLEARLIST_ID || 1);
             const allowlistRaw = String(process.env.LIQUIDITY_REWARD_PROPERTY_ALLOWLIST || "");
             const allowlist = new Set(
-                allowlistRaw
-                    .split(",")
-                    .map(s => Number(s.trim()))
-                    .filter(n => Number.isFinite(n))
+                allowlistRaw.split(",").map(s => Number(s.trim())).filter(n => Number.isFinite(n))
             );
 
             const isListedA = await ClearList.isAddressInClearlist(rewardAddressListId, senderAddress).catch(() => false);
             const isListedB = await ClearList.isAddressInClearlist(rewardAddressListId, receiverAddress).catch(() => false);
-
             let isTokenListed = false;
             if (String(propertyId).startsWith('s-')) {
                 isTokenListed = allowlist.size === 0 || allowlist.has(Number(propertyId));
@@ -500,13 +538,15 @@ const Logic = {
                 isTokenListed = allowById && (allowlist.size > 0 || allowByIssuer);
             }
 
-            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed);
-
             const eligibleParticipants = (isListedA ? 1 : 0) + (isListedB ? 1 : 0);
             if (isTokenListed && eligibleParticipants > 0) {
-                const cumulative = await VolumeIndex.getCumulativeVolumes(block + 1).catch(() => null);
+                const blockKey = String(block);
+                let cumulative = this._liquidityRewardVolumeCache.get(blockKey);
+                if (!cumulative) {
+                    cumulative = await VolumeIndex.getCumulativeVolumes(block + 1).catch(() => null);
+                    this._liquidityRewardVolumeCache.set(blockKey, cumulative || {});
+                }
                 const cumulativeLtc = Number(cumulative?.ltcPairTotalVolume || cumulative?.globalCumulativeVolume || 0);
-
                 const rewardBudget = await VolumeIndex.calculateLiquidityReward(tokenAmount, propertyId, {
                     feePaid: fee,
                     cumulativeLtc,
@@ -524,24 +564,12 @@ const Logic = {
                     const spent = perAddress.times(eligibleParticipants);
                     const remainder = new BigNumber(rewardBudget).minus(spent).decimalPlaces(8, BigNumber.ROUND_DOWN);
 
-                    if (isListedA) {
-                        await TallyMap.updateBalance(senderAddress, 3, perAddress.toNumber(), 0, 0, 0, 'liquidityReward', block, txid);
-                    }
+                    if (isListedA) this.queueLiquidityReward(senderAddress, perAddress, block, txid, 'liquidityReward');
                     if (isListedB) {
                         const extra = remainder.gt(0) && !isListedA ? remainder : new BigNumber(0);
-                        await TallyMap.updateBalance(
-                            receiverAddress,
-                            3,
-                            perAddress.plus(extra).toNumber(),
-                            0,
-                            0,
-                            0,
-                            'liquidityReward',
-                            block,
-                            txid
-                        );
+                        this.queueLiquidityReward(receiverAddress, perAddress.plus(extra), block, txid, 'liquidityReward');
                     } else if (isListedA && remainder.gt(0)) {
-                        await TallyMap.updateBalance(senderAddress, 3, remainder.toNumber(), 0, 0, 0, 'liquidityRewardRemainder', block, txid);
+                        this.queueLiquidityReward(senderAddress, remainder, block, txid, 'liquidityRewardRemainder');
                     }
                 }
             }
