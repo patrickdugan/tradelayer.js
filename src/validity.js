@@ -2855,7 +2855,7 @@ const Validity = {
           const mm = await MarginMap.getInstance(seriesIdNum);
 
           // Find who is seller/buyer in *this* tx by your columnA flag
-          const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+          const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1" || params.columnAIsSeller==="true");
           const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
           const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
           const effectiveSeller = AIsSeller ? effectiveA : effectiveB;
