@@ -1434,7 +1434,11 @@ const Logic = {
 
       const tMeta = OptionsEngine.parseTicker(params.contractId);
       const blockHeight = Number(params.blockHeight || 0);
-      const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
+      const seriesIdNum = Number(tMeta?.seriesId);
+      if (!Number.isFinite(seriesIdNum)) {
+        return { valid: false, reason: 'Invalid option series id; ' };
+      }
+      const seriesInfo = await ContractRegistry.getContractInfo(seriesIdNum);
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
       // Resolve commits
@@ -1460,26 +1464,19 @@ const Logic = {
         );
       }
 
-      // 2) Margin moves on seller
-      // - If reducing: free margin and realize PnL into available
-      // - Else opening/adding: lock margin (available -> margin)
+      // 2) Seller-side margin transition + rPNL.
+      // creditMargin is a signed delta:
+      //   >0 lock additional margin, <0 unlock margin, 0 no margin change.
       const credit = Number(params.creditMargin || 0);
-
-      if (params.sellerReducing) {
-        const r = Number(params.rpnlSeller || 0);
+      const r = Number(params.rpnlSeller || 0);
+      if (params.sellerReducing || credit !== 0) {
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
-          r,           // availableChange (realized PnL)
+          r - credit,
           0,
-          -credit,     // marginChange (unlock)
+          credit,
           0,
-          'optionReduceSeller', blockHeight, txid
-        );
-      } else if (credit > 0) {
-        await TallyMap.updateBalance(
-          sellerAddr, collateralPropertyId,
-          -credit, 0, +credit, 0,
-          'optionMarginLock', blockHeight, txid
+          'optionSellerMarginTransition', blockHeight, txid
         );
       }
 
@@ -1495,7 +1492,7 @@ const Logic = {
       }
 
       // 4) Record positions into margin map (hybrid, nested by ticker)
-      const mm = await MarginMap.getInstance(tMeta.seriesId);
+      const mm = await MarginMap.getInstance(seriesIdNum);
       await mm.applyOptionTrade(
         sellerAddr,              // we write positions for both sides below
         params.contractId,
@@ -1517,11 +1514,11 @@ const Logic = {
       if (params.comboTicker && params.comboAmount) {
         const cMeta = OptionsEngine.parseTicker(params.comboTicker);
         if (cMeta && cMeta.type) {
-          // Option combo leg: mirror deltas (typically opposite side)
+          // Option combo leg: opposite side of primary for spread packaging.
           await mm.applyOptionTrade(
             sellerAddr,
             params.comboTicker,
-            -(Math.abs(params.comboAmount||0)), // seller side consistent
+            +(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
             blockHeight,
             0 // margin included in credit for the package already
@@ -1529,7 +1526,7 @@ const Logic = {
           await mm.applyOptionTrade(
             buyerAddr,
             params.comboTicker,
-            +(Math.abs(params.comboAmount||0)),
+            -(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
             blockHeight,
             0
@@ -1547,6 +1544,10 @@ const Logic = {
           }, txid);
         }
       }
+
+      // Persist hybrid option/perp position updates so readers that reload from DB
+      // observe the latest option legs.
+      await mm.saveMarginMap(blockHeight);
 
       // 6) (Optional) Persist trade history w/ rPNL fields for auditing
       if (typeof TradeHistory?.recordTrade === 'function') {
@@ -1802,6 +1803,22 @@ const Logic = {
                         block,
                         txid
                     );
+                    break;
+
+                case SettleType.KING_SETTLE:
+                    await this.batchSettlement({
+                        senderAddress: channelAddress,
+                        blockStart: Number(txParams.blockStart ?? block),
+                        blockEnd: Number(txParams.blockEnd ?? block),
+                        propertyId: Number(txParams.propertyId),
+                        netAmount: Number(txParams.netAmount ?? 0),
+                        aPaysBDirection: txParams.aPaysBDirection ?? txParams.columnAIsSeller ?? false,
+                        channelRoot: txParams.channelRoot || txidNeutralized1 || '',
+                        totalContracts: Number(txParams.totalContracts ?? 0),
+                        neutralizedCount: Number(txParams.neutralizedCount ?? 0),
+                        block,
+                        txid
+                    });
                     break;
 
                 default:

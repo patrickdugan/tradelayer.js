@@ -435,30 +435,15 @@ const Encode = {
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
-        const settleType = params.settleType !== undefined
-            ? Number(params.settleType)
-            : (params.close ? 1 : 0);
+        const base256Encoded1 = Base256Converter.hexToBase256(params.tradeid);
+        const base256Encoded2 = Base256Converter.hexToBase256(params.settleid);
+        const base94Encoded = Base94Converter.decimalToBase94(params.markPrice);
         const payload = [
-            Base256Converter.hexToBase256(params.txidNeutralized1 || params.tradeid || ''),
-            Base256Converter.hexToBase256(params.txidNeutralized2 || params.settleid || ''),
-            Base94Converter.decimalToBase94(params.markPrice || 0),
-            settleType.toString(),
-            params.columnAIsSeller ? '1' : '0',
-            params.columnAIsMaker ? '1' : '0',
-            Base94Converter.decimalToBase94(params.netAmount || 0),
-            Base94Converter.decimalToBase94(params.expiryBlock || 0)
+            base256Encoded1,
+            base256Encoded2,
+            base94Encoded,
+            params.close ? '1' : '0'
         ];
-        if (params.blockStart !== undefined || params.blockEnd !== undefined || params.propertyId !== undefined) {
-            payload.push(
-                Base94Converter.decimalToBase94(params.blockStart || 0),
-                Base94Converter.decimalToBase94(params.blockEnd || 0),
-                Base94Converter.decimalToBase94(params.propertyId || 0),
-                params.aPaysBDirection ? '1' : '0',
-                Base256Converter.hexToBase256(params.channelRoot || ''),
-                Base94Converter.decimalToBase94(params.totalContracts || 0),
-                Base94Converter.decimalToBase94(params.neutralizedCount || 0)
-            );
-        }
         const type = 23;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
