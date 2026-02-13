@@ -3080,6 +3080,7 @@ const Validity = {
                     }
                 }
                 break;
+
         }
 
         // Block expiry check - anti-free-option mechanism
