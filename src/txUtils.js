@@ -1090,11 +1090,9 @@ async addInputs(utxos, rawTx) {
         }
     },
 
-    async createCommitTransaction(thisAddress, commitParams) {
-        try {
-            var txNumber = 4;
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeCommit(commitParams);
+async createCommitTransaction(thisAddress, commitParams) {
+    try {
+            const payload = Encode.encodeCommit(commitParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
@@ -1146,9 +1144,7 @@ async addInputs(utxos, rawTx) {
 
 async createChannelContractTradeTransaction(thisAddress, params) {
     try {
-        var txNumber = 19;
-        var payload = 'tl' + txNumber.toString(36);
-        payload += Encode.encodeTradeContractChannel(params);
+        const payload = Encode.encodeTradeContractChannel(params);
 
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const rawTx = new litecore.Transaction()

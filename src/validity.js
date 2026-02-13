@@ -2826,9 +2826,10 @@ const Validity = {
           if (params.comboTicker && params.comboAmount) {
             const qty = Math.min(Number(params.amount||0), Number(params.comboAmount||0));
 
-            // width via strike difference; inverse-safe using your estimatePNL
-            const loss = estimatePNL(qty, tA.strike, tB.strike, inverse, seriesInfo.notionalValue);
-            requiredMargin = Math.abs(loss);
+            // Width-based spread loss approximation for option packages.
+            const width = Math.abs(Number(tA.strike || 0) - Number(tB.strike || 0));
+            const notional = Math.abs(Number(seriesInfo.notionalValue || 1));
+            requiredMargin = width * qty * notional;
 
             // premium adjustment (credit reduces margin; debit = margin)
             const leg1Premium = Number(params.price || 0) * Number(params.amount || 0);

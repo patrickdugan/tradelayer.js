@@ -91,6 +91,20 @@ describe('Option margin validation', () => {
     expect(out.reason).toMatch(/option premium/);
   });
 
+  test('accepts string true for columnAIsSeller routing', async () => {
+    const Validity = loadValidityWithMocks({ sellerAvailable: 150, buyerAvailable: 20 });
+    const params = {
+      ticker: '3-9000-C-200',
+      amount: 1,
+      price: 0,
+      columnAIsSeller: 'true',
+      block: 100
+    };
+    const out = await Validity.validateOptionTrade('channel1', params, 'tx3');
+    expect(out.valid).toBe(true);
+    expect(out.sellerReducing).toBe(false);
+  });
+
   test('vertical spread margin uses max-loss framing (width less credit)', async () => {
     const Validity = loadValidityWithMocks({ sellerAvailable: 500, buyerAvailable: 500 });
 
