@@ -126,6 +126,27 @@ describe('Option margin validation', () => {
     expect(out.netPremium).toBe(4);
   });
 
+  test('debit spread margin uses paid debit', async () => {
+    const Validity = loadValidityWithMocks({ sellerAvailable: 500, buyerAvailable: 500 });
+
+    const params = {
+      ticker: '3-9000-C-120',
+      comboTicker: '3-9000-C-140',
+      amount: 2,
+      comboAmount: 2,
+      price: 1,
+      comboPrice: 3,
+      columnAIsSeller: true,
+      block: 100
+    };
+
+    const out = await Validity.validateOptionTrade('channel1', params, 'txd');
+    expect(out.valid).toBe(true);
+    // debit spread: netPremium=(1-3)*2=-4 => IM should be debit paid (4)
+    expect(out.creditMargin).toBe(4);
+    expect(out.netPremium).toBe(-4);
+  });
+
   test('unwinding protective long first increases seller margin transition', async () => {
     const sellerOptions = {
       '3-9000-C-120': { contracts: -1, avgPrice: 0, margin: 0 },
@@ -146,6 +167,6 @@ describe('Option margin validation', () => {
     expect(out.valid).toBe(true);
     expect(out.sellerReducing).toBe(true);
     // covered spread -> naked short transition should require additional lock
-    expect(out.creditMargin).toBeGreaterThan(0);
+    expect(out.creditMargin).toBe(13);
   });
 });

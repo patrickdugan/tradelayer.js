@@ -22,4 +22,18 @@ describe('Options portfolio maintenance', () => {
     expect(spread).toBeLessThan(naked);
     expect(spread).toBe(12);
   });
+
+  test('unwinding long wing reverts spread back to naked maintenance', () => {
+    const spread = Options.portfolioMaintenance([
+      { type: 'Call', strike: 120, qty: -1, expiryBlock: 1000 },
+      { type: 'Call', strike: 150, qty: 1, expiryBlock: 1000 }
+    ], 150);
+    const afterUnwind = Options.portfolioMaintenance([
+      { type: 'Call', strike: 120, qty: -1, expiryBlock: 1000 }
+    ], 150);
+
+    expect(spread).toBe(12);
+    expect(afterUnwind).toBe(15);
+    expect(afterUnwind).toBeGreaterThan(spread);
+  });
 });
