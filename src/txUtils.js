@@ -1045,6 +1045,25 @@ async addInputs(utxos, rawTx) {
         //}
     },
 
+    async createOptionTradeTransaction(thisAddress, optionParams) {
+        const payload = Encode.encodeOptionTrade(optionParams);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(2000);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+
+        console.log(`Option trade transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
     async createCancelTransaction(thisAddress, cancelParams) {
         try {
             var txNumber = 6;
