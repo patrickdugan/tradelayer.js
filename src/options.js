@@ -119,6 +119,71 @@ class OptionsEngine {
     }
     return { premium: prem, intrinsic: intr };
   }
+
+  /**
+   * Portfolio-style maintenance for an option set under one series.
+   * - Baseline: 10% naked maintenance for shorts (existing rule)
+   * - Offsets: vertical spread coverage reduces short maintenance by wing width/10
+   *   for covered quantity at same expiry/type.
+   *
+   * positions: [{ type:'Call'|'Put', strike:number, qty:number, expiryBlock:number }]
+   */
+  portfolioMaintenance(positions, spot) {
+    const byKey = new Map();
+    for (const p of (positions || [])) {
+      const type = p?.type;
+      const expiry = Number(p?.expiryBlock || 0);
+      if (!type) continue;
+      const k = `${type}:${expiry}`;
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push({
+        type,
+        expiryBlock: expiry,
+        strike: Number(p?.strike || 0),
+        qty: Number(p?.qty || 0)
+      });
+    }
+
+    let total = 0;
+
+    for (const legs of byKey.values()) {
+      const shorts = legs.filter((x) => x.qty < 0).map((x) => ({ ...x, rem: Math.abs(x.qty) }));
+      const longs = legs.filter((x) => x.qty > 0).map((x) => ({ ...x, rem: x.qty }));
+
+      // Naked base
+      for (const s of shorts) {
+        total += this.nakedMaintenance(s.type, s.strike, spot) * s.rem;
+      }
+
+      // Vertical offsets
+      for (const s of shorts) {
+        for (const l of longs) {
+          if (s.rem <= 0 || l.rem <= 0) continue;
+          if (s.type !== l.type) continue;
+          // Protective wing direction:
+          // - short Call protected by higher-strike long Call
+          // - short Put protected by lower-strike long Put
+          const protective =
+            (s.type === 'Call' && l.strike > s.strike) ||
+            (s.type === 'Put' && l.strike < s.strike);
+          if (!protective) continue;
+
+          const coveredQty = Math.min(s.rem, l.rem);
+          const width = Math.abs(l.strike - s.strike);
+          const offset = (width / 10) * coveredQty;
+
+          total -= Math.min(
+            offset,
+            this.nakedMaintenance(s.type, s.strike, spot) * coveredQty
+          );
+          s.rem -= coveredQty;
+          l.rem -= coveredQty;
+        }
+      }
+    }
+
+    return Math.max(0, total);
+  }
 }
 
 // Export as a singleton instance.

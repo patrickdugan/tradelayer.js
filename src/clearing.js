@@ -3000,7 +3000,7 @@ class Clearing {
       const bpd = Math.max(1, Number(blocksPerDay || 144));
       let premiumMTM = 0;
       let intrinsicNet = 0;
-      let maintNaked = 0;
+      const legs = [];
 
       for (const [ticker, o] of Object.entries(optionsBag)) {
         const meta = Options.parseTicker(ticker);
@@ -3012,6 +3012,12 @@ class Clearing {
         // qty is signed: >0 long options, <0 short options
         const qty = Number(o.contracts || 0);
         if (!qty) continue;
+        legs.push({
+          type: meta.type,
+          strike: Number(meta.strike || 0),
+          qty,
+          expiryBlock: Number(meta.expiryBlock || 0)
+        });
 
         // MTM premium approximation (treating options as assets for equity)
         const px = Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry);
@@ -3020,13 +3026,9 @@ class Clearing {
         // Intrinsic (floor/ceiling) can be used as an extra conservative cushion
         const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
         intrinsicNet += iv * qty;
-
-        // Naked maintenance padding for shorts only (10× rule via helper)
-        if (qty < 0) {
-          maintNaked += Options.nakedMaintenance(meta.type, Number(meta.strike || 0), Number(spot || 0)) * Math.abs(qty);
-        }
       }
 
+      const maintNaked = Options.portfolioMaintenance(legs, Number(spot || 0));
       return { premiumMTM, intrinsicNet, maintNaked };
     }
 
@@ -3126,3 +3128,4 @@ class Clearing {
 }
 
 module.exports = Clearing;
+
