@@ -45,6 +45,21 @@ class Clearing {
     static latestNativeMarkById = new Map();
     // contractId -> { price: number, blockHeight: number }
 
+    static computeLossCoverage(available, margin, optionAdj = {}) {
+      const avail = new BigNumber(available || 0);
+      const mar = new BigNumber(margin || 0);
+      const maintBase = mar.div(2);
+      const optionMTM = new BigNumber(optionAdj.premiumMTM || 0);
+      const optionMaint = new BigNumber(optionAdj.maintNaked || 0);
+      const coverage = avail.plus(maintBase).plus(optionMTM).minus(optionMaint);
+      return {
+        coverage,
+        maintBase,
+        optionMTM,
+        optionMaint
+      };
+    }
+
     // =========================================
     // TRADE TRACKING
     // =========================================
@@ -1789,13 +1804,25 @@ class Clearing {
         const loss = pnl.abs();
         const available   = new BigNumber(tally.available || 0);
         const margin      = new BigNumber(tally.margin || 0);
-        const maintMargin = margin.div(2);
-        const coverage    = available.plus(maintMargin);
+        const optionAdj = await this.computeOptionAdjustments(
+          contractId,
+          pos.address,
+          thisPrice || lastPrice,
+          blockHeight,
+          144
+        );
+        const coverageParts = Clearing.computeLossCoverage(
+          available,
+          margin,
+          optionAdj
+        );
+        const coverage = coverageParts.coverage;
 
         console.log(
           `  LOSS=${loss.toFixed()} ` +
           `coverage=${coverage.toFixed()} ` +
-          `(avail=${available.toFixed()} maint=${maintMargin.toFixed()})`
+          `(avail=${available.toFixed()} maint=${coverageParts.maintBase.toFixed()} ` +
+          `optMTM=${coverageParts.optionMTM.toFixed()} optMaint=${coverageParts.optionMaint.toFixed()})`
         );
 
         totalNeg = totalNeg.plus(loss);
@@ -1833,7 +1860,8 @@ class Clearing {
           pos,
           loss,
           shortfall: loss.minus(coverage),
-          coverage
+          coverage,
+          optionAdj
         });
       }
 
