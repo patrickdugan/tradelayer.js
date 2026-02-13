@@ -151,8 +151,10 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
     }
   }
 
+  const skipOnchainCommitSetup = String(process.env.TL_SKIP_ONCHAIN_COMMIT_SETUP || 'true').toLowerCase() === 'true';
   let ch;
   try {
+    if (skipOnchainCommitSetup) throw new Error('on-chain commit setup skipped by TL_SKIP_ONCHAIN_COMMIT_SETUP');
     const cATx = await withRetry(`commit A ${a}`, async () => TxUtils.createCommitTransaction(a, {
       propertyId: collateralId,
       amount: commitAmount,
