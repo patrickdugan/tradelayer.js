@@ -241,4 +241,20 @@ describe("TallyMap fee cache / buyback routing tests", () => {
     const row = feeRows.get("4-9");
     expect(row.stash).toBeCloseTo(0.25000001, 8);
   });
+
+  test("TLI payout pull in tally uses drawOnFeeCache on property 1: VALUE first, then STASH", async () => {
+    const { TallyMap, feeRows } = createHarness();
+
+    feeRows.set("1-9", { value: 0.3, stash: 0.2, contract: "9" });
+
+    const pull1 = await TallyMap.drawOnFeeCache(1, 9, { max: 0.4, allowStash: true });
+    expect(pull1.spent.toFixed(8)).toBe("0.30000000");
+    expect(feeRows.get("1-9").value).toBeCloseTo(0, 8);
+    expect(feeRows.get("1-9").stash).toBeCloseTo(0.2, 8);
+
+    const pull2 = await TallyMap.drawOnFeeCache(1, 9, { max: 0.2, allowStash: true });
+    expect(pull2.spent.toFixed(8)).toBe("0.20000000");
+    expect(feeRows.get("1-9").value).toBeCloseTo(0, 8);
+    expect(feeRows.get("1-9").stash).toBeCloseTo(0, 8);
+  });
 });
