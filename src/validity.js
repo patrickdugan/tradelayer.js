@@ -2855,6 +2855,8 @@ const Validity = {
           const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
           const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
           const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
+          const effectiveSeller = AIsSeller ? effectiveA : effectiveB;
+          const effectiveBuyer = AIsSeller ? effectiveB : effectiveA;
 
           // Load existing option positions under the specific ticker string
           const sellerBlob = mm.margins.get(sellerAddr) || {};
@@ -2886,9 +2888,13 @@ const Validity = {
           // --- Balance check with requiredMargin (credit) ---
           params.creditMargin = requiredMargin; // expose to logic.js
 
-          if (effectiveA < requiredMargin && effectiveB < requiredMargin) {
+          if (!params.sellerReducing && effectiveSeller < requiredMargin) {
             params.valid = false;
             params.reason += 'Insufficient collateral for option margin; ';
+          }
+          if (netPremium > 0 && effectiveBuyer < netPremium) {
+            params.valid = false;
+            params.reason += 'Insufficient collateral for option premium; ';
           }
 
           // --- Expiry guard ---
