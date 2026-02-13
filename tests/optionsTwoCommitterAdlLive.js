@@ -32,6 +32,7 @@ const MarginMap = require('../src/marginMap');
 const Clearing = require('../src/clearing');
 const Orderbook = require('../src/orderbook');
 const ClearList = require('../src/clearlist');
+const OracleList = require('../src/oracle');
 
 function nenv(name, fallback) {
   const raw = process.env[name];
@@ -241,6 +242,7 @@ async function main() {
   const commitAmount = nenv('TL_COMMIT_AMOUNT', 25);
   const perpQty = nenv('TL_PERP_QTY', 1);
   const optQty = nenv('TL_OPTION_QTY', 1);
+  const bPerpLong = String(process.env.TL_B_PERP_LONG || 'true').toLowerCase() === 'true';
   const startSpot = nenv('TL_SPOT_START', 108);
   const targets = splitNums('TL_SPOT_TARGETS', '113,118,123,128');
   const callStrike = nenv('TL_CALL_STRIKE', 120);
@@ -278,17 +280,23 @@ async function main() {
 
   let synthBlock = await withRetry('getBlockCount synth start', async () => TxUtils.getBlockCount());
   await publishOracle(admin, oracleId, startSpot, applyImmediate, ++synthBlock);
+  const tradePxRaw = process.env.TL_TRADE_PRICE;
+  const tradePrice = (tradePxRaw === undefined || tradePxRaw === null || tradePxRaw === '')
+    ? Number(await OracleList.getOraclePrice(oracleId))
+    : Number(tradePxRaw);
 
   const block = await withRetry('getBlockCount pre-trade', async () => TxUtils.getBlockCount());
   const expiry = block + 120;
   const callTicker = `${seriesId}-${expiry}-C-${callStrike}`;
 
-  // B long perp: A is seller => columnAIsSeller=true
+  // Direction toggle:
+  // - B long perp  => A seller => columnAIsSeller=true
+  // - B short perp => A buyer  => columnAIsSeller=false
   const perpTx = await withRetry('create perp trade', async () => TxUtils.createChannelContractTradeTransaction(channel, {
     contractId: seriesId,
-    price: startSpot,
+    price: tradePrice,
     amount: perpQty,
-    columnAIsSeller: true,
+    columnAIsSeller: bPerpLong ? true : false,
     expiryBlock: expiry,
     insurance: false,
     columnAIsMaker: true
