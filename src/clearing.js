@@ -5,7 +5,9 @@ const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
 const Options = require('./options.js');
 const MarginMap = require('./marginMap.js')
-const Insurance = require('./insurance.js')
+function getInsuranceModule() {
+    return require('./insurance.js');
+}
 const Orderbooks = require('./orderbook.js')
 const Channels = require('./channels.js')
 const PropertyManager = require('./property.js')
@@ -2903,7 +2905,7 @@ class Clearing {
           if (totalLoss.gte(0)) {
               const ContractRegistry = require('./contractRegistry.js');
               const isOracleContract = await ContractRegistry.isOracleContract(contractId);
-              const insurance = await Insurance.getInstance(contractId, isOracleContract);
+              const insurance = await getInsuranceModule().getInstance(contractId, isOracleContract);
 
               const payout = await insurance.calcPayout(totalLoss.abs(), blockHeight);
               console.log('payout to distribute '+payout)

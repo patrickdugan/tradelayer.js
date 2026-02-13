@@ -3,7 +3,9 @@ var TxUtils = require('./txUtils.js')
 var PropertyList = require('./property.js')
 const uuid = require('uuid');
 const BigNumber = require('bignumber.js');
-const Insurance = require('./insurance.js')
+function getInsuranceModule() {
+  return require('./insurance.js');
+}
 const Orderbooks = require('./orderbook.js')
 const ContractRegistry = require('./contractRegistry.js')
 
@@ -769,7 +771,7 @@ class TallyMap {
         if (effContractId === '1' && propertyId == 1) {
             console.log(`SPOT TL route → 100% to insurance`);
 
-            const insurance = await Insurance.getInstance(effContractId, false);
+            const insurance = await getInsuranceModule().getInstance(effContractId, false);
 
             console.log(`insurance.deposit: +${fromSats(feeSats).toFixed(8)} (LTC)`);
             await insurance.deposit(propertyId, fromSats(feeSats).toFixed(8), blk);
@@ -799,7 +801,7 @@ class TallyMap {
             console.log(`Insurance deposit: contract=${effContractId}, isOracle=${isOracleContract}`);
             console.log(`insurance.deposit: +${fromSats(insuranceSats).toFixed(8)} (LTC)`);
 
-            const insurance = await Insurance.getInstance(effContractId, isOracleContract);
+            const insurance = await getInsuranceModule().getInstance(effContractId, isOracleContract);
 
             await insurance.deposit(
                 propertyId,
@@ -932,7 +934,7 @@ class TallyMap {
           });
           return;
         }
-        const insurance = await Insurance.getInstance(effContractId, effContractId !== '1');
+        const insurance = await getInsuranceModule().getInstance(effContractId, effContractId !== '1');
         await insurance.deposit(propertyId, fromSats(wholeSats).toNumber(), blk);
       });
 
@@ -952,7 +954,7 @@ class TallyMap {
 
         // Property 1 fee can go directly to insurance (no conversion step needed).
         try {
-          const ins = await Insurance.getInstance('1', false);
+          const ins = await getInsuranceModule().getInstance('1', false);
           await ins.deposit('1', fromSats(feeSats).toFixed(8), blk);
         } catch (e) {
           console.error('❌ Spot fee insurance deposit failed:', e);
@@ -968,7 +970,7 @@ class TallyMap {
         const stashSats     = feeSats.minus(insuranceSats);
 
         try {
-          const ins = await Insurance.getInstance(effContractId, true);
+          const ins = await getInsuranceModule().getInstance(effContractId, true);
           await ins.deposit(propertyId, fromSats(insuranceSats).toNumber(), blk);
         } catch (e) {
           console.error(`❌ Insurance deposit failed for contract ${effContractId}:`, e);

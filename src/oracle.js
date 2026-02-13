@@ -1,6 +1,8 @@
 var db = require('./db')
 var BigNumber = require('bignumber.js')
-const Insurance = require('./insurance.js')
+function getInsuranceModule() {
+    return require('./insurance.js');
+}
 
 class OracleList {
     static instance = null;
@@ -334,7 +336,7 @@ class OracleList {
             console.log(`Oracle ID ${oracleId} has been closed`);
 
             // Call the insurance fund to perform the payout
-            await Insurance.liquidate(oracle.adminAddress,true);
+            await getInsuranceModule().liquidate(oracle.adminAddress,true);
 
             console.log(`Payout for Oracle ID ${oracleId} completed`);
         } catch (error) {

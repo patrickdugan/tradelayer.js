@@ -31,6 +31,7 @@ const Channels = require('../src/channels');
 const MarginMap = require('../src/marginMap');
 const Clearing = require('../src/clearing');
 const Orderbook = require('../src/orderbook');
+const ClearList = require('../src/clearlist');
 
 function nenv(name, fallback) {
   const raw = process.env[name];
@@ -112,11 +113,12 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
   return parsed.type;
 }
 
-async function publishOracle(admin, oracleId, price, applyImmediate) {
+async function publishOracle(admin, oracleId, price, applyImmediate, forcedBlock = null) {
   const txid = await withRetry(`publishOracle ${price}`, async () => TxUtils.publishDataTransaction(admin, { oracleid: oracleId, price }));
   if (applyImmediate) {
     const tip = await withRetry('getBlockCount publish', async () => TxUtils.getBlockCount());
-    await applyTxNow(txid, admin, tip);
+    const applyBlock = Number.isFinite(forcedBlock) ? forcedBlock : tip;
+    await applyTxNow(txid, admin, applyBlock);
   }
   return txid;
 }
@@ -207,6 +209,27 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
   };
 }
 
+async function bootstrapAttestations(a, b) {
+  const enabled = String(process.env.TL_BOOTSTRAP_ATTESTATIONS || 'true').toLowerCase() === 'true';
+  if (!enabled) return;
+  const cc = String(process.env.TL_ATTEST_COUNTRY || 'CA');
+  const blk = await withRetry('getBlockCount attest', async () => TxUtils.getBlockCount());
+  await ClearList.addAttestation(0, a, cc, blk);
+  await ClearList.addAttestation(0, b, cc, blk);
+}
+
+async function bootstrapBalances(admin, a, b, collateralId, applyImmediate) {
+  const amount = nenv('TL_BOOTSTRAP_BALANCE', 0);
+  if (!(amount > 0)) return;
+  const sendATx = await withRetry(`bootstrap send A ${a}`, async () => TxUtils.sendTransaction(admin, a, collateralId, amount, 0));
+  const sendBTx = await withRetry(`bootstrap send B ${b}`, async () => TxUtils.sendTransaction(admin, b, collateralId, amount, 0));
+  if (applyImmediate) {
+    const tip = await withRetry('getBlockCount bootstrap send', async () => TxUtils.getBlockCount());
+    await applyTxNow(sendATx, admin, tip);
+    await applyTxNow(sendBTx, admin, tip);
+  }
+}
+
 async function main() {
   const admin = process.env.TL_ADMIN_ADDRESS || 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
   const channel = process.env.TL_CHANNEL_ADDRESS || admin;
@@ -239,6 +262,8 @@ async function main() {
   }
 
   const setup = await ensureTwoCommitters(admin, channel, collateralId, commitAmount, applyImmediate);
+  await bootstrapAttestations(setup.commitA, setup.commitB);
+  await bootstrapBalances(admin, setup.commitA, setup.commitB, collateralId, applyImmediate);
   console.log('[setup]', {
     channel,
     commitA: setup.commitA,
@@ -249,7 +274,8 @@ async function main() {
     }
   });
 
-  await publishOracle(admin, oracleId, startSpot, applyImmediate);
+  let synthBlock = await withRetry('getBlockCount synth start', async () => TxUtils.getBlockCount());
+  await publishOracle(admin, oracleId, startSpot, applyImmediate, ++synthBlock);
 
   const block = await withRetry('getBlockCount pre-trade', async () => TxUtils.getBlockCount());
   const expiry = block + 120;
@@ -291,12 +317,24 @@ async function main() {
   }
 
   const ob = await Orderbook.getOrderbookInstance(seriesId);
+  const forceEmptyBook = String(process.env.TL_FORCE_EMPTY_BOOK || 'false').toLowerCase() === 'true';
+  if (forceEmptyBook) {
+    const key = String(seriesId);
+    if (!ob.orderBooks[key]) ob.orderBooks[key] = { buy: [], sell: [] };
+    ob.orderBooks[key].buy = [];
+    ob.orderBooks[key].sell = [];
+    await ob.saveOrderBook(seriesId);
+  }
   const side = ob?.orderBooks?.[String(seriesId)] || { buy: [], sell: [] };
   console.log('[orderbook-depth]', { buy: side.buy.length, sell: side.sell.length });
 
   for (const px of targets) {
-    await publishOracle(admin, oracleId, px, applyImmediate);
+    await publishOracle(admin, oracleId, px, applyImmediate, ++synthBlock);
     const h = await withRetry('getBlockCount loop', async () => TxUtils.getBlockCount());
+    if (String(process.env.TL_SKIP_SUPPLY_CHECK || 'true').toLowerCase() === 'true') {
+      const TallyMap = require('../src/tally');
+      await TallyMap.setModFlag(false);
+    }
     try {
       await withRetry(`clearing ${px}`, async () => Clearing.clearingFunction(h, true));
     } catch (e) {
