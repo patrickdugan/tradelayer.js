@@ -45,6 +45,38 @@ function splitNums(name, fallbackCsv) {
   return String(raw).split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x));
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRetryableRpcErr(err) {
+  const msg = String(err?.message || err || '').toUpperCase();
+  return (
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('SOCKET') ||
+    msg.includes('TIMEOUT')
+  );
+}
+
+async function withRetry(label, fn) {
+  const attempts = nenv('TL_RPC_RETRIES', 6);
+  const waitMs = nenv('TL_RPC_RETRY_MS', 4000);
+  let last;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      if (!isRetryableRpcErr(e) || i === attempts) break;
+      console.log(`[retry] ${label} attempt=${i}/${attempts} err=${e.message || e}`);
+      await sleep(waitMs);
+    }
+  }
+  throw last;
+}
+
 function extractTlPayloadFromHex(scriptHex) {
   const markerHex = '746c';
   const pos = scriptHex.indexOf(markerHex);
@@ -57,13 +89,13 @@ function extractTlPayloadFromHex(scriptHex) {
 }
 
 async function applyTxNow(txid, senderAddress, blockHeight) {
-  const tx = await TxUtils.getRawTransaction(txid);
+  const tx = await withRetry(`getRawTransaction ${txid}`, async () => TxUtils.getRawTransaction(txid));
   const opret = tx?.vout?.find((v) => v?.scriptPubKey?.type === 'nulldata');
   const scriptHex = opret?.scriptPubKey?.hex;
   if (!scriptHex) throw new Error(`No OP_RETURN payload found for ${txid}`);
   const parsed = extractTlPayloadFromHex(scriptHex);
   if (!parsed) throw new Error(`No TL payload marker found for ${txid}`);
-  const decoded = await Types.decodePayload(
+  const decoded = await withRetry(`decodePayload ${txid}`, async () => Types.decodePayload(
     txid,
     parsed.type,
     parsed.marker,
@@ -73,17 +105,17 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
     0,
     0,
     blockHeight
-  );
+  ));
   decoded.block = blockHeight;
   if (decoded.valid !== true) throw new Error(`Immediate apply invalid tx ${txid}: ${decoded.reason || 'unknown'}`);
-  await Logic.typeSwitch(parsed.type, decoded);
+  await withRetry(`typeSwitch ${txid}`, async () => Logic.typeSwitch(parsed.type, decoded));
   return parsed.type;
 }
 
 async function publishOracle(admin, oracleId, price, applyImmediate) {
-  const txid = await TxUtils.publishDataTransaction(admin, { oracleid: oracleId, price });
+  const txid = await withRetry(`publishOracle ${price}`, async () => TxUtils.publishDataTransaction(admin, { oracleid: oracleId, price }));
   if (applyImmediate) {
-    const tip = await TxUtils.getBlockCount();
+    const tip = await withRetry('getBlockCount publish', async () => TxUtils.getBlockCount());
     await applyTxNow(txid, admin, tip);
   }
   return txid;
@@ -103,15 +135,15 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
   const skipFund = String(process.env.TL_SKIP_FUNDING || 'true').toLowerCase() === 'true';
 
   if (!skipFund) {
-    await fundAddress(a, 0.02);
-    await fundAddress(b, 0.02);
+    await withRetry(`fund ${a}`, async () => fundAddress(a, 0.02));
+    await withRetry(`fund ${b}`, async () => fundAddress(b, 0.02));
 
-    const sendATx = await TxUtils.sendTransaction(admin, a, collateralId, commitAmount, 0);
-    const sendBTx = await TxUtils.sendTransaction(admin, b, collateralId, commitAmount, 0);
+    const sendATx = await withRetry(`send token A ${a}`, async () => TxUtils.sendTransaction(admin, a, collateralId, commitAmount, 0));
+    const sendBTx = await withRetry(`send token B ${b}`, async () => TxUtils.sendTransaction(admin, b, collateralId, commitAmount, 0));
     if (!sendATx || String(sendATx).startsWith('Error')) throw new Error(`sendATx failed: ${sendATx}`);
     if (!sendBTx || String(sendBTx).startsWith('Error')) throw new Error(`sendBTx failed: ${sendBTx}`);
     if (applyImmediate) {
-      const tip = await TxUtils.getBlockCount();
+      const tip = await withRetry('getBlockCount send token', async () => TxUtils.getBlockCount());
       await applyTxNow(sendATx, admin, tip);
       await applyTxNow(sendBTx, admin, tip);
     }
@@ -119,22 +151,22 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
 
   let ch;
   try {
-    const cATx = await TxUtils.createCommitTransaction(a, {
+    const cATx = await withRetry(`commit A ${a}`, async () => TxUtils.createCommitTransaction(a, {
       propertyId: collateralId,
       amount: commitAmount,
       channelAddress: channel,
       payEnabled: false,
       clearLists: []
-    });
-    const cBTx = await TxUtils.createCommitTransaction(b, {
+    }));
+    const cBTx = await withRetry(`commit B ${b}`, async () => TxUtils.createCommitTransaction(b, {
       propertyId: collateralId,
       amount: commitAmount,
       channelAddress: channel,
       payEnabled: false,
       clearLists: []
-    });
+    }));
     if (applyImmediate) {
-      const tip = await TxUtils.getBlockCount();
+      const tip = await withRetry('getBlockCount commit', async () => TxUtils.getBlockCount());
       await applyTxNow(cATx, a, tip);
       await applyTxNow(cBTx, b, tip);
     }
@@ -152,7 +184,7 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
         B: {},
         clearLists: { A: [], B: [] },
         payEnabled: { A: false, B: false },
-        lastCommitmentTime: await TxUtils.getBlockCount(),
+        lastCommitmentTime: await withRetry('getBlockCount fallback channel init', async () => TxUtils.getBlockCount()),
         lastUsedColumn: null,
         channelPubkeys: { A: '', B: '' }
       };
@@ -162,7 +194,7 @@ async function ensureTwoCommitters(admin, channel, collateralId, commitAmount, a
     cur.A[String(collateralId)] = Number((cur.A[String(collateralId)] || 0) + commitAmount);
     cur.B[String(collateralId)] = Number((cur.B[String(collateralId)] || 0) + commitAmount);
     cur.lastUsedColumn = 'B';
-    cur.lastCommitmentTime = await TxUtils.getBlockCount();
+    cur.lastCommitmentTime = await withRetry('getBlockCount fallback channel save', async () => TxUtils.getBlockCount());
     Channels.channelsRegistry.set(channel, cur);
     await Channels.saveChannelsRegistry();
     ch = cur;
@@ -189,15 +221,18 @@ async function main() {
   const callStrike = nenv('TL_CALL_STRIKE', 120);
   const applyImmediate = String(process.env.TL_APPLY_IMMEDIATE || 'true').toLowerCase() === 'true';
   const runActivation = String(process.env.TL_RUN_ACTIVATION || 'false').toLowerCase() === 'true';
+  const skipActivationInit = String(process.env.TL_SKIP_ACTIVATION_INIT || 'true').toLowerCase() === 'true';
 
-  await TxUtils.init();
-  await Activation.getInstance().init();
+  await withRetry('TxUtils.init', async () => TxUtils.init());
+  if (!skipActivationInit) {
+    await withRetry('Activation.init', async () => Activation.getInstance().init());
+  }
 
   if (runActivation) {
     for (const t of [4, 14, 19, 27]) {
-      const txid = await TxUtils.activationTransaction(admin, t);
+      const txid = await withRetry(`activate ${t}`, async () => TxUtils.activationTransaction(admin, t));
       if (applyImmediate) {
-        const tip = await TxUtils.getBlockCount();
+        const tip = await withRetry('getBlockCount activate', async () => TxUtils.getBlockCount());
         await applyTxNow(txid, admin, tip);
       }
     }
@@ -216,12 +251,12 @@ async function main() {
 
   await publishOracle(admin, oracleId, startSpot, applyImmediate);
 
-  const block = await TxUtils.getBlockCount();
+  const block = await withRetry('getBlockCount pre-trade', async () => TxUtils.getBlockCount());
   const expiry = block + 120;
   const callTicker = `${seriesId}-${expiry}-C-${callStrike}`;
 
   // B long perp: A is seller => columnAIsSeller=true
-  const perpTx = await TxUtils.createChannelContractTradeTransaction(channel, {
+  const perpTx = await withRetry('create perp trade', async () => TxUtils.createChannelContractTradeTransaction(channel, {
     contractId: seriesId,
     price: startSpot,
     amount: perpQty,
@@ -229,7 +264,7 @@ async function main() {
     expiryBlock: expiry,
     insurance: false,
     columnAIsMaker: true
-  });
+  }));
   if (applyImmediate) {
     try {
       await applyTxNow(perpTx, channel, block);
@@ -239,14 +274,14 @@ async function main() {
   }
 
   // B short call: A is buyer => columnAIsSeller=false
-  const optionTx = await TxUtils.createOptionTradeTransaction(channel, {
+  const optionTx = await withRetry('create option trade', async () => TxUtils.createOptionTradeTransaction(channel, {
     contractId: callTicker,
     price: 0,
     amount: optQty,
     columnAIsSeller: false,
     expiryBlock: expiry,
     columnAIsMaker: true
-  });
+  }));
   if (applyImmediate) {
     try {
       await applyTxNow(optionTx, channel, block);
@@ -261,9 +296,9 @@ async function main() {
 
   for (const px of targets) {
     await publishOracle(admin, oracleId, px, applyImmediate);
-    const h = await TxUtils.getBlockCount();
+    const h = await withRetry('getBlockCount loop', async () => TxUtils.getBlockCount());
     try {
-      await Clearing.clearingFunction(h, true);
+      await withRetry(`clearing ${px}`, async () => Clearing.clearingFunction(h, true));
     } catch (e) {
       console.log('[clearing-error]', { spot: px, error: e.message || String(e) });
     }
