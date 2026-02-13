@@ -2784,6 +2784,8 @@ const Validity = {
         validateOptionTrade: async (sender, params, txid) => {
           params.reason = '';
           params.valid = true;
+          params.contractId = params.contractId || params.ticker;
+          params.blockHeight = params.blockHeight ?? params.block;
 
           // --- Parse primary & combo ---
           const tA = OptionsEngine.parseTicker(params.contractId);
@@ -2817,6 +2819,7 @@ const Validity = {
 
           // --- Margin requirement (spreads w/ premium adj; naked otherwise) ---
           let requiredMargin = 0;
+          let netPremium = Number(params.price || 0) * Number(params.amount || 0);
 
           if (params.comboTicker && params.comboAmount) {
             const qty = Math.min(Number(params.amount||0), Number(params.comboAmount||0));
@@ -2828,7 +2831,7 @@ const Validity = {
             // premium adjustment (credit reduces margin; debit = margin)
             const leg1Premium = Number(params.price || 0) * Number(params.amount || 0);
             const leg2Premium = Number(params.comboPrice || 0) * Number(params.comboAmount || 0);
-            const netPremium  = leg1Premium - leg2Premium;
+            netPremium  = leg1Premium - leg2Premium;
 
             if (netPremium > 0) {
               requiredMargin = Math.max(0, requiredMargin - netPremium);
@@ -2843,6 +2846,7 @@ const Validity = {
           } else {
             requiredMargin = (Number(tA.strike||0) / 10) * Number(params.amount||0);
           }
+          params.netPremium = netPremium;
 
           // --- Reduce/Flip & rPNL (per side) for the OPTION ticker itself ---
           const mm = await MarginMap.getInstance(tA.seriesId);
@@ -2888,7 +2892,7 @@ const Validity = {
           }
 
           // --- Expiry guard ---
-          if (params.blockHeight && params.blockHeight >= tA.expiryBlock) {
+          if (params.blockHeight && Number(params.blockHeight) >= tA.expiryBlock) {
             params.valid = false;
             params.reason += 'Option already expired; ';
           }

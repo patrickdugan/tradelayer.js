@@ -396,6 +396,7 @@ const Types = {
             case 27:
                 params = Decode.decodeOptionTrade(encodedPayload.substr(index));
                 params.block=block 
+                params.blockHeight = block
                 params.senderAddress= sender
                 params.txid=txId
                 params = await Validity.validateOptionTrade(sender, params, txId)

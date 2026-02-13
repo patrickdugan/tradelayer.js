@@ -528,8 +528,10 @@ const Decode = {
     decodeOptionTrade: (payload) => {
         const parts = payload.split(',');
 
+        const ticker = parts[0];
         const result = {
-            ticker: parts[0],                                      // keep full ticker string
+            contractId: ticker,
+            ticker,                                                // backward compatibility
             price: Decode.decodeAmount(parts[1] || '0'),
             amount: parseInt(parts[2] || '0', 36),
             columnAIsSeller: parts[3]=== '1',

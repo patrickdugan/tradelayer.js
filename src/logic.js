@@ -136,7 +136,7 @@ const Logic = {
                 await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount, params.block);
                 break;
             case 27:
-                await processOptionTrade(sender, params, txid);
+                await Logic.processOptionTrade(params.senderAddress, params, params.txid);
                 break;
             case 28:
                 await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock, params.block);
@@ -1356,11 +1356,14 @@ const Logic = {
     // inside logic.j
 
     async processOptionTrade(sender, params, txid){
+      params.contractId = params.contractId || params.ticker;
+      params.blockHeight = params.blockHeight ?? params.block;
       // Validate first (also populates creditMargin, reduce/flip flags, rPNL, closed sizes)
       const res = await Validity.validateOptionTrade(sender, params, txid);
       if (!res.valid) return res;
 
       const tMeta = OptionsEngine.parseTicker(params.contractId);
+      const blockHeight = Number(params.blockHeight || 0);
       const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
@@ -1377,13 +1380,13 @@ const Logic = {
         await TallyMap.updateBalance(
           buyerAddr, collateralPropertyId,
           -np, 0, 0, 0,
-          'optionPremiumPay', params.blockHeight, txid
+          'optionPremiumPay', blockHeight, txid
         );
         // seller receives (available +)
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
           +np, 0, 0, 0,
-          'optionPremiumReceive', params.blockHeight, txid
+          'optionPremiumReceive', blockHeight, txid
         );
       }
 
@@ -1400,13 +1403,13 @@ const Logic = {
           0,
           -credit,     // marginChange (unlock)
           0,
-          'optionReduceSeller', params.blockHeight, txid
+          'optionReduceSeller', blockHeight, txid
         );
       } else if (credit > 0) {
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
           -credit, 0, +credit, 0,
-          'optionMarginLock', params.blockHeight, txid
+          'optionMarginLock', blockHeight, txid
         );
       }
 
@@ -1417,7 +1420,7 @@ const Logic = {
         await TallyMap.updateBalance(
           buyerAddr, collateralPropertyId,
           r, 0, 0, 0, // we’re not adjusting buyer margin here (credit is seller’s requirement)
-          'optionReduceBuyer', params.blockHeight, txid
+          'optionReduceBuyer', blockHeight, txid
         );
       }
 
@@ -1428,7 +1431,7 @@ const Logic = {
         params.contractId,
         -Math.abs(params.amount || 0), // seller delta negative (short if SELL)
         params.price,
-        params.blockHeight,
+        blockHeight,
         credit
       );
       await mm.applyOptionTrade(
@@ -1436,7 +1439,7 @@ const Logic = {
         params.contractId,
         +Math.abs(params.amount || 0), // buyer delta positive
         params.price,
-        params.blockHeight,
+        blockHeight,
         0 // buyer doesn’t post credit margin in our model
       );
 
@@ -1450,7 +1453,7 @@ const Logic = {
             params.comboTicker,
             -(Math.abs(params.comboAmount||0)), // seller side consistent
             params.comboPrice || 0,
-            params.blockHeight,
+            blockHeight,
             0 // margin included in credit for the package already
           );
           await mm.applyOptionTrade(
@@ -1458,7 +1461,7 @@ const Logic = {
             params.comboTicker,
             +(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
-            params.blockHeight,
+            blockHeight,
             0
           );
         } else {
@@ -1470,7 +1473,7 @@ const Logic = {
             columnAIsSeller: params.columnAIsSeller,
             expiryBlock: params.expiryBlock,
             isMaker: params.isMaker,
-            blockHeight: params.blockHeight
+            blockHeight
           }, txid);
         }
       }
@@ -1481,13 +1484,13 @@ const Logic = {
           sellerAddr, params.contractId,
           -Math.abs(params.amount||0), params.price,
           Number(params.rpnlSeller||0),
-          params.blockHeight, txid
+          blockHeight, txid
         );
         await TradeHistory.recordTrade(
           buyerAddr, params.contractId,
           +Math.abs(params.amount||0), params.price,
           Number(params.rpnlBuyer||0),
-          params.blockHeight, txid
+          blockHeight, txid
         );
       }
 
@@ -2047,3 +2050,5 @@ const Logic = {
 module.exports = Logic;
 
 // Example function to create and register a new token
+
+
