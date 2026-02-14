@@ -163,6 +163,9 @@ async function main() {
   const adverseTargetMult = nenv('TL_ADVERSE_TARGET_MULT', 1.6);
   const adverseTargetOverride = process.env.TL_ADVERSE_TARGET;
   const requireSuccess = benv('TL_REQUIRE_SUCCESS', false);
+  const requirePickedAddress = benv('TL_REQUIRE_PICK_ADDRESS', false);
+  const skipSupplyCheck = benv('TL_SKIP_SUPPLY_CHECK', true);
+  const skipNetCheck = benv('TL_SKIP_NET_CHECK', true);
   let synthBlock = nenv('TL_SYNTH_BLOCK_START', 0);
 
   await TxUtils.init();
@@ -221,7 +224,10 @@ async function main() {
     markStart,
     adverseTarget,
     maxSteps,
-    maxMovePct
+    maxMovePct,
+    requirePickedAddress,
+    skipSupplyCheck,
+    skipNetCheck
   });
 
   let cur = markStart;
@@ -245,6 +251,8 @@ async function main() {
     const settleBlock = Number.isFinite(forced) ? forced : await TxUtils.getBlockCount();
     let clearingError = '';
     try {
+      if (skipSupplyCheck) await Tally.setModFlag(false);
+      if (skipNetCheck) await ContractRegistry.setModFlag(false);
       await Clearing.clearingFunction(settleBlock, true);
     } catch (e) {
       clearingError = String(e?.message || e || '');
@@ -256,7 +264,7 @@ async function main() {
       const s = t?.sellerAddress;
       const hasAmm = (b === 'amm' || s === 'amm');
       const hasPicked = (b === pickedAddress || s === pickedAddress);
-      return hasAmm && hasPicked;
+      return hasAmm && (!requirePickedAddress || hasPicked);
     });
 
     console.log('[step]', {
