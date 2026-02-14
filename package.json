@@ -17,7 +17,8 @@
     "test:amm-contract-live": "node tests/ammContractLive.js",
     "test:amm-contract-taker-live": "node tests/ammContractTakerLive.js",
     "test:scaling-settlement-live": "node tests/scalingSettlementLive.js",
-    "test:dlc-scenario": "node tests/dlcMultiDepositorScenario.js"
+    "test:dlc-scenario": "node tests/dlcMultiDepositorScenario.js",
+    "test:dlc-live": "node tests/dlcLiveIntegration.js"
   },
   "jest": {
     "testPathIgnorePatterns": [

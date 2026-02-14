@@ -1063,6 +1063,60 @@ async addInputs(utxos, rawTx) {
         return txid;
     },
 
+    async createGrantManagedTokenTransaction(thisAddress, params) {
+        const payload = Encode.encodeGrantManagedToken(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Grant managed token tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createRedeemManagedTokenTransaction(thisAddress, params) {
+        const payload = Encode.encodeRedeemManagedToken(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Redeem managed token tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createStakeFraudProofTransaction(thisAddress, params) {
+        const payload = Encode.encodeStakeFraudProof(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Stake/Fraud/Relay tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
     async createSettleChannelPNLTransaction(thisAddress, params) {
         const payload = Encode.encodeSettleChannelPNL(params);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
