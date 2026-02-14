@@ -808,7 +808,7 @@ async addInputs(utxos, rawTx) {
                 codeHash: codeHash
             });
 
-            const utxos = await this.client.listUnspent(1, 9999999, [adminAddress]);
+            const utxos = await this.client.listUnspent(0, 9999999, [adminAddress]);
             console.log(utxos);
             if (utxos.length === 0) throw new Error('No UTXOs available for the admin address.');
 

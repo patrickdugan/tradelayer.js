@@ -1913,7 +1913,7 @@ const Logic = {
                 console.log(`King settle: B pays A ${absAmount} of property ${propertyId}`);
             }
 
-            await Channels.updateChannel(channelAddress, channel);
+            await Channels.setChannel(channelAddress, channel);
 
             // 3. Record the king settlement
             if (!doc) {
