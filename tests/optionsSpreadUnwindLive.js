@@ -35,6 +35,15 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
   await Logic.typeSwitch(p.type, decoded);
 }
 
+async function tryApplyTxNow(txid, senderAddress, blockHeight) {
+  try {
+    await applyTxNow(txid, senderAddress, blockHeight);
+    return { ok: true, reason: '' };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e || '') };
+  }
+}
+
 async function snapshot(seriesId, addr, spot) {
   const mm = await MarginMap.getInstance(seriesId);
   const pos = mm.margins.get(addr) || {};
@@ -74,6 +83,7 @@ async function main() {
   const longStrike = nenv('TL_LONG_STRIKE', 130);
   const qty = nenv('TL_QTY', 1);
   const applyImmediate = String(process.env.TL_APPLY_IMMEDIATE || 'true').toLowerCase() === 'true';
+  const expectLongOnlyReject = String(process.env.TL_EXPECT_LONG_ONLY_REJECT || 'true').toLowerCase() === 'true';
 
   await TxUtils.init();
   await Activation.getInstance().init();
@@ -104,7 +114,7 @@ async function main() {
   const afterSpread = await snapshot(seriesId, trackAddress, spot);
   console.log('[after-spread]', afterSpread);
 
-  const unwindTxid = await TxUtils.createOptionTradeTransaction(channel, {
+  const longOnlyUnwindTxid = await TxUtils.createOptionTradeTransaction(channel, {
     contractId: longTicker,
     amount: qty,
     price: 0,
@@ -112,11 +122,30 @@ async function main() {
     expiryBlock: expiry,
     columnAIsMaker: true
   });
-  if (applyImmediate) await applyTxNow(unwindTxid, channel, block);
+  if (applyImmediate) {
+    const longOnly = await tryApplyTxNow(longOnlyUnwindTxid, channel, block);
+    console.log('[long-only-unwind]', longOnly);
+    if (expectLongOnlyReject && longOnly.ok) {
+      throw new Error('long-only unwind unexpectedly succeeded; expected reject with short-first policy');
+    }
+  }
+
+  const comboUnwindTxid = await TxUtils.createOptionTradeTransaction(channel, {
+    contractId: shortTicker,
+    comboTicker: longTicker,
+    amount: qty,
+    comboAmount: qty,
+    price: 0,
+    comboPrice: 0,
+    columnAIsSeller: true,
+    expiryBlock: expiry,
+    columnAIsMaker: true
+  });
+  if (applyImmediate) await applyTxNow(comboUnwindTxid, channel, block);
 
   const afterUnwind = await snapshot(seriesId, trackAddress, spot);
   const marginDelta = Number((afterUnwind.margin - afterSpread.margin).toFixed(8));
-  console.log('[after-unwind]', { ...afterUnwind, marginDelta });
+  console.log('[after-combo-unwind]', { ...afterUnwind, marginDelta });
 }
 
 main().catch((e) => {
