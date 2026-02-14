@@ -51,6 +51,7 @@ const OracleList = require('../src/oracle');
 const PropertyList = require('../src/property');
 const Clearing = require('../src/clearing');
 const Encode = require('../src/txEncoder');
+const Channels = require('../src/channels');
 const { ProceduralRegistry } = require('../src/procedural');
 const { createOracleSigner } = require('./makeshiftOracle');
 
@@ -161,6 +162,7 @@ async function main() {
   const redeemAmount = nenv('TL_REDEEM_AMOUNT', 1);
 
   const optionSeriesId = nenv('TL_OPTION_SERIES_ID', 3);
+  const optionSender = env('TL_OPTION_SENDER', admin);
   const optionType = env('TL_OPTION_TYPE', 'P').toUpperCase() === 'C' ? 'C' : 'P';
   const optionStrike = nenv('TL_OPTION_STRIKE', 120);
   const optionAmount = nenv('TL_OPTION_AMOUNT', 1);
@@ -182,7 +184,7 @@ async function main() {
   console.log('[dlc-live] config', {
     admin, oracleAdmin, badOracle, challenger, depositors, collateralPropertyId,
     vaultAddress, templateId, contractId, nextContractId, receiptTicker,
-    depositAmts, tradeAmount, redeemAmount
+    depositAmts, tradeAmount, redeemAmount, optionSender
   });
   if (dryRun) return;
 
@@ -290,7 +292,20 @@ async function main() {
   const block = await TxUtils.getBlockCount();
   const expiryBlock = block + expiryOffset;
   const ticker = `${optionSeriesId}-${expiryBlock}-${optionType}-${optionStrike}`;
-  const optTx = await TxUtils.createOptionTradeTransaction(depositors[0], {
+  // Keep option channel state isolated from long-lived historical channel entries.
+  await Channels.setChannel(optionSender, {
+    channel: optionSender,
+    participants: { A: depositors[0], B: depositors[1] },
+    commits: [],
+    A: {},
+    B: {},
+    clearLists: { A: [], B: [] },
+    payEnabled: { A: false, B: false },
+    lastCommitmentTime: block,
+    lastUsedColumn: 'A',
+    channelPubkeys: { A: '', B: '' }
+  });
+  const optTx = await TxUtils.createOptionTradeTransaction(optionSender, {
     contractId: ticker,
     price: optionPrice,
     amount: optionAmount,
@@ -316,7 +331,7 @@ async function main() {
     eventId: `${contractId}-settle`,
     outcome: 'SETTLED',
     outcomeIndex: 1,
-    stateHash: `state-${contractId}-settled`,
+    stateHash: `s-${contractId}`,
     timestamp: Math.floor(Date.now() / 1000)
   });
   const relayTx = await TxUtils.createStakeFraudProofTransaction(oracleAdmin, {
@@ -326,7 +341,8 @@ async function main() {
     stateHash: relayBundle.stateHash,
     dlcRef: contractId,
     settlementState: 'SETTLED',
-    relayBlob: JSON.stringify(relayBundle),
+    // Keep payload compact for OP_RETURN size limits in live mode.
+    relayBlob: '',
     autoRoll: true,
     nextDlcRef: nextContractId
   });
@@ -343,7 +359,8 @@ async function main() {
     stateHash: relayBundle.stateHash,
     dlcRef: contractId,
     settlementState: 'SETTLED',
-    relayBlob: JSON.stringify({ ...relayBundle, signatureHex: '00'.repeat(64) })
+    // Intentionally malformed compact bundle; should fail signature/path validation.
+    relayBlob: '{}'
   });
   if (applyImmediate) {
     const b = await TxUtils.getBlockCount();
@@ -360,7 +377,8 @@ async function main() {
     oracleId,
     accusedAddress: badOracle,
     amount: 2,
-    evidenceHash: `bad-relay-${Date.now()}`,
+    // Keep compact to avoid oversized OP_RETURN + dust/change edge cases in live mode.
+    evidenceHash: 'br1',
     stakedPropertyId: collateralPropertyId
   });
   if (applyImmediate) {

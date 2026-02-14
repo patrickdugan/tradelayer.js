@@ -76,14 +76,17 @@ class OracleList {
         // Prepare the query to find all entries with the specified oracleId
         const oracleDB = await db.getDatabase('oracleData');
         const oracleData = await oracleDB.findAsync({ oracleId: oracleId });
+        const priceRows = (oracleData || []).filter((row) =>
+            row && row.data && Number.isFinite(Number(row.data.price))
+        );
         
         // Check if any data was returned
-        if (oracleData.length === 0) {
+        if (priceRows.length === 0) {
             return 1
         }
         
         // Find the latest data point by blockHeight
-        const latestDataPoint = oracleData.reduce((latest, entry) => {
+        const latestDataPoint = priceRows.reduce((latest, entry) => {
             return (entry.blockHeight > latest.blockHeight) ? entry : latest;
         });
 
@@ -122,9 +125,16 @@ class OracleList {
                     oracleData.price = circuitLimitDown
                 }
             } 
-            // Update in-memory oracle data (optional)
+            // Preserve oracle metadata and only refresh the latest data payload.
             const oracleKey = `oracle-${oracleId}`;
-            instance.oracles.set(oracleKey, oracleData);
+            const existingMeta = instance.oracles.get(oracleKey) ||
+                await (await db.getDatabase('oracleList')).findOneAsync({ _id: oracleKey }) ||
+                { _id: oracleKey, id: Number(oracleId) };
+            instance.oracles.set(oracleKey, {
+                ...existingMeta,
+                data: oracleData,
+                lastPublishedBlock: blockHeight
+            });
 
             // Save oracle data to the database
             await instance.saveOracleData(oracleId, oracleData, blockHeight);
@@ -299,16 +309,25 @@ class OracleList {
         return relayDoc;
     }
 
-    static async createOracle(name, adminAddress) {
+    static async createOracle(nameOrConfig, adminAddress) {
         const instance = OracleList.getInstance(); // Get the singleton instance
-        const oracleId = OracleList.getNextId();
+        const oracleId = await OracleList.getNextId();
         const oracleKey = `oracle-${oracleId}`;
+        const config = (nameOrConfig && typeof nameOrConfig === 'object')
+            ? nameOrConfig
+            : { name: nameOrConfig, adminAddress };
+        const displayName = config.name || config.ticker || `oracle-${oracleId}`;
 
         const newOracle = {
             _id: oracleKey, // NeDB uses _id as the primary key
             id: oracleId,
-            name: name,
-            adminAddress: adminAddress,
+            name: displayName,
+            ticker: config.ticker || displayName,
+            url: config.url || '',
+            backupAddress: config.backupAddress || '',
+            clearlists: Array.isArray(config.clearlists) ? config.clearlists : [],
+            lag: Number.isFinite(Number(config.lag)) ? Number(config.lag) : 1,
+            adminAddress: config.adminAddress || adminAddress || '',
             data: {} // Initial data, can be empty or preset values
         };
 
@@ -322,7 +341,7 @@ class OracleList {
             // Also save the new oracle to the in-memory map
             instance.oracles.set(oracleKey, newOracle);
 
-            console.log(`New oracle created: ID ${oracleId}, Name: ${name}`);
+            console.log(`New oracle created: ID ${oracleId}, Name: ${displayName}`);
             return oracleId; // Return the new oracle ID
         } catch (error) {
             console.error('Error creating new oracle:', error);
@@ -330,9 +349,17 @@ class OracleList {
         }
     }
 
-    static getNextId() {
-        const instance = OracleList.getInstance(); // Get the singleton instance
+    static async getNextId() {
+        const oracleDB = await db.getDatabase('oracleList');
+        const docs = await oracleDB.findAsync({});
         let maxId = 0;
+        for (const doc of docs) {
+            const id = Number(doc?.id ?? (String(doc?._id || '').split('-')[1]));
+            if (Number.isFinite(id) && id > maxId) maxId = id;
+        }
+        if (maxId > 0) return maxId + 1;
+
+        const instance = OracleList.getInstance(); // Get the singleton instance
         for (const key of instance.oracles.keys()) {
             const currentId = parseInt(key.split('-')[1]);
             if (currentId > maxId) {
@@ -348,6 +375,7 @@ class OracleList {
         console.log('saving published oracle data to key '+recordKey)
         const oracleDataRecord = {
             _id: recordKey,
+            type: 'oracle',
             oracleId,
             data,
             blockHeight
@@ -371,6 +399,7 @@ class OracleList {
         try {
             const query = {
                 oracleId: oracleId,
+                type: 'oracle',
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
             };
             const oracleDataRecords = await oracleDataDB.findAsync(query);

@@ -1102,11 +1102,12 @@ async addInputs(utxos, rawTx) {
     async createStakeFraudProofTransaction(thisAddress, params) {
         const payload = Encode.encodeStakeFraudProof(params);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const relayFee = STANDARD_FEE * 3;
         const rawTx = new litecore.Transaction()
             .from(utxo)
             .addData(payload)
             .change(thisAddress)
-            .fee(STANDARD_FEE);
+            .fee(relayFee);
 
         const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
