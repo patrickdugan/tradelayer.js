@@ -757,6 +757,15 @@ class Clearing {
                 const oracleId = contractInfo.underlyingOracleId;
                 const latestOracleData = await OracleRegistry.getOraclePrice(oracleId);
 
+                if (typeof latestOracleData === 'number') {
+                    if (!Number.isFinite(latestOracleData)) {
+                        console.warn(`Invalid numeric oracle data for Oracle ID ${oracleId}.`);
+                        return null;
+                    }
+                    console.log(`Latest oracle price for contract ${contractId}: ${latestOracleData}`);
+                    return latestOracleData;
+                }
+
                 if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
                     console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
                     return null;
