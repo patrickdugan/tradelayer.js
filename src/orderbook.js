@@ -3216,9 +3216,13 @@ class Orderbook {
 		  const buyerAddr = match.buyOrder.buyerAddress;
 		  const sellerAddr = match.sellOrder.sellerAddress;
 		  const txid = match.txid || `contract-fee-${block}`;
+		  const buyerIsVirtualAmm = buyerAddr === 'amm' || (typeof buyerAddr === 'string' && buyerAddr.startsWith('amm:'));
+		  const sellerIsVirtualAmm = sellerAddr === 'amm' || (typeof sellerAddr === 'string' && sellerAddr.startsWith('amm:'));
 
 		  // -------- BUYER SIDE --------
-		  if (buyerFee < 0) {
+		  if (buyerIsVirtualAmm) {
+		    console.log('Skipping buyer fee settlement for virtual AMM sender');
+		  } else if (buyerFee < 0) {
 		    // Negative = rebate → always credit
 		    await TallyMap.updateBalance(
 		      buyerAddr, collateralPropertyId,
@@ -3253,7 +3257,9 @@ class Orderbook {
 		  }
 
 		  // -------- SELLER SIDE --------
-		  if (sellerFee < 0) {
+		  if (sellerIsVirtualAmm) {
+		    console.log('Skipping seller fee settlement for virtual AMM sender');
+		  } else if (sellerFee < 0) {
 		    await TallyMap.updateBalance(
 		      sellerAddr, collateralPropertyId,
 		      -sellerFee, 0, 0, 0, 'contractFeeRebate', block, txid

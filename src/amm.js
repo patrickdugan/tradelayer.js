@@ -79,6 +79,53 @@ class AMMPool {
         await TallyMap.updateBalance(address, id2, redeemAmount2, 0, 0, 0, 'AMMRedeem', block);
     }
 
+    quoteContractOrders(markPrice, block, spreadBps = 40) {
+        const mid = Number(markPrice || 0);
+        if (!Number.isFinite(mid) || mid <= 0) return [];
+
+        const quoteSize = Math.max(0, Math.min(Number(this.maxQuoteSize || 0), Number(this.position || 0)));
+        if (!(quoteSize > 0)) return [];
+
+        const spread = Math.max(1, Number(spreadBps || 40)) / 10000;
+        const bid = Number((mid * (1 - spread)).toFixed(8));
+        const ask = Number((mid * (1 + spread)).toFixed(8));
+        const cid = Number(this.contractType || 0);
+        const t = Number(block || 0);
+
+        return [
+            {
+                contractId: cid,
+                amount: quoteSize,
+                price: bid,
+                blockTime: t,
+                sell: false,
+                initMargin: 0,
+                sender: 'amm',
+                txid: `amm-bid-${cid}-${t}`,
+                isLiq: false,
+                reduce: false,
+                post: false,
+                stop: false,
+                initialReduce: false
+            },
+            {
+                contractId: cid,
+                amount: quoteSize,
+                price: ask,
+                blockTime: t,
+                sell: true,
+                initMargin: 0,
+                sender: 'amm',
+                txid: `amm-ask-${cid}-${t}`,
+                isLiq: false,
+                reduce: false,
+                post: false,
+                stop: false,
+                initialReduce: false
+            }
+        ];
+    }
+
     // Create a new AMM and insert into ammRegistry
     async createAMM(payload) {
         const registryDB = db.getDatabase('ammRegistry');
@@ -139,33 +186,35 @@ class AMMPool {
 
      // ---------------- Order Update ----------------
     static async updateOrdersForAllContractAMMs(block) {
-        const volIndex = await VolumeIndex.calculateVolIndex();
-        const contractIds = await ContractRegistry.loadContractSeries();
-        if (!contractIds || contractIds.size === 0) return;
+        const ContractRegistry = require('./contractRegistry.js');
+        const Orderbook = require('./orderbook.js');
+        const Clearing = require('./clearing.js');
+        const contractSeries = await ContractRegistry.loadContractSeries();
+        if (!contractSeries || contractSeries.size === 0) return;
 
-        for (const contractId of contractIds) {
-            let id = contractId[1].id;
-            let change = await Clearing.isPriceUpdatedForBlockHeight(id, block);
-            if (!change) continue;
-
-            let blob = await Clearing.getPriceChange(block, id);
-            let lastPrice = blob.lastPrice;
-            const ammInstance = await ContractRegistry.getAMM(id);
-            if (!ammInstance) continue;
-
-            let orderBookKey = contractId;
-            let orderbook = Orderbook.getOrderbookInstance(orderBookKey);
-            orderbook.cancelOrdersByCriteria('amm', orderBookKey, {}, false, true);
-
-            const coreOrders = await ammInstance.generateOrders(lastPrice, 0.2, 10, contractId, null, false, false);
-            const optionOrders = await ammInstance.runOptionStrategy(lastPrice, volIndex, block);
-            const allOrders = [...coreOrders, ...optionOrders];
-
-            for (const order of allOrders) {
-                const isBuyOrder = order.side === 'buy';
-                const isLiq = order.isLiq || false;
-                await orderbook.insertOrder(order, orderBookKey, isBuyOrder, isLiq);
+        for (const [id] of contractSeries.entries()) {
+            let ammInstance = null;
+            try {
+                ammInstance = await ContractRegistry.getAMM(id);
+            } catch (_) {
+                continue;
             }
+            if (!ammInstance) continue;
+            if (!(Number(ammInstance.position || 0) > 0)) continue;
+
+            const mark = await Clearing.getIndexPrice(id, block);
+            if (!Number.isFinite(Number(mark)) || Number(mark) <= 0) continue;
+
+            const orderBookKey = String(id);
+            const orderbook = await Orderbook.getOrderbookInstance(orderBookKey);
+            await orderbook.cancelOrdersByCriteria('amm', orderBookKey, {}, false, true);
+
+            let orderbookData = await orderbook.loadOrderBook(orderBookKey, false);
+            const quoteOrders = ammInstance.quoteContractOrders(mark, block);
+            for (const ord of quoteOrders) {
+                orderbookData = await orderbook.insertOrder(ord, orderbookData, Boolean(ord.sell), false);
+            }
+            await orderbook.saveOrderBook(orderbookData, orderBookKey);
         }
     }
 

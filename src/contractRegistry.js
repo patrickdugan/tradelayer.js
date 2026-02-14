@@ -665,6 +665,14 @@ class ContractRegistry {
             totalInitialMargin = new BigNumber(totalInitialMargin).minus(feeInfo.sellerFee).decimalPlaces(8).toNumber();
         }
 
+        const isVirtualAmmSender = (sender === 'amm') || (typeof sender === 'string' && sender.startsWith('amm:'));
+        if (channel === false && isVirtualAmmSender) {
+            console.log('virtual AMM sender: skip tally collateral movement, set margin only in map');
+            console.log('about to setInitialMargin ' + sender + contractId + ' ' + totalInitialMargin);
+            position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin, block, position);
+            return position;
+        }
+
         // ------------------------------------------------------------
         // Move init margin into margin bucket
         // Priority: reserve -> available -> (optional) existing margin
