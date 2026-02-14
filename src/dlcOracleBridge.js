@@ -13,6 +13,9 @@ function canonicalRelayMessage(bundle) {
     stateHash: String(bundle.stateHash || ''),
     timestamp: Number(bundle.timestamp || 0)
   };
+  if (bundle.payloadHash !== undefined && bundle.payloadHash !== null) {
+    canonical.payloadHash = String(bundle.payloadHash);
+  }
   return JSON.stringify(canonical);
 }
 
@@ -39,6 +42,8 @@ const DlcOracleBridge = {
       outcomeIndex: raw.outcomeIndex ?? raw.outcome_index ?? 0,
       stateHash: raw.stateHash || raw.tradeLayerStateHash || raw.state_hash || '',
       timestamp: raw.timestamp || raw.eventMaturityEpoch || raw.event_maturity_epoch || 0,
+      payloadHash: raw.payloadHash || raw.payload_hash || '',
+      balancePayloadB64: raw.balancePayloadB64 || raw.balance_payload_b64 || '',
       oraclePubkeyHex: raw.oraclePubkeyHex || raw.oraclePubkey || raw.oracle_public_key || '',
       signatureHex: raw.signatureHex || (Array.isArray(raw.signatures) ? raw.signatures[0] : '') || ''
     };
@@ -47,7 +52,11 @@ const DlcOracleBridge = {
   parseRelayBlob(relayBlob) {
     if (!relayBlob) return null;
     try {
-      const parsed = JSON.parse(relayBlob);
+      let raw = relayBlob;
+      if (typeof relayBlob === 'string' && relayBlob.startsWith('b64:')) {
+        raw = Buffer.from(relayBlob.slice(4), 'base64').toString('utf8');
+      }
+      const parsed = JSON.parse(raw);
       return this.fromNodeDlcLike(parsed) || parsed;
     } catch {
       return null;
@@ -66,9 +75,30 @@ const DlcOracleBridge = {
 
     const message = canonicalRelayMessage(bundle);
     const msgHash = sha256(Buffer.from(message, 'utf8'));
-    const verified = secp.verify(msgHash, pubkey, sig);
+    let verified = secp.verify(msgHash, pubkey, sig);
+    if (!verified) {
+      // Backward compatibility: legacy bundles did not include payloadHash in canonical signature body.
+      const legacy = { ...bundle };
+      delete legacy.payloadHash;
+      const legacyHash = sha256(Buffer.from(canonicalRelayMessage(legacy), 'utf8'));
+      verified = secp.verify(legacyHash, pubkey, sig);
+    }
     if (!verified) {
       return { valid: false, reason: 'Invalid oracle relay signature' };
+    }
+
+    if (bundle.payloadHash) {
+      const payloadHash = String(bundle.payloadHash);
+      const hexLike = /^[0-9a-fA-F]{64}$/.test(payloadHash);
+      if (!hexLike) {
+        return { valid: false, reason: 'Invalid payloadHash format' };
+      }
+      if (bundle.balancePayloadB64) {
+        const actual = sha256(Buffer.from(bundle.balancePayloadB64, 'base64')).toString('hex');
+        if (actual !== payloadHash.toLowerCase()) {
+          return { valid: false, reason: 'payloadHash mismatch for balance payload' };
+        }
+      }
     }
 
     if (expectedStateHash && String(bundle.stateHash || '') !== String(expectedStateHash)) {

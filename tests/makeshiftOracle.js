@@ -14,13 +14,17 @@ function createOracleSigner() {
   return {
     pubkeyHex: pubkey,
     signBundle(bundle) {
-      const canonical = JSON.stringify({
+      const canonicalObj = {
         eventId: String(bundle.eventId || ''),
         outcome: String(bundle.outcome || ''),
         outcomeIndex: Number(bundle.outcomeIndex || 0),
         stateHash: String(bundle.stateHash || ''),
         timestamp: Number(bundle.timestamp || 0)
-      });
+      };
+      if (bundle.payloadHash !== undefined && bundle.payloadHash !== null) {
+        canonicalObj.payloadHash = String(bundle.payloadHash);
+      }
+      const canonical = JSON.stringify(canonicalObj);
       const hash = sha256(Buffer.from(canonical, 'utf8'));
       const sig = secp.sign(hash, priv);
       return {
@@ -33,4 +37,3 @@ function createOracleSigner() {
 }
 
 module.exports = { createOracleSigner };
-
