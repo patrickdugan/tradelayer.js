@@ -2950,12 +2950,81 @@ const Validity = {
             }
           }
 
-          // --- Balance check with requiredMargin (credit) ---
-          params.creditMargin = requiredMargin; // expose to logic.js
+          // --- Seller portfolio transition margin ---
+          // If seller is reducing a leg, portfolio requirement can go either way:
+          // - close short/covered risk -> unlock margin
+          // - unwind protection first -> lock additional naked margin
+          const markSpot = params.sellerReducing
+            ? (Number(await Validity.hasReferencePrice(seriesIdNum, params.blockHeight)) || 0)
+            : 0;
+          const sellerOptionsBefore = (sellerBlob.options && typeof sellerBlob.options === 'object')
+            ? sellerBlob.options
+            : {};
+          const beforeLegs = [];
+          for (const [tk, op] of Object.entries(sellerOptionsBefore)) {
+            const m = OptionsEngine.parseTicker(tk);
+            if (!m) continue;
+            const q = Number(op?.contracts || 0);
+            if (!q) continue;
+            beforeLegs.push({
+              type: m.type,
+              strike: Number(m.strike || 0),
+              qty: q,
+              expiryBlock: Number(m.expiryBlock || 0)
+            });
+          }
+          const beforeMaint = params.sellerReducing
+            ? OptionsEngine.portfolioMaintenance(beforeLegs, markSpot)
+            : 0;
+
+          const afterMap = {};
+          for (const [tk, op] of Object.entries(sellerOptionsBefore)) {
+            afterMap[tk] = {
+              contracts: Number(op?.contracts || 0),
+              avgPrice: Number(op?.avgPrice || 0),
+              margin: Number(op?.margin || 0)
+            };
+          }
+          const sellerPrimaryDelta = -Math.abs(Number(params.amount || 0));
+          afterMap[params.contractId] = afterMap[params.contractId] || { contracts: 0, avgPrice: 0, margin: 0 };
+          afterMap[params.contractId].contracts += sellerPrimaryDelta;
+
+          if (params.comboTicker && params.comboAmount) {
+            const sellerComboDelta = +Math.abs(Number(params.comboAmount || 0));
+            afterMap[params.comboTicker] = afterMap[params.comboTicker] || { contracts: 0, avgPrice: 0, margin: 0 };
+            afterMap[params.comboTicker].contracts += sellerComboDelta;
+          }
+
+          const afterLegs = [];
+          for (const [tk, op] of Object.entries(afterMap)) {
+            const m = OptionsEngine.parseTicker(tk);
+            if (!m) continue;
+            const q = Number(op?.contracts || 0);
+            if (!q) continue;
+            afterLegs.push({
+              type: m.type,
+              strike: Number(m.strike || 0),
+              qty: q,
+              expiryBlock: Number(m.expiryBlock || 0)
+            });
+          }
+          const afterMaint = params.sellerReducing
+            ? OptionsEngine.portfolioMaintenance(afterLegs, markSpot)
+            : 0;
+          const portfolioDelta = params.sellerReducing
+            ? Number((afterMaint - beforeMaint).toFixed(8))
+            : 0;
+
+          // --- Balance check with requiredMargin / transition delta ---
+          params.creditMargin = params.sellerReducing ? portfolioDelta : requiredMargin;
 
           if (!params.sellerReducing && effectiveSeller < requiredMargin) {
             params.valid = false;
             params.reason += 'Insufficient collateral for option margin; ';
+          }
+          if (params.sellerReducing && portfolioDelta > 0 && effectiveSeller < portfolioDelta) {
+            params.valid = false;
+            params.reason += 'Insufficient collateral for option margin transition; ';
           }
           if (netPremium > 0 && effectiveBuyer < netPremium) {
             params.valid = false;
@@ -3047,11 +3116,11 @@ const Validity = {
             return params;
         }
 
-        // Validate settleType enum (0=KEEP_ALIVE, 1=CLOSE_POSITION, 2=NET_SETTLE)
-        const validSettleTypes = [0, 1, 2]; // SettleType enum values
+        // Validate settleType enum (0=KEEP_ALIVE, 1=CLOSE_POSITION, 2=NET_SETTLE, 3=KING_SETTLE)
+        const validSettleTypes = [0, 1, 2, 3]; // SettleType enum values
         if (!validSettleTypes.includes(params.settleType)) {
             params.valid = false;
-            params.reason += `Invalid settleType: ${params.settleType}, expected 0-2; `;
+            params.reason += `Invalid settleType: ${params.settleType}, expected 0-3; `;
             return params;
         }
 
@@ -3070,19 +3139,22 @@ const Validity = {
             return params;
         }
 
-        // txidNeutralized1 required for all settle types
-        if (!params.txidNeutralized1) {
+        // txidNeutralized1 required for non-king settle types
+        const isKingSettle = params.settleType === 3;
+        if (!isKingSettle && !params.txidNeutralized1) {
             params.valid = false;
             params.reason += 'Missing txidNeutralized1 (trade reference); ';
             return params;
         }
 
-        // Check if already neutralized by later settlement
-        const isNeutralized = await Scaling.isThisSettlementAlreadyNeutralized(sender, params.txidNeutralized1);
-        if (isNeutralized) {
-            params.valid = false;
-            params.reason += 'Settlement already superseded by later settlement; ';
-            return params;
+        if (!isKingSettle) {
+            // Check if already neutralized by later settlement
+            const isNeutralized = await Scaling.isThisSettlementAlreadyNeutralized(sender, params.txidNeutralized1);
+            if (isNeutralized) {
+                params.valid = false;
+                params.reason += 'Settlement already superseded by later settlement; ';
+                return params;
+            }
         }
 
         // Type-specific validation
@@ -3145,6 +3217,26 @@ const Validity = {
                     }
                 }
                 break;
+
+            case 3: // KING_SETTLE
+                if (params.propertyId === undefined || params.propertyId === null) {
+                    params.valid = false;
+                    params.reason += 'Missing propertyId for KING_SETTLE; ';
+                }
+                if (params.netAmount === undefined || params.netAmount === null) {
+                    params.valid = false;
+                    params.reason += 'Missing netAmount for KING_SETTLE; ';
+                }
+                if (params.aPaysBDirection === undefined && params.columnAIsSeller === undefined) {
+                    params.valid = false;
+                    params.reason += 'Missing direction flag for KING_SETTLE; ';
+                }
+                if (params.blockStart !== undefined && params.blockEnd !== undefined && params.blockStart > params.blockEnd) {
+                    params.valid = false;
+                    params.reason += 'Invalid block range for KING_SETTLE (start > end); ';
+                }
+                break;
+
         }
 
         // Block expiry check - anti-free-option mechanism

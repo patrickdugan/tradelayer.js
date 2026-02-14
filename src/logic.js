@@ -369,6 +369,49 @@ const Logic = {
         return
 	},
 
+    _liquidityRewardQueue: new Map(),
+    _liquidityRewardVolumeCache: new Map(),
+
+    queueLiquidityReward(address, amount, block, txid, reason = 'liquidityReward') {
+        const amt = new BigNumber(amount || 0).decimalPlaces(8, BigNumber.ROUND_DOWN);
+        if (amt.lte(0)) return;
+        const blockKey = String(block);
+        let byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock) {
+            byBlock = new Map();
+            this._liquidityRewardQueue.set(blockKey, byBlock);
+        }
+        const prev = byBlock.get(address);
+        if (!prev) {
+            byBlock.set(address, { amount: amt, txid, reason });
+        } else {
+            prev.amount = prev.amount.plus(amt).decimalPlaces(8, BigNumber.ROUND_DOWN);
+            byBlock.set(address, prev);
+        }
+    },
+
+    async settleLiquidityRewards(block) {
+        const blockKey = String(block);
+        const byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock || byBlock.size === 0) return;
+        for (const [address, entry] of byBlock.entries()) {
+            if (entry.amount.lte(0)) continue;
+            await TallyMap.updateBalance(
+                address,
+                3,
+                entry.amount.toNumber(),
+                0,
+                0,
+                0,
+                entry.reason || 'liquidityReward',
+                block,
+                entry.txid
+            );
+        }
+        this._liquidityRewardQueue.delete(blockKey);
+        this._liquidityRewardVolumeCache.delete(blockKey);
+    },
+
 	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -474,36 +517,63 @@ const Logic = {
             };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
-            TallyMap.updateFeeCache(propertyId,fee,1,block)
-            const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
-            const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
-            let isTokenListed = false
+            const rewardAddressListId = Number(process.env.LIQUIDITY_REWARD_ADDRESS_CLEARLIST_ID || 2);
+            const rewardIssuerListId = Number(process.env.LIQUIDITY_REWARD_ISSUER_CLEARLIST_ID || 1);
+            const allowlistRaw = String(process.env.LIQUIDITY_REWARD_PROPERTY_ALLOWLIST || "");
+            const allowlist = new Set(
+                allowlistRaw.split(",").map(s => Number(s.trim())).filter(n => Number.isFinite(n))
+            );
+
+            const isListedA = await ClearList.isAddressInClearlist(rewardAddressListId, senderAddress).catch(() => false);
+            const isListedB = await ClearList.isAddressInClearlist(rewardAddressListId, receiverAddress).catch(() => false);
+            let isTokenListed = false;
             if (String(propertyId).startsWith('s-')) {
-                isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
-                                    // and then look up if those tokens are listed
-            }else{
-                let propertyInfo = PropertyManager.getPropertyData(propertyId)
-                if(propertyInfo.issuer){
-                    isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
+                isTokenListed = allowlist.size === 0 || allowlist.has(Number(propertyId));
+            } else {
+                const propertyInfo = await PropertyManager.getPropertyData(propertyId);
+                const allowById = allowlist.size === 0 || allowlist.has(Number(propertyId));
+                const allowByIssuer = propertyInfo?.issuer
+                    ? await ClearList.isAddressInClearlist(rewardIssuerListId, propertyInfo.issuer).catch(() => false)
+                    : false;
+                isTokenListed = allowById && (allowlist.size > 0 || allowByIssuer);
+            }
+
+            const eligibleParticipants = (isListedA ? 1 : 0) + (isListedB ? 1 : 0);
+            if (isTokenListed && eligibleParticipants > 0) {
+                const blockKey = String(block);
+                let cumulative = this._liquidityRewardVolumeCache.get(blockKey);
+                if (!cumulative) {
+                    cumulative = await VolumeIndex.getCumulativeVolumes(block + 1).catch(() => null);
+                    this._liquidityRewardVolumeCache.set(blockKey, cumulative || {});
+                }
+                const cumulativeLtc = Number(cumulative?.ltcPairTotalVolume || cumulative?.globalCumulativeVolume || 0);
+                const rewardBudget = await VolumeIndex.calculateLiquidityReward(tokenAmount, propertyId, {
+                    feePaid: fee,
+                    cumulativeLtc,
+                    block,
+                    maxShare: Number(process.env.LIQUIDITY_REWARD_MAX_SHARE || 0.35),
+                    minShare: Number(process.env.LIQUIDITY_REWARD_MIN_SHARE || 0.02),
+                    pivotLtc: Number(process.env.LIQUIDITY_REWARD_PIVOT_LTC || 1000),
+                    slope: Number(process.env.LIQUIDITY_REWARD_SLOPE || 1)
+                });
+
+                if (rewardBudget > 0) {
+                    const perAddress = new BigNumber(rewardBudget)
+                        .div(eligibleParticipants)
+                        .decimalPlaces(8, BigNumber.ROUND_DOWN);
+                    const spent = perAddress.times(eligibleParticipants);
+                    const remainder = new BigNumber(rewardBudget).minus(spent).decimalPlaces(8, BigNumber.ROUND_DOWN);
+
+                    if (isListedA) this.queueLiquidityReward(senderAddress, perAddress, block, txid, 'liquidityReward');
+                    if (isListedB) {
+                        const extra = remainder.gt(0) && !isListedA ? remainder : new BigNumber(0);
+                        this.queueLiquidityReward(receiverAddress, perAddress.plus(extra), block, txid, 'liquidityReward');
+                    } else if (isListedA && remainder.gt(0)) {
+                        this.queueLiquidityReward(senderAddress, remainder, block, txid, 'liquidityRewardRemainder');
+                    }
                 }
             }
-            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
-                if(isTokenListed){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
-                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline1,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline2,0,0,0,'baselineLiquidityReward')
-                }
-                if(isListedA){
-                    const liqReward1= await VolumeIndex.calculateLiquidityReward(satsReceived,0)    
-                    TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                }
-                if(isListedB){
-                    const liqReward2= await VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
-                    TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
-
-                }
-                return
+            return
 	},
 	// commitToken: Commits tokens for a specific purpose
 	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
@@ -1414,26 +1484,19 @@ const Logic = {
         );
       }
 
-      // 2) Margin moves on seller
-      // - If reducing: free margin and realize PnL into available
-      // - Else opening/adding: lock margin (available -> margin)
+      // 2) Seller-side margin transition + rPNL.
+      // creditMargin is a signed delta:
+      //   >0 lock additional margin, <0 unlock margin, 0 no margin change.
       const credit = Number(params.creditMargin || 0);
-
-      if (params.sellerReducing) {
-        const r = Number(params.rpnlSeller || 0);
+      const r = Number(params.rpnlSeller || 0);
+      if (params.sellerReducing || credit !== 0) {
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
-          r,           // availableChange (realized PnL)
+          r - credit,
           0,
-          -credit,     // marginChange (unlock)
+          credit,
           0,
-          'optionReduceSeller', blockHeight, txid
-        );
-      } else if (credit > 0) {
-        await TallyMap.updateBalance(
-          sellerAddr, collateralPropertyId,
-          -credit, 0, +credit, 0,
-          'optionMarginLock', blockHeight, txid
+          'optionSellerMarginTransition', blockHeight, txid
         );
       }
 
@@ -1760,6 +1823,22 @@ const Logic = {
                         block,
                         txid
                     );
+                    break;
+
+                case SettleType.KING_SETTLE:
+                    await this.batchSettlement({
+                        senderAddress: channelAddress,
+                        blockStart: Number(txParams.blockStart ?? block),
+                        blockEnd: Number(txParams.blockEnd ?? block),
+                        propertyId: Number(txParams.propertyId),
+                        netAmount: Number(txParams.netAmount ?? 0),
+                        aPaysBDirection: txParams.aPaysBDirection ?? txParams.columnAIsSeller ?? false,
+                        channelRoot: txParams.channelRoot || txidNeutralized1 || '',
+                        totalContracts: Number(txParams.totalContracts ?? 0),
+                        neutralizedCount: Number(txParams.neutralizedCount ?? 0),
+                        block,
+                        txid
+                    });
                     break;
 
                 default:

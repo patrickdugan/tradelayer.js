@@ -702,6 +702,65 @@ class TallyMap {
       );
     }
 
+    static getFeeAccrualBuffer() {
+      if (!this._feeAccrualBuffer) this._feeAccrualBuffer = new Map();
+      return this._feeAccrualBuffer;
+    }
+
+    static async queueFeeAccrual(propertyId, amount, contractId, block) {
+      const resolved = await TallyMap.resolveBlock(block);
+      if (resolved == null || Number.isNaN(Number(resolved))) {
+        return await TallyMap.accrueFee(propertyId, amount, contractId, block);
+      }
+
+      const blockKey = String(resolved);
+      const effContractId = (contractId === null || contractId === undefined) ? "1" : String(contractId);
+      const key = `${propertyId}-${effContractId}`;
+      const amountBN = new BigNumber(amount || 0).decimalPlaces(8);
+      if (amountBN.lte(0)) return;
+
+      const buffer = this.getFeeAccrualBuffer();
+      let byBlock = buffer.get(blockKey);
+      if (!byBlock) {
+        byBlock = new Map();
+        buffer.set(blockKey, byBlock);
+      }
+
+      const prev = byBlock.get(key);
+      if (!prev) {
+        byBlock.set(key, { propertyId, contractId: effContractId, amount: amountBN });
+      } else {
+        prev.amount = prev.amount.plus(amountBN).decimalPlaces(8);
+        byBlock.set(key, prev);
+      }
+    }
+
+    static async flushQueuedFeeAccruals(block) {
+      const resolved = await TallyMap.resolveBlock(block);
+      const blockKey = String(resolved);
+      const buffer = this.getFeeAccrualBuffer();
+      const byBlock = buffer.get(blockKey);
+      if (!byBlock || byBlock.size === 0) return;
+
+      for (const [, entry] of byBlock.entries()) {
+        await TallyMap.accrueFee(
+          entry.propertyId,
+          entry.amount.toNumber(),
+          entry.contractId,
+          resolved
+        );
+      }
+      buffer.delete(blockKey);
+    }
+
+    static async flushAllQueuedFeeAccruals() {
+      const buffer = this.getFeeAccrualBuffer();
+      const blocks = Array.from(buffer.keys()).sort((a, b) => Number(a) - Number(b));
+      for (const block of blocks) {
+        await TallyMap.flushQueuedFeeAccruals(Number(block));
+      }
+    }
+
      /*
      * updateFeeCache with full tracing:
      * - Logs every decision point: spot, TL-spot, derivative, oracle/non-oracle.
@@ -709,8 +768,8 @@ class TallyMap {
      * - Logs stash/insurance writes with exact integer sats.
      */static async updateFeeCache(propertyId, amount, contractId, block) {
     const blockArg = arguments.length >= 6 ? arguments[5] : block;
-    // Canonical fee routing lives in accrueFee; keep updateFeeCache as compatibility wrapper.
-    return await TallyMap.accrueFee(propertyId, amount, contractId, blockArg);
+    // Canonical fee routing lives in accrueFee; queue by block to reduce feeCache write pressure.
+    return await TallyMap.queueFeeAccrual(propertyId, amount, contractId, blockArg);
 
     try {
         console.log(`\n====== updateFeeCache() @ block ${blockArg} ======`);
@@ -900,7 +959,7 @@ class TallyMap {
      * accrueFee:
      * - SPOT (contractId null/undefined):
      *    - propertyId != 1: 100% to VALUE cache (awaits buyback path before insurance accounting).
-     *    - propertyId == 1: direct to insurance for property 1.
+     *    - propertyId == 1: 50/50 split in sats -> insurance now + stash (tail-emission pool).
      * - CONTRACT:
      *    - Native -> 100% to VALUE (no insurance now).
      *    - Oracle  -> 50/50 split in integer sats → half Insurance NOW, half -> STASH.
@@ -924,6 +983,7 @@ class TallyMap {
       const convDust = rawSats.minus(feeSats); // [0,1)
       await _accumulateDust(db, dustKey, convDust, async ({ wholeSats }) => {
         const isSpotNonOne = isSpot && String(propertyId) !== '1';
+        const isSpotOne = isSpot && String(propertyId) === '1';
         if (isSpotNonOne) {
           // Keep non-1 spot dust in cache until buyback conversion occurs.
           const dustRow = await TallyMap.loadFeeRow(db, cacheId);
@@ -932,6 +992,24 @@ class TallyMap {
             stash: dustRow.stash,
             contract: '1',
           });
+          return;
+        }
+        if (isSpotOne) {
+          // Property 1 dust follows tail-emission split: 50% insurance, 50% stash.
+          const insuranceSats = wholeSats.idiv(2);
+          const stashSats = wholeSats.minus(insuranceSats);
+          if (insuranceSats.gt(0)) {
+            const insurance = await getInsuranceModule().getInstance('1', false);
+            await insurance.deposit('1', fromSats(insuranceSats).toFixed(8), blk);
+          }
+          if (stashSats.gt(0)) {
+            const dustRow = await TallyMap.loadFeeRow(db, cacheId);
+            await TallyMap.saveFeeRow(db, cacheId, {
+              value: dustRow.value,
+              stash: dustRow.stash.plus(fromSats(stashSats)),
+              contract: '1',
+            });
+          }
           return;
         }
         const insurance = await getInsuranceModule().getInstance(effContractId, effContractId !== '1');
@@ -952,10 +1030,21 @@ class TallyMap {
           return;
         }
 
-        // Property 1 fee can go directly to insurance (no conversion step needed).
+        // Property 1 fee is split 50/50 between insurance and tail-emission stash.
         try {
           const ins = await getInsuranceModule().getInstance('1', false);
-          await ins.deposit('1', fromSats(feeSats).toFixed(8), blk);
+          const insuranceSats = feeSats.idiv(2);
+          const stashSats = feeSats.minus(insuranceSats);
+          if (insuranceSats.gt(0)) {
+            await ins.deposit('1', fromSats(insuranceSats).toFixed(8), blk);
+          }
+          if (stashSats.gt(0)) {
+            await TallyMap.saveFeeRow(db, cacheId, {
+              value: row.value,
+              stash: row.stash.plus(fromSats(stashSats)),
+              contract: '1',
+            });
+          }
         } catch (e) {
           console.error('❌ Spot fee insurance deposit failed:', e);
         }

@@ -366,7 +366,14 @@ const Types = {
                     columnAIsSeller: params.columnAIsSeller,
                     columnAIsMaker: params.columnAIsMaker,
                     netAmount: params.netAmount,
-                    expiryBlock: params.expiryBlock
+                    expiryBlock: params.expiryBlock,
+                    blockStart: params.blockStart,
+                    blockEnd: params.blockEnd,
+                    propertyId: params.propertyId,
+                    aPaysBDirection: params.aPaysBDirection,
+                    channelRoot: params.channelRoot,
+                    totalContracts: params.totalContracts,
+                    neutralizedCount: params.neutralizedCount
                 }
                 console.log('decoded settle channel PNL, settleType=' + params.settleType + ' ' + JSON.stringify(params))
                 params = await Validity.validateSettleChannelPNL(sender, params, txId)

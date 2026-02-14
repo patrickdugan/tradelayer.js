@@ -477,30 +477,43 @@ static async getCumulativeVolumes(block) {
         );
     }
 
-    static async calculateLiquidityReward(tradeVolume, token) {
+    static computeLiquidityRewardShare(cumulativeLtc, opts = {}) {
+        const maxShare = Number(opts.maxShare ?? 0.35);
+        const minShare = Number(opts.minShare ?? 0.02);
+        const pivotLtc = Math.max(Number(opts.pivotLtc ?? 1000), 1);
+        const slope = Math.max(Number(opts.slope ?? 1), 0);
 
-        if (!this.globalCumulativeVolume || this.globalCumulativeVolume === 0) {
-            const blob = await getCumulativeVolumes; // Assuming this function fetches or initializes globalCumulativeVolume
-            this.globalCumulativeVolume=blob.globalCumulativeVolume
+        const cumulative = Math.max(Number(cumulativeLtc || 0), 0);
+        const scaled = cumulative / pivotLtc;
+        const attenuation = maxShare / (1 + Math.log10(1 + scaled) * slope);
+        const clamped = Math.max(minShare, Math.min(maxShare, attenuation));
+        return Math.min(0.99, clamped);
+    }
+
+    static calculateAttenuatedLiquidityReward(feePaid, cumulativeLtc, opts = {}) {
+        const fee = Math.max(Number(feePaid || 0), 0);
+        if (fee <= 0) return 0;
+        const share = this.computeLiquidityRewardShare(cumulativeLtc, opts);
+        return new BigNumber(fee).times(share).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+    }
+
+    static async calculateLiquidityReward(tradeVolume, token, ctx = {}) {
+        const feePaid = Number(
+            ctx.feePaid != null
+                ? ctx.feePaid
+                : new BigNumber(tradeVolume || 0)
+                    .times(Number(ctx.feeRate ?? 0.00005))
+                    .toNumber()
+        );
+
+        let cumulativeLtc = Number(ctx.cumulativeLtc ?? 0);
+        if (!(cumulativeLtc > 0)) {
+            const block = Number(ctx.block || 0);
+            const cumulative = await this.getCumulativeVolumes((block > 0 ? block : 1) + 1).catch(() => null);
+            cumulativeLtc = Number(cumulative?.ltcPairTotalVolume || cumulative?.globalCumulativeVolume || 0);
         }
-        
-        if(token!=0){
-            const tokenPriceInLTC = await this.getTokenPriceInLTC(token);
-        }
 
-        tradeVolume=tradeVolume*tokenPriceInLTC
-        const totalVolume = this.globalCumulativeVolume - tradeVolume;
-        
-        // Calculate logarithmic value
-        const logVolume = Math.log10(totalVolume / 1e9); // Log base 10 with cap at 1 billion LTC
-
-        // Calculate liquidity reward based on log value
-        let liquidityReward = 0;
-        if (logVolume > 0) {
-            liquidityReward = logVolume * 3e6 / 3; // Adjust 3e6 for percentage calculation
-        }
-
-        return liquidityReward;
+        return this.calculateAttenuatedLiquidityReward(feePaid, cumulativeLtc, ctx);
     }
 static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
     try {
@@ -540,35 +553,9 @@ static async getVWAP(propertyId1, propertyId2, blockHeight, trailingBlocks) {
 }
 
 
-    static async baselineLiquidityReward(tradeVolume, fee, token) {
-        const totalVolume = this.globalCumulativeVolume - tradeVolume;
-        let tlPriceInLTC = 0.001 
-        if(token!=0){
-
-            // Step 1: Get LTC price of the token in question
-            const tokenPriceInLTC = await this.getTokenPriceInLTC(token);
-
-            // Step 2: Get TL/LTC price (assuming TL is a specific token or currency)
-            tlPriceInLTC = await this.getTLPriceInLTC();
-
-            // Step 3: Calculate fee in TL
-            const feeInTL = fee * tokenPriceInLTC * tlPriceInLTC;
-        }else{
-            const feeInTL= fee * tlPriceInLTC
-        }
-
-
-        // Calculate logarithmic value
-        const logVolume = Math.log10(totalVolume);
-
-        // Calculate liquidity reward based on log value and fee
-        let liquidityReward = 0;
-        if (logVolume > 0) {
-            const feeAdjustment = 1/logVolume; // Reducing by 10% per log 10
-            liquidityReward = feeInTL * feeAdjustment;
-        }
-        
-        return liquidityReward;
+    static async baselineLiquidityReward(tradeVolume, fee, token, ctx = {}) {
+        // Compatibility shim: keep call sites stable but use bounded fee-linked attenuation.
+        return this.calculateLiquidityReward(tradeVolume, token, { ...ctx, feePaid: fee });
     }
 
     static async getTLPriceInLTC() {
