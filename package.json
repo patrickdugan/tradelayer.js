@@ -14,6 +14,7 @@
     "test:options-live": "node tests/optionsLiveIntegration.js",
     "test:options-forced-assignment-live": "node tests/optionsForcedAssignmentLive.js",
     "test:options-amm-liq-live": "node tests/optionsAmmLiqLive.js",
+    "test:send-vest-live": "node tests/sendVestTest.js",
     "test:amm-contract-live": "node tests/ammContractLive.js",
     "test:amm-contract-taker-live": "node tests/ammContractTakerLive.js",
     "test:scaling-settlement-live": "node tests/scalingSettlementLive.js",
