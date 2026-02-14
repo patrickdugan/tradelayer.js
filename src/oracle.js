@@ -281,7 +281,7 @@ class OracleList {
         return { slashed: slash };
     }
 
-    static async relayTradeLayerState(oracleId, senderAddress, relayType, stateHash, dlcRef, blockHeight) {
+    static async relayTradeLayerState(oracleId, senderAddress, relayType, stateHash, dlcRef, blockHeight, relayBlob = '') {
         const oracleDataDB = await db.getDatabase('oracleData');
         const relayKey = `oracle-relay-${oracleId}-${relayType}-${blockHeight}`;
         const relayDoc = {
@@ -292,6 +292,7 @@ class OracleList {
             relayType,
             stateHash,
             dlcRef,
+            relayBlob,
             blockHeight
         };
         await oracleDataDB.updateAsync({ _id: relayKey }, relayDoc, { upsert: true });

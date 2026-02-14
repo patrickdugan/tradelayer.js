@@ -15,6 +15,8 @@ const VolumeIndex = require('./volumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
 const Vesting = require('./vesting.js')
 const Scaling = require('./scaling.js')
+const DlcOracleBridge = require('./dlcOracleBridge.js')
+const { ProceduralRegistry } = require('./procedural.js')
 //const whiteLists = require('./whitelists.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 const OptionsEngine = require('./options.js');
@@ -1161,6 +1163,20 @@ const Validity = {
                 params.reason += 'Property is not of managed type or admin does not match';
             }
 
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            if (isProcedural) {
+                const gate = await ProceduralRegistry.ensureIssuanceContext(
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
+                if (!gate.valid) {
+                    params.valid = false;
+                    params.reason += gate.reason + '; ';
+                }
+            }
+
             return params;
         },
 
@@ -1198,6 +1214,20 @@ const Validity = {
             if (Number(tally?.available || 0) < Number(params.amountDestroyed || 0)) {
                 params.valid = false;
                 params.reason += 'Cannot redeem tokens; insufficient balance; ';
+            }
+
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            if (isProcedural) {
+                const gate = await ProceduralRegistry.ensureRedemptionContext(
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
+                if (!gate.valid) {
+                    params.valid = false;
+                    params.reason += gate.reason + '; ';
+                }
             }
 
             return params;
@@ -3185,6 +3215,14 @@ const Validity = {
             if (!Number.isInteger(params.relayType) || params.relayType < 0) {
                 params.valid = false;
                 params.reason += 'Invalid relay type; ';
+            }
+            if (params.relayBlob) {
+                const bundle = DlcOracleBridge.parseRelayBlob(params.relayBlob);
+                const relayCheck = DlcOracleBridge.validateRelayBundle(bundle, params.stateHash);
+                if (!relayCheck.valid) {
+                    params.valid = false;
+                    params.reason += relayCheck.reason + '; ';
+                }
             }
         }
 

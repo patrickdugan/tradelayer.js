@@ -268,10 +268,13 @@ const Encode = {
     encodeGrantManagedToken: (params) => {
         const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
         const payload = [
-            params.propertyid?.toString(36) ?? '0',
+            (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountGranted?.toString(36) ?? '0',
             params.addressToGrantTo,
-            params?.dlcHash
+            params?.dlcHash || '',
+            params?.dlcTemplateId || '',
+            params?.dlcContractId || '',
+            params?.settlementState || ''
         ];
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';
@@ -280,11 +283,13 @@ const Encode = {
 
     // Encode Redeem Managed Token Transaction
     encodeRedeemManagedToken: (params) => {
-        const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
+        const amountDestroyed = new BigNumber(params.amountDestroyed ?? params.amountGranted ?? 0).times(1e8).toNumber();
         const payload = [
-            params.propertyid?.toString(36) ?? '0',
-            amountGranted?.toString(36) ?? '0',
-            params.addressToGrantTo,
+            (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
+            amountDestroyed?.toString(36) ?? '0',
+            params?.dlcTemplateId || '',
+            params?.dlcContractId || '',
+            params?.settlementState || ''
         ];
         const type = 12;
         const typeStr = type?.toString(36) ?? '0';
@@ -588,7 +593,9 @@ const Encode = {
             params.evidenceHash || '',
             Number(params.relayType || 0).toString(36),
             params.stateHash || '',
-            params.dlcRef || ''
+            params.dlcRef || '',
+            params.settlementState || '',
+            params.relayBlob || ''
         ];
         const type = 30;
         const typeStr = type?.toString(36) ?? '0';

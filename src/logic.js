@@ -35,6 +35,7 @@ const VolumeIndex = require('./volumeIndex.js')
 const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
+const { ProceduralRegistry } = require('./procedural.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -100,10 +101,27 @@ const Logic = {
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id, params.amount, params.id2, params.amount2);
                 break;
             case 11:
-                await Logic.grantManagedToken(params.propertyId, params.amountGranted, params.addressToGrantTo, params.senderAddress, params.block);
+                await Logic.grantManagedToken(
+                    params.propertyId,
+                    params.amountGranted,
+                    params.addressToGrantTo,
+                    params.senderAddress,
+                    params.block,
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
                 break;
             case 12:
-                await Logic.redeemManagedToken(params.propertyId, params.amountDestroyed, params.senderAddress, params.block);
+                await Logic.redeemManagedToken(
+                    params.propertyId,
+                    params.amountDestroyed,
+                    params.senderAddress,
+                    params.block,
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
                 break;
             case 13:
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.clearlists, params.lag, params.oracleRegistry, params.block);
@@ -833,19 +851,29 @@ const Logic = {
         }
     },
 
-    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block) {
+    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, dlcTemplateId = '', dlcContractId = '', settlementState = '') {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
 	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
 	    const pm = PropertyManager.getInstance();
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+        if (Number(propertyData?.type) === 7) {
+            const gate = await ProceduralRegistry.ensureIssuanceContext(dlcTemplateId, dlcContractId, settlementState);
+            if (!gate.valid) throw new Error(gate.reason);
+        }
 	    await pm.grantTokens(propertyId, recipientAddress, amount, block);
 	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
         return
 	},
 
-	async redeemManagedToken(propertyId, amount, senderAddress, block) {
+	async redeemManagedToken(propertyId, amount, senderAddress, block, dlcTemplateId = '', dlcContractId = '', settlementState = '') {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
 	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
 	    const pm = PropertyManager.getInstance();
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+        if (Number(propertyData?.type) === 7) {
+            const gate = await ProceduralRegistry.ensureRedemptionContext(dlcTemplateId, dlcContractId, settlementState);
+            if (!gate.valid) throw new Error(gate.reason);
+        }
 	    await pm.redeemTokens(propertyId, senderAddress, amount, block);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
         return
@@ -1712,8 +1740,16 @@ const Logic = {
                 params.relayType,
                 params.stateHash,
                 params.dlcRef,
-                block
+                block,
+                params.relayBlob
             );
+            if (params.dlcRef && params.settlementState) {
+                await ProceduralRegistry.transitionContract(params.dlcRef, params.settlementState, {
+                    oracleId: params.oracleId,
+                    stateHash: params.stateHash,
+                    blockHeight: block
+                });
+            }
             return;
         }
 

@@ -278,7 +278,11 @@ const Decode = {
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            addressToGrantTo: parts[2] || ''
+            addressToGrantTo: parts[2] || '',
+            dlcHash: parts[3] || '',
+            dlcTemplateId: parts[4] || '',
+            dlcContractId: parts[5] || '',
+            settlementState: parts[6] || ''
         };
     },
 
@@ -287,7 +291,10 @@ const Decode = {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
-            amountDestroyed: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+            amountDestroyed: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            dlcTemplateId: parts[2] || '',
+            dlcContractId: parts[3] || '',
+            settlementState: parts[4] || ''
         };
     },
 
@@ -599,7 +606,9 @@ const Decode = {
             evidenceHash: parts[5] || '',
             relayType: parseInt(parts[6] || '0', 36),
             stateHash: parts[7] || '',
-            dlcRef: parts[8] || ''
+            dlcRef: parts[8] || '',
+            settlementState: parts[9] || '',
+            relayBlob: parts[10] || ''
         };
     },
 
