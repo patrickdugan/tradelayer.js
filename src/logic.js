@@ -23,6 +23,7 @@ const PropertyManager = require('./property.js'); // Manages properties
 const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
 const ClearList = require('./clearlist.js')
 const Scaling = require('./scaling.js')
+const { ScalingL2: ScalingLogic } = require('./scaling.js');
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
