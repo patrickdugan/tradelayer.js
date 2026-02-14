@@ -89,10 +89,10 @@ const Logic = {
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id, params.amount, params.id2, params.amount2);
                 break;
             case 11:
-                await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager, params.senderAddress, params.block);
+                await Logic.grantManagedToken(params.propertyId, params.amountGranted, params.addressToGrantTo, params.senderAddress, params.block);
                 break;
             case 12:
-                await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager, params.senderAddress, params.block);
+                await Logic.redeemManagedToken(params.propertyId, params.amountDestroyed, params.senderAddress, params.block);
                 break;
             case 13:
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.clearlists, params.lag, params.oracleRegistry, params.block);
@@ -724,17 +724,17 @@ const Logic = {
 		        };
 		},
 
-    async updateAdmin(whitelist,token,oracle, newAddress, id, updateBackup, block) {
+    async updateAdmin(whitelist,token,oracle, id, newAddress, updateBackup, block) {
 
 	    if(whitelist){
                 await ClearList.updateAdmin(id, newAddress,updateBackup);
         }else if(token){
                 await PropertyList.updateAdmin(id, newAddress,updateBackup);
         }else if(oracle){
-                await OracleList.updateAdmin(entityId, newAddress, updateBackup);
+                await OracleList.updateAdmin(id, newAddress, updateBackup);
         }
 
-	    console.log(`Admin updated for ${entityType} ${entityId}`);
+	    console.log(`Admin updated for id=${id}`);
         return
 	},
 
@@ -818,30 +818,20 @@ const Logic = {
         }
     },
 
-    async grantManagedToken(propertyId, amount, recipientAddress, propertyManager,block) {
-
-	    // Verify if the property is a managed type
-	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
-	    if (!isManaged) {
-	        throw new Error('Property is not a managed type');
-	    }
-
-	    // Logic to grant tokens to the recipient
-	    await PropertyManager.grantTokens(propertyId, recipientAddress, amount,block);
+    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block) {
+	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
+	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
+	    const pm = PropertyManager.getInstance();
+	    await pm.grantTokens(propertyId, recipientAddress, amount, block);
 	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
         return
 	},
 
-	async redeemManagedToken(propertyId, amount, address,block) {
-
-	    // Verify if the property is a managed type
-	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
-	    if (!isManaged) {
-	        throw new Error('Property is not a managed type');
-	    }
-
-	    // Logic to redeem tokens from the admin's balance
-	    await PropertyManager.redeemTokens(address, propertyId, amount,block);
+	async redeemManagedToken(propertyId, amount, senderAddress, block) {
+	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
+	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
+	    const pm = PropertyManager.getInstance();
+	    await pm.redeemTokens(propertyId, senderAddress, amount, block);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
         return
 	},

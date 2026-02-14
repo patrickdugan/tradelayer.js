@@ -210,18 +210,14 @@ class OracleList {
             throw new Error('Oracle not found');
         }
 
-        if(backup){
-            oracle.backupAddress=newAdminAddress
-        }else{
-            // Update the admin address
-            oracle.adminAddress = newAdminAddress;
-        }
+        const field = backup ? 'backupAddress' : 'adminAddress';
+        oracle[field] = newAdminAddress;
 
         // Update the oracle in the database
-        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});
+        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { [field]: newAdminAddress } }, {});
 
         // Optionally, update the in-memory map if you are maintaining one
-        this.oracles.set(oracleKey, oracle);
+        instance.oracles.set(oracleKey, oracle);
 
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`);
     }

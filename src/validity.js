@@ -891,18 +891,32 @@ const Validity = {
                     params.reason += 'Invalid new address; ';
                 }
 
+                const targets = [Boolean(params.whitelist), Boolean(params.oracle), Boolean(params.token)].filter(Boolean).length;
+                if (targets !== 1) {
+                    params.valid = false;
+                    params.reason += 'Exactly one admin target (whitelist/oracle/token) must be selected; ';
+                }
+
                 // Validate admin based on the type
                 if (params.whitelist) {
                     const whitelistInfo = await ClearList.getList(params.id);
-                    if (whitelistInfo.adminAddress !== sender||whitelistInfo.backupAddress!==sender) {
+                    if (!whitelistInfo) {
+                        params.valid = false;
+                        params.reason += 'Whitelist not found; ';
+                    } else if (whitelistInfo.adminAddress !== sender && whitelistInfo.backupAddress !== sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the whitelist; ';
                     }
                 }
 
                 if(params.oracle) {
-                    const admin = await OracleList.isAdmin(sender, params.id);
-                    if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!==sender) {
+                    const oracleInfo = await OracleList.getOracleInfo(params.id);
+                    const adminAddr = oracleInfo?.adminAddress || oracleInfo?.name?.adminAddress;
+                    const backupAddr = oracleInfo?.backupAddress || oracleInfo?.name?.backupAddress;
+                    if (!oracleInfo) {
+                        params.valid = false;
+                        params.reason += 'Oracle not found; ';
+                    } else if (adminAddr !== sender && backupAddr !== sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the oracle; ';
                     }
@@ -910,12 +924,16 @@ const Validity = {
 
                 if(params.token) {
                     const tokenInfo = await PropertyList.getPropertyData(params.id)
-                    if (tokenInfo.issuer !== sender||tokenInfo.backupAddress!==sender){
+                    if (!tokenInfo) {
+                        params.valid = false;
+                        params.reason += 'Token not found; ';
+                    } else if (tokenInfo.issuer !== sender && tokenInfo.backupAddress !== sender){
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the token;' 
                     }
 
-                    if(tokenInfo.type!==2){
+                    const managedType = tokenInfo?.type;
+                    if(!(managedType === 2 || managedType === 'Managed')){
                         params.valid = false
                         params.reason += "Not a managed token with a usable admin address"
                     }
@@ -1126,7 +1144,7 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isManagedProperty = PropertyList.isManagedAndAdmin(params.propertyId);
+            const isManagedProperty = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type or admin does not match';
@@ -1159,22 +1177,16 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isPropertyAdmin = PropertyList.isAdmin(params.senderAddress, params.propertyId);
-            if (!isPropertyAdmin) {
+            const isManagedAdmin = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
+            if (!isManagedAdmin) {
                 params.valid = false;
-                params.reason += 'Sender is not admin of the property; ';
+                params.reason += 'Sender is not admin of a managed property; ';
             }
 
-            const isManagedProperty = PropertyList.isManagedProperty(params.propertyId);
-            if (!isManagedProperty) {
+            const tally = await TallyMap.getTally(sender, params.propertyId);
+            if (Number(tally?.available || 0) < Number(params.amountDestroyed || 0)) {
                 params.valid = false;
-                params.reason += 'Property is not of managed type; ';
-            }
-
-            const canRedeemTokens = TallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
-            if (!canRedeemTokens) {
-                params.valid = false;
-                params.reason += 'Cannot redeem tokens; insufficient balance or other criteria not met; ';
+                params.reason += 'Cannot redeem tokens; insufficient balance; ';
             }
 
             return params;

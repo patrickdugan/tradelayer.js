@@ -386,28 +386,31 @@ class PropertyManager {
 
     static async updateAdmin(propertyId, newAddress, backup) {
         try {
-            // Ensure the property index is loaded
-            await PropertyManager.load();
+            const base = await db.getDatabase('propertyList');
+            const indexDoc = await base.findOneAsync({ _id: 'propertyIndex' });
+            if (!indexDoc || !indexDoc.value) {
+                throw new Error('Property index not found.');
+            }
 
-            // Check if the property exists
-            if (!PropertyManager.instance.propertyIndex.has(propertyId)) {
+            const parsedData = JSON.parse(indexDoc.value);
+            const idx = parsedData.findIndex(entry => Number(entry[0]) === Number(propertyId));
+            if (idx < 0) {
                 throw new Error(`Property with ID ${propertyId} does not exist.`);
             }
 
-            // Get the property data
-            const propertyData = await getPropertyData(propertyId);
-
-            if(backup){
-                properData.backupAddress=newAddress
-            }else{
-                 // Update the admin address
-                propertyData.issuer = newAddress; 
+            const propertyData = parsedData[idx][1];
+            if (backup) {
+                propertyData.backupAddress = newAddress;
+            } else {
+                propertyData.issuer = newAddress;
             }
+            parsedData[idx][1] = propertyData;
 
-            // Update the property index with the modified property data
-            this.propertyIndex.set(propertyId, propertyData);
-
-            await this.save();
+            await base.updateAsync(
+                { _id: 'propertyIndex' },
+                { $set: { value: JSON.stringify(parsedData) } },
+                { upsert: true }
+            );
 
             console.log(`Admin address for property ID ${propertyId} updated to ${newAddress}.`);
         } catch (error) {
