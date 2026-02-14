@@ -2722,19 +2722,35 @@ class Clearing {
      * ITM legs are forcibly exercised into underlying exposure.
      */
     static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
+      const ContractRegistry = require('./contractRegistry.js');
       const mm = await MarginMap.getInstance(seriesId);
       const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
       if (!seriesInfo) return;
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
       const expTickers = await mm.getExpiringTickersUpTo(currentBlockHeight);
-      if (!expTickers.length) return;
+      let tickersToSettle = Array.isArray(expTickers) ? [...expTickers] : [];
+      if (!tickersToSettle.length) {
+        const fallback = new Set();
+        for (const [, pos] of mm.margins.entries()) {
+          if (!pos || !pos.options) continue;
+          for (const ticker of Object.keys(pos.options)) {
+            const meta = Options.parseTicker(ticker);
+            if (!meta) continue;
+            if (Number(meta.expiryBlock || 0) <= Number(currentBlockHeight)) {
+              fallback.add(ticker);
+            }
+          }
+        }
+        tickersToSettle = Array.from(fallback);
+      }
+      if (!tickersToSettle.length) return;
 
       // For each address with positions
       for (const [address, pos] of mm.margins.entries()) {
         if (!pos || !pos.options) continue;
 
-        for (const ticker of expTickers) {
+        for (const ticker of tickersToSettle) {
           const optPos = pos.options[ticker];
           if (!optPos) continue;
 
@@ -2819,6 +2835,7 @@ class Clearing {
 
       // Global index cleanup (remove those expiries)
       await mm.cleanupExpiredTickersUpTo(currentBlockHeight);
+      await mm.saveMarginMap(currentBlockHeight);
     }
 
     static getLatestPositionByAddress(trades, address) {

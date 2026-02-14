@@ -6,6 +6,7 @@ describe('Options expiry forced assignment', () => {
   function setup({
     ticker = '3-100-P-120',
     optionPos = { contracts: -2, avgPrice: 0, margin: 24 },
+    expiringTickers = null,
     seriesInfo = {
       collateralPropertyId: 1,
       contracts: {
@@ -18,6 +19,7 @@ describe('Options expiry forced assignment', () => {
   } = {}) {
     const recordMarginMapDelta = jest.fn(async () => {});
     const cleanupExpiredTickersUpTo = jest.fn(async () => {});
+    const saveMarginMap = jest.fn(async () => {});
 
     const margins = new Map([
       [
@@ -36,9 +38,10 @@ describe('Options expiry forced assignment', () => {
     jest.doMock('../src/marginMap.js', () => ({
       getInstance: jest.fn(async () => ({
         margins,
-        getExpiringTickersUpTo: jest.fn(async () => [ticker]),
+        getExpiringTickersUpTo: jest.fn(async () => (Array.isArray(expiringTickers) ? expiringTickers : [ticker])),
         cleanupExpiredTickersUpTo,
-        recordMarginMapDelta
+        recordMarginMapDelta,
+        saveMarginMap
       }))
     }));
 
@@ -139,5 +142,16 @@ describe('Options expiry forced assignment', () => {
       101,
       'tx-otm-1'
     );
+  });
+
+  test('fallback ticker scan settles when expiry index is empty after reload', async () => {
+    const { Clearing, margins } = setup({
+      expiringTickers: []
+    });
+
+    await Clearing.settleOptionExpiries(3, 101, 100, 144, 'tx-fallback-1');
+    const pos = margins.get('addr1');
+    expect(pos.options['3-100-P-120']).toBeUndefined();
+    expect(pos.contracts).toBe(2);
   });
 });
