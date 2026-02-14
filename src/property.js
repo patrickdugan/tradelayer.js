@@ -1,7 +1,10 @@
 const db = require('./db.js');
 const path = require('path');
 const BigNumber = require('bignumber.js')
-const TallyMap = require('./tally.js');
+function getTallyMap() {
+    // Lazy-load to avoid circular dependency returning a partial export.
+    return require('./tally.js');
+}
 
 function quantize8(value) {
     return new BigNumber(value || 0).decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
@@ -315,7 +318,7 @@ class PropertyManager {
         this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to credit the amount to recipient
-        await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
+        await getTallyMap().updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
 
         // Save changes
         await this.save();
@@ -341,7 +344,7 @@ class PropertyManager {
         this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to debit the amount from recipient
-        await TallyMap.updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
+        await getTallyMap().updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
 
         // Save changes
         await this.save();

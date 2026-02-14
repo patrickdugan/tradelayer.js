@@ -123,6 +123,11 @@ async function broadcastPayload(senderAddress, payload) {
 }
 
 async function activateIfNeeded(adminAddress, txType, applyImmediate) {
+  const activation = Activation.getInstance();
+  const alreadyActive = await activation.isTxTypeActive(txType);
+  if (alreadyActive) {
+    return null;
+  }
   const txid = await TxUtils.activationTransaction(adminAddress, txType);
   if (applyImmediate) {
     const block = await TxUtils.getBlockCount();
@@ -207,7 +212,8 @@ async function main() {
 
   // 2) Issue procedural receipt token.
   const issuePayload = Encode.encodeTokenIssue({
-    initialAmount: 0,
+    // Protocol validity requires integer > 0 even for managed/procedural wrappers.
+    initialAmount: 1,
     ticker: receiptTicker,
     whitelists: [],
     managed: true,
@@ -393,4 +399,3 @@ main().catch((err) => {
   console.error('[dlc-live] failed:', err.message || err);
   process.exit(1);
 });
-

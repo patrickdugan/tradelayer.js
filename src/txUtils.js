@@ -1495,17 +1495,25 @@ inferChannelAddrType(addr) {
 async findSuitableUTXO(address, minAmount) {
     const minConfEnv = Number(process.env.TL_UTXO_MINCONF || 0);
     const minConf = Number.isFinite(minConfEnv) && minConfEnv >= 0 ? minConfEnv : 0;
+    const minSpendSats = Math.max(
+        Number.isFinite(Number(minAmount)) ? Number(minAmount) : 0,
+        STANDARD_FEE
+    ) + DUST_THRESHOLD;
+    const minSpendLtc = minSpendSats / COIN;
     const utxos = await this.client.listUnspent(0, 9999999, [address]);
     const candidates = (utxos || [])
-        .filter((u) => Number(u?.amount || 0) >= 0.00002)
+        .filter((u) => Number(u?.amount || 0) >= Math.max(0.00002, minSpendLtc))
         .sort((a, b) => {
+            const aa = Number(a?.amount || 0);
+            const ab = Number(b?.amount || 0);
+            if (ab !== aa) return ab - aa;
             const ca = Number(a?.confirmations || 0);
             const cb = Number(b?.confirmations || 0);
             if (cb !== ca) return cb - ca;
             const sa = a?.safe === false ? 0 : 1;
             const sb = b?.safe === false ? 0 : 1;
             if (sb !== sa) return sb - sa;
-            return Number(b?.amount || 0) - Number(a?.amount || 0);
+            return 0;
         });
     const suitableUtxo = candidates.find((u) => Number(u?.confirmations || 0) >= minConf) || candidates[0];
     if (!suitableUtxo) {
