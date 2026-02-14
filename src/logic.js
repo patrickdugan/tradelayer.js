@@ -237,7 +237,15 @@ const Logic = {
 
         // Create the token in the property manager
         try {
-            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, clearlistId, sender, backupAddress);
+            var newPropertyId = await propertyManager.createToken(
+                ticker,
+                initialAmount,
+                tokenType,
+                clearlistId,
+                sender,
+                backupAddress,
+                { proceduralType }
+            );
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
             await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance',block);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;

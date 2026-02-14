@@ -67,7 +67,7 @@ class PropertyManager {
         return maxId + 1;
     }
 
-    async createToken(ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
+    async createToken(ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta = {}) {
         // Check if the ticker already exists
 
         if (this.propertyIndex.has(ticker)) {
@@ -80,12 +80,12 @@ class PropertyManager {
         }
 
         const propertyId = await this.getNextPropertyId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress);
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta);
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
       }
 
-    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
+    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta = {}) {
         
         const propertyTypeIndexes = {
             'Fixed': 1,
@@ -118,6 +118,9 @@ class PropertyManager {
             existingProperty.whitelistId = whitelistId || existingProperty.whitelistId;
             existingProperty.issuer = issuer || existingProperty.issuer;
             existingProperty.backupAddress = backupAddress || existingProperty.backupAddress;
+            if (meta.proceduralType !== undefined && meta.proceduralType !== null) {
+                existingProperty.proceduralType = Number(meta.proceduralType);
+            }
         } else {
             // If property does not exist, create a new one
             existingProperty = {
@@ -126,7 +129,10 @@ class PropertyManager {
                 type: propertyTypeIndexes[type],
                 whitelistId: whitelistId,
                 issuer: issuer,
-                backupAddress: backupAddress
+                backupAddress: backupAddress,
+                proceduralType: (meta.proceduralType !== undefined && meta.proceduralType !== null)
+                    ? Number(meta.proceduralType)
+                    : undefined
             };
         }
 
@@ -136,7 +142,10 @@ class PropertyManager {
             type: propertyTypeIndexes[type],
             whitelistId: whitelistId,
             issuer: issuer,
-            backupAddress: backupAddress
+            backupAddress: backupAddress,
+            proceduralType: (meta.proceduralType !== undefined && meta.proceduralType !== null)
+                ? Number(meta.proceduralType)
+                : undefined
         }
 
         this.propertyIndex.set(propertyId,existingProperty);

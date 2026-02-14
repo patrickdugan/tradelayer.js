@@ -101,6 +101,14 @@ const Validity = {
                 if (x <= 0 || x > MAX_SAFE_AMOUNT) return false;
                 return (typeof x === 'number' && Number.isFinite(x) && !isNaN(x) && x > 0)
         },
+
+        isRestrictedProceduralToken(propertyData) {
+            const typeNum = Number(propertyData?.type);
+            const isProcedural = typeNum === 7 || propertyData?.type === 'Procedural';
+            const proceduralType = Number(propertyData?.proceduralType ?? -1);
+            // Procedural type 1 is DLC-receipt style and intentionally non-transferable/non-spot-tradeable.
+            return isProcedural && proceduralType === 1;
+        },
         //Type 0: Activation
         validateActivateTradeLayer: async (sender, params, txid) => {
             params.valid = true;
@@ -245,12 +253,23 @@ const Validity = {
                 }
             }
 
-            const propertyData = await PropertyList.getPropertyData(params.propertyIds)
-            console.log(JSON.stringify(propertyData))
-            if(propertyData==null||propertyData==undefined){
-                params.valid = false
-                params.reason = 'propertyId not found in Property List'
-                return params
+            const propertyIds = Array.isArray(params.propertyIds)
+                ? params.propertyIds
+                : [params.propertyIds];
+            let propertyData = null;
+            for (const pid of propertyIds) {
+                const pData = await PropertyList.getPropertyData(pid);
+                console.log(JSON.stringify(pData));
+                if (pData == null || pData == undefined) {
+                    params.valid = false;
+                    params.reason = 'propertyId not found in Property List';
+                    return params;
+                }
+                if (Validity.isRestrictedProceduralToken(pData)) {
+                    params.valid = false;
+                    params.reason += `Property ${pid} is restricted procedural and non-transferable; `;
+                }
+                if (!propertyData) propertyData = pData;
             }
 
             const admin = activationInstance.getAdmin()
@@ -298,13 +317,6 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
-            let propertyIds = [];
-
-                if (Array.isArray(params.propertyIds)) {
-                    propertyIds = params.propertyIds;
-                } else if (Number.isInteger(params.propertyIds)) {
-                    propertyIds = [params.propertyIds];
-                }
 
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
@@ -375,11 +387,15 @@ const Validity = {
             }
             
 
-            const property = PropertyList.getPropertyData(params.propertyId)
+            const property = await PropertyList.getPropertyData(params.propertyId)
 
             if (property==null) {
                 params.valid = false;
                 params.reason += 'Invalid property ID; ';
+            }
+            if (Validity.isRestrictedProceduralToken(property)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be token-traded; ';
             }
 
             if (!Validity.isValidNumber(params.amount)) {
@@ -530,6 +546,10 @@ const Validity = {
                 params.valid=false
                 params.reason="Null returning for propertyData"
                 return params
+            }
+            if (Validity.isRestrictedProceduralToken(propertyData)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be committed/traded in token channels; ';
             }
                     // Whitelist validation logic
   
@@ -695,6 +715,10 @@ const Validity = {
                 params.valid = false
                 params.reason += 'Null returning for propertyData'
                 return params
+            }
+            if (Validity.isRestrictedProceduralToken(propertyData1) || Validity.isRestrictedProceduralToken(propertyData2)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be spot token-traded; ';
             }
 
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
@@ -2137,6 +2161,13 @@ const Validity = {
             if(params.propertyIdOffered==0||params.propertyIdDesired==0){
                 params.valid=false
                 params.reason += "Should be a UTXO trade"
+            }
+
+            const offeredProperty = await PropertyList.getPropertyData(params.propertyIdOffered);
+            const desiredProperty = await PropertyList.getPropertyData(params.propertyIdDesired);
+            if (Validity.isRestrictedProceduralToken(offeredProperty) || Validity.isRestrictedProceduralToken(desiredProperty)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be token-traded in channels; ';
             }
 
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
