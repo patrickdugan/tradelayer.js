@@ -125,6 +125,12 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
 }
 
 async function publishOracle(admin, oracleId, price, applyImmediate, forcedBlock = null) {
+  const offchainOnly = String(process.env.TL_ORACLE_OFFCHAIN || 'false').toLowerCase() === 'true';
+  if (offchainOnly) {
+    const b = forcedBlock || await withRetry('getBlockCount offchain oracle', async () => TxUtils.getBlockCount());
+    await OracleList.publishData(oracleId, price, undefined, undefined, undefined, b);
+    return 'offchain-oracle';
+  }
   const txid = await withRetry(`publishOracle ${price}`, async () => TxUtils.publishDataTransaction(admin, { oracleid: oracleId, price }));
   if (applyImmediate) {
     const tip = await withRetry('getBlockCount publish', async () => TxUtils.getBlockCount());
@@ -259,6 +265,7 @@ async function main() {
   const optionType = String(process.env.TL_OPTION_TYPE || 'C').toUpperCase() === 'P' ? 'P' : 'C';
   const optionStrike = nenv('TL_OPTION_STRIKE', nenv('TL_CALL_STRIKE', 120));
   const applyImmediate = String(process.env.TL_APPLY_IMMEDIATE || 'true').toLowerCase() === 'true';
+  const skipPositionSetup = String(process.env.TL_SKIP_POSITION_SETUP || 'false').toLowerCase() === 'true';
   const runActivation = String(process.env.TL_RUN_ACTIVATION || 'false').toLowerCase() === 'true';
   const skipActivationInit = String(process.env.TL_SKIP_ACTIVATION_INIT || 'true').toLowerCase() === 'true';
 
@@ -290,7 +297,10 @@ async function main() {
     }
   });
 
-  let synthBlock = await withRetry('getBlockCount synth start', async () => TxUtils.getBlockCount());
+  const synthBlockStart = process.env.TL_SYNTH_BLOCK_START;
+  let synthBlock = (synthBlockStart === undefined || synthBlockStart === null || synthBlockStart === '')
+    ? await withRetry('getBlockCount synth start', async () => TxUtils.getBlockCount())
+    : Number(synthBlockStart);
   await publishOracle(admin, oracleId, startSpot, applyImmediate, ++synthBlock);
   const tradePxRaw = process.env.TL_TRADE_PRICE;
   const tradePrice = (tradePxRaw === undefined || tradePxRaw === null || tradePxRaw === '')
@@ -307,20 +317,22 @@ async function main() {
   const perpColumnAIsSeller = process.env.TL_PERP_COLUMN_A_SELLER === undefined
     ? (bPerpLong ? true : false)
     : boolEnv('TL_PERP_COLUMN_A_SELLER', true);
-  const perpTx = await withRetry('create perp trade', async () => TxUtils.createChannelContractTradeTransaction(channel, {
-    contractId: seriesId,
-    price: tradePrice,
-    amount: perpQty,
-    columnAIsSeller: perpColumnAIsSeller,
-    expiryBlock: expiry,
-    insurance: false,
-    columnAIsMaker: true
-  }));
-  if (applyImmediate) {
-    try {
-      await applyTxNow(perpTx, channel, block);
-    } catch (e) {
-      console.log('[warn] perp immediate-apply failed:', e.message || e);
+  if (!skipPositionSetup) {
+    const perpTx = await withRetry('create perp trade', async () => TxUtils.createChannelContractTradeTransaction(channel, {
+      contractId: seriesId,
+      price: tradePrice,
+      amount: perpQty,
+      columnAIsSeller: perpColumnAIsSeller,
+      expiryBlock: expiry,
+      insurance: false,
+      columnAIsMaker: true
+    }));
+    if (applyImmediate) {
+      try {
+        await applyTxNow(perpTx, channel, block);
+      } catch (e) {
+        console.log('[warn] perp immediate-apply failed:', e.message || e);
+      }
     }
   }
 
@@ -330,19 +342,21 @@ async function main() {
   const optionColumnAIsSeller = process.env.TL_OPTION_COLUMN_A_SELLER === undefined
     ? (bOptionLong ? true : false)
     : boolEnv('TL_OPTION_COLUMN_A_SELLER', false);
-  const optionTx = await withRetry('create option trade', async () => TxUtils.createOptionTradeTransaction(channel, {
-    contractId: optionTicker,
-    price: 0,
-    amount: optQty,
-    columnAIsSeller: optionColumnAIsSeller,
-    expiryBlock: expiry,
-    columnAIsMaker: true
-  }));
-  if (applyImmediate) {
-    try {
-      await applyTxNow(optionTx, channel, block);
-    } catch (e) {
-      console.log('[warn] option immediate-apply failed:', e.message || e);
+  if (!skipPositionSetup) {
+    const optionTx = await withRetry('create option trade', async () => TxUtils.createOptionTradeTransaction(channel, {
+      contractId: optionTicker,
+      price: 0,
+      amount: optQty,
+      columnAIsSeller: optionColumnAIsSeller,
+      expiryBlock: expiry,
+      columnAIsMaker: true
+    }));
+    if (applyImmediate) {
+      try {
+        await applyTxNow(optionTx, channel, block);
+      } catch (e) {
+        console.log('[warn] option immediate-apply failed:', e.message || e);
+      }
     }
   }
 
