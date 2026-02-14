@@ -29,8 +29,10 @@ const Base256Converter = {
 
   // Hex <-> Decimal helpers
   hexToDecimal(hex) {
+    if (hex === undefined || hex === null || String(hex).trim() === '') return '0';
     // normalize & allow odd-length hex
-    const h = hex.length % 2 ? '0' + hex : hex;
+    const clean = String(hex).replace(/\s+/g, '');
+    const h = clean.length % 2 ? '0' + clean : clean;
     return BigInt('0x' + h).toString(10);
   },
 
@@ -43,10 +45,12 @@ const Base256Converter = {
 
   // Hex <-> Base256
   hexToBase256(hex) {
+    if (hex === undefined || hex === null || String(hex).trim() === '') return '';
     return this.toBase256(this.hexToDecimal(hex));
   },
 
   base256ToHex(base256String) {
+    if (base256String === undefined || base256String === null || String(base256String) === '') return '';
     const dec = this.fromBase256(base256String);
     return this.decimalToHex(dec);
   }

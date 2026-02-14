@@ -439,8 +439,8 @@ const Encode = {
             ? Number(params.settleType)
             : (params.close ? 1 : 0);
         const payload = [
-            base256.hexToBase256(params.txidNeutralized1 || params.tradeid || ''),
-            base256.hexToBase256(params.txidNeutralized2 || params.settleid || ''),
+            (params.txidNeutralized1 || params.tradeid || ''),
+            (params.txidNeutralized2 || params.settleid || ''),
             base94.decimalToBase94(params.markPrice || 0),
             settleType.toString(),
             params.columnAIsSeller ? '1' : '0',
@@ -454,7 +454,7 @@ const Encode = {
                 base94.decimalToBase94(params.blockEnd || 0),
                 base94.decimalToBase94(params.propertyId || 0),
                 params.aPaysBDirection ? '1' : '0',
-                base256.hexToBase256(params.channelRoot || ''),
+                (params.channelRoot || ''),
                 base94.decimalToBase94(params.totalContracts || 0),
                 base94.decimalToBase94(params.neutralizedCount || 0)
             );
@@ -472,7 +472,7 @@ const Encode = {
             base94.decimalToBase94(params.propertyId || 0),
             base94.decimalToBase94(params.netAmount || 0),
             params.aPaysBDirection ? '1' : '0',
-            base256.hexToBase256(params.channelRoot || ''),
+            (params.channelRoot || ''),
             base94.decimalToBase94(params.totalContracts || 0),
             base94.decimalToBase94(params.neutralizedCount || 0)
         ];

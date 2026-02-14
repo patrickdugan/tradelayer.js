@@ -552,8 +552,8 @@ const Decode = {
     decodeSettleChannelPNL: (payload) => {
         const parts = payload.split(',');
         return {
-            txidNeutralized1: base256.base256ToHex(parts[0] || ''),
-            txidNeutralized2: base256.base256ToHex(parts[1] || ''),
+            txidNeutralized1: parts[0] || '',
+            txidNeutralized2: parts[1] || '',
             markPrice: parseFloat(base94.fromBase94(parts[2] || '0')),
             settleType: parseInt(parts[3] || '0'),
             columnAIsSeller: parts[4] === '1',
@@ -565,7 +565,7 @@ const Decode = {
             blockEnd: parts[9] ? parseInt(base94.fromBase94(parts[9])) : undefined,
             propertyId: parts[10] ? parseInt(base94.fromBase94(parts[10])) : undefined,
             aPaysBDirection: parts[11] ? (parts[11] === '1') : undefined,
-            channelRoot: parts[12] ? base256.base256ToHex(parts[12]) : undefined,
+            channelRoot: parts[12] || undefined,
             totalContracts: parts[13] ? parseInt(base94.fromBase94(parts[13])) : undefined,
             neutralizedCount: parts[14] ? parseInt(base94.fromBase94(parts[14])) : undefined
         };
@@ -580,7 +580,7 @@ const Decode = {
                 propertyId: parseInt(base94.fromBase94(parts[2] || '0')),
                 netAmount: parseFloat(base94.fromBase94(parts[3] || '0')),
                 aPaysBDirection: parts[4] === '1',
-                channelRoot: base256.base256ToHex(parts[5] || ''),
+                channelRoot: parts[5] || '',
                 totalContracts: parseInt(base94.fromBase94(parts[6] || '0')),
                 neutralizedCount: parseInt(base94.fromBase94(parts[7] || '0'))
             };

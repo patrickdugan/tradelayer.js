@@ -1799,11 +1799,11 @@ const Logic = {
             // Enum switch for settle type routing
             switch (settleType) {
                 case SettleType.KEEP_ALIVE:
-                    await ScalingLogic.processKeepAlive(channelAddress, txidNeutralized1, block, txid);
+                    await this.processKeepAlive(channelAddress, txidNeutralized1, block, txid);
                     break;
 
                 case SettleType.CLOSE_POSITION:
-                    await ScalingLogic.processClosePosition(
+                    await this.processClosePosition(
                         channelAddress,
                         txidNeutralized1,
                         txidNeutralized2,
@@ -1815,7 +1815,7 @@ const Logic = {
                     break;
 
                 case SettleType.NET_SETTLE:
-                    await ScalingLogic.processNetSettle(
+                    await this.processNetSettle(
                         channelAddress,
                         txidNeutralized1,
                         txidNeutralized2,

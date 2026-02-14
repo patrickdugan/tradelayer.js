@@ -1063,6 +1063,52 @@ async addInputs(utxos, rawTx) {
         return txid;
     },
 
+    async createSettleChannelPNLTransaction(thisAddress, params) {
+        const payload = Encode.encodeSettleChannelPNL(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const inputSats = Math.round(Number(utxo.satoshis || 0));
+        const feeSats = STANDARD_FEE;
+        const changeSats = inputSats - feeSats;
+        let rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .fee(feeSats);
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.to(thisAddress, changeSats);
+        }
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.uncheckedSerialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Settle Channel PNL transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createKingSettleTransaction(thisAddress, params) {
+        const payload = Encode.encodeKingSettle(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const inputSats = Math.round(Number(utxo.satoshis || 0));
+        const feeSats = STANDARD_FEE;
+        const changeSats = inputSats - feeSats;
+        let rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .fee(feeSats);
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.to(thisAddress, changeSats);
+        }
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.uncheckedSerialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`King settle transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
     async createAMMPoolTransaction(thisAddress, ammParams) {
         const payload = Encode.encodeAMMPool(ammParams);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);

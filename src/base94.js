@@ -9,7 +9,7 @@ const base94Chars = Array.from({ length: 94 }, (_, i) => String.fromCharCode(i +
 const Base94Converter = {
     // Convert decimal to base 94
     toBase94(decimalString) {
-        return baseConverter(decimalString, 10, base94Chars.join(''));
+        return baseConverter(String(decimalString), 10, base94Chars.join(''));
     },
 
     // Convert hex to decimal
@@ -43,33 +43,24 @@ const Base94Converter = {
     },
 
    decimalToBase94(decimal) {
-        if (!decimal) return null; // Validate input
+        if (decimal === undefined || decimal === null) return null;
 
-        const [integerPart, fractionalPart] = decimal.toString().split('.');
-        console.log('integer part '+integerPart)
-        const integerEncoded = this.toBase94(integerPart);
-
-        let fractionalEncoded = '';
-        if (fractionalPart) {
-            const scale = Math.pow(10, fractionalPart.length);
-            const scaledFraction = BigInt(fractionalPart) * BigInt(scale) / BigInt('1' + '0'.repeat(fractionalPart.length));
-            fractionalEncoded = this.toBase94(scaledFraction.toString());
-        }
-
-        return fractionalPart ? `${integerEncoded}|${fractionalEncoded}` : integerEncoded;
+        const [integerPart, fractionalPart] = String(decimal).split('.');
+        const integerEncoded = this.toBase94(integerPart || '0');
+        if (!fractionalPart) return integerEncoded;
+        const fractionalEncoded = this.toBase94(fractionalPart);
+        return `${integerEncoded}|${fractionalEncoded}`;
     },
 
     fromBase94(base94String) {
-        if (!base94String) return null; // Validate input
+        if (!base94String) return null;
 
-        const [integerEncoded, fractionalEncoded] = base94String.split('|');
-        const integerDecoded = this.fromBase94(integerEncoded);
-        let fractionalDecoded = '0';
-
-        if (fractionalEncoded) {
-            fractionalDecoded = BigInt(this.fromBase94(fractionalEncoded)).toString();
-        }
-
+        const [integerEncoded, fractionalEncoded] = String(base94String).split('|');
+        const intOut = baseConverter(integerEncoded || '0', base94Chars.join(''), 10);
+        const integerDecoded = Array.isArray(intOut) ? intOut.join('') : String(intOut);
+        if (!fractionalEncoded) return integerDecoded;
+        const fracOut = baseConverter(fractionalEncoded, base94Chars.join(''), 10);
+        const fractionalDecoded = Array.isArray(fracOut) ? fracOut.join('') : String(fracOut);
         return `${integerDecoded}.${fractionalDecoded}`;
     }
 
