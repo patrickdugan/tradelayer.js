@@ -1063,6 +1063,24 @@ async addInputs(utxos, rawTx) {
         return txid;
     },
 
+    async createAMMPoolTransaction(thisAddress, ammParams) {
+        const payload = Encode.encodeAMMPool(ammParams);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`AMM pool transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
     async createCancelTransaction(thisAddress, cancelParams) {
         try {
             var txNumber = 6;

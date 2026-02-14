@@ -1019,7 +1019,9 @@ const Validity = {
             params.reason += 'Tx type not yet activated ';
         }
 
-        if (!Validity.isValidNumber(params.amount) || !Validity.isValidNumber(params.amount2)) {
+        const amountOk = Validity.isValidNumber(params.amount);
+        const amount2Ok = params.isContract ? true : Validity.isValidNumber(params.amount2);
+        if (!amountOk || !amount2Ok) {
             params.valid = false;
             params.reason += 'Invalid or missing amount; ';
             return params;
@@ -1031,34 +1033,42 @@ const Validity = {
             params.reason = 'Transaction type activated after tx';
         }
 
-        if (typeof params.targetAddress !== 'string') {
-            params.valid = false;
-            params.reason += 'Invalid target address; ';
-        }
-
-        const propertyData1 = await PropertyList.getPropertyData(params.id);
-        const propertyData2 = await PropertyList.getPropertyData(params.id2);
-        if (propertyData1 === 2 || propertyData1 === 3 || propertyData2 === 2 || propertyData2 === 3) {
-            params.valid = false;
-            params.reason = "Cannot trade vesting tokens";
-        }
-
-        // Whitelist validation
-        const senderWhitelists = [].concat(propertyData1.whitelistId || []);
-        const desiredLists = [].concat(propertyData2.whitelistId || []);
-
-        for (const whitelistId of senderWhitelists) {
-            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-            if (!whitelisted) {
+        if (params.isContract) {
+            const series = await ContractRegistry.getContractInfo(params.id);
+            if (!series) {
                 params.valid = false;
-                params.reason += `Sender address not in clearlist for offered token ${whitelistId}; `;
+                params.reason += `Contract series ${params.id} not found; `;
             }
-        }
-        for (const whitelistId of desiredLists) {
-            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-            if (!whitelisted) {
+        } else {
+            const propertyData1 = await PropertyList.getPropertyData(params.id);
+            const propertyData2 = await PropertyList.getPropertyData(params.id2);
+            if (!propertyData1 || !propertyData2) {
                 params.valid = false;
-                params.reason += `Trader address not in clearlist ${whitelistId}; `;
+                params.reason += 'Property AMM requires valid id/id2 properties; ';
+                return params;
+            }
+            if (propertyData1 === 2 || propertyData1 === 3 || propertyData2 === 2 || propertyData2 === 3) {
+                params.valid = false;
+                params.reason = "Cannot trade vesting tokens";
+            }
+
+            // Whitelist validation
+            const senderWhitelists = [].concat(propertyData1.whitelistId || []);
+            const desiredLists = [].concat(propertyData2.whitelistId || []);
+
+            for (const whitelistId of senderWhitelists) {
+                const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+                if (!whitelisted) {
+                    params.valid = false;
+                    params.reason += `Sender address not in clearlist for offered token ${whitelistId}; `;
+                }
+            }
+            for (const whitelistId of desiredLists) {
+                const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+                if (!whitelisted) {
+                    params.valid = false;
+                    params.reason += `Trader address not in clearlist ${whitelistId}; `;
+                }
             }
         }
 
@@ -2887,6 +2897,58 @@ const Validity = {
           const tradePx = Number(params.price || 0);
           params.rpnlSeller = OptionsEngine.rpnlForClose(sellerRF.exSide, sellerRF.closedQty, tradePx, sellerOpt.avgPrice);
           params.rpnlBuyer  = OptionsEngine.rpnlForClose(buyerRF.exSide,  buyerRF.closedQty,  tradePx, buyerOpt.avgPrice);
+
+          const hasOpenShortSameBucket = (blob, tickerMeta, ignoreTicker) => {
+            const bag = (blob && blob.options) ? blob.options : {};
+            for (const [tk, op] of Object.entries(bag)) {
+              if (tk === ignoreTicker) continue;
+              const m = OptionsEngine.parseTicker(tk);
+              if (!m) continue;
+              if (Number(m.expiryBlock) !== Number(tickerMeta.expiryBlock)) continue;
+              if (String(m.type) !== String(tickerMeta.type)) continue;
+              if (Number(op?.contracts || 0) < 0) return true;
+            }
+            return false;
+          };
+
+          // Policy:
+          // - If reducing a long wing while there is an open short in same bucket, single-leg unwind is forbidden.
+          // - Combo unwind must cover at least as much short as long being reduced.
+          if (!params.comboTicker || !params.comboAmount) {
+            if (sellerRF.closedQty > 0 && sellerRF.exSide === 'LONG' && hasOpenShortSameBucket(sellerBlob, tA, params.contractId)) {
+              params.valid = false;
+              params.reason += 'Spread unwind requires combo trade; cover short leg first; ';
+            }
+            if (buyerRF.closedQty > 0 && buyerRF.exSide === 'LONG' && hasOpenShortSameBucket(buyerBlob, tA, params.contractId)) {
+              params.valid = false;
+              params.reason += 'Spread unwind requires combo trade; cover short leg first; ';
+            }
+          } else {
+            const sellerCombo = (sellerBlob.options && sellerBlob.options[params.comboTicker]) || { contracts: 0, avgPrice: 0 };
+            const buyerCombo  = (buyerBlob.options  && buyerBlob.options[params.comboTicker])  || { contracts: 0, avgPrice: 0 };
+            const sellerComboDelta = +Math.abs(Number(params.comboAmount || 0)); // opposite leg for spread package
+            const buyerComboDelta  = -Math.abs(Number(params.comboAmount || 0));
+            const sellerComboRF = OptionsEngine.computeReduceFlip(Number(sellerCombo.contracts || 0), sellerComboDelta);
+            const buyerComboRF  = OptionsEngine.computeReduceFlip(Number(buyerCombo.contracts || 0),  buyerComboDelta);
+
+            const sellerLongClosed = (sellerRF.exSide === 'LONG' ? Number(sellerRF.closedQty || 0) : 0)
+              + (sellerComboRF.exSide === 'LONG' ? Number(sellerComboRF.closedQty || 0) : 0);
+            const sellerShortClosed = (sellerRF.exSide === 'SHORT' ? Number(sellerRF.closedQty || 0) : 0)
+              + (sellerComboRF.exSide === 'SHORT' ? Number(sellerComboRF.closedQty || 0) : 0);
+            const buyerLongClosed = (buyerRF.exSide === 'LONG' ? Number(buyerRF.closedQty || 0) : 0)
+              + (buyerComboRF.exSide === 'LONG' ? Number(buyerComboRF.closedQty || 0) : 0);
+            const buyerShortClosed = (buyerRF.exSide === 'SHORT' ? Number(buyerRF.closedQty || 0) : 0)
+              + (buyerComboRF.exSide === 'SHORT' ? Number(buyerComboRF.closedQty || 0) : 0);
+
+            if (sellerLongClosed > 0 && sellerShortClosed < sellerLongClosed) {
+              params.valid = false;
+              params.reason += 'Combo unwind must cover shorts first; ';
+            }
+            if (buyerLongClosed > 0 && buyerShortClosed < buyerLongClosed) {
+              params.valid = false;
+              params.reason += 'Combo unwind must cover shorts first; ';
+            }
+          }
 
           // --- Balance check with requiredMargin (credit) ---
           params.creditMargin = requiredMargin; // expose to logic.js

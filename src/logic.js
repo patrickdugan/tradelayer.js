@@ -85,7 +85,7 @@ const Logic = {
                 await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block, params.merkleRoot);
                 break;
             case 10:
-                await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
+                await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id, params.amount, params.id2, params.amount2);
                 break;
             case 11:
                 await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager, params.senderAddress, params.block);
@@ -709,7 +709,7 @@ const Logic = {
         if (isContract) {
             ammInstance = await ContractRegistry.getAMM(id);
         } else {
-            ammInstance = await PropertyRegistry.getAMM(id, id2);
+            ammInstance = await PropertyManager.getAMM(id, id2);
         }
 
         if (!ammInstance) {
@@ -724,6 +724,26 @@ const Logic = {
             await ammInstance.addCapital(sender, id, amount, isContract, block);
         }else if(!isRedeem&&!isContract){
             await ammInstance.addCapital(sender, id, amount,isContract, id2, amount2,block)
+        }
+
+        if (isContract) {
+            const seriesInfo = await ContractRegistry.getContractInfo(id);
+            if (seriesInfo) {
+                seriesInfo.ammPool = {
+                    position: ammInstance.position,
+                    maxPosition: ammInstance.maxPosition,
+                    maxQuoteSize: ammInstance.maxQuoteSize,
+                    contractType: ammInstance.contractType,
+                    lpAddresses: { ...(ammInstance.lpAddresses || {}) },
+                    ammOrders: Array.isArray(ammInstance.ammOrders) ? ammInstance.ammOrders : []
+                };
+                const contractListDB = await db.getDatabase('contractList');
+                await contractListDB.updateAsync(
+                    { id: parseInt(id, 10), type: 'contractSeries' },
+                    { id: parseInt(id, 10), type: 'contractSeries', data: seriesInfo },
+                    { upsert: true }
+                );
+            }
         }
     },
 
@@ -1451,11 +1471,11 @@ const Logic = {
       if (params.comboTicker && params.comboAmount) {
         const cMeta = OptionsEngine.parseTicker(params.comboTicker);
         if (cMeta && cMeta.type) {
-          // Option combo leg: mirror deltas (typically opposite side)
+          // Option combo leg: opposite side to primary leg (spread package semantics).
           await mm.applyOptionTrade(
             sellerAddr,
             params.comboTicker,
-            -(Math.abs(params.comboAmount||0)), // seller side consistent
+            +(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
             blockHeight,
             0 // margin included in credit for the package already
@@ -1463,7 +1483,7 @@ const Logic = {
           await mm.applyOptionTrade(
             buyerAddr,
             params.comboTicker,
-            +(Math.abs(params.comboAmount||0)),
+            -(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
             blockHeight,
             0

@@ -13,6 +13,72 @@ class AMMPool {
         this.ammOrders = []; // Array to store AMM orders
     }
 
+    async addCapital(address, id, capital, isContract, id2, amount2, block) {
+        const TallyMap = require('./tally.js');
+        const addAmount = Number(capital || 0);
+        const addAmount2 = Number(amount2 || 0);
+        if (!Number.isFinite(addAmount) || addAmount <= 0) {
+            throw new Error('Invalid AMM capital amount');
+        }
+        if (this.position + addAmount > this.maxPosition) {
+            throw new Error('Pool has reached its maximum position');
+        }
+
+        this.position += addAmount;
+        this.lpAddresses[address] = Number(this.lpAddresses[address] || 0) + addAmount;
+
+        if (isContract) {
+            const lpProperty = `${id}-LP`;
+            await TallyMap.updateBalance(address, id, -addAmount, 0, 0, 0, 'AMMPledge', block);
+            await TallyMap.updateBalance(address, lpProperty, addAmount, 0, 0, 0, 'LPIssue', block);
+            return;
+        }
+
+        if (!Number.isFinite(addAmount2) || addAmount2 <= 0) {
+            throw new Error('Invalid second AMM capital amount');
+        }
+        const lpProperty1 = `${id}-${id2}-LP`;
+        const lpProperty2 = `${id2}-${id}-LP`;
+        await TallyMap.updateBalance(address, id, -addAmount, 0, 0, 0, 'AMMPledge', block);
+        await TallyMap.updateBalance(address, lpProperty1, addAmount, 0, 0, 0, 'LPIssue', block);
+        await TallyMap.updateBalance(address, id2, -addAmount2, 0, 0, 0, 'AMMPledge', block);
+        await TallyMap.updateBalance(address, lpProperty2, addAmount2, 0, 0, 0, 'LPIssue', block);
+    }
+
+    async redeemCapital(address, id, capital, isContract, id2, amount2, block) {
+        const TallyMap = require('./tally.js');
+        const redeemAmount = Number(capital || 0);
+        const redeemAmount2 = Number(amount2 || 0);
+        const currentShare = Number(this.lpAddresses[address] || 0);
+        if (!Number.isFinite(redeemAmount) || redeemAmount <= 0) {
+            throw new Error('Invalid AMM redeem amount');
+        }
+        if (currentShare < redeemAmount) {
+            throw new Error('Insufficient LP shares to redeem');
+        }
+
+        this.position -= redeemAmount;
+        this.lpAddresses[address] = currentShare - redeemAmount;
+        if (this.lpAddresses[address] <= 0) delete this.lpAddresses[address];
+
+        if (isContract) {
+            const lpProperty = `${id}-LP`;
+            await TallyMap.updateBalance(address, lpProperty, -redeemAmount, 0, 0, 0, 'LPBurn', block);
+            await TallyMap.updateBalance(address, id, redeemAmount, 0, 0, 0, 'AMMRedeem', block);
+            return;
+        }
+
+        if (!Number.isFinite(redeemAmount2) || redeemAmount2 <= 0) {
+            throw new Error('Invalid second AMM redeem amount');
+        }
+        const lpProperty1 = `${id}-${id2}-LP`;
+        const lpProperty2 = `${id2}-${id}-LP`;
+        await TallyMap.updateBalance(address, lpProperty1, -redeemAmount, 0, 0, 0, 'LPBurn', block);
+        await TallyMap.updateBalance(address, id, redeemAmount, 0, 0, 0, 'AMMRedeem', block);
+        await TallyMap.updateBalance(address, lpProperty2, -redeemAmount2, 0, 0, 0, 'LPBurn', block);
+        await TallyMap.updateBalance(address, id2, redeemAmount2, 0, 0, 0, 'AMMRedeem', block);
+    }
+
     // Create a new AMM and insert into ammRegistry
     async createAMM(payload) {
         const registryDB = db.getDatabase('ammRegistry');

@@ -12,7 +12,8 @@
     "test:tx-type-coverage": "node tests/txTypeCoverageAudit.js",
     "test:options": "jest tests/optionsFeature.test.js tests/optionsMarginValidation.test.js tests/optionsClearing.test.js --runInBand",
     "test:options-live": "node tests/optionsLiveIntegration.js",
-    "test:options-forced-assignment-live": "node tests/optionsForcedAssignmentLive.js"
+    "test:options-forced-assignment-live": "node tests/optionsForcedAssignmentLive.js",
+    "test:amm-contract-live": "node tests/ammContractLive.js"
   },
   "jest": {
     "testPathIgnorePatterns": [

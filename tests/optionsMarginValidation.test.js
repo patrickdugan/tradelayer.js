@@ -147,7 +147,7 @@ describe('Option margin validation', () => {
     expect(out.netPremium).toBe(-4);
   });
 
-  test('unwinding protective long first increases seller margin transition', async () => {
+  test('single-leg long-wing unwind is rejected when paired short is still open', async () => {
     const sellerOptions = {
       '3-9000-C-120': { contracts: -1, avgPrice: 0, margin: 0 },
       '3-9000-C-130': { contracts: 1, avgPrice: 0, margin: 0 }
@@ -164,9 +164,31 @@ describe('Option margin validation', () => {
     };
 
     const out = await Validity.validateOptionTrade('channel1', params, 'tx2');
-    expect(out.valid).toBe(true);
+    expect(out.valid).toBe(false);
     expect(out.sellerReducing).toBe(true);
-    // covered spread -> naked short transition should require additional lock
-    expect(out.creditMargin).toBe(13);
+    expect(out.reason).toMatch(/cover short leg first/i);
+  });
+
+  test('combo unwind that covers short and long together is allowed', async () => {
+    const sellerOptions = {
+      '3-9000-C-120': { contracts: -1, avgPrice: 0, margin: 0 },
+      '3-9000-C-130': { contracts: 1, avgPrice: 0, margin: 0 }
+    };
+    const Validity = loadValidityWithMocks({ sellerAvailable: 50, buyerAvailable: 50, sellerOptions });
+    jest.spyOn(Validity, 'hasReferencePrice').mockResolvedValue(108);
+
+    const params = {
+      ticker: '3-9000-C-120',
+      comboTicker: '3-9000-C-130',
+      amount: 1,
+      comboAmount: 1,
+      price: 0,
+      comboPrice: 0,
+      columnAIsSeller: false,
+      block: 100
+    };
+
+    const out = await Validity.validateOptionTrade('channel1', params, 'tx4');
+    expect(out.valid).toBe(true);
   });
 });

@@ -172,9 +172,18 @@ class ContractRegistry {
     static async getAMM(contractId) {
         console.log('inside get AMM')
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        if (contractInfo && contractInfo.amm) {
-            // Assuming the AMM object is stored inside the contractInfo object
-            return contractInfo.amm;
+        if (contractInfo && contractInfo.ammPool) {
+            const pool = contractInfo.ammPool;
+            if (pool instanceof AMMPool) return pool;
+            const hydrated = new AMMPool(
+                Number(pool.position || 0),
+                Number(pool.maxPosition || 1),
+                Number(pool.maxQuoteSize || 10),
+                Number(pool.contractType || contractId)
+            );
+            hydrated.lpAddresses = { ...(pool.lpAddresses || {}) };
+            hydrated.ammOrders = Array.isArray(pool.ammOrders) ? pool.ammOrders : [];
+            return hydrated;
         } else {
             throw new Error(`AMM object not found for contract ID ${contractId}`);
         }
