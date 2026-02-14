@@ -630,6 +630,8 @@ class Clearing {
 
 
     static async getIndexPrice(contractId, blockHeight) {
+        const ContractRegistry = require('./contractRegistry.js');
+        const Oracle = require('./oracle.js');
         // Load contract info (get from memory, or from DB)
         const contractInfo = await ContractRegistry.getContractInfo(contractId); // or your method
 
@@ -652,6 +654,7 @@ class Clearing {
 
 
     static async applyFundingToPositions(contractId, fundingRate, block) {
+        const ContractRegistry = require('./contractRegistry.js');
         const margins = await MarginMap.getInstance(contractId);
         const openPositions = await margins.getAllPositions(contractId);
         const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
@@ -692,6 +695,7 @@ class Clearing {
 
 
     static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
+        const ContractRegistry = require('./contractRegistry.js');
         if (totalFunding.isZero()) return;
 
         const collateralId = await ContractRegistry.getCollateralId(contractId);
@@ -3133,6 +3137,7 @@ class Clearing {
      *   }
      */
     async computeOptionAdjustments(seriesId, address, spot, currentBlockHeight, blocksPerDay) {
+      const ContractRegistry = require('./contractRegistry.js');
       const mm = await MarginMap.getInstance(seriesId);
       const pos = mm.margins.get(address) || {};
       const optionsBag = { ...(pos.options || {}) };
