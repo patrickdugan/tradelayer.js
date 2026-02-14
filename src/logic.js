@@ -867,10 +867,11 @@ const Logic = {
 
 	async redeemManagedToken(propertyId, amount, senderAddress, block, dlcTemplateId = '', dlcContractId = '', settlementState = '') {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
-	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
 	    const pm = PropertyManager.getInstance();
         const propertyData = await PropertyManager.getPropertyData(propertyId);
-        if (Number(propertyData?.type) === 7) {
+        const isProcedural = Number(propertyData?.type) === 7;
+        if (!isManagedAdmin && !isProcedural) throw new Error('Sender is not admin of a managed property');
+        if (isProcedural) {
             const gate = await ProceduralRegistry.ensureRedemptionContext(dlcTemplateId, dlcContractId, settlementState);
             if (!gate.valid) throw new Error(gate.reason);
         }
@@ -1749,6 +1750,14 @@ const Logic = {
                     stateHash: params.stateHash,
                     blockHeight: block
                 });
+                if (params.autoRoll && params.nextDlcRef) {
+                    await ProceduralRegistry.transitionContract(params.nextDlcRef, 'FUNDED', {
+                        rolledFrom: params.dlcRef,
+                        oracleId: params.oracleId,
+                        stateHash: params.stateHash,
+                        blockHeight: block
+                    });
+                }
             }
             return;
         }

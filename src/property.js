@@ -1,6 +1,7 @@
 const db = require('./db.js');
 const path = require('path');
 const BigNumber = require('bignumber.js')
+const TallyMap = require('./tally.js');
 
 function quantize8(value) {
     return new BigNumber(value || 0).decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
@@ -190,9 +191,9 @@ class PropertyManager {
                 throw new Error(`Property with ID ${propertyId} not found.`);
             }
 
-            // Check if the property type is 2 (Managed)
+            // Check if the property type is managed/procedural
             const propertyData = propertyEntry[1];
-            return propertyData.type === 2&&propertyData.issuer===address;
+            return (propertyData.type === 2 || propertyData.type === 7) && propertyData.issuer===address;
         } catch (error) {
             console.error(`Error checking if property ID ${propertyId} is managed:`, error);
             return false;
@@ -301,7 +302,7 @@ class PropertyManager {
     }
 
     async grantTokens(propertyId, recipient, amount,block) {
-        const propertyData = await this.getPropertyData(propertyId);
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
         if (!propertyData) {
             throw new Error(`Property with ID ${propertyId} not found.`);
         }
@@ -310,6 +311,8 @@ class PropertyManager {
         propertyData.totalInCirculation = quantize8(
             new BigNumber(propertyData.totalInCirculation).plus(amount)
         );
+        await PropertyManager.load();
+        this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to credit the amount to recipient
         await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
@@ -320,7 +323,7 @@ class PropertyManager {
     }
 
     async redeemTokens(propertyId, recipient, amount,block) {
-        const propertyData = await this.getPropertyData(propertyId);
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
         if (!propertyData) {
             throw new Error(`Property with ID ${propertyId} not found.`);
         }
@@ -334,6 +337,8 @@ class PropertyManager {
         propertyData.totalInCirculation = quantize8(
             new BigNumber(propertyData.totalInCirculation).minus(amount)
         );
+        await PropertyManager.load();
+        this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to debit the amount from recipient
         await TallyMap.updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);

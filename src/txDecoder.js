@@ -608,7 +608,9 @@ const Decode = {
             stateHash: parts[7] || '',
             dlcRef: parts[8] || '',
             settlementState: parts[9] || '',
-            relayBlob: parts[10] || ''
+            relayBlob: parts[10] || '',
+            autoRoll: parts[11] === '1',
+            nextDlcRef: parts[12] || ''
         };
     },
 

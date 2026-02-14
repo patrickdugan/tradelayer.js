@@ -1204,8 +1204,10 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
             const isManagedAdmin = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
-            if (!isManagedAdmin) {
+            if (!isManagedAdmin && !isProcedural) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of a managed property; ';
             }
@@ -1216,8 +1218,6 @@ const Validity = {
                 params.reason += 'Cannot redeem tokens; insufficient balance; ';
             }
 
-            const propertyData = await PropertyList.getPropertyData(params.propertyId);
-            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
             if (isProcedural) {
                 const gate = await ProceduralRegistry.ensureRedemptionContext(
                     params.dlcTemplateId,
@@ -3215,6 +3215,10 @@ const Validity = {
             if (!Number.isInteger(params.relayType) || params.relayType < 0) {
                 params.valid = false;
                 params.reason += 'Invalid relay type; ';
+            }
+            if (params.autoRoll && !params.nextDlcRef) {
+                params.valid = false;
+                params.reason += 'autoRoll requires nextDlcRef; ';
             }
             if (params.relayBlob) {
                 const bundle = DlcOracleBridge.parseRelayBlob(params.relayBlob);

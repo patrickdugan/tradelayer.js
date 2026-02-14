@@ -595,7 +595,9 @@ const Encode = {
             params.stateHash || '',
             params.dlcRef || '',
             params.settlementState || '',
-            params.relayBlob || ''
+            params.relayBlob || '',
+            params.autoRoll ? '1' : '0',
+            params.nextDlcRef || ''
         ];
         const type = 30;
         const typeStr = type?.toString(36) ?? '0';

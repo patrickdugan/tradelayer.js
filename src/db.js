@@ -24,19 +24,30 @@ class Database {
         }
         this.initializing= true
         this.initPromise = (async () => {
+            const skipRpcBootstrap = process.env.TL_SKIP_RPC_BOOT === '1';
 
-            const instance = await ClientWrapper.getInstance();
-            if (!chain) {
-                chain = await instance.getChain();
+            if (skipRpcBootstrap) {
+                if (!chain) {
+                    chain = (process.env.CHAIN || 'LTC').toUpperCase();
+                }
+                this.test = process.env.TL_FORCE_TEST === '0' ? false : true;
+            } else {
+                const instance = await ClientWrapper.getInstance();
+                if (!chain) {
+                    chain = await instance.getChain();
+                }
+                this.test = await instance.getTest();
             }
-
-            this.test = await instance.getTest() 
 
             while (!chain) {
                 console.log('Waiting for chain...');
                 await new Promise(resolve => setTimeout(resolve, 300));
-                const instance = await ClientWrapper.getInstance();
-                chain = instance.chain;
+                if (!skipRpcBootstrap) {
+                    const instance = await ClientWrapper.getInstance();
+                    chain = instance.chain;
+                } else {
+                    chain = (process.env.CHAIN || 'LTC').toUpperCase();
+                }
             }
             let test = 'test'
             if(this.test==false){
