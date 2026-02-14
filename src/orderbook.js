@@ -2126,6 +2126,7 @@ class Orderbook {
 
               const address = order.sender || order.address;
               if (!address) continue;
+              const isVirtualAmm = address === 'amm' || (typeof address === 'string' && address.startsWith('amm:'));
 
               const qty = Math.abs(Number(order.amount || 0));
               if (!Number.isFinite(qty) || qty <= 0) continue;
@@ -2146,7 +2147,7 @@ class Orderbook {
 
                 // refund reserve if present
                 const reserve = Number(order.initMargin || 0);
-                if (reserve > 0) {
+                if (reserve > 0 && !isVirtualAmm) {
                   await Tally.updateBalance(
                     address,
                     collateralId,
@@ -2194,7 +2195,7 @@ class Orderbook {
                   reserve = Number(imPer || 0) * qty;
                 }
 
-                if (reserve > 0) {
+                if (reserve > 0 && !isVirtualAmm) {
                   await Tally.updateBalance(
                     address,
                     collateralId,
@@ -3774,12 +3775,8 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
                         if (order.sender === "amm") {
                             cancelledOrders.push(order);
                             orderBook.buy.splice(i, 1);
-                            // Adjust return from reserve based on the cancelled order
-                            if (token === true) {
-                                returnFromReserve += order.amountOffered;
-                            } else {
-                                returnFromReserve += order.initMargin;
-                            }
+                            // Virtual AMM quotes are not backed by wallet reserve buckets.
+                            // Do not attempt reserve refund accounting for sender=amm.
                         }
                     }
 
@@ -3790,12 +3787,8 @@ async updateVolumeAndRewards(match, currentBlockHeight) {
                         if (order.sender === "amm") {
                             cancelledOrders.push(order);
                             orderBook.sell.splice(i, 1);
-                            // Adjust return from reserve based on the cancelled order
-                            if (token === true) {
-                                returnFromReserve += order.amountOffered;
-                            } else {
-                                returnFromReserve += order.initMargin;
-                            }
+                            // Virtual AMM quotes are not backed by wallet reserve buckets.
+                            // Do not attempt reserve refund accounting for sender=amm.
                         }
                     }
                 } else {
@@ -4077,7 +4070,8 @@ async cancelAllOrdersForAddress(fromAddress, key, block, collateralPropertyId) {
     this.orderBooks[key] = orderBook;
     await this.saveOrderBook(orderBook, key);
 
-    if (returnFromReserve > 0) {
+    const isVirtualAmmSender = fromAddress === 'amm' || (typeof fromAddress === 'string' && fromAddress.startsWith('amm:'));
+    if (returnFromReserve > 0 && !isVirtualAmmSender) {
         await TallyMap.updateBalance(
             fromAddress,
             collateralPropertyId,
