@@ -2655,9 +2655,71 @@ class Clearing {
       }
 
 
+    static resolveOptionExerciseTarget(seriesId, seriesInfo, optionExpiryBlock) {
+      const sid = Number(seriesId);
+      if (!seriesInfo || !seriesInfo.contracts || !Array.isArray(seriesInfo.contracts.unexpired)) {
+        return sid;
+      }
+
+      const exp = Number(optionExpiryBlock || 0);
+      if (!Number.isFinite(exp) || exp <= 0) return sid;
+
+      const candidates = seriesInfo.contracts.unexpired
+        .map((c) => ({
+          id: c && c.id != null ? c.id : sid,
+          expirationBlock: Number(c && c.expirationBlock)
+        }))
+        .filter((c) => Number.isFinite(c.expirationBlock) && c.expirationBlock >= exp)
+        .sort((a, b) => a.expirationBlock - b.expirationBlock);
+
+      return candidates.length ? candidates[0].id : sid;
+    }
+
+    static computeExerciseContracts(meta, qty) {
+      const signedQty = Number(qty || 0);
+      const absQty = Math.abs(signedQty);
+      if (!absQty) return 0;
+
+      if (meta.type === 'Call') {
+        return signedQty > 0 ? absQty : -absQty;
+      }
+      // Put
+      return signedQty > 0 ? -absQty : absQty;
+    }
+
+    static applyAssignedUnderlyingPosition(pos, contractDelta, entryPrice, marginTransfer) {
+      const delta = Number(contractDelta || 0);
+      if (!delta) return;
+
+      const px = Number(entryPrice || 0);
+      const marginShift = Number(marginTransfer || 0);
+      const before = Number(pos.contracts || 0);
+      const after = before + delta;
+
+      const beforeSign = Math.sign(before);
+      const afterSign = Math.sign(after);
+      const deltaSign = Math.sign(delta);
+      const isFlip = before !== 0 && delta !== 0 && beforeSign !== deltaSign && Math.abs(delta) > Math.abs(before);
+
+      if (after === 0) {
+        pos.avgPrice = 0;
+      } else if (!isFlip && (before === 0 || beforeSign === afterSign)) {
+        const oldCost = before * Number(pos.avgPrice || 0);
+        const newCost = delta * px;
+        pos.avgPrice = (oldCost + newCost) / after;
+      } else {
+        pos.avgPrice = px;
+      }
+
+      pos.contracts = after;
+      pos.margin = Number(pos.margin || 0) + marginShift;
+      pos.lastMark = Number.isFinite(Number(pos.lastMark)) ? Number(pos.lastMark) : px;
+    }
+
     /**
      * Settle all options expiring at or before currentBlock for a given series.
-     * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
+     * OTM legs cash-settle and release option margin.
+     * ITM legs are forcibly exercised into underlying exposure.
      */
     static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
       const mm = await MarginMap.getInstance(seriesId);
@@ -2688,27 +2750,51 @@ class Clearing {
 
           // Intrinsic payoff at settlement
           const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-          const cash = iv * Math.abs(qty); // per-contract * absolute qty
-
-          // Long options receive; short options pay
-          const availableDelta = qty > 0 ? +cash : -cash;
-
-          // Free any margin previously held on this option leg
           const marginHeld = Number(optPos.margin || 0);
-          const marginDelta = marginHeld ? -marginHeld : 0;
+          const isITM = iv > 0;
 
-          // Tally: available +/- intrinsic; margin -= marginHeld
-          await TallyMap.updateBalance(
-            address,
-            collateralPropertyId,
-            availableDelta, // availableChange
-            0,              // reservedChange
-            marginDelta,    // marginChange
-            0,              // vestingChange
-            'optionExpire',
-            currentBlockHeight,
-            txid
-          );
+          if (isITM) {
+            const exerciseDelta = this.computeExerciseContracts(meta, qty);
+            const assignmentTarget = this.resolveOptionExerciseTarget(
+              seriesId,
+              seriesInfo,
+              meta.expiryBlock
+            );
+
+            // Move option-leg collateral into core series margin and open assigned delta at strike.
+            this.applyAssignedUnderlyingPosition(
+              pos,
+              exerciseDelta,
+              Number(meta.strike || spot || 0),
+              marginHeld
+            );
+
+            await mm.recordMarginMapDelta(
+              address,
+              String(assignmentTarget),
+              Number(pos.contracts || 0),
+              exerciseDelta,
+              Number(meta.strike || spot || 0),
+              0,
+              marginHeld,
+              'optionExpireAssign',
+              currentBlockHeight
+            );
+          } else {
+            // OTM expiry: no assignment, only release option margin.
+            const marginDelta = marginHeld ? -marginHeld : 0;
+            await TallyMap.updateBalance(
+              address,
+              collateralPropertyId,
+              0,              // availableChange
+              0,              // reservedChange
+              marginDelta,    // marginChange
+              0,              // vestingChange
+              'optionExpire',
+              currentBlockHeight,
+              txid
+            );
+          }
 
           // Remove the option sub-position from the blob
           delete pos.options[ticker];
@@ -2719,10 +2805,10 @@ class Clearing {
             ticker,
             0,                 // position after (expired → closed)
             -qty,              // delta contracts to flat
-            iv,                // settled at intrinsic (for audit)
+            iv,                // settlement intrinsic (for audit)
             0,                 // uPNL delta
             marginHeld ? -marginHeld : 0, // margin freed
-            'optionExpire',
+            isITM ? 'optionExpireExercised' : 'optionExpire',
             currentBlockHeight
           );
         }
