@@ -423,11 +423,11 @@ const Types = {
                 params = await Validity.validateTradeMurabaha(sender, params, txId)
                 break;
             case 30:
-                params = Decode.stakeFraudProof(encodedPayload.substr(index));
+                params = Decode.decodeStakeFraudProof(encodedPayload.substr(index));
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateStake(sender, params, txId)
+                params = await Validity.validateStakeFraudProof(sender, params, txId)
                 break;    
             case 31:
                 // L2 Scaling: King Settlement (batch sweep)

@@ -90,6 +90,7 @@ class PropertyManager {
             'Vesting': 4,
             'Synthetic': 5,
             'Non-Fungible': 6,
+            'Procedural': 7,
         };
 
         if (!propertyTypeIndexes[type]) {

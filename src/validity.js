@@ -193,6 +193,17 @@ const Validity = {
                 params.reason += 'Invalid property ID for vesting type; ';
             }
 
+            if (params.proceduralType !== null && params.proceduralType !== undefined) {
+                if (!params.managed) {
+                    params.valid = false;
+                    params.reason += 'Procedural token type requires managed issuance; ';
+                }
+                if (!Number.isInteger(params.proceduralType) || params.proceduralType < 0) {
+                    params.valid = false;
+                    params.reason += 'Invalid procedural type enum; ';
+                }
+            }
+
             const is = await Validity.isActivated(params.block,txid,1)
             console.log(is)
             if (!is) {
@@ -3091,14 +3102,93 @@ const Validity = {
         return isValidChannel && isValidContractTerms;
     },
 
-    // 30: Issue Invoice
-    validateStakeFraudProof: (params, invoiceRegistry, tallyMap) => {
-        // Check if the issuer has sufficient balance of the property to receive payment
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.issuerAddress, params.propertyIdToReceivePayment, params.amount);
-        // Validate invoice terms (due date, collateral, etc.)
-        const isValidInvoiceTerms = invoiceRegistry.isValidInvoiceTerms(params.dueDateBlock, params.propertyIdCollateral);
+    // 30: Oracle stake / fraud proof / relay
+    validateStakeFraudProof: async (sender, params, txid) => {
+        params.reason = '';
+        params.valid = true;
 
-        return hasSufficientBalance.hasSufficient && isValidInvoiceTerms;
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(30);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated ';
+        }
+
+        const is = await Validity.isActivated(params.block, txid, 30);
+        if (!is) {
+            params.valid = false;
+            params.reason += 'Transaction type activated after tx; ';
+        }
+
+        if (![0, 1, 2].includes(Number(params.action))) {
+            params.valid = false;
+            params.reason += 'Invalid action, expected 0/1/2; ';
+            return params;
+        }
+
+        const oracle = await OracleList.getOracleInfo(params.oracleId);
+        if (!oracle) {
+            params.valid = false;
+            params.reason += 'Invalid oracle id; ';
+            return params;
+        }
+
+        if (Number(params.action) === 0) {
+            if (!Number.isInteger(params.stakedPropertyId) || params.stakedPropertyId <= 0) {
+                params.valid = false;
+                params.reason += 'Invalid staked property id; ';
+            } else {
+                const stakeProperty = await PropertyList.getPropertyData(params.stakedPropertyId);
+                if (!stakeProperty) {
+                    params.valid = false;
+                    params.reason += 'Staked property does not exist; ';
+                }
+            }
+
+            if (!Validity.isValidNumber(params.amount)) {
+                params.valid = false;
+                params.reason += 'Invalid stake amount; ';
+            } else {
+                const senderBal = await TallyMap.getTally(sender, params.stakedPropertyId);
+                if (Number(senderBal?.available || 0) < Number(params.amount || 0)) {
+                    params.valid = false;
+                    params.reason += 'Insufficient available balance for stake; ';
+                }
+            }
+        }
+
+        if (Number(params.action) === 1) {
+            if (!params.accusedAddress || typeof params.accusedAddress !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing accused address; ';
+            }
+            if (!params.evidenceHash || typeof params.evidenceHash !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing evidence hash; ';
+            }
+            if (!Validity.isValidNumber(params.amount)) {
+                params.valid = false;
+                params.reason += 'Invalid slash amount; ';
+            }
+        }
+
+        if (Number(params.action) === 2) {
+            const adminAddr = oracle?.adminAddress || oracle?.name?.adminAddress;
+            const backupAddr = oracle?.backupAddress || oracle?.name?.backupAddress;
+            if (sender !== adminAddr && sender !== backupAddr) {
+                params.valid = false;
+                params.reason += 'Relay sender is not oracle admin/backup; ';
+            }
+            if (!params.stateHash || typeof params.stateHash !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing state hash; ';
+            }
+            if (!Number.isInteger(params.relayType) || params.relayType < 0) {
+                params.valid = false;
+                params.reason += 'Invalid relay type; ';
+            }
+        }
+
+        return params;
     },
 
     /**

@@ -57,7 +57,18 @@ const Logic = {
                 await Logic.activateTradeLayer(params.txTypesToActivate, params.block, params.codeHash);
                 break;
             case 1:
-                await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT, params.block);
+                await Logic.tokenIssue(
+                    params.senderAddress,
+                    params.initialAmount,
+                    params.ticker,
+                    params.url,
+                    Array.isArray(params.whitelists) ? (params.whitelists[0] || 0) : (params.whitelistId || 0),
+                    params.managed ?? params.isManaged,
+                    params.backupAddress,
+                    params.nft ?? params.isNFT,
+                    params.block,
+                    params.proceduralType
+                );
                 break;
             case 2:
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
@@ -146,7 +157,7 @@ const Logic = {
                 await Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight, params.block);
                 break;
             case 30:
-                await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce, params.block);
+                await Logic.processStakeFraudProof(params.senderAddress, params, params.block);
                 break;
             case 31:
                 Logic.batchSettlement(params);
@@ -186,11 +197,14 @@ const Logic = {
     },
 
 
-    async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block, proceduralType = null) {
         const propertyManager = PropertyManager.getInstance();
 
         // Determine the type of the token based on whether it's managed or an NFT
         let tokenType = isNFT ? 'Non-Fungible' : isManaged ? 'Managed' : 'Fixed';
+        if (proceduralType !== null && proceduralType !== undefined && isManaged) {
+            tokenType = 'Procedural';
+        }
 
         // Define the token data
         const tokenData = {
@@ -199,7 +213,8 @@ const Logic = {
             type: tokenType,
             clearlistId: clearlistId,
             issuer: sender,
-            backupAddress: backupAddress
+            backupAddress: backupAddress,
+            proceduralType
         };
 
         // Create the token in the property manager
@@ -1667,44 +1682,43 @@ const Logic = {
 	    console.log(`Murabaha contract created in channel ${channelAddress}`);
 	},
 
-    issueInvoice(propertyManager, invoiceRegistry, propertyIdToReceivePayment, amount, dueDateBlock, propertyIdCollateral = null, receivesPayToToken = false, issuerNonce) {
-	    // Validate input parameters
-	    if (!propertyManager.isPropertyIdValid(propertyIdToReceivePayment)) {
-	        throw new Error('Invalid property ID to receive payment');
-	    }
-	    if (propertyIdCollateral && !propertyManager.isPropertyIdValid(propertyIdCollateral)) {
-	        throw new Error('Invalid property ID for collateral');
-	    }
+    async processStakeFraudProof(senderAddress, params, block) {
+        const action = Number(params.action || 0);
+        if (action === 0) {
+            await TallyMap.updateBalance(senderAddress, params.stakedPropertyId, -params.amount, 0, params.amount, 0, 'oracleStake', block);
+            await OracleList.recordStake(params.oracleId, senderAddress, params.stakedPropertyId, params.amount, block);
+            return;
+        }
 
-	    // Generate an invoice ID
-	    const invoiceId = `${propertyIdToReceivePayment}-${dueDateBlock}-${issuerNonce}`;
+        if (action === 1) {
+            const result = await OracleList.applyFraudProof(
+                params.oracleId,
+                params.accusedAddress,
+                senderAddress,
+                params.amount,
+                params.evidenceHash,
+                block
+            );
+            if (result && Number(result.slashed || 0) > 0) {
+                await TallyMap.updateBalance(senderAddress, params.stakedPropertyId, result.slashed, 0, 0, 0, 'oracleFraudReward', block);
+            }
+            return;
+        }
 
-	    // Create the invoice object
-	    const invoice = {
-	        invoiceId,
-	        propertyIdToReceivePayment,
-	        amount,
-	        dueDateBlock,
-	        collateral: propertyIdCollateral ? {
-	            propertyId: propertyIdCollateral,
-	            locked: receivesPayToToken,
-	        } : null,
-	    };
+        if (action === 2) {
+            await OracleList.relayTradeLayerState(
+                params.oracleId,
+                senderAddress,
+                params.relayType,
+                params.stateHash,
+                params.dlcRef,
+                block
+            );
+            return;
+        }
 
-	    // Register the invoice in the invoice registry
-	    invoiceRegistry.registerInvoice(invoice);
-
-	    console.log(`Invoice issued with ID: ${invoiceId}`);
-
-	    // Optionally, if collateral is involved and receives payToToken, lock the collateral
-	    if (invoice.collateral && receivesPayToToken) {
-	        // Logic to lock collateral in association with this invoice
-	        // This might involve updating a collateral registry or similar system
-	    }
-
-	    // Return the invoice ID for reference
-	    return invoiceId;
-	},
+        throw new Error(`Unknown stake/fraud/relay action ${action}`);
+    },
 
 	batchMoveZkRollup(zkVerifier, rollupData, zkProof) {
 	    // Parse the Zero-Knowledge rollup data

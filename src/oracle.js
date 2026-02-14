@@ -160,14 +160,16 @@ class OracleList {
         }
     }
 
-     static async isAdmin(senderAddress, oracleId) {
+    static async isAdmin(senderAddress, oracleId) {
         try {
             const oracleKey = `oracle-${oracleId}`;
             console.log('checking admin for oracle key '+oracleKey)
             const oracleDB = await db.getDatabase('oracleList');
             const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
 
-            if (oracleData && oracleData.name.adminAddress === senderAddress) {
+            const adminAddr = oracleData?.adminAddress || oracleData?.name?.adminAddress;
+            const backupAddr = oracleData?.backupAddress || oracleData?.name?.backupAddress;
+            if (adminAddr === senderAddress || backupAddr === senderAddress) {
                 return true; // The sender is the admin
             } else {
                 return false; // The sender is not the admin
@@ -220,6 +222,80 @@ class OracleList {
         instance.oracles.set(oracleKey, oracle);
 
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`);
+    }
+
+    static async recordStake(oracleId, stakerAddress, stakedPropertyId, amount, blockHeight) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const key = `oracle-stake-${oracleId}-${stakerAddress}`;
+        const prev = await oracleDataDB.findOneAsync({ _id: key });
+        const previousAmount = Number(prev?.amount || 0);
+        const nextAmount = new BigNumber(previousAmount).plus(amount).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        const doc = {
+            _id: key,
+            type: 'stake',
+            oracleId,
+            stakerAddress,
+            stakedPropertyId,
+            amount: nextAmount,
+            blockHeight
+        };
+        await oracleDataDB.updateAsync({ _id: key }, { $set: doc }, { upsert: true });
+        return doc;
+    }
+
+    static async getStake(oracleId, stakerAddress) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        return oracleDataDB.findOneAsync({ _id: `oracle-stake-${oracleId}-${stakerAddress}` });
+    }
+
+    static async applyFraudProof(oracleId, accusedAddress, challengerAddress, slashAmount, evidenceHash, blockHeight) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const stakeKey = `oracle-stake-${oracleId}-${accusedAddress}`;
+        const accusedStake = await oracleDataDB.findOneAsync({ _id: stakeKey });
+        if (!accusedStake) {
+            return { slashed: 0 };
+        }
+
+        const currentStake = Number(accusedStake.amount || 0);
+        const slash = Math.min(currentStake, Number(slashAmount || 0));
+        const nextStake = new BigNumber(currentStake).minus(slash).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        await oracleDataDB.updateAsync({ _id: stakeKey }, { $set: { amount: nextStake, blockHeight } }, { upsert: true });
+
+        const fraudKey = `oracle-fraud-${oracleId}-${blockHeight}-${String(evidenceHash || '').slice(0, 24)}`;
+        await oracleDataDB.updateAsync(
+            { _id: fraudKey },
+            {
+                $set: {
+                    _id: fraudKey,
+                    type: 'fraudProof',
+                    oracleId,
+                    accusedAddress,
+                    challengerAddress,
+                    slashAmount: slash,
+                    evidenceHash,
+                    blockHeight
+                }
+            },
+            { upsert: true }
+        );
+        return { slashed: slash };
+    }
+
+    static async relayTradeLayerState(oracleId, senderAddress, relayType, stateHash, dlcRef, blockHeight) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const relayKey = `oracle-relay-${oracleId}-${relayType}-${blockHeight}`;
+        const relayDoc = {
+            _id: relayKey,
+            type: 'relay',
+            oracleId,
+            senderAddress,
+            relayType,
+            stateHash,
+            dlcRef,
+            blockHeight
+        };
+        await oracleDataDB.updateAsync({ _id: relayKey }, relayDoc, { upsert: true });
+        return relayDoc;
     }
 
     static async createOracle(name, adminAddress) {

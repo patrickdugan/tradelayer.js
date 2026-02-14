@@ -41,6 +41,8 @@ const Encode = {
             params.managed ? '1' : '0', //turn into enum
             params.backupAddress,
             params.nft ? '1' : '0',
+            params.coloredCoinHybrid ? '1' : '0',
+            params.proceduralType?.toString(36) ?? '',
         ];
         const type = 1;
         const typeStr = type?.toString(36) ?? '0';
@@ -574,14 +576,19 @@ const Encode = {
         return marker + typeStr + payload.join(',');
     },
 
-    // Encode Issue Invoice Transaction
+    // Encode Oracle Stake/Fraud/Relay Transaction
     encodeStakeFraudProof: (params) => {
+        const amount = new BigNumber(params.amount || 0).times(1e8).integerValue(BigNumber.ROUND_DOWN).toString(36);
         const payload = [
-            params.propertyIdToReceivePayment?.toString(36) ?? '0',
-            params.amount?.toString(36) ?? '0',
-            params.dueDateBlock?.toString(36) ?? '0',
-            params.optionalPropertyIdCollateral ? params.optionalPropertyIdCollateral?.toString(36) ?? '0' : '0',
-            params.receivesPayToToken ? '1' : '0',
+            Number(params.action || 0).toString(36),     // 0=stake,1=fraud,2=relay
+            Number(params.oracleId || 0).toString(36),
+            Number(params.stakedPropertyId || 0).toString(36),
+            amount,
+            params.accusedAddress || '',
+            params.evidenceHash || '',
+            Number(params.relayType || 0).toString(36),
+            params.stateHash || '',
+            params.dlcRef || ''
         ];
         const type = 30;
         const typeStr = type?.toString(36) ?? '0';

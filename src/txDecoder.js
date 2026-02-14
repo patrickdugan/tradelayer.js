@@ -48,7 +48,8 @@ const Decode = {
             managed: parts[3] === '1',
             backupAddress: parts[4] || '',
             nft: parts[5] === '1',
-            coloredCoinHybrid: parts[6]==='1'
+            coloredCoinHybrid: parts[6] === '1',
+            proceduralType: parts[7] ? parseInt(parts[7], 36) : null
         };
     },
 
@@ -585,6 +586,22 @@ const Decode = {
                 neutralizedCount: parseInt(base94.fromBase94(parts[7] || '0'))
             };
         },
+
+    // Type 30: Oracle stake/fraud/relay
+    decodeStakeFraudProof: (payload) => {
+        const parts = payload.split(',');
+        return {
+            action: parseInt(parts[0] || '0', 36), // 0=stake,1=fraud,2=relay
+            oracleId: parseInt(parts[1] || '0', 36),
+            stakedPropertyId: parseInt(parts[2] || '0', 36),
+            amount: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            accusedAddress: parts[4] || '',
+            evidenceHash: parts[5] || '',
+            relayType: parseInt(parts[6] || '0', 36),
+            stateHash: parts[7] || '',
+            dlcRef: parts[8] || ''
+        };
+    },
 
     decodeBatchMoveZkRollup: (payload) =>{
        return { ordinalRevealJSON: payload };
