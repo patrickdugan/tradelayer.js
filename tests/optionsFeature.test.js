@@ -19,6 +19,8 @@ describe('Options feature wiring', () => {
     expect(decoded.contractId).toBe('3-1000-C-150');
     expect(decoded.ticker).toBe('3-1000-C-150');
     expect(decoded.amount).toBe(4);
+    expect(decoded.columnAIsSeller).toBe(true);
+    expect(decoded.columnAIsMaker).toBe(false);
   });
 
   test('type 27 decode forwards blockHeight into validation', async () => {

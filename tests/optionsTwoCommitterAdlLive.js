@@ -21,6 +21,10 @@
  * - TL_SPOT_START=108
  * - TL_SPOT_TARGETS=113,118,123,128
  * - TL_CALL_STRIKE=120
+ * - TL_OPTION_TYPE=C|P
+ * - TL_OPTION_STRIKE=120
+ * - TL_B_OPTION_LONG=true|false
+ * - TL_B_PERP_LONG=true|false
  */
 
 const TxUtils = require('../src/txUtils');
@@ -45,6 +49,12 @@ function nenv(name, fallback) {
 function splitNums(name, fallbackCsv) {
   const raw = process.env[name] || fallbackCsv;
   return String(raw).split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x));
+}
+
+function boolEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  return String(raw).toLowerCase() === 'true';
 }
 
 function sleep(ms) {
@@ -242,10 +252,12 @@ async function main() {
   const commitAmount = nenv('TL_COMMIT_AMOUNT', 25);
   const perpQty = nenv('TL_PERP_QTY', 1);
   const optQty = nenv('TL_OPTION_QTY', 1);
-  const bPerpLong = String(process.env.TL_B_PERP_LONG || 'true').toLowerCase() === 'true';
+  const bPerpLong = boolEnv('TL_B_PERP_LONG', true);
+  const bOptionLong = boolEnv('TL_B_OPTION_LONG', false);
   const startSpot = nenv('TL_SPOT_START', 108);
   const targets = splitNums('TL_SPOT_TARGETS', '113,118,123,128');
-  const callStrike = nenv('TL_CALL_STRIKE', 120);
+  const optionType = String(process.env.TL_OPTION_TYPE || 'C').toUpperCase() === 'P' ? 'P' : 'C';
+  const optionStrike = nenv('TL_OPTION_STRIKE', nenv('TL_CALL_STRIKE', 120));
   const applyImmediate = String(process.env.TL_APPLY_IMMEDIATE || 'true').toLowerCase() === 'true';
   const runActivation = String(process.env.TL_RUN_ACTIVATION || 'false').toLowerCase() === 'true';
   const skipActivationInit = String(process.env.TL_SKIP_ACTIVATION_INIT || 'true').toLowerCase() === 'true';
@@ -287,16 +299,19 @@ async function main() {
 
   const block = await withRetry('getBlockCount pre-trade', async () => TxUtils.getBlockCount());
   const expiry = block + 120;
-  const callTicker = `${seriesId}-${expiry}-C-${callStrike}`;
+  const optionTicker = `${seriesId}-${expiry}-${optionType}-${optionStrike}`;
 
   // Direction toggle:
   // - B long perp  => A seller => columnAIsSeller=true
   // - B short perp => A buyer  => columnAIsSeller=false
+  const perpColumnAIsSeller = process.env.TL_PERP_COLUMN_A_SELLER === undefined
+    ? (bPerpLong ? true : false)
+    : boolEnv('TL_PERP_COLUMN_A_SELLER', true);
   const perpTx = await withRetry('create perp trade', async () => TxUtils.createChannelContractTradeTransaction(channel, {
     contractId: seriesId,
     price: tradePrice,
     amount: perpQty,
-    columnAIsSeller: bPerpLong ? true : false,
+    columnAIsSeller: perpColumnAIsSeller,
     expiryBlock: expiry,
     insurance: false,
     columnAIsMaker: true
@@ -309,12 +324,17 @@ async function main() {
     }
   }
 
-  // B short call: A is buyer => columnAIsSeller=false
+  // Direction toggle:
+  // - B long option  => A seller => columnAIsSeller=true
+  // - B short option => A buyer  => columnAIsSeller=false
+  const optionColumnAIsSeller = process.env.TL_OPTION_COLUMN_A_SELLER === undefined
+    ? (bOptionLong ? true : false)
+    : boolEnv('TL_OPTION_COLUMN_A_SELLER', false);
   const optionTx = await withRetry('create option trade', async () => TxUtils.createOptionTradeTransaction(channel, {
-    contractId: callTicker,
+    contractId: optionTicker,
     price: 0,
     amount: optQty,
-    columnAIsSeller: false,
+    columnAIsSeller: optionColumnAIsSeller,
     expiryBlock: expiry,
     columnAIsMaker: true
   }));
@@ -336,7 +356,13 @@ async function main() {
     await ob.saveOrderBook(seriesId);
   }
   const side = ob?.orderBooks?.[String(seriesId)] || { buy: [], sell: [] };
-  console.log('[orderbook-depth]', { buy: side.buy.length, sell: side.sell.length });
+  console.log('[orderbook-depth]', {
+    buy: side.buy.length,
+    sell: side.sell.length,
+    perpColumnAIsSeller,
+    optionColumnAIsSeller,
+    optionTicker
+  });
 
   for (const px of targets) {
     await publishOracle(admin, oracleId, px, applyImmediate, ++synthBlock);
@@ -352,12 +378,16 @@ async function main() {
     }
 
     const mm = await MarginMap.getInstance(seriesId);
+    const aPos = mm.margins.get(setup.commitA) || {};
     const bPos = mm.margins.get(setup.commitB) || {};
     const liq = Clearing.getLiquidation(seriesId, setup.commitB) || null;
     const adlLike = Boolean(liq && Number(liq.totalDeleveraged || 0) > 0 && side.buy.length === 0 && side.sell.length === 0);
     console.log('[step]', {
       spot: px,
+      aContracts: Number(aPos.contracts || 0),
+      aOptions: aPos.options || {},
       bContracts: Number(bPos.contracts || 0),
+      bLiqPrice: Number(bPos.liqPrice ?? bPos.liquidationPrice ?? 0),
       bOptions: bPos.options || {},
       liquidation: liq,
       adlLike

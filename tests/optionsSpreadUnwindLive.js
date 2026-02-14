@@ -5,6 +5,7 @@ const Activation = require('../src/activation');
 const MarginMap = require('../src/marginMap');
 const Tally = require('../src/tally');
 const Options = require('../src/options');
+const Channels = require('../src/channels');
 
 function nenv(name, fallback) {
   const raw = process.env[name];
@@ -56,6 +57,14 @@ async function snapshot(seriesId, addr, spot) {
   };
 }
 
+async function resolveTrackAddress(channel, fallback) {
+  if (process.env.TL_TRACK_ADDRESS) return process.env.TL_TRACK_ADDRESS;
+  const ch = await Channels.getChannel(channel);
+  const b = ch?.participants?.B;
+  const a = ch?.participants?.A;
+  return b || a || fallback;
+}
+
 async function main() {
   const admin = process.env.TL_ADMIN_ADDRESS || 'tltc1qa0kd2d39nmeph3hvcx8ytv65ztcywg5sazhtw8';
   const channel = process.env.TL_CHANNEL_ADDRESS || admin;
@@ -72,10 +81,11 @@ async function main() {
   const expiry = block + 120;
   const shortTicker = `${seriesId}-${expiry}-C-${shortStrike}`;
   const longTicker = `${seriesId}-${expiry}-C-${longStrike}`;
+  const trackAddress = await resolveTrackAddress(channel, admin);
 
-  console.log({ admin, channel, seriesId, shortTicker, longTicker, qty, applyImmediate });
+  console.log({ admin, channel, trackAddress, seriesId, shortTicker, longTicker, qty, applyImmediate });
 
-  const before = await snapshot(seriesId, admin, spot);
+  const before = await snapshot(seriesId, trackAddress, spot);
   console.log('[before]', before);
 
   const spreadTxid = await TxUtils.createOptionTradeTransaction(channel, {
@@ -91,7 +101,7 @@ async function main() {
   });
   if (applyImmediate) await applyTxNow(spreadTxid, channel, block);
 
-  const afterSpread = await snapshot(seriesId, admin, spot);
+  const afterSpread = await snapshot(seriesId, trackAddress, spot);
   console.log('[after-spread]', afterSpread);
 
   const unwindTxid = await TxUtils.createOptionTradeTransaction(channel, {
@@ -104,7 +114,7 @@ async function main() {
   });
   if (applyImmediate) await applyTxNow(unwindTxid, channel, block);
 
-  const afterUnwind = await snapshot(seriesId, admin, spot);
+  const afterUnwind = await snapshot(seriesId, trackAddress, spot);
   const marginDelta = Number((afterUnwind.margin - afterSpread.margin).toFixed(8));
   console.log('[after-unwind]', { ...afterUnwind, marginDelta });
 }

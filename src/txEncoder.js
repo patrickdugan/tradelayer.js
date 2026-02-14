@@ -494,7 +494,7 @@ const Encode = {
             params.contractId,
             Encode.encodeAmount(params.price)?.toString(36) ?? '0',
             params.amount?.toString(36) ?? '0',
-            params.columnAIsSeller,
+            params.columnAIsSeller ? '1' : '0',
             params.expiryBlock?.toString(36) ?? '0',
             params.columnAIsMaker ? '1' : '0'
         ];
