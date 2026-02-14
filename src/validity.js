@@ -3133,7 +3133,7 @@ const Validity = {
         }
 
         const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
-        if (!commitAddressA && !commitAddressB) {
+        if (!commitAddressA || !commitAddressB) {
             params.valid = false;
             params.reason += 'Sender is not a channel participant; ';
             return params;
@@ -3149,7 +3149,7 @@ const Validity = {
 
         if (!isKingSettle) {
             // Check if already neutralized by later settlement
-            const isNeutralized = await Scaling.isThisSettlementAlreadyNeutralized(sender, params.txidNeutralized1);
+            const isNeutralized = await ScalingL2.isSettlementNeutralized(sender, params.txidNeutralized1);
             if (isNeutralized) {
                 params.valid = false;
                 params.reason += 'Settlement already superseded by later settlement; ';
@@ -3161,7 +3161,7 @@ const Validity = {
         switch (params.settleType) {
             case 0: // KEEP_ALIVE
                 // Tx 2: Just needs valid trade reference
-                const tradeStatus = await Scaling.isTradePublished(params.txidNeutralized1);
+                const tradeStatus = await ScalingL2.getTradeStatus(params.txidNeutralized1);
                 if (tradeStatus.status === 'expired') {
                     params.valid = false;
                     params.reason += 'Cannot keep-alive an expired trade; ';
@@ -3202,6 +3202,10 @@ const Validity = {
                     params.valid = false;
                     params.reason += 'Missing netAmount for NET_SETTLE; ';
                 }
+                if (params.propertyId === undefined || params.propertyId === null) {
+                    params.valid = false;
+                    params.reason += 'Missing propertyId for NET_SETTLE; ';
+                }
                 if (params.columnAIsSeller === undefined) {
                     params.valid = false;
                     params.reason += 'Missing columnAIsSeller direction flag; ';
@@ -3230,6 +3234,10 @@ const Validity = {
                 if (params.aPaysBDirection === undefined && params.columnAIsSeller === undefined) {
                     params.valid = false;
                     params.reason += 'Missing direction flag for KING_SETTLE; ';
+                }
+                if (!params.channelRoot) {
+                    params.valid = false;
+                    params.reason += 'Missing channelRoot for KING_SETTLE; ';
                 }
                 if (params.blockStart !== undefined && params.blockEnd !== undefined && params.blockStart > params.blockEnd) {
                     params.valid = false;
