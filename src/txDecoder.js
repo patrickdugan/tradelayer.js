@@ -478,9 +478,9 @@ const Decode = {
         const parts = payload.split(',');
 
         return {
-            txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
-            txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
-            markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
+            txidNeutralized1: base256.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
+            txidNeutralized2: base256.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
+            markPrice: parseFloat(base94.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
             close: parts[3] === '1',
             columnAIsSeller: parts[4]=== '1',
             columnAIsMaker: parts[5]==='1',
@@ -552,22 +552,22 @@ const Decode = {
     decodeSettleChannelPNL: (payload) => {
         const parts = payload.split(',');
         return {
-            txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''),
-            txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''),
-            markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '0')),
+            txidNeutralized1: base256.base256ToHex(parts[0] || ''),
+            txidNeutralized2: base256.base256ToHex(parts[1] || ''),
+            markPrice: parseFloat(base94.fromBase94(parts[2] || '0')),
             settleType: parseInt(parts[3] || '0'),
             columnAIsSeller: parts[4] === '1',
             columnAIsMaker: parts[5] === '1',
-            netAmount: parseFloat(Base94Converter.fromBase94(parts[6] || '0')),
-            expiryBlock: parseInt(Base94Converter.fromBase94(parts[7] || '0')),
+            netAmount: parseFloat(base94.fromBase94(parts[6] || '0')),
+            expiryBlock: parseInt(base94.fromBase94(parts[7] || '0')),
             // Optional king-style fields for settleType=3 routed through tx23
-            blockStart: parts[8] ? parseInt(Base94Converter.fromBase94(parts[8])) : undefined,
-            blockEnd: parts[9] ? parseInt(Base94Converter.fromBase94(parts[9])) : undefined,
-            propertyId: parts[10] ? parseInt(Base94Converter.fromBase94(parts[10])) : undefined,
+            blockStart: parts[8] ? parseInt(base94.fromBase94(parts[8])) : undefined,
+            blockEnd: parts[9] ? parseInt(base94.fromBase94(parts[9])) : undefined,
+            propertyId: parts[10] ? parseInt(base94.fromBase94(parts[10])) : undefined,
             aPaysBDirection: parts[11] ? (parts[11] === '1') : undefined,
-            channelRoot: parts[12] ? Base256Converter.base256ToHex(parts[12]) : undefined,
-            totalContracts: parts[13] ? parseInt(Base94Converter.fromBase94(parts[13])) : undefined,
-            neutralizedCount: parts[14] ? parseInt(Base94Converter.fromBase94(parts[14])) : undefined
+            channelRoot: parts[12] ? base256.base256ToHex(parts[12]) : undefined,
+            totalContracts: parts[13] ? parseInt(base94.fromBase94(parts[13])) : undefined,
+            neutralizedCount: parts[14] ? parseInt(base94.fromBase94(parts[14])) : undefined
         };
     },
 
@@ -575,14 +575,14 @@ const Decode = {
     decodeKingSettle: (payload) => {
             const parts = payload.split(',');
             return {
-                blockStart: parseInt(Base94Converter.fromBase94(parts[0] || '0')),
-                blockEnd: parseInt(Base94Converter.fromBase94(parts[1] || '0')),
-                propertyId: parseInt(Base94Converter.fromBase94(parts[2] || '0')),
-                netAmount: parseFloat(Base94Converter.fromBase94(parts[3] || '0')),
+                blockStart: parseInt(base94.fromBase94(parts[0] || '0')),
+                blockEnd: parseInt(base94.fromBase94(parts[1] || '0')),
+                propertyId: parseInt(base94.fromBase94(parts[2] || '0')),
+                netAmount: parseFloat(base94.fromBase94(parts[3] || '0')),
                 aPaysBDirection: parts[4] === '1',
-                channelRoot: Base256Converter.base256ToHex(parts[5] || ''),
-                totalContracts: parseInt(Base94Converter.fromBase94(parts[6] || '0')),
-                neutralizedCount: parseInt(Base94Converter.fromBase94(parts[7] || '0'))
+                channelRoot: base256.base256ToHex(parts[5] || ''),
+                totalContracts: parseInt(base94.fromBase94(parts[6] || '0')),
+                neutralizedCount: parseInt(base94.fromBase94(parts[7] || '0'))
             };
         },
 

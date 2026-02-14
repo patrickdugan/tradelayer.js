@@ -439,27 +439,44 @@ const Encode = {
             ? Number(params.settleType)
             : (params.close ? 1 : 0);
         const payload = [
-            Base256Converter.hexToBase256(params.txidNeutralized1 || params.tradeid || ''),
-            Base256Converter.hexToBase256(params.txidNeutralized2 || params.settleid || ''),
-            Base94Converter.decimalToBase94(params.markPrice || 0),
+            base256.hexToBase256(params.txidNeutralized1 || params.tradeid || ''),
+            base256.hexToBase256(params.txidNeutralized2 || params.settleid || ''),
+            base94.decimalToBase94(params.markPrice || 0),
             settleType.toString(),
             params.columnAIsSeller ? '1' : '0',
             params.columnAIsMaker ? '1' : '0',
-            Base94Converter.decimalToBase94(params.netAmount || 0),
-            Base94Converter.decimalToBase94(params.expiryBlock || 0)
+            base94.decimalToBase94(params.netAmount || 0),
+            base94.decimalToBase94(params.expiryBlock || 0)
         ];
         if (params.blockStart !== undefined || params.blockEnd !== undefined || params.propertyId !== undefined) {
             payload.push(
-                Base94Converter.decimalToBase94(params.blockStart || 0),
-                Base94Converter.decimalToBase94(params.blockEnd || 0),
-                Base94Converter.decimalToBase94(params.propertyId || 0),
+                base94.decimalToBase94(params.blockStart || 0),
+                base94.decimalToBase94(params.blockEnd || 0),
+                base94.decimalToBase94(params.propertyId || 0),
                 params.aPaysBDirection ? '1' : '0',
-                Base256Converter.hexToBase256(params.channelRoot || ''),
-                Base94Converter.decimalToBase94(params.totalContracts || 0),
-                Base94Converter.decimalToBase94(params.neutralizedCount || 0)
+                base256.hexToBase256(params.channelRoot || ''),
+                base94.decimalToBase94(params.totalContracts || 0),
+                base94.decimalToBase94(params.neutralizedCount || 0)
             );
         }
         const type = 23;
+        const typeStr = type?.toString(36) ?? '0';
+        return marker + typeStr + payload.join(',');
+    },
+
+    // Encode King Settlement Transaction (Type 31)
+    encodeKingSettle: (params) => {
+        const payload = [
+            base94.decimalToBase94(params.blockStart || 0),
+            base94.decimalToBase94(params.blockEnd || 0),
+            base94.decimalToBase94(params.propertyId || 0),
+            base94.decimalToBase94(params.netAmount || 0),
+            params.aPaysBDirection ? '1' : '0',
+            base256.hexToBase256(params.channelRoot || ''),
+            base94.decimalToBase94(params.totalContracts || 0),
+            base94.decimalToBase94(params.neutralizedCount || 0)
+        ];
+        const type = 31;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
     },
