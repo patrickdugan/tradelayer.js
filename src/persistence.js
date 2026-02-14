@@ -77,7 +77,10 @@ class Persistence {
         chain = chain.toLowerCase().trim();
         this.networkFull = `${chain}-${isTest ? "test" : "main"}`;
 
-        const baseDir = path.join(__dirname, "..", "nedb-data");
+        const rootOverride = process.env.TL_NEDB_ROOT;
+        const baseDir = rootOverride
+            ? (path.isAbsolute(rootOverride) ? rootOverride : path.join(__dirname, "..", rootOverride))
+            : path.join(__dirname, "..", "nedb-data");
 
         this.dbDir = path.join(baseDir, this.networkFull);
         this.snapshotsDir = path.join(baseDir, `${this.networkFull}-snapshots`);

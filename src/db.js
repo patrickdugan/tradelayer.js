@@ -43,7 +43,11 @@ class Database {
                 test = 'main'
             }
             const folderName = chain.toLowerCase()+'-'+test
-            const dbPath = path.join(__dirname, '..', 'nedb-data', folderName);
+            const rootOverride = process.env.TL_NEDB_ROOT;
+            const baseDir = rootOverride
+                ? (path.isAbsolute(rootOverride) ? rootOverride : path.join(__dirname, '..', rootOverride))
+                : path.join(__dirname, '..', 'nedb-data');
+            const dbPath = path.join(baseDir, folderName);
             this.path=dbPath
             const categories = ['ammRegistry', 'ammState','txIndex', 'propertyList', 
             'oracleList', 'oracleData', 'contractList','tallyMap', 'tallyMapDelta', 

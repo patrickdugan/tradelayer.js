@@ -1405,13 +1405,13 @@ class MarginMap {
       if (protectiveStrikes.length === 0) return baseLiqPrice;
 
       if (netContracts > 0) {
-        // Long underlying: puts protect → lowest liq can’t fall below the highest protective strike
+        // Long underlying: puts protect downside -> liq cannot be below protective put strike.
         const floor = Math.max(...protectiveStrikes);
-        return Math.min(baseLiqPrice, floor);
+        return Math.max(baseLiqPrice, floor);
       } else {
-        // Short underlying: calls protect → highest liq can’t rise above the lowest protective strike
+        // Short underlying: calls protect upside -> liq cannot be above protective call strike.
         const cap = Math.min(...protectiveStrikes);
-        return Math.max(baseLiqPrice, cap);
+        return Math.min(baseLiqPrice, cap);
       }
     }
 
