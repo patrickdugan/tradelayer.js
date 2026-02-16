@@ -743,7 +743,7 @@ const Logic = {
 		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
 		     * @returns {Object} - The result of the clearlist creation
 		     */
-	async createClearList(adminAddress, name, url, description, backupAddress, block){
+ 	async createClearList(adminAddress, name, url, description, backupAddress, block){
 
 		        // Validate input parameters
 		        if (!adminAddress) {
@@ -751,13 +751,14 @@ const Logic = {
 		        }
 
 		        // Create the clearlist
-		        const clearlistData = await ClearList.createclearlist({
+		        // clearlist.js exports createClearlist; keep a stable call site here.
+		        const clearlistData = await ClearList.createClearlist(
 		            adminAddress,
 		            name,
 		            url,
                     description,
 		            backupAddress
-		        });
+		        );
 
 		        // Return a message with the new clearlist ID
 		        return {
@@ -811,7 +812,7 @@ const Logic = {
             }
 
             console.log('Using default global Banlist:', bannedCountriesGlobal);
-            await Clearlist.setBanList(bannedCountriesGlobal,block); // Update Clearlist object with default
+            await ClearList.setBanlist(bannedCountriesGlobal,block); // Update ClearList object with default
     },
 
 

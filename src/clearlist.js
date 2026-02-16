@@ -31,6 +31,23 @@ class clearlistManager {
         return clearlistData;
     }
 
+    // Compatibility alias (older callers used different casing/signature).
+    // Supports Logic.createClearList implementations that call createclearlist({..}) or createclearlist(args...).
+    static async createclearlist(arg1, name, url, description, backupAddress, id) {
+        if (arg1 && typeof arg1 === 'object') {
+            const o = arg1;
+            return await this.createClearlist(
+                o.adminAddress || o.admin || o.admin_address,
+                o.name,
+                o.url,
+                o.description,
+                o.backupAddress || o.backup,
+                o.id
+            );
+        }
+        return await this.createClearlist(arg1, name, url, description, backupAddress, id);
+    }
+
     static async loadClearlists() {
         try {
             const base = await dbInstance.getDatabase('clearlists')
@@ -89,7 +106,7 @@ class clearlistManager {
             throw new Error('Clearlist not found');
         }
 
-        return clearlist.adminAddress === adminAddress;
+        return (clearlist.adminAddress || clearlist.admin) === adminAddress;
     }
 
     static async updateAdmin(clearlistId, newAdminAddress, backup) {
@@ -102,10 +119,14 @@ class clearlistManager {
 
         if (backup) {
             clearlist.backupAddress = newAdminAddress;
+            clearlist.backup = newAdminAddress;
         } else {
             clearlist.adminAddress = newAdminAddress;
+            clearlist.admin = newAdminAddress;
         }
-        await this.db.updateAsync({ _id: clearlistKey }, { $set: { data: clearlist } });
+
+        const base = await dbInstance.getDatabase('clearlists');
+        await base.updateAsync({ _id: clearlistKey }, { $set: { data: clearlist } }, { upsert: true });
         this.clearlists.set(clearlistId, clearlist);
 
         console.log(`Clearlist ID ${clearlistId} admin updated to ${newAdminAddress}`);
@@ -392,23 +413,38 @@ class clearlistManager {
     }
 
     static async revokeAttestation(attestationId, targetAddress, revokeReason,block) {
-        const attestationKey = `attestation:${targetAddress}`;
-        const base= await dbInstance.getDatabase('attestations')
-        const attestation = await base.findOneAsync({ _id: attestationKey });
+        const base = await dbInstance.getDatabase('attestations');
 
-        if (!attestation) {
-            throw new Error('Attestation not found');
+        // Try to locate by listId+address first (canonical).
+        const records = await base.findAsync({
+            'data.address': targetAddress,
+            'data.status': 'active',
+            $or: [
+                { 'data.listId': attestationId },
+                { 'data.clearlistId': attestationId }
+            ]
+        });
+
+        if (!records || records.length === 0) {
+            // Back-compat: older code used _id forms.
+            const legacy = await base.findOneAsync({ _id: `attestation:${targetAddress}` }) ||
+                           await base.findOneAsync({ _id: targetAddress });
+            if (!legacy) throw new Error('Attestation not found');
+            legacy.data.status = 'revoked';
+            legacy.data.revokeReason = revokeReason;
+            legacy.data.timestamp = block;
+            legacy.data.id = attestationId;
+            await base.updateAsync({ _id: legacy._id }, { $set: { data: legacy.data } });
+            return attestationId;
         }
 
-        attestation.data.status = 'revoked';
-        attestation.data.id = attestationId;
-        attestation.data.revokeReason = revokeReason;
-        attestation.data.timestamp = block
-
-        await this.attestationsDb.updateAsync(
-            { _id: attestationKey },
-            { $set: { data: attestation.data } }
-        );
+        for (const rec of records) {
+            rec.data.status = 'revoked';
+            rec.data.revokeReason = revokeReason;
+            rec.data.timestamp = block;
+            rec.data.id = attestationId;
+            await base.updateAsync({ _id: rec._id }, { $set: { data: rec.data } });
+        }
 
         return attestationId;
     }
@@ -463,6 +499,11 @@ class clearlistManager {
         this.banlist= banlistArray
     }
 
+    // Compatibility alias.
+    static async setBanList(banlistArray, block) {
+        return await this.setBanlist(banlistArray, block);
+    }
+
     static async getBanlist() {
         try {
             const base = await dbInstance.getDatabase('clearlists');
@@ -481,7 +522,9 @@ class clearlistManager {
 
     static async getAttestations(clearlistId) {
         const base = await dbInstance.getDatabase('attestations')
-        return await base.findAsync({ 'data.clearlistId': clearlistId });
+        return await base.findAsync({
+            $or: [{ 'data.listId': clearlistId }, { 'data.clearlistId': clearlistId }]
+        });
     }
     
     static async getAttestationHistory(address, clearlistId) {
@@ -501,9 +544,9 @@ class clearlistManager {
 
         const base = await dbInstance.getDatabase('attestations')
         const attestations = await base.findAsync({
-            'data.clearlistId': clearlistId,
             'data.address': address,
-            'data.status': 'active'
+            'data.status': 'active',
+            $or: [{ 'data.listId': clearlistId }, { 'data.clearlistId': clearlistId }]
         });
         return attestations.length > 0;
     }

@@ -307,8 +307,8 @@ app.post('/tl_listProperties', async (req, res) => {
 app.post('/tl_listClearlists', async (req, res) => {
     try {
         console.log('Express calling clearlists');
-        const clearLists = await Clearlist.loadClearlists();
-        res.json(propertiesArray);
+        const clearLists = await ClearList.loadClearlists();
+        res.json(clearLists);
     } catch (error) {
         console.error('Error fetching property list:', error);
         res.status(500).send('Error: ' + error.message);
@@ -322,10 +322,27 @@ app.post('/tl_showClearlist', async (req, res) => {
         // Corrected the destructuring syntax
         const { id } = req.body;
         
-        const clearLists = await Clearlist.getList(id);
-        res.json(clearLists);
+        const clearList = await ClearList.getClearlistById(Number(id));
+        res.json(clearList);
     } catch (error) {
         console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+// Protocol-canonical clearlist lookup for infra/attestation tooling.
+// Returns the clearlist registry record (admin + backup + metadata) or false if not found.
+app.post('/tl_getClearlistById', async (req, res) => {
+    try {
+        const { id } = req.body;
+        const n = Number(id);
+        if (!Number.isInteger(n) || n < 0) {
+            return res.status(400).json({ error: 'Invalid clearlist id' });
+        }
+        const clearList = await ClearList.getClearlistById(n);
+        res.json(clearList);
+    } catch (error) {
+        console.error('Error fetching clearlist:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
