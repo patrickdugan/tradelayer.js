@@ -352,7 +352,7 @@ class Main {
                         console.log('skip to my lou my darlin '+skips +' '+skips2+' '+blockData.fundingTx.length+' '+blockData.tradeTx.length)
                         skip=false
                         if((skips+skips2)>0){
-                            throw error("somehow there are already processed transactions in a partially processed block")
+                            throw new Error("somehow there are already processed transactions in a partially processed block")
                         }
                     }
                 }
