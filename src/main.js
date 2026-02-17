@@ -405,10 +405,11 @@ class Main {
             let skips = 0
             for (const txData of txSet) {
                 let flag = false;
-               
-
-                const valueData = txData.value
-                    const txId = valueData.txId;
+                let txId = 'unknown';
+                let type = -1;
+                try {
+                    const valueData = txData.value
+                    txId = valueData.txId;
                     
                     if (await Consensus.checkIfTxProcessed(txId)) {
                         //console.log('scanning blockHeight '+blockHeight+' '+txId)
@@ -418,7 +419,7 @@ class Main {
 
                     var payload = valueData.payload;
                     const marker = valueData.marker;
-                    const type = parseInt(payload.slice(0, 1).toString(36), 36);
+                    type = parseInt(payload.slice(0, 1).toString(36), 36);
                     console.log('type is '+type + ' height is '+blockHeight)
                     payload = payload.slice(1, payload.length).toString(36);
                     const senderAddress = valueData.sender.senderAddress;
@@ -468,6 +469,21 @@ class Main {
 
                     await Consensus.markTxAsProcessed(txId, decodedParams);
                     await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                } catch (txErr) {
+                    console.error(`Fatal tx processing failure for ${txId} at block ${blockHeight}:`, txErr);
+                    const failedParams = {
+                        valid: false,
+                        reason: `Fatal tx processing error: ${txErr.message}`,
+                        block: blockHeight,
+                        txid: txId
+                    };
+                    if (txId !== 'unknown') {
+                        await Consensus.markTxAsProcessed(txId, failedParams);
+                        if (type >= 0) {
+                            await TxIndex.upsertTxValidityAndReason(txId, type, false, failedParams.reason);
+                        }
+                    }
+                }
             }
             return skips
         }
@@ -476,59 +492,77 @@ class Main {
               let processedAny = false;
 
               for (const txData of txSet) {
-                console.log('tx data in real-time' + JSON.stringify(txData));
-                const txId = txData.txId;
+                let txId = 'unknown';
+                let type = -1;
+                try {
+                  console.log('tx data in real-time' + JSON.stringify(txData));
+                  txId = txData.txId;
 
-                if (await Consensus.checkIfTxProcessed(txId)) {
-                  // We *skip* this tx, but keep going in case there are new ones
-                  continue;
-                }
+                  if (await Consensus.checkIfTxProcessed(txId)) {
+                    // We *skip* this tx, but keep going in case there are new ones
+                    continue;
+                  }
 
-                let payload = txData.payload;
-                const marker = 'tl';
+                  let payload = txData.payload;
+                  const marker = 'tl';
 
-                const type = parseInt(payload.slice(0, 1).toString(36), 36);
-                payload = payload.slice(1, payload.length).toString(36);
+                  type = parseInt(payload.slice(0, 1).toString(36), 36);
+                  payload = payload.slice(1, payload.length).toString(36);
 
-                const senderAddress    = txData.sender.senderAddress;
-                const referenceAddress = txData.reference;
-                const senderUTXO       = txData.sender.amount;
-                const referenceUTXO    = txData.reference.amount / COIN;
+                  const senderAddress    = txData.sender.senderAddress;
+                  const referenceAddress = txData.reference;
+                  const senderUTXO       = txData.sender.amount;
+                  const referenceUTXO    = txData.reference.amount / COIN;
 
-                console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
+                  console.log('params to go in during consensus builder ' + type + '  ' + payload + ' ' + senderAddress + blockHeight);
 
-                const decodedParams = await Types.decodePayload(
-                  txId, type, marker, payload,
-                  senderAddress, referenceAddress,
-                  senderUTXO, referenceUTXO,
-                  blockHeight
-                );
-                decodedParams.block = blockHeight;
+                  const decodedParams = await Types.decodePayload(
+                    txId, type, marker, payload,
+                    senderAddress, referenceAddress,
+                    senderUTXO, referenceUTXO,
+                    blockHeight
+                  );
+                  decodedParams.block = blockHeight;
 
-                // activation checks as you already have...
-                if (decodedParams.type > 0) {
-                  const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
-                  if (blockHeight < activationBlock) {
-                    decodedParams.valid = false;
-                    decodedParams.reason += 'Tx not yet activated ';
+                  // activation checks as you already have...
+                  if (decodedParams.type > 0) {
+                    const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
+                    if (blockHeight < activationBlock) {
+                      decodedParams.valid = false;
+                      decodedParams.reason += 'Tx not yet activated ';
+                    }
+                  }
+
+                  if (decodedParams.valid === true) {
+                    processedAny = true;
+                    console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
+                    try {
+                      await Logic.typeSwitch(type, decodedParams);
+                    } catch (logicErr) {
+                      decodedParams.valid = false;
+                      decodedParams.reason = `${decodedParams.reason || ''} Logic error: ${logicErr.message}`;
+                      console.error(`Realtime logic failure while processing tx ${txId} at block ${blockHeight}:`, logicErr);
+                    }
+                  } else {
+                    console.log('invalid tx ' + decodedParams.reason);
+                  }
+                  await Consensus.markTxAsProcessed(txId, decodedParams);
+                  await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
+                } catch (txErr) {
+                  console.error(`Realtime fatal tx processing failure for ${txId} at block ${blockHeight}:`, txErr);
+                  const failedParams = {
+                    valid: false,
+                    reason: `Fatal tx processing error: ${txErr.message}`,
+                    block: blockHeight,
+                    txid: txId
+                  };
+                  if (txId !== 'unknown') {
+                    await Consensus.markTxAsProcessed(txId, failedParams);
+                    if (type >= 0) {
+                      await TxIndex.upsertTxValidityAndReason(txId, type, false, failedParams.reason);
+                    }
                   }
                 }
-
-                if (decodedParams.valid === true) {
-                  processedAny = true;
-                  console.log('valid tx going in for processing ' + type + JSON.stringify(decodedParams) + ' ' + txId + 'blockHeight ' + blockHeight);
-                  try {
-                    await Logic.typeSwitch(type, decodedParams);
-                  } catch (logicErr) {
-                    decodedParams.valid = false;
-                    decodedParams.reason = `${decodedParams.reason || ''} Logic error: ${logicErr.message}`;
-                    console.error(`Realtime logic failure while processing tx ${txId} at block ${blockHeight}:`, logicErr);
-                  }
-                } else {
-                  console.log('invalid tx ' + decodedParams.reason);
-                }
-                await Consensus.markTxAsProcessed(txId, decodedParams);
-                await TxIndex.upsertTxValidityAndReason(txId, type, decodedParams.valid, decodedParams.reason);
               }
 
               return processedAny;

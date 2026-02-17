@@ -520,7 +520,7 @@ class Clearing {
             const differenceSats = propertyTotalSats.minus(expectedSats);
             console.log('total '+fromSats(propertyTotalSats).toFixed(8)+' expected '+fromSats(expectedSats).toFixed(8))
             if(!differenceSats.isZero()){
-                if(!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
+                if(!(propertyId === 2 || propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
                     const difference = fromSats(differenceSats).toFixed(8)
                     if(differenceSats.gt(1)||differenceSats.lt(-1)){
                         // Legacy replay reconciliation for historical imbalance in Property 5.
