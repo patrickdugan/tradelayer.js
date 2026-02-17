@@ -794,10 +794,21 @@ const Logic = {
 
     async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block, merkleRoot) {
         const admin = activation.getAdmin()
-        if(sender==admin&&clearlistId==0){
-            console.log('admin updating banlist')
-            await this.updateBannedCountries(metaData,block)
-            return
+        const isListZero = Number(clearlistId) === 0;
+        const targetTag = (targetAddress || '').toString().trim().toUpperCase();
+        if (isListZero && targetTag === 'BANLIST') {
+            if (sender !== admin) {
+                throw new Error('Only protocol admin can update global banlist via list id 0');
+            }
+            const normalized = Array.isArray(metaData)
+                ? metaData
+                : String(metaData || '')
+                    .split(/[,\s;|]+/)
+                    .map(v => v.trim().toUpperCase())
+                    .filter(Boolean);
+            console.log('admin updating banlist', normalized);
+            await this.updateBannedCountries(normalized, block);
+            return;
         }
         if(!revoke){
             console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block,merkleRoot)

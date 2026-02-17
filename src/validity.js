@@ -1042,6 +1042,9 @@ const Validity = {
 
             // Fetch the clearlistId from params or wherever it's stored
             const clearlistId = params.id;
+            const isListZero = Number(clearlistId) === 0;
+            const targetTag = (params.targetAddress || '').toString().trim().toUpperCase();
+            const isBanlistUpdate = isListZero && targetTag === 'BANLIST';
 
             // Assuming ClearList or an equivalent instance is available
             console.log('this clearlist id' +clearlistId)
@@ -1059,12 +1062,32 @@ const Validity = {
                 }
             }
             console.log('params in validate attestation '+sender+' '+params.targetAddress)
-            if(sender!=params.targetAddress&&clearlistId==0){
+            if (isListZero && isBanlistUpdate) {
+                const admin = activationInstance.getAdmin();
+                if (sender !== admin) {
+                    params.valid = false;
+                    params.reason += 'Only protocol admin can update global banlist via list id 0; ';
+                }
+                const bannedCountriesGlobal = String(params.metaData || '')
+                    .split(/[,\s;|]+/)
+                    .map(v => v.trim().toUpperCase())
+                    .filter(Boolean);
+                const invalidCode = bannedCountriesGlobal.find(code => !/^[A-Z]{2}$/.test(code));
+                if (bannedCountriesGlobal.length === 0 || invalidCode) {
+                    params.valid = false;
+                    params.reason += 'Banlist update requires 2-letter country codes in metaData; ';
+                }
+            } else if(sender!=params.targetAddress&&isListZero){
                     params.valid = false;
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
             }
 
-            if(params.revoke==true&&!ClearList.isAddressInClearlist(params.targetAddress)){
+            if (isListZero && !isBanlistUpdate && (!params.metaData || !/^[A-Za-z]{2}$/.test(String(params.metaData).trim()))) {
+                params.valid = false;
+                params.reason += 'Self-cert (clearlist id 0) requires 2-letter country code metaData; ';
+            }
+
+            if(params.revoke==true&&!await ClearList.isAddressInClearlist(clearlistId, params.targetAddress)){
                     params.valid = false;
                     params.reason += `Target Address has no attestation to revoke `;
             }
