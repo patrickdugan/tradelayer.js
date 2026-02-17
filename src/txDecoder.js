@@ -479,15 +479,20 @@ const Decode = {
     // Decode Settle Channel PNL Transaction
    decodeSettleChannelPNL: (payload) => {
         const parts = payload.split(',');
+        const macroBatch = parts[6] === '1';
 
         return {
-            txidNeutralized1: Base256Converter.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
-            txidNeutralized2: Base256Converter.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
-            markPrice: parseFloat(Base94Converter.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
+            txidNeutralized1: macroBatch
+                ? (parts[0] || '')
+                : base256.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
+            txidNeutralized2: parts[1]
+                ? base256.base256ToHex(parts[1] || '')
+                : '', // Decode from Base 256 to Hex
+            markPrice: parseFloat(base94.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
             close: parts[3] === '1',
             columnAIsSeller: parts[4]=== '1',
             columnAIsMaker: parts[5]==='1',
-            macroBatch: parts[6] ==='1'
+            macroBatch
             // Boolean flag for closing trade
         };
     },

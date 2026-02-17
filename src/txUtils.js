@@ -1500,6 +1500,9 @@ inferChannelAddrType(addr) {
 },
 
 async findSuitableUTXO(address, minAmount) {
+    if (!this.client) {
+        this.client = await clientPromise;
+    }
     const minConfEnv = Number(process.env.TL_UTXO_MINCONF || 0);
     const minConf = Number.isFinite(minConfEnv) && minConfEnv >= 0 ? minConfEnv : 0;
     const minSpendSats = Math.max(

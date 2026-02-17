@@ -433,14 +433,21 @@ const Encode = {
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
-        const base256Encoded1 = Base256Converter.hexToBase256(params.tradeid);
-        const base256Encoded2 = Base256Converter.hexToBase256(params.settleid);
-        const base94Encoded = Base94Converter.decimalToBase94(params.markPrice);
+        const macroBatch = Boolean(params.macroBatch);
+        const tradeId = params.tradeid || params.txidNeutralized1 || '';
+        const settleId = params.settleid || params.txidNeutralized2 || '';
+        const batchTxids = Array.isArray(params.batchTxids) ? params.batchTxids.join(';') : tradeId;
+        const field0 = macroBatch ? batchTxids : base256.hexToBase256(tradeId);
+        const field1 = settleId ? base256.hexToBase256(settleId) : '';
+        const base94Encoded = base94.decimalToBase94(params.markPrice);
         const payload = [
-            base256Encoded1,
-            base256Encoded2,
+            field0,
+            field1,
             base94Encoded,
-            params.close ? '1' : '0'
+            params.close ? '1' : '0',
+            params.columnAIsSeller ? '1' : '0',
+            params.columnAIsMaker ? '1' : '0',
+            macroBatch ? '1' : '0'
         ];
         const type = 23;
         const typeStr = type?.toString(36) ?? '0';
