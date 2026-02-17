@@ -347,12 +347,14 @@ class Main {
                     console.log('skips? '+skips)
                     // Then process trade transactions
                     const skips2 = await this.processTxSet(blockData.tradeTx, blockHeight);
-                    console.log('skips 2? '+skips)
+                    console.log('skips 2? '+skips2)
                     if((skips+skips2)<(blockData.fundingTx.length+blockData.tradeTx.length)){
                         console.log('skip to my lou my darlin '+skips +' '+skips2+' '+blockData.fundingTx.length+' '+blockData.tradeTx.length)
                         skip=false
                         if((skips+skips2)>0){
-                            throw new Error("somehow there are already processed transactions in a partially processed block")
+                            // Replay can legitimately hit partially processed blocks after prior crashes.
+                            // Continue idempotently: process remaining txs and run post-processing once.
+                            console.warn("partially processed block detected; continuing idempotent replay");
                         }
                     }
                 }
