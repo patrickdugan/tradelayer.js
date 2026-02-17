@@ -668,7 +668,9 @@ class Clearing {
         const ContractRegistry = require('./contractRegistry.js');
         const margins = await MarginMap.getInstance(contractId);
         const openPositions = await margins.getAllPositions(contractId);
-        const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
+        const refPrice = await Clearing.getIndexPrice(contractId, block);
+        const notionalBlob = await ContractRegistry.getNotionalValue(contractId, refPrice);
+        const notionalPerContract = Number(notionalBlob?.notionalValue ?? notionalBlob ?? 0);
         const notionalBN = new BigNumber(notionalPerContract || 0);
         const fundingRateBN = new BigNumber(fundingRate || 0);
 
