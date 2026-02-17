@@ -1804,6 +1804,14 @@ class Clearing {
             'clearingLoss',
             blockHeight
           );
+          // Keep supply accounting neutral when losses are realized before/without
+          // matching profit credits in the same block.
+          await PnlIou.addLoss(
+            contractId,
+            collateralId,
+            loss.toNumber(),
+            blockHeight
+          );
           continue;
         }
 
@@ -1913,6 +1921,14 @@ class Clearing {
             0,
             0,
             'clearingProfit',
+            blockHeight
+          );
+          // Mirror realized clearing profits in the IOU bucket so
+          // getTotalTokenBalances remains invariant block-to-block.
+          await PnlIou.addProfit(
+            contractId,
+            collateralId,
+            profit.toNumber(),
             blockHeight
           );
         }
