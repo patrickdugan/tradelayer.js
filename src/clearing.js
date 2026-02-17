@@ -524,7 +524,7 @@ class Clearing {
                     const difference = fromSats(differenceSats).toFixed(8)
                     if(differenceSats.gt(1)||differenceSats.lt(-1)){
                         // Legacy replay reconciliation for historical imbalance in Property 5.
-                        if (Number(propertyId) === 5 && Number(block) >= 4555000) {
+                        if (Number(propertyId) === 5) {
                             const reconcileAbs = fromSats(differenceSats.abs()).toNumber();
                             if (differenceSats.lt(0)) {
                                 await PnlIou.addLoss(0, Number(propertyId), reconcileAbs, block);
