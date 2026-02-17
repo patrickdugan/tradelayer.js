@@ -461,16 +461,34 @@ class clearlistManager {
                 return null; // No attestations for this address
             }
 
-            // Loop through attestations to find one with clearListId: 0 and a valid countryCode
+            // Accept legacy and current attestation shapes for list id 0 self-cert.
             for (const attestation of attestations) {
-                const { listId, data} = attestation.data;
-                
-                if (listId === 0 && data) {
+                const row = attestation && attestation.data ? attestation.data : {};
+                const status = row.status || 'active';
+                const listIdRaw = row.listId !== undefined ? row.listId : row.clearlistId;
+                const listId = Number(listIdRaw);
+                const meta = row.data;
+
+                if (status !== 'active') continue;
+                if (listId !== 0) continue;
+
+                if (typeof meta === 'string' && meta.trim()) {
                     return {
                         address,
-                        countryCode: data,
-                        blockHeight: attestation.data.blockHeight || null, // Optional blockHeight in metadata
+                        countryCode: meta.trim().toUpperCase(),
+                        blockHeight: row.blockHeight || row.timestamp || null,
                     };
+                }
+
+                if (meta && typeof meta === 'object') {
+                    const cc = meta.countryCode || meta.country || meta.code || meta.value;
+                    if (typeof cc === 'string' && cc.trim()) {
+                        return {
+                            address,
+                            countryCode: cc.trim().toUpperCase(),
+                            blockHeight: row.blockHeight || row.timestamp || null,
+                        };
+                    }
                 }
             }
 
