@@ -99,7 +99,7 @@ const Logic = {
                 await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
                 break;
            case 7:
-                await Logic.createClearList(sender, params.name, params.url, params.description, params.backupAddress, params.block);
+                await Logic.createClearList(params.senderAddress, params.name, params.url, params.description, params.backupAddress, params.block);
                 break;
             case 8:
                 await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
@@ -117,6 +117,7 @@ const Logic = {
                     params.addressToGrantTo,
                     params.senderAddress,
                     params.block,
+                    params.dlcHash,
                     params.dlcTemplateId,
                     params.dlcContractId,
                     params.settlementState
@@ -870,13 +871,13 @@ const Logic = {
         }
     },
 
-    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, dlcTemplateId = '', dlcContractId = '', settlementState = '') {
+    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, dlcHash = '', dlcTemplateId = '', dlcContractId = '', settlementState = '') {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
 	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
 	    const pm = PropertyManager.getInstance();
         const propertyData = await PropertyManager.getPropertyData(propertyId);
         if (Number(propertyData?.type) === 7) {
-            const gate = await ProceduralRegistry.ensureIssuanceContext(dlcTemplateId, dlcContractId, settlementState);
+            const gate = await ProceduralRegistry.ensureIssuanceContext(dlcTemplateId, dlcContractId, settlementState, dlcHash);
             if (!gate.valid) throw new Error(gate.reason);
         }
 	    await pm.grantTokens(propertyId, recipientAddress, amount, block);

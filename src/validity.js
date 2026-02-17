@@ -904,7 +904,7 @@ const Validity = {
 
             if(!validateAddress(params.backupAddress)){
                 const valid = await TxUtils.validateAddressWrapper(params.backupAddress)
-                if(!valid.isValid){
+                if(!valid.isValid && !valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -1052,7 +1052,8 @@ const Validity = {
                 params.reason += `Clearlist with ID ${clearlistId} not found; `;
             } else if(clearlistId!=0){
                 // Check if the sender matches the admin address of the clearlist
-                if (sender !== clearlist.adminAddress) {
+                const clearlistAdmin = clearlist.adminAddress || clearlist.admin;
+                if (sender !== clearlistAdmin) {
                     params.valid = false;
                     params.reason += `Sender ${sender} is not authorized to issue or revoke attestations for clearlist ${clearlistId}; `;
                 }
