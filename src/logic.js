@@ -44,6 +44,18 @@ const SettleType = {
     KING_SETTLE: 3
 };
 
+function parseRelayBlobRaw(relayBlob) {
+    if (!relayBlob) return null;
+    try {
+        const raw = (typeof relayBlob === 'string' && relayBlob.startsWith('b64:'))
+            ? Buffer.from(relayBlob.slice(4), 'base64').toString('utf8')
+            : relayBlob;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
 // logic.js
 const Logic = {
     //here we have a kinda stupid structure where instead of passing the params obj. I break it down into its sub-properties
@@ -1775,6 +1787,7 @@ const Logic = {
                 block,
                 params.relayBlob
             );
+            await Logic.applyProceduralOracleSettlement(senderAddress, params, block);
             if (params.dlcRef && params.settlementState) {
                 await ProceduralRegistry.transitionContract(params.dlcRef, params.settlementState, {
                     oracleId: params.oracleId,
@@ -1794,6 +1807,54 @@ const Logic = {
         }
 
         throw new Error(`Unknown stake/fraud/relay action ${action}`);
+    },
+
+    async applyProceduralOracleSettlement(senderAddress, params, block) {
+        const relayParsed = parseRelayBlobRaw(params.relayBlob);
+        const settlement = relayParsed?.settlement || relayParsed?.settle || null;
+        if (!settlement || typeof settlement !== 'object') return;
+
+        const mode = String(settlement.mode || settlement.action || '').toLowerCase();
+        const propertyId = Number(settlement.propertyId);
+        const amount = Number(settlement.amount || 0);
+        const fromAddress = settlement.fromAddress || settlement.holderAddress || senderAddress;
+        const toAddress = settlement.toAddress || settlement.recipientAddress || senderAddress;
+        const pm = PropertyManager.getInstance();
+
+        if (!Number.isFinite(propertyId) || propertyId <= 0) {
+            throw new Error('Invalid settlement propertyId in relayBlob');
+        }
+
+        if (mode === 'redemption' || mode === 'redeem') {
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error('Invalid redemption amount in relayBlob');
+            }
+            await pm.redeemTokens(propertyId, fromAddress, amount, block);
+            return;
+        }
+
+        if (mode === 'rollover' || mode === 'roll') {
+            const nextPropertyId = Number(settlement.nextPropertyId);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error('Invalid rollover amount in relayBlob');
+            }
+            if (!Number.isFinite(nextPropertyId) || nextPropertyId <= 0) {
+                throw new Error('Invalid rollover nextPropertyId in relayBlob');
+            }
+            await pm.redeemTokens(propertyId, fromAddress, amount, block);
+            await pm.grantTokens(nextPropertyId, toAddress, amount, block);
+            return;
+        }
+
+        if (mode === 'pnl_sweep' || mode === 'pnlsweep' || mode === 'sweep') {
+            const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
+            }
+            await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'oraclePnlSweep', block);
+            await TallyMap.updateBalance(toAddress, propertyId, amount, 0, 0, 0, 'oraclePnlSweep', block);
+            return;
+        }
     },
 
 	batchMoveZkRollup(zkVerifier, rollupData, zkProof) {
@@ -1993,7 +2054,13 @@ const Logic = {
                 console.log(`King settle: B pays A ${absAmount} of property ${propertyId}`);
             }
 
-            await Channels.setChannel(channelAddress, channel);
+            if (typeof Channels.setChannel === 'function') {
+                await Channels.setChannel(channelAddress, channel);
+            } else if (typeof Channels.updateChannel === 'function') {
+                await Channels.updateChannel(channelAddress, channel);
+            } else {
+                throw new Error('No channel persistence method available (setChannel/updateChannel)');
+            }
 
             // 3. Record the king settlement
             if (!doc) {
