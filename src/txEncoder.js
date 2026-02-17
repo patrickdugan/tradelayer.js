@@ -227,13 +227,25 @@ const Encode = {
 
     // Encode AMM Pool Transaction
     encodeAMMPool: (params) => {
+        const toFlag = (v) => ((v === true || v === 1 || v === '1') ? '1' : '0');
+        const toBase36 = (v) => {
+            if (v === undefined || v === null || v === '') return '0';
+            if (typeof v === 'string') {
+                // If caller already provided base36 with alpha chars, preserve it.
+                if (/[a-z]/i.test(v) && /^-?[0-9a-z]+$/i.test(v)) return v.toLowerCase();
+                const n = Number(v);
+                return Number.isFinite(n) ? Math.trunc(n).toString(36) : '0';
+            }
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.trunc(n).toString(36) : '0';
+        };
         const payload = [
-            params.isRedeem, 
-            params.isContract, 
-            params.id, 
-            params.amount, 
-            params.id2, 
-            params.amount2,
+            toFlag(params.isRedeem),
+            toFlag(params.isContract),
+            toBase36(params.id),
+            toBase36(params.amount),
+            toBase36(params.id2),
+            toBase36(params.amount2),
         ];
         const type = 10;
         const typeStr = type?.toString(36) ?? '0';
