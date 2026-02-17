@@ -19,6 +19,7 @@ const Clearing = require('./clearing.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const VolumeIndex = require('./volumeIndex.js')
 const db = require('./db.js')
+const IssuanceIntent = require('./issuanceIntent.js')
 
 let isInitialized = false; // A flag to track the initialization status
 const app = express();
@@ -127,6 +128,54 @@ app.post('/tl_getAttestations', async (req, res) => {
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_getIssuanceIntents', async (req, res) => {
+    try {
+        const { address } = req.body;
+        if (!address) return res.status(400).json({ error: 'Missing address' });
+        const intents = await IssuanceIntent.getIntentsByAddress(address);
+        return res.status(200).json(intents || []);
+    } catch (error) {
+        console.error('Error fetching issuance intents:', error);
+        return res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_prepareCommitFromIssuance', async (req, res) => {
+    try {
+        const { issuanceTxid, fromAddress, channelAddress, autoSend = false, payEnabled = false, clearLists } = req.body;
+        if (!issuanceTxid || !fromAddress || !channelAddress) {
+            return res.status(400).json({ error: 'Missing issuanceTxid/fromAddress/channelAddress' });
+        }
+
+        const intent = await IssuanceIntent.getIntent(issuanceTxid);
+        if (!intent) return res.status(404).json({ error: 'Issuance intent not found' });
+        if (intent.mode !== 'commit') return res.status(400).json({ error: 'Issuance intent is not commit mode' });
+        if (intent.recipientAddress !== fromAddress) {
+            return res.status(400).json({ error: 'fromAddress must match issuance recipient' });
+        }
+
+        const commitParams = {
+            propertyId: intent.propertyId,
+            amount: intent.amount,
+            channelAddress,
+            payEnabled: Boolean(payEnabled),
+            clearLists: Array.isArray(clearLists)
+                ? clearLists
+                : (intent.clearlistId ? [intent.clearlistId] : [])
+        };
+
+        if (!autoSend) {
+            return res.status(200).json({ prepared: true, commitParams, intent });
+        }
+
+        const txid = await TxUtils.createCommitTransaction(fromAddress, commitParams);
+        return res.status(200).json({ prepared: true, broadcast: true, txid, commitParams, intent });
+    } catch (error) {
+        console.error('Error preparing commit from issuance:', error);
+        return res.status(500).send('Error: ' + error.message);
     }
 });
 

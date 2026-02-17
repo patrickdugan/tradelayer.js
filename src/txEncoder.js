@@ -258,11 +258,16 @@ const Encode = {
     // Encode Grant Managed Token Transaction
     encodeGrantManagedToken: (params) => {
         const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
+        const propertyId = (params.propertyid ?? params.propertyId)?.toString(36) ?? '0';
+        const commitClearlistId = (params.commitClearlistId === '' || params.commitClearlistId === undefined || params.commitClearlistId === null)
+            ? ''
+            : Number(params.commitClearlistId).toString(36);
         const payload = [
-            params.propertyid?.toString(36) ?? '0',
+            propertyId,
             amountGranted?.toString(36) ?? '0',
-            params.addressToGrantTo,
-            params?.dlcHash
+            params.addressToGrantTo || '',
+            params?.dlcHash || '',
+            commitClearlistId
         ];
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';

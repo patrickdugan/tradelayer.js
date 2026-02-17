@@ -34,6 +34,7 @@ const VolumeIndex = require('./volumeIndex.js')
 const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
+const IssuanceIntent = require('./issuanceIntent.js');
 
 // logic.js
 const Logic = {
@@ -81,7 +82,16 @@ const Logic = {
                 await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
                 break;
             case 11:
-                await Logic.grantManagedToken(params.propertyId, params.amount, params.recipientAddress, params.propertyManager, params.senderAddress, params.block);
+                await Logic.grantManagedToken(
+                    params.propertyId,
+                    params.amountGranted,
+                    params.addressToGrantTo,
+                    params.senderAddress,
+                    params.block,
+                    params.commitClearlistId,
+                    params.txid,
+                    params.dlcHash
+                );
                 break;
             case 12:
                 await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager, params.senderAddress, params.block);
@@ -713,19 +723,43 @@ const Logic = {
         }
     },
 
-    async grantManagedToken(propertyId, amount, recipientAddress, propertyManager,block) {
+    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, commitClearlistId = '', txid = '', dlcHash = '') {
+        const manager = PropertyManager.getInstance();
+        const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
+        if (!isManagedAdmin) {
+            throw new Error('Sender is not admin of a managed property');
+        }
 
-	    // Verify if the property is a managed type
-	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
-	    if (!isManaged) {
-	        throw new Error('Property is not a managed type');
-	    }
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+        const propertyType = Number(propertyData?.type);
+        const isProcedural = propertyType === 7 || propertyData?.type === 'Procedural' || Boolean(dlcHash);
+        const recipient = recipientAddress || senderAddress;
 
-	    // Logic to grant tokens to the recipient
-	    await PropertyManager.grantTokens(propertyId, recipientAddress, amount,block);
-	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
-        return
-	},
+        if (isProcedural && !recipientAddress) {
+            throw new Error('Procedural grant requires recipient/reference address');
+        }
+
+        await manager.grantTokens(propertyId, recipient, amount, block);
+
+        if (commitClearlistId !== '' && commitClearlistId !== undefined && commitClearlistId !== null) {
+            const clearlistIdNum = Number(commitClearlistId);
+            if (Number.isInteger(clearlistIdNum) && clearlistIdNum > 0 && txid) {
+                await IssuanceIntent.recordIntent(txid, {
+                    txid,
+                    propertyId,
+                    amount,
+                    senderAddress,
+                    recipientAddress: recipient,
+                    mode: 'commit',
+                    clearlistId: clearlistIdNum,
+                    status: 'minted'
+                });
+            }
+        }
+
+        console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipient}`);
+        return;
+    },
 
 	async redeemManagedToken(propertyId, amount, address,block) {
 
@@ -1059,33 +1093,45 @@ const Logic = {
             txidNeutralized1,
             txidNeutralized2,
             markPrice,
-            close
+            close,
+            macroBatch = false,
+            batchTxids = []
         } = txParams;
 
-        if(txidNeutralized2){
-            const settlement = await Scaling.nuetralizeSettlement(channel,txidNeutralized2)
+        if (txidNeutralized2) {
+            await Scaling.neutralizeSettlement(channelAddress, txidNeutralized2);
         }
 
-        const trade = await Scaling.isTradePublished(txidNeutralized1)
-        let offset
-        if(trade.status=="unpublished"){
-            await Scaling.settlementLimbo(txid) //Must check settlement limbo for references in logic of channel trades
-        }else if(trade.status=="expiredContract"){
-            await Logic.typeSwitch(19,trade.params)
-        }else if(trade.status=="expiredToken"){
-            await Logic.typeSwitch(20,trade.params)
-        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
-            offset = Scaling.generateOffset(trade.params,markPrice)
-            await Logic.typeSwitch(19,offset.params)
-        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
-            offset = Scaling.generateOffset(trade.params,markPrice)
-            await Logic.typeSwitch(20,offset.params)
-        }else if(trade.status=="live"&&!close){
-            const last = await Scaling.queryPriorSettlements(txidNuetralized1, txidNeutralized2, channelAddress)
-            const settlement = await Scaling.settlePNL(last,mark,txidNuetralized1)
+        const parsedBatch = Array.isArray(batchTxids) && batchTxids.length > 0
+            ? batchTxids
+            : (typeof txidNeutralized1 === 'string' && txidNeutralized1.includes(';')
+                ? txidNeutralized1.split(';').map((s) => s.trim()).filter(Boolean)
+                : []);
+        const txidsToSettle = (macroBatch && parsedBatch.length > 0) ? parsedBatch : [txidNeutralized1];
+
+        for (const settleTxid of txidsToSettle) {
+            const trade = await Scaling.isTradePublished(settleTxid);
+            let offset;
+
+            if (trade.status === "unpublished") {
+                await Scaling.settlementLimbo(channelAddress, settleTxid);
+            } else if (trade.status === "expiredContract") {
+                await Logic.typeSwitch(19, trade.params);
+            } else if (trade.status === "expiredToken") {
+                await Logic.typeSwitch(20, trade.params);
+            } else if ((trade.status === "liveContract" || trade.status === "expiredContract") && close === true) {
+                offset = Scaling.generateOffset(trade.params, markPrice);
+                await Logic.typeSwitch(19, offset.params);
+            } else if ((trade.status === "liveToken" || trade.status === "expiredToken") && close === true) {
+                offset = Scaling.generateOffset(trade.params, markPrice);
+                await Logic.typeSwitch(20, offset.params);
+            } else {
+                const last = await Scaling.queryPriorSettlements(settleTxid, txidNeutralized2, channelAddress);
+                await Scaling.settlePNL(last, markPrice, settleTxid);
+            }
         }
       
-        console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
+        console.log(`PNL settled for channel ${channelAddress}, trades=${txidsToSettle.length}`);
         return
     },
 

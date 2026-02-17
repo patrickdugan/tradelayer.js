@@ -1028,13 +1028,6 @@ const Validity = {
                 return '';
             };
 
-            if (!params.addressToGrantTo) {
-                const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
-                if (fallbackAddress) {
-                    params.addressToGrantTo = fallbackAddress;
-                }
-            }
-
             const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -1047,10 +1040,46 @@ const Validity = {
                 return params;
             }
 
+            if (params.commitClearlistId !== '' && params.commitClearlistId !== undefined && params.commitClearlistId !== null) {
+                const clearlistIdNum = Number(params.commitClearlistId);
+                if (!Number.isInteger(clearlistIdNum) || clearlistIdNum < 0) {
+                    params.valid = false;
+                    params.reason += 'commitClearlistId must be a non-negative integer; ';
+                } else {
+                    params.commitClearlistId = clearlistIdNum;
+                }
+            }
+
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const propertyType = Number(propertyData?.type);
+            const hasDlcContext = Boolean(params.dlcHash);
+            const isProcedural = propertyType === 7 || propertyData?.type === 'Procedural' || hasDlcContext;
+            const refAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
+
             if (!params.addressToGrantTo) {
-                params.valid = false;
-                params.reason += 'Destination address missing (payload + reference); ';
-                return params;
+                if (isProcedural) {
+                    if (refAddress) {
+                        params.addressToGrantTo = refAddress;
+                    } else {
+                        params.valid = false;
+                        params.reason += 'Destination address missing for procedural issuance (reference required); ';
+                        return params;
+                    }
+                }
+                if (!isProcedural) {
+                    // Non-procedural managed token issuance defaults to sender/admin.
+                    params.addressToGrantTo = sender;
+                }
+            }
+
+            if (isProcedural) {
+                if (!refAddress) {
+                    params.valid = false;
+                    params.reason += 'Procedural issuance requires reference address; ';
+                } else if (params.addressToGrantTo !== refAddress) {
+                    params.valid = false;
+                    params.reason += 'Procedural issuance recipient must match reference address; ';
+                }
             }
 
             if(!validateAddress(params.addressToGrantTo)){
@@ -1068,10 +1097,18 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isManagedProperty = PropertyList.isManagedAndAdmin(params.propertyId);
+            const isManagedProperty = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
             if (!isManagedProperty) {
                 params.valid = false;
                 params.reason += 'Property is not of managed type or admin does not match';
+            }
+
+            if (params.valid && params.commitClearlistId > 0) {
+                const listed = await ClearList.isAddressInClearlist(params.commitClearlistId, params.addressToGrantTo);
+                if (!listed) {
+                    params.valid = false;
+                    params.reason += `Recipient not in clearlist ${params.commitClearlistId}; `;
+                }
             }
 
             return params;

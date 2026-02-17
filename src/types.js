@@ -277,9 +277,6 @@ const Types = {
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
                 params.referenceAddress = Types.resolveReferenceAddress(reference);
-                if (!params.addressToGrantTo && params.referenceAddress) {
-                    params.addressToGrantTo = params.referenceAddress;
-                }
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
@@ -380,6 +377,11 @@ const Types = {
                     txidNeutralized1: params.txidNeutralized1,
                     txidNeutralized2: params.txidNeutralized2,
                     markPrice: params.markPrice,
+                    close: params.close,
+                    macroBatch: params.macroBatch,
+                    batchTxids: params.macroBatch && typeof params.txidNeutralized1 === 'string'
+                        ? params.txidNeutralized1.split(';').map((s) => s.trim()).filter(Boolean)
+                        : [],
                     settleType: params.settleType,
                     columnAIsSeller: params.columnAIsSeller,
                     columnAIsMaker: params.columnAIsMaker,

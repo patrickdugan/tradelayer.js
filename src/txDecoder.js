@@ -274,10 +274,13 @@ const Decode = {
     // Decode Grant Managed Token Transaction
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
+        const clearlistRaw = parts[4] || '';
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
-            addressToGrantTo: parts[2] || ''
+            addressToGrantTo: parts[2] || '',
+            dlcHash: parts[3] || '',
+            commitClearlistId: clearlistRaw === '' ? '' : parseInt(clearlistRaw, 36)
         };
     },
 
