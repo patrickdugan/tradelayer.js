@@ -3,6 +3,13 @@ const secp = require('tiny-secp256k1');
 const DlcOracleBridge = require('../src/dlcOracleBridge.js');
 
 describe('DLC relay signature + procedural token validity gates', () => {
+  test('tx11 decoder accepts trailing dlcHash field', () => {
+    const Decode = require('../src/txDecoder');
+    const decoded = Decode.decodeGrantManagedToken('9,2s,tltc1qabc,,tpl-1,ct-1,FUNDED,abc123');
+    expect(decoded.dlcHash).toBe('abc123');
+    expect(decoded.dlcTemplateId).toBe('tpl-1');
+  });
+
   test('dlc relay bundle verifies with valid secp256k1 signature', () => {
     let priv;
     do {
@@ -102,6 +109,7 @@ describe('DLC relay signature + procedural token validity gates', () => {
         propertyId: 9,
         amountGranted: 1,
         addressToGrantTo: 'tltc1qabc',
+        dlcHash: 'hash-1',
         dlcTemplateId: 'tpl-1',
         dlcContractId: 'ct-1',
         settlementState: 'DISPUTED',
@@ -121,6 +129,7 @@ describe('DLC relay signature + procedural token validity gates', () => {
         propertyId: 9,
         amountGranted: 1,
         addressToGrantTo: '',
+        dlcHash: 'hash-1',
         dlcTemplateId: 'tpl-1',
         dlcContractId: 'ct-1',
         settlementState: 'FUNDED',
@@ -130,6 +139,26 @@ describe('DLC relay signature + procedural token validity gates', () => {
     );
     expect(out.valid).toBe(false);
     expect(out.reason).toMatch(/Destination address missing for procedural issuance/i);
+  });
+
+  test('procedural token grant requires dlcHash', async () => {
+    const Validity = loadValidity({ issuanceGate: { valid: true } });
+    const out = await Validity.validateGrantManagedToken(
+      'tk-admin',
+      {
+        propertyId: 9,
+        amountGranted: 1,
+        addressToGrantTo: 'tltc1qabc',
+        dlcTemplateId: 'tpl-1',
+        dlcContractId: 'ct-1',
+        settlementState: 'FUNDED',
+        dlcHash: '',
+        block: 1
+      },
+      'tx-gm-proc-no-hash'
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/Missing dlcHash/i);
   });
 
   test('procedural token redeem requires redeemable DLC state', async () => {

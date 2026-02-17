@@ -35,9 +35,32 @@ class ProceduralRegistry {
     return base.findOneAsync({ _id: `contract-${contractId}` });
   }
 
-  static async ensureIssuanceContext(templateId, contractId, settlementState = '') {
+  static async getTemplate(templateId) {
+    const base = await this._base();
+    return base.findOneAsync({ _id: `template-${templateId}` });
+  }
+
+  static _normalizeHash(hash) {
+    return String(hash || '').trim().toLowerCase();
+  }
+
+  static async ensureIssuanceContext(templateId, contractId, settlementState = '', dlcHash = '') {
     if (!templateId || !contractId) {
       return { valid: false, reason: 'Missing dlcTemplateId/dlcContractId for procedural token' };
+    }
+    if (!dlcHash) {
+      return { valid: false, reason: 'Missing dlcHash for procedural token issuance' };
+    }
+    const template = await this.getTemplate(templateId);
+    if (!template) {
+      return { valid: false, reason: 'Unknown DLC template id for procedural token' };
+    }
+    const expectedHash = this._normalizeHash(template.templateHash || template.dlcHash || template.hash);
+    if (!expectedHash) {
+      return { valid: false, reason: 'DLC template missing published hash reference' };
+    }
+    if (this._normalizeHash(dlcHash) !== expectedHash) {
+      return { valid: false, reason: 'DLC template hash mismatch' };
     }
     const contract = await this.getContract(contractId);
     if (!contract) return { valid: false, reason: 'Unknown DLC contract id for procedural token' };
@@ -51,7 +74,7 @@ class ProceduralRegistry {
     if (settlementState && String(settlementState).toUpperCase() !== currentState) {
       return { valid: false, reason: 'Provided settlementState does not match DLC contract state' };
     }
-    return { valid: true, contract };
+    return { valid: true, contract, template };
   }
 
   static async ensureRedemptionContext(templateId, contractId, settlementState = '') {

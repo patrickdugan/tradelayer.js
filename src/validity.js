@@ -1231,10 +1231,16 @@ const Validity = {
                 }
             }
             if (isProcedural) {
+                if (!params.dlcHash) {
+                    params.valid = false;
+                    params.reason += 'Missing dlcHash for procedural issuance; ';
+                    return params;
+                }
                 const gate = await ProceduralRegistry.ensureIssuanceContext(
                     params.dlcTemplateId,
                     params.dlcContractId,
-                    params.settlementState
+                    params.settlementState,
+                    params.dlcHash
                 );
                 if (!gate.valid) {
                     params.valid = false;

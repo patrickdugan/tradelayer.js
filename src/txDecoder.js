@@ -279,11 +279,13 @@ const Decode = {
     // Decode Grant Managed Token Transaction
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
+        const trailingHash = parts[7] || '';
+        const legacyHash = parts[3] || '';
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             addressToGrantTo: parts[2] || '',
-            dlcHash: parts[3] || '',
+            dlcHash: trailingHash || legacyHash,
             dlcTemplateId: parts[4] || '',
             dlcContractId: parts[5] || '',
             settlementState: parts[6] || ''

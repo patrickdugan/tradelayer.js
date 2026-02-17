@@ -286,10 +286,11 @@ const Encode = {
             (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountGranted?.toString(36) ?? '0',
             params.addressToGrantTo,
-            params?.dlcHash || '',
+            '',
             params?.dlcTemplateId || '',
             params?.dlcContractId || '',
-            params?.settlementState || ''
+            params?.settlementState || '',
+            params?.dlcHash || ''
         ];
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';
