@@ -9,6 +9,20 @@ const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 
 const Types = {
+  resolveReferenceAddress: (reference) => {
+    if (!reference) return '';
+    if (typeof reference === 'string') return reference;
+    if (Array.isArray(reference)) {
+      const firstWithAddress = reference.find((entry) => entry && typeof entry.address === 'string' && entry.address.length > 0);
+      return firstWithAddress?.address || '';
+    }
+    if (typeof reference === 'object') {
+      if (typeof reference.address === 'string' && reference.address.length > 0) return reference.address;
+      if (typeof reference.senderAddress === 'string' && reference.senderAddress.length > 0) return reference.senderAddress;
+    }
+    return '';
+  },
+
   // Function to encode a payload based on the transaction ID and parameters
   encodePayload: (transactionId, params) => {
     let payload = "tl"
@@ -96,6 +110,33 @@ const Types = {
             case 26:
                 payload += Encode.encodePayToTokens(params);
                 break;
+            case 27:
+                payload += Encode.encodeOptionTrade(params);
+                break;
+            case 28:
+                payload += Encode.encodeTradeBaiUrbun(params);
+                break;
+            case 29:
+                payload += Encode.encodeTradeMurabaha(params);
+                break;
+            case 30:
+                payload += Encode.encodeStakeFraudProof(params);
+                break;
+            case 31:
+                payload += Encode.encodeKingSettle(params);
+                break;
+            case 32:
+                payload += Encode.encodeBatchMoveZkRollup(params);
+                break;
+            case 33:
+                payload += Encode.encodeColoredCoin(params);
+                break;
+            case 34:
+                payload += Encode.encodeAbstractionBridge(params);
+                break;
+            case 35:
+                payload += Encode.encodeBindSmartContract(params);
+                break;
            
       default:
         throw new Error('Unknown transaction type');
@@ -169,63 +210,61 @@ const Types = {
                     
                 if (paymentReference && tokenDeliveryReference) {
                     params.satsPaymentAddress = paymentReference.address;
-                    params.satsDelivered = new BigNumber(paymentReference.satoshis).dividedBy(1e8).toNumber();  // Convert satoshis to LTC or token equivalent
                     params.tokenDeliveryAddress = tokenDeliveryReference.address;
-                    console.log('params '+params.satsPaymentAddress+ ' '+params.satsDelivered+' '+params.tokenDeliveryAddress)
-                    // Call the validate function with the updated params
-                    params = await Validity.validateTradeTokenForUTXO(sender, params, txId, reference);
+                    params.satsReceived = referenceAmount;  // Assuming the amountReceived is what you're looking for
+                    console.log('Decoded and validated UTXO trade params: ' + JSON.stringify(params));
+                    console.log('validating utxo trade '+JSON.stringify(params))
+                    params = await Validity.validateTradeTokenForUTXO(sender, params, txId);
+                    console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 } else {
-                    params.valid = false
-                    params.reason = "Missing outputs"
-                }           
-                      
+                    console.error('Invalid UTXO trade reference data');
+                    // Handle error: invalid reference data
+                }
                 break;
-
             case 4:
+                console.log('decoding commit '+encodedPayload)
                 params = Decode.decodeCommitToken(encodedPayload.substr(index));
-                console.log('in type decode '+JSON.stringify(params))
+                console.log('validating commit '+JSON.stringify(params))
                 params.senderAddress= sender
-                params.txid = txId
+                params.txid=txId
                 params.block=block
-                params = await Validity.validateCommit(sender, params, txId)
-                console.log('after validity '+JSON.stringify(params))
+                params = await Validity.validateCommit(sender, params, txId, reference, referenceAmount)
+                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 5:
                 params = Decode.decodeOnChainTokenForToken(encodedPayload.substr(index));
-                console.log('validating token trade '+JSON.stringify(params))
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
                 params = await Validity.validateOnChainTokenForToken(sender, params, txId)
-                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
+                console.log('validated on chain token for token'+JSON.stringify(params))
                 break;
             case 6:
-                params = Decode.decodeCancelOrder(encodedPayload.substr(index))
+                params = Decode.decodeCancelOrder(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
                 params = await Validity.validateCancelOrder(sender, params, txId)
-                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 7:
                 params = Decode.decodeCreateWhitelist(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
                 params.block=block
-                params.senderAddress = sender
-                params.txid = txId
                 params = await Validity.validateCreateWhitelist(sender, params, txId)
                 break;
             case 8:
                 params = Decode.decodeUpdateAdmin(encodedPayload.substr(index));
+                params.senderAddress= sender
+                params.txid=txId
                 params.block=block
-                params.senderAddress = sender
-                params.txid = txId
                 params = await Validity.validateUpdateAdmin(sender, params, txId)
                 break;
             case 9:
                 params = Decode.decodeIssueOrRevokeAttestation(encodedPayload.substr(index));
+                params.sender= sender
+                params.txid=txId
                 params.block=block
-                params.senderAddress = sender
-                params.txid = txId
                 params = await Validity.validateIssueOrRevokeAttestation(sender, params, txId)
                 break;
             case 10:
@@ -237,11 +276,14 @@ const Types = {
                 break;
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
+                params.referenceAddress = Types.resolveReferenceAddress(reference);
+                if (!params.addressToGrantTo && params.referenceAddress) {
+                    params.addressToGrantTo = params.referenceAddress;
+                }
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
-                params = await Validity.validateGrantManagedToken(sender, params, txId)
-                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
+                params = await Validity.validateGrantManagedToken(sender, params, txId, reference)
                 break;
             case 12:
                 params = Decode.decodeRedeemManagedToken(encodedPayload.substr(index));
@@ -249,14 +291,12 @@ const Types = {
                 params.txid=txId
                 params.block=block
                 params = await Validity.validateRedeemManagedToken(sender, params, txId)
-                console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 break;
             case 13:
                 params = Decode.decodeCreateOracle(encodedPayload.substr(index));
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
-                console.log('validating create Oracle '+JSON.stringify(params))
                 params = await Validity.validateCreateOracle(sender, params, txId)
                 console.log('validated oracle params '+JSON.stringify(params))
                 break;
@@ -329,11 +369,33 @@ const Types = {
                 params = await Validity.validateTransfer(sender, params, txId)
                 break;
             case 23:
+                // L2 Scaling: Settle Channel PNL (polymorphic via settleType)
                 params = Decode.decodeSettleChannelPNL(encodedPayload.substr(index));
-                params.block=block
-                params.senderAddress= sender
-                params.txid=txId
+                params.block = block
+                params.senderAddress = sender
+                params.channelAddress = sender  // Channel address is the sender for settlements
+                params.txid = txId
+                // Wrap decoded params for logic.js compatibility
+                params.txParams = {
+                    txidNeutralized1: params.txidNeutralized1,
+                    txidNeutralized2: params.txidNeutralized2,
+                    markPrice: params.markPrice,
+                    settleType: params.settleType,
+                    columnAIsSeller: params.columnAIsSeller,
+                    columnAIsMaker: params.columnAIsMaker,
+                    netAmount: params.netAmount,
+                    expiryBlock: params.expiryBlock,
+                    blockStart: params.blockStart,
+                    blockEnd: params.blockEnd,
+                    propertyId: params.propertyId,
+                    aPaysBDirection: params.aPaysBDirection,
+                    channelRoot: params.channelRoot,
+                    totalContracts: params.totalContracts,
+                    neutralizedCount: params.neutralizedCount
+                }
+                console.log('decoded settle channel PNL, settleType=' + params.settleType + ' ' + JSON.stringify(params))
                 params = await Validity.validateSettleChannelPNL(sender, params, txId)
+                console.log('validated settle channel PNL ' + JSON.stringify(params) + ' valid=' + params.valid + ' reason=' + params.reason)
                 break;
             case 24:
                 params = Decode.decodeMintSynthetic(encodedPayload.substr(index));
@@ -359,6 +421,7 @@ const Types = {
             case 27:
                 params = Decode.decodeOptionTrade(encodedPayload.substr(index));
                 params.block=block 
+                params.blockHeight = block
                 params.senderAddress= sender
                 params.txid=txId
                 params = await Validity.validateOptionTrade(sender, params, txId)
@@ -378,18 +441,21 @@ const Types = {
                 params = await Validity.validateTradeMurabaha(sender, params, txId)
                 break;
             case 30:
-                params = Decode.stakeFraudProof(encodedPayload.substr(index));
+                params = Decode.decodeStakeFraudProof(encodedPayload.substr(index));
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                params = await Validity.validateStake(sender, params, txId)
+                params = await Validity.validateStakeFraudProof(sender, params, txId)
                 break;    
             case 31:
-                params = Decode.decodeBatchSettlement(encodedPayload.substr(index));
-                params.block=block
-                params.senderAddress= sender
-                params.txid=txId
-                //params = await Validity.validatePublishNewTx(sender, params, block)
+                // L2 Scaling: King Settlement (batch sweep)
+                params = Decode.decodeKingSettle(encodedPayload.substr(index));
+                params.block = block
+                params.senderAddress = sender
+                params.txid = txId
+                console.log('decoded king settle ' + JSON.stringify(params))
+                params = await Validity.validateKingSettle(sender, params, txId)
+                console.log('validated king settle ' + JSON.stringify(params) + ' valid=' + params.valid + ' reason=' + params.reason)
                 break;
             case 32:
                 params = Decode.decodeBatchMoveZkRollup(encodedPayload.substr(index));

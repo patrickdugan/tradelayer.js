@@ -296,12 +296,13 @@ const TxUtils = {
         if(!this.client){
             console.log('awaiting client in get raw tx')
             this.client = await clientPromise;
+
         }
-        
+
         try {
             const tx = await this.client.getRawTransaction(txId);
             return tx.vout.map(output => ({
-                address: output.scriptPubKey.address || (output.scriptPubKey.addresses && output.scriptPubKey.addresses[0]) || null,
+                address: output.scriptPubKey.addresses ? output.scriptPubKey.addresses[0] : null,
                 satoshis: Math.round(output.value * COIN),
                 vout: output.n
             })).filter(output => output.address);  // Filter out outputs without addresses (OP_RETURN)
@@ -775,7 +776,7 @@ async addInputs(utxos, rawTx) {
             const utxo = await this.findSuitableUTXO(fromAddress, minAmountSatoshis);
 
             let transaction = new litecore.Transaction().from(utxo).fee(STANDARD_FEE);
-            //transaction.change(fromAddress);
+            transaction.change(fromAddress);
 
             let payload = Encode.encodeSend({
                 sendAll: sendAll,
@@ -807,7 +808,7 @@ async addInputs(utxos, rawTx) {
                 codeHash: codeHash
             });
 
-            const utxos = await this.client.listUnspent(1, 9999999, [adminAddress]);
+            const utxos = await this.client.listUnspent(0, 9999999, [adminAddress]);
             console.log(utxos);
             if (utxos.length === 0) throw new Error('No UTXOs available for the admin address.');
 
@@ -991,8 +992,7 @@ async addInputs(utxos, rawTx) {
 
     async publishDataTransaction(thisAddress, contractParams) {
         try {
-            var txNumber = 14;
-            payload += Encode.encodePublishOracleData(contractParams);
+            const payload = Encode.encodePublishOracleData(contractParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
@@ -1044,6 +1044,150 @@ async addInputs(utxos, rawTx) {
         //}
     },
 
+    async createOptionTradeTransaction(thisAddress, optionParams) {
+        const payload = Encode.encodeOptionTrade(optionParams);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(2000);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+
+        console.log(`Option trade transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createGrantManagedTokenTransaction(thisAddress, params) {
+        const payload = Encode.encodeGrantManagedToken(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const recipientAddress = params.addressToGrantTo || params.referenceAddress || '';
+        let rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .fee(STANDARD_FEE);
+
+        if (recipientAddress) {
+            rawTx = rawTx.to(recipientAddress, DUST_THRESHOLD);
+        }
+
+        rawTx = rawTx.change(thisAddress);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Grant managed token tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createRedeemManagedTokenTransaction(thisAddress, params) {
+        const payload = Encode.encodeRedeemManagedToken(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Redeem managed token tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createStakeFraudProofTransaction(thisAddress, params) {
+        const payload = Encode.encodeStakeFraudProof(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const relayFee = STANDARD_FEE * 3;
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(relayFee);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Stake/Fraud/Relay tx sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createSettleChannelPNLTransaction(thisAddress, params) {
+        const payload = Encode.encodeSettleChannelPNL(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const inputSats = Math.round(Number(utxo.satoshis || 0));
+        const feeSats = STANDARD_FEE;
+        const changeSats = inputSats - feeSats;
+        let rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .fee(feeSats);
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.to(thisAddress, changeSats);
+        }
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.uncheckedSerialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`Settle Channel PNL transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createKingSettleTransaction(thisAddress, params) {
+        const payload = Encode.encodeKingSettle(params);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const inputSats = Math.round(Number(utxo.satoshis || 0));
+        const feeSats = STANDARD_FEE;
+        const changeSats = inputSats - feeSats;
+        let rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .fee(feeSats);
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.to(thisAddress, changeSats);
+        }
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.uncheckedSerialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`King settle transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
+    async createAMMPoolTransaction(thisAddress, ammParams) {
+        const payload = Encode.encodeAMMPool(ammParams);
+        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const rawTx = new litecore.Transaction()
+            .from(utxo)
+            .addData(payload)
+            .change(thisAddress)
+            .fee(STANDARD_FEE);
+
+        const privateKey = await this.client.dumpprivkey(thisAddress);
+        rawTx.sign(privateKey);
+
+        const serializedTx = rawTx.serialize();
+        const txid = await this.client.sendrawtransaction(serializedTx);
+        console.log(`AMM pool transaction sent successfully. TXID: ${txid}`);
+        return txid;
+    },
+
     async createCancelTransaction(thisAddress, cancelParams) {
         try {
             var txNumber = 6;
@@ -1071,11 +1215,9 @@ async addInputs(utxos, rawTx) {
         }
     },
 
-    async createCommitTransaction(thisAddress, commitParams) {
-        try {
-            var txNumber = 4;
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeCommit(commitParams);
+async createCommitTransaction(thisAddress, commitParams) {
+    try {
+            const payload = Encode.encodeCommit(commitParams);
 
             const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
@@ -1127,9 +1269,7 @@ async addInputs(utxos, rawTx) {
 
 async createChannelContractTradeTransaction(thisAddress, params) {
     try {
-        var txNumber = 19;
-        var payload = 'tl' + txNumber.toString(36);
-        payload += Encode.encodeTradeContractChannel(params);
+        const payload = Encode.encodeTradeContractChannel(params);
 
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const rawTx = new litecore.Transaction()
@@ -1360,8 +1500,29 @@ inferChannelAddrType(addr) {
 },
 
 async findSuitableUTXO(address, minAmount) {
+    const minConfEnv = Number(process.env.TL_UTXO_MINCONF || 0);
+    const minConf = Number.isFinite(minConfEnv) && minConfEnv >= 0 ? minConfEnv : 0;
+    const minSpendSats = Math.max(
+        Number.isFinite(Number(minAmount)) ? Number(minAmount) : 0,
+        STANDARD_FEE
+    ) + DUST_THRESHOLD;
+    const minSpendLtc = minSpendSats / COIN;
     const utxos = await this.client.listUnspent(0, 9999999, [address]);
-    const suitableUtxo = utxos.find(utxo => (utxo.amount >=0.00002))//* COIN >= minAmount) && (utxo.amount * COIN >= DUST_THRESHOLD));
+    const candidates = (utxos || [])
+        .filter((u) => Number(u?.amount || 0) >= Math.max(0.00002, minSpendLtc))
+        .sort((a, b) => {
+            const aa = Number(a?.amount || 0);
+            const ab = Number(b?.amount || 0);
+            if (ab !== aa) return ab - aa;
+            const ca = Number(a?.confirmations || 0);
+            const cb = Number(b?.confirmations || 0);
+            if (cb !== ca) return cb - ca;
+            const sa = a?.safe === false ? 0 : 1;
+            const sb = b?.safe === false ? 0 : 1;
+            if (sb !== sa) return sb - sa;
+            return 0;
+        });
+    const suitableUtxo = candidates.find((u) => Number(u?.confirmations || 0) >= minConf) || candidates[0];
     if (!suitableUtxo) {
         throw new Error('No suitable UTXO found.');
     }
