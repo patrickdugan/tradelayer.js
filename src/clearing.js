@@ -669,9 +669,18 @@ class Clearing {
         const margins = await MarginMap.getInstance(contractId);
         const openPositions = await margins.getAllPositions(contractId);
         const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
+        const notionalBN = new BigNumber(notionalPerContract || 0);
+        const fundingRateBN = new BigNumber(fundingRate || 0);
 
         if (!openPositions.length) {
             //console.log(`⚠️ No positions found for contract ${contractId}`);
+            return;
+        }
+        if (!notionalBN.isFinite() || notionalBN.lte(0) || !fundingRateBN.isFinite()) {
+            console.warn(`[funding-skip] contract=${contractId} block=${block} invalid notional/rate`, {
+                notionalPerContract,
+                fundingRate
+            });
             return;
         }
 
@@ -684,8 +693,13 @@ class Clearing {
 
         // **Calculate total funding owed by each side**
         for (let pos of openPositions) {
-            const contractsBN = new BigNumber(Math.abs(pos.contracts));
-            const fundingAmount = contractsBN.times(notionalPerContract).times(fundingRate / 10000).decimalPlaces(8);
+            const contractsBN = new BigNumber(Math.abs(Number(pos.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.lte(0)) continue;
+            const fundingAmount = contractsBN
+                .times(notionalBN)
+                .times(fundingRateBN.div(10000))
+                .decimalPlaces(8);
+            if (!fundingAmount.isFinite()) continue;
 
             if (fundingRate > 0 && pos.contracts > 0) {
                 longFunding = longFunding.plus(fundingAmount); // Longs owe shorts
@@ -707,31 +721,44 @@ class Clearing {
 
     static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
         const ContractRegistry = require('./contractRegistry.js');
-        if (totalFunding.isZero()) return;
+        const Tally = require('./tally.js');
+        const totalFundingBN = new BigNumber(totalFunding || 0);
+        if (!totalFundingBN.isFinite() || totalFundingBN.isZero()) return;
 
         const collateralId = await ContractRegistry.getCollateralId(contractId);
-        let totalContracts = payers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        let totalContracts = payers.reduce((sum, pos) => {
+            const c = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            return c.isFinite() ? sum.plus(c) : sum;
+        }, new BigNumber(0));
 
         if (totalContracts.isZero()) return;
 
         for (let pos of payers) {
-            let contractsBN = new BigNumber(Math.abs(pos.contracts));
-            let amountOwed = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            let contractsBN = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.isZero()) continue;
+            let amountOwed = totalFundingBN.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            if (!amountOwed.isFinite()) continue;
 
             console.log(`💸 Funding Deduction: ${pos.address} pays ${amountOwed}`);
 
-            await TallyMap.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
+            await Tally.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
         }
 
-        totalContracts = receivers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        totalContracts = receivers.reduce((sum, pos) => {
+            const c = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            return c.isFinite() ? sum.plus(c) : sum;
+        }, new BigNumber(0));
+        if (totalContracts.isZero()) return;
 
         for (let pos of receivers) {
-            let contractsBN = new BigNumber(Math.abs(pos.contracts));
-            let amountReceived = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            let contractsBN = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.isZero()) continue;
+            let amountReceived = totalFundingBN.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            if (!amountReceived.isFinite()) continue;
 
             console.log(`💰 Funding Credit: ${pos.address} receives ${amountReceived}`);
 
-            await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
+            await Tally.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
         }
     }
 
