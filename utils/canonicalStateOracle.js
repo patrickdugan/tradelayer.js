@@ -48,17 +48,27 @@ async function currentBlockHint() {
 }
 
 async function buildStatePayload(propertyId) {
-  const holders = await TallyMap.getAddressesWithBalanceForProperty(propertyId);
-  const normalized = (holders || [])
-    .map((h) => ({
-      address: String(h.address || ''),
-      available: Number(h.available || 0),
-      reserved: Number(h.reserved || 0),
-      margin: Number(h.margin || 0),
-      vesting: Number(h.vesting || 0),
-      channelBalance: Number(h.channelBalance || 0)
-    }))
-    .sort((a, b) => a.address.localeCompare(b.address));
+  await TallyMap.loadFromDB();
+  const normalized = [];
+  for (const [address, props] of (TallyMap.addresses || new Map()).entries()) {
+    const bal = props?.[propertyId];
+    if (!bal) continue;
+    const available = Number(bal.available || 0);
+    const reserved = Number(bal.reserved || 0);
+    const margin = Number(bal.margin || 0);
+    const vesting = Number(bal.vesting || 0);
+    const channelBalance = Number(bal.channelBalance || 0);
+    if (available <= 0 && reserved <= 0 && margin <= 0 && vesting <= 0 && channelBalance <= 0) continue;
+    normalized.push({
+      address: String(address || ''),
+      available,
+      reserved,
+      margin,
+      vesting,
+      channelBalance
+    });
+  }
+  normalized.sort((a, b) => a.address.localeCompare(b.address));
 
   const payload = {
     propertyId: Number(propertyId),
@@ -187,4 +197,3 @@ main().catch((err) => {
   console.error('[canonical-state-oracle] error:', err.message);
   process.exit(1);
 });
-
