@@ -675,7 +675,7 @@ const Logic = {
         const admin = activation.getAdmin()
         if(sender==admin&&clearlistId==0){
             console.log('admin updating banlist')
-            await updateBannedCountries(metaData,block)
+            await Logic.updateBannedCountries(metaData,block)
             return
         }
         if(!revoke){
