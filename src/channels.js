@@ -799,7 +799,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
     }
 
 
-    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid){
+    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid, commitClearlistId = null){
         console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight+ txid)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
@@ -870,7 +870,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             tokenAmount,
             block: blockHeight,
             columnAssigned: channelColumn,
-            payEnabled: payEnabled
+            payEnabled: payEnabled,
+            commitClearlistId
         };
 
         await Channels.recordChannelDelta({

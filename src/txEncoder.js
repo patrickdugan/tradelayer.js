@@ -140,6 +140,9 @@ const Encode = {
             clearLists,
             isColoredOutput,
         ];
+        if (Number.isInteger(params.commitClearlistId)) {
+            payload.push(params.commitClearlistId.toString(36));
+        }
         const type = 4;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');

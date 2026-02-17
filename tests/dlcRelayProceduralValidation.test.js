@@ -113,6 +113,25 @@ describe('DLC relay signature + procedural token validity gates', () => {
     expect(out.reason).toMatch(/not mintable/i);
   });
 
+  test('procedural token grant requires explicit or referenced destination', async () => {
+    const Validity = loadValidity({ issuanceGate: { valid: true } });
+    const out = await Validity.validateGrantManagedToken(
+      'tk-admin',
+      {
+        propertyId: 9,
+        amountGranted: 1,
+        addressToGrantTo: '',
+        dlcTemplateId: 'tpl-1',
+        dlcContractId: 'ct-1',
+        settlementState: 'FUNDED',
+        block: 1
+      },
+      'tx-gm-proc-no-dst'
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/Destination address missing for procedural issuance/i);
+  });
+
   test('procedural token redeem requires redeemable DLC state', async () => {
     const Validity = loadValidity({ redemptionGate: { valid: false, reason: 'DLC contract state OPEN not redeemable' } });
     const out = await Validity.validateRedeemManagedToken(

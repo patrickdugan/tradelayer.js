@@ -640,6 +640,18 @@ const Validity = {
                     params.reason += 'clearLists contains non-integer values. ';
                 }
             }
+            if (params.commitClearlistId !== null && params.commitClearlistId !== undefined) {
+                if (!Number.isInteger(params.commitClearlistId) || params.commitClearlistId < 0) {
+                    params.valid = false;
+                    params.reason += 'commitClearlistId must be a non-negative integer. ';
+                } else if (params.commitClearlistId > 0) {
+                    const approved = await ClearList.isAddressInClearlistOrDerived(params.commitClearlistId, sender);
+                    if (!approved) {
+                        params.valid = false;
+                        params.reason += `Sender address not listed in commit clearlist ${params.commitClearlistId}; `;
+                    }
+                }
+            }
 
             return params;
         },
@@ -1168,13 +1180,6 @@ const Validity = {
                 return '';
             };
 
-            if (!params.addressToGrantTo) {
-                const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
-                if (fallbackAddress) {
-                    params.addressToGrantTo = fallbackAddress;
-                }
-            }
-
             const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -1185,20 +1190,6 @@ const Validity = {
                 params.valid = false;
                 params.reason += 'Invalid or missing amount; ';
                 return params;
-            }
-
-            if (!params.addressToGrantTo) {
-                params.valid = false;
-                params.reason += 'Destination address missing (payload + reference); ';
-                return params;
-            }
-
-            if(!validateAddress(params.addressToGrantTo)){
-                const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
-                if(!valid.isvalid){
-                    params.valid= false
-                    params.reason += 'Destination address is not validly formed.'
-                }
             }
 
             const is = await Validity.isActivated(params.block,txid,11)
@@ -1216,6 +1207,29 @@ const Validity = {
 
             const propertyData = await PropertyList.getPropertyData(params.propertyId);
             const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            if (!params.addressToGrantTo) {
+                const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
+                if (fallbackAddress) {
+                    params.addressToGrantTo = fallbackAddress;
+                } else if (!isProcedural) {
+                    // Non-procedural tx11 grants default to sender address when no explicit destination is provided.
+                    params.addressToGrantTo = sender;
+                }
+            }
+            if (!params.addressToGrantTo) {
+                params.valid = false;
+                params.reason += isProcedural
+                    ? 'Destination address missing for procedural issuance; '
+                    : 'Destination address missing (payload + reference); ';
+                return params;
+            }
+            if(!validateAddress(params.addressToGrantTo)){
+                const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
+                if(!valid.isvalid){
+                    params.valid= false
+                    params.reason += 'Destination address is not validly formed.'
+                }
+            }
             if (isProcedural) {
                 const gate = await ProceduralRegistry.ensureIssuanceContext(
                     params.dlcTemplateId,

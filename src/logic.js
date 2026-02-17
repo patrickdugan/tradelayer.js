@@ -80,7 +80,17 @@ const Logic = {
                 break;
             case 4:
                 console.log('in the commit case '+params.txid)
-                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block, params.txid);
+                await Logic.commitToken(
+                    params.senderAddress,
+                    params.channelAddress,
+                    params.propertyId,
+                    params.amount,
+                    params.payEnabled,
+                    params.clearLists,
+                    params.block,
+                    params.txid,
+                    params.commitClearlistId
+                );
                 break;
             case 5:
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block, params.stop, params.post);
@@ -618,7 +628,7 @@ const Logic = {
             return
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
+	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid, commitClearlistId = null) {
        
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
@@ -627,7 +637,7 @@ const Logic = {
         await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
         console.log('commiting tokens '+tokenAmount+' '+block+' '+txid)
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid);
+        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid, commitClearlistId);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
         return;

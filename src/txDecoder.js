@@ -160,6 +160,9 @@ const Decode = {
         }
 
         const isColoredOutput = parts[5] ==='1'
+        const commitClearlistId = parts[6] !== undefined && parts[6] !== ''
+            ? parseInt(parts[6], 36)
+            : null;
 
         return {
             propertyId,
@@ -168,7 +171,8 @@ const Decode = {
             ref,
             payEnabled,
             clearLists,
-            isColoredOutput
+            isColoredOutput,
+            commitClearlistId
         };
     },
 
