@@ -2309,6 +2309,111 @@ class Clearing {
         return result;
     }
 
+    static _sweepAmmLiquidityFirst(obData, liqOrder, maxFill, liqBoundaryPrice, inverse) {
+        const sideKey = liqOrder.sell ? 'buy' : 'sell';
+        const side = Array.isArray(obData?.[sideKey]) ? obData[sideKey] : [];
+        const qtyCap = Number(maxFill || 0);
+
+        const result = {
+            filledSize: 0,
+            matches: []
+        };
+
+        if (qtyCap <= 0 || side.length === 0) return result;
+
+        // For liquidation, AMM is the first preferred counterparty, but only at "safe" prices.
+        const ammLevels = side
+            .filter(o => o && o.sender === 'amm' && Number(o.amount || 0) > 0)
+            .sort((a, b) => {
+                const pa = Number(a.price || 0);
+                const pb = Number(b.price || 0);
+                if (liqOrder.sell) {
+                    // Selling liquidation should hit highest bids first.
+                    if (pb !== pa) return pb - pa;
+                } else {
+                    // Buying liquidation should hit lowest asks first.
+                    if (pa !== pb) return pa - pb;
+                }
+                return Number(a.blockTime || 0) - Number(b.blockTime || 0);
+            });
+
+        let remaining = qtyCap;
+        for (const level of ammLevels) {
+            if (remaining <= 0) break;
+
+            const px = Number(level.price || 0);
+            const avail = Number(level.amount || 0);
+            if (!Number.isFinite(px) || !Number.isFinite(avail) || avail <= 0) continue;
+
+            const isGood = !inverse
+                ? (liqOrder.sell ? px >= liqBoundaryPrice : px <= liqBoundaryPrice)
+                : (liqOrder.sell ? px <= liqBoundaryPrice : px >= liqBoundaryPrice);
+
+            if (!isGood) continue;
+
+            const take = Math.min(remaining, avail);
+            if (take <= 0) continue;
+
+            const liqLegBase = {
+                ...liqOrder,
+                amount: take,
+                contractId: liqOrder.contractId,
+                sender: liqOrder.address,
+                txid: liqOrder.txid || 'liq',
+                maker: false,
+                liq: true
+            };
+
+            const ammLegBase = {
+                ...level,
+                amount: take,
+                contractId: liqOrder.contractId,
+                sender: level.sender || 'amm',
+                txid: level.txid || 'amm',
+                maker: true,
+                liq: Boolean(level.isLiq)
+            };
+
+            let match;
+            if (liqOrder.sell) {
+                match = {
+                    sellOrder: {
+                        ...liqLegBase,
+                        sellerAddress: liqOrder.address
+                    },
+                    buyOrder: {
+                        ...ammLegBase,
+                        buyerAddress: ammLegBase.sender
+                    },
+                    tradePrice: px,
+                    txid: ammLegBase.txid
+                };
+            } else {
+                match = {
+                    sellOrder: {
+                        ...ammLegBase,
+                        sellerAddress: ammLegBase.sender
+                    },
+                    buyOrder: {
+                        ...liqLegBase,
+                        buyerAddress: liqOrder.address
+                    },
+                    tradePrice: px,
+                    txid: ammLegBase.txid
+                };
+            }
+
+            result.matches.push(match);
+            result.filledSize += take;
+            remaining -= take;
+
+            level.amount = new BigNumber(level.amount || 0).minus(take).toNumber();
+        }
+
+        obData[sideKey] = side.filter(o => Number(o.amount || 0) > 0);
+        return result;
+    }
+
        static async handleLiquidation(
         ctxKey,
         orderbook,
@@ -2465,20 +2570,39 @@ class Clearing {
           // amount in the same call.
           // ============================================================
           const safeSize = Number(splat.goodFilledSize || 0);
+          let remainingSafeSize = safeSize;
           const liqOb = { ...liq, amount: safeSize };
 
           console.log('safe size!? '+safeSize)
-
-          obData = await orderbook.insertOrder(liqOb, obData, liqOb.sell, true);
           let trades= []
+          const ammSweep = Clearing._sweepAmmLiquidityFirst(
+            obData,
+            liqOb,
+            remainingSafeSize,
+            computedLiqPrice,
+            inverse
+          );
 
-          const matchResult = await orderbook.matchContractOrders(obData);   
-          if (matchResult.matches && matchResult.matches.length > 0) {
-                trades= await orderbook.processContractMatches(matchResult.matches, blockHeight, false,markPrice);
+          if (ammSweep.matches.length > 0) {
+            const ammTrades = await orderbook.processContractMatches(ammSweep.matches, blockHeight, false, markPrice);
+            if (Array.isArray(ammTrades) && ammTrades.length > 0) trades.push(...ammTrades);
+            remainingSafeSize -= Number(ammSweep.filledSize || 0);
+            console.log(`[LIQ AMM-FIRST] filled=${ammSweep.filledSize} remainingSafe=${remainingSafeSize}`);
+          }
+
+          let matchResult = { matches: [], orderBook: obData };
+          if (remainingSafeSize > 0) {
+            const liqRemainder = { ...liqOb, amount: remainingSafeSize };
+            obData = await orderbook.insertOrder(liqRemainder, obData, liqRemainder.sell, true);
+            matchResult = await orderbook.matchContractOrders(obData);
+            if (matchResult.matches && matchResult.matches.length > 0) {
+                const extraTrades = await orderbook.processContractMatches(matchResult.matches, blockHeight, false, markPrice);
+                if (Array.isArray(extraTrades) && extraTrades.length > 0) trades.push(...extraTrades);
+            }
           }
 
           console.log('liq match result '+JSON.stringify(matchResult))
-          await orderbook.saveOrderBook(matchResult.orderBook, obKey);
+          await orderbook.saveOrderBook(matchResult.orderBook || obData, obKey);
 
            // PATCH 1: set obFill to what actually matched (best-effort from match objects)
           let filledFromMatches = 0;
@@ -2493,7 +2617,7 @@ class Clearing {
           }
 
           // Never exceed requested liqAmount
-          obFill = new Big(Math.min(filledFromMatches, liqAmount));
+          obFill = new Big(Math.min(filledFromMatches + Number(ammSweep.filledSize || 0), liqAmount));
           console.log('obFill after matches '+obFill.toNumber()+' '+filledFromMatches+' '+liqAmount)
 
                 
