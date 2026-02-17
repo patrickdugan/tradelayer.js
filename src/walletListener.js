@@ -21,6 +21,8 @@ const VolumeIndex = require('./volumeIndex.js')
 const db = require('./db.js')
 
 let isInitialized = false; // A flag to track the initialization status
+let isInitializing = false;
+let initPromise = null;
 const app = express();
 const port = 3000; // Choose a port that suits your setup
 
@@ -61,24 +63,38 @@ const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1,'tlt
             lastInitCall = now;
         }
 
-        if (!isInitialized) {
-            console.log('Waiting for ClientWrapper initialization...');
-            const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
-            
-            console.log('Client and Database initialized successfully.');
-
-            // Initialize Main only after ClientWrapper is ready
-            const mainProcessor = await Main.getInstance(client);  // Pass client to Main
-            mainProcessor.initialize();
-            
-            isInitialized = true;  // Mark as initialized
-            res.status(200).send('Main process initialized successfully');
-        } else {
+        if (isInitialized) {
             res.status(200).send('Main process already initialized');
+            return;
         }
+        if (isInitializing && initPromise) {
+            await initPromise;
+            res.status(200).send(isInitialized ? 'Main process initialized successfully' : 'Main process initialization failed');
+            return;
+        }
+
+        console.log('Waiting for ClientWrapper initialization...');
+        const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
+        
+        console.log('Client and Database initialized successfully.');
+
+        // Initialize Main only after ClientWrapper is ready
+        const mainProcessor = await Main.getInstance(client);  // Pass client to Main
+        isInitializing = true;
+        initPromise = (async () => {
+            await mainProcessor.initialize();
+            isInitialized = true;  // Mark as initialized only after successful init
+        })();
+
+        await initPromise;
+        res.status(200).send('Main process initialized successfully');
     } catch (error) {
+        isInitialized = false;
         console.error('Error during initialization:', error);
         res.status(500).send('Error: ' + error.message);
+    } finally {
+        isInitializing = false;
+        initPromise = null;
     }
 });
 // Validate address
