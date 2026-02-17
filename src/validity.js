@@ -1150,9 +1150,30 @@ const Validity = {
 
 
         // 11: Grant Managed Token
-        validateGrantManagedToken: async (sender, params, txid) => {
+        validateGrantManagedToken: async (sender, params, txid, reference = null) => {
             params.reason = '';
             params.valid = true;
+
+            const resolveReferenceAddress = (ref) => {
+                if (!ref) return '';
+                if (typeof ref === 'string') return ref;
+                if (Array.isArray(ref)) {
+                    const firstWithAddress = ref.find((entry) => entry && typeof entry.address === 'string' && entry.address.length > 0);
+                    return firstWithAddress?.address || '';
+                }
+                if (typeof ref === 'object') {
+                    if (typeof ref.address === 'string' && ref.address.length > 0) return ref.address;
+                    if (typeof ref.senderAddress === 'string' && ref.senderAddress.length > 0) return ref.senderAddress;
+                }
+                return '';
+            };
+
+            if (!params.addressToGrantTo) {
+                const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
+                if (fallbackAddress) {
+                    params.addressToGrantTo = fallbackAddress;
+                }
+            }
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
             if(isAlreadyActivated==false){
@@ -1166,11 +1187,17 @@ const Validity = {
                 return params;
             }
 
+            if (!params.addressToGrantTo) {
+                params.valid = false;
+                params.reason += 'Destination address missing (payload + reference); ';
+                return params;
+            }
+
             if(!validateAddress(params.addressToGrantTo)){
                 const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
                 if(!valid.isvalid){
                     params.valid= false
-                    params.reason = 'Destination address is not validly formed.'
+                    params.reason += 'Destination address is not validly formed.'
                 }
             }
 

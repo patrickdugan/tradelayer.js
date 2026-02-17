@@ -87,6 +87,29 @@ describe('Admin control validation (tx8/tx11/tx12)', () => {
     expect(out.reason).toMatch(/managed type or admin/i);
   });
 
+  test('tx11 grant managed falls back to reference address when payload destination is missing', async () => {
+    const Validity = loadValidity({ managedAndAdmin: true });
+    const out = await Validity.validateGrantManagedToken(
+      'tk-admin',
+      { propertyId: 9, amountGranted: 1, addressToGrantTo: '', block: 1 },
+      'tx-gm-ref',
+      { address: 'tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw' }
+    );
+    expect(out.valid).toBe(true);
+    expect(out.addressToGrantTo).toBe('tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw');
+  });
+
+  test('tx11 grant managed rejects missing payload and reference destination', async () => {
+    const Validity = loadValidity({ managedAndAdmin: true });
+    const out = await Validity.validateGrantManagedToken(
+      'tk-admin',
+      { propertyId: 9, amountGranted: 1, addressToGrantTo: '', block: 1 },
+      'tx-gm-no-dst'
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/Destination address missing/i);
+  });
+
   test('tx12 redeem managed enforces admin and balance', async () => {
     const Validity = loadValidity({ managedAndAdmin: true, tallyAvailable: 0.5 });
     const out = await Validity.validateRedeemManagedToken(

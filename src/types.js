@@ -9,6 +9,20 @@ const TxIndex = require('./txIndex.js')
 const BigNumber = require('bignumber.js')
 
 const Types = {
+  resolveReferenceAddress: (reference) => {
+    if (!reference) return '';
+    if (typeof reference === 'string') return reference;
+    if (Array.isArray(reference)) {
+      const firstWithAddress = reference.find((entry) => entry && typeof entry.address === 'string' && entry.address.length > 0);
+      return firstWithAddress?.address || '';
+    }
+    if (typeof reference === 'object') {
+      if (typeof reference.address === 'string' && reference.address.length > 0) return reference.address;
+      if (typeof reference.senderAddress === 'string' && reference.senderAddress.length > 0) return reference.senderAddress;
+    }
+    return '';
+  },
+
   // Function to encode a payload based on the transaction ID and parameters
   encodePayload: (transactionId, params) => {
     let payload = "tl"
@@ -262,10 +276,14 @@ const Types = {
                 break;
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
+                params.referenceAddress = Types.resolveReferenceAddress(reference);
+                if (!params.addressToGrantTo && params.referenceAddress) {
+                    params.addressToGrantTo = params.referenceAddress;
+                }
                 params.senderAddress= sender
                 params.txid=txId
                 params.block=block
-                params = await Validity.validateGrantManagedToken(sender, params, txId)
+                params = await Validity.validateGrantManagedToken(sender, params, txId, reference)
                 break;
             case 12:
                 params = Decode.decodeRedeemManagedToken(encodedPayload.substr(index));

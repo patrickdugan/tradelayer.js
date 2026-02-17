@@ -1066,11 +1066,17 @@ async addInputs(utxos, rawTx) {
     async createGrantManagedTokenTransaction(thisAddress, params) {
         const payload = Encode.encodeGrantManagedToken(params);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
-        const rawTx = new litecore.Transaction()
+        const recipientAddress = params.addressToGrantTo || params.referenceAddress || '';
+        let rawTx = new litecore.Transaction()
             .from(utxo)
             .addData(payload)
-            .change(thisAddress)
             .fee(STANDARD_FEE);
+
+        if (recipientAddress) {
+            rawTx = rawTx.to(recipientAddress, DUST_THRESHOLD);
+        }
+
+        rawTx = rawTx.change(thisAddress);
 
         const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
