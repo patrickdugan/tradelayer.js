@@ -1,5 +1,7 @@
 var db = require('./db')
 var BigNumber = require('bignumber.js')
+const crypto = require('crypto');
+const DlcOracleBridge = require('./dlcOracleBridge.js');
 function getInsuranceModule() {
     return require('./insurance.js');
 }
@@ -293,6 +295,40 @@ class OracleList {
 
     static async relayTradeLayerState(oracleId, senderAddress, relayType, stateHash, dlcRef, blockHeight, relayBlob = '') {
         const oracleDataDB = await db.getDatabase('oracleData');
+        const parsed = DlcOracleBridge.parseRelayBlob(relayBlob);
+        const sigHex = String(parsed?.signatureHex || '').trim().toLowerCase();
+        const effectiveStateHash = String(stateHash || parsed?.stateHash || '');
+        const effectiveDlcRef = String(dlcRef || '');
+
+        // Replay protection: a signed oracle attestation cannot be reused for a different
+        // DLC reference or state hash.
+        if (sigHex) {
+            const sigDigest = crypto.createHash('sha256').update(sigHex).digest('hex');
+            const sigKey = `oracle-relay-sig-${oracleId}-${sigDigest}`;
+            const prev = await oracleDataDB.findOneAsync({ _id: sigKey });
+            if (prev) {
+                const changedState = String(prev.stateHash || '') !== effectiveStateHash;
+                const changedDlcRef = String(prev.dlcRef || '') !== effectiveDlcRef;
+                if (changedState || changedDlcRef) {
+                    throw new Error('Relay signature replay detected for different stateHash/dlcRef');
+                }
+            } else {
+                await oracleDataDB.updateAsync(
+                    { _id: sigKey },
+                    {
+                        _id: sigKey,
+                        type: 'relaySigUse',
+                        oracleId,
+                        signatureHex: sigHex,
+                        stateHash: effectiveStateHash,
+                        dlcRef: effectiveDlcRef,
+                        firstSeenBlock: blockHeight
+                    },
+                    { upsert: true }
+                );
+            }
+        }
+
         const relayKey = `oracle-relay-${oracleId}-${relayType}-${blockHeight}`;
         const relayDoc = {
             _id: relayKey,
