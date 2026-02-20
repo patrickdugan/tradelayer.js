@@ -170,8 +170,6 @@ async function main() {
 
   await TxUtils.init();
   await Activation.getInstance().init();
-  const clearingShim = new Clearing();
-  Clearing.computeOptionAdjustments = clearingShim.computeOptionAdjustments.bind(clearingShim);
   let block = await TxUtils.getBlockCount();
 
   const info = await ContractRegistry.getContractInfo(seriesId);

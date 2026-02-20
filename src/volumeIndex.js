@@ -229,6 +229,10 @@ static async updateCumulativeVolumes(volume, type, id, block) {
         try {
             const base = await db.getDatabase('volumeIndex');
             console.log('inside get last price ' + blockHeight);
+            if (typeof tokenPair !== 'string' || !tokenPair.includes('-')) {
+                console.warn(`getLastPrice called with invalid tokenPair: ${tokenPair}`);
+                return null;
+            }
 
             // Try direct pair first
             const direct = await base.findOneAsync({ _id: tokenPair });

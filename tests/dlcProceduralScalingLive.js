@@ -74,6 +74,23 @@ async function broadcastPayload(senderAddress, payload) {
   return TxUtils.client.sendrawtransaction(tx.uncheckedSerialize());
 }
 
+async function broadcastGrantManagedToken(senderAddress, params) {
+  const payload = Encode.encodeGrantManagedToken(params);
+  const feeSats = 4000;
+  const utxo = await TxUtils.findSuitableUTXO(senderAddress, feeSats);
+  const privateKey = await TxUtils.client.dumpprivkey(senderAddress);
+  const dust = 546;
+  const recipientAddress = params.addressToGrantTo || '';
+  const tx = new litecore.Transaction()
+    .from(utxo)
+    .addData(payload)
+    .to(recipientAddress, dust)
+    .change(senderAddress)
+    .fee(feeSats);
+  tx.sign(privateKey);
+  return TxUtils.client.sendrawtransaction(tx.uncheckedSerialize());
+}
+
 async function applyTxNow(txid, senderAddress, blockHeight) {
   const tx = await TxUtils.getRawTransaction(txid);
   const opret = tx?.vout?.find((v) => v?.scriptPubKey?.type === 'nulldata');
@@ -189,6 +206,18 @@ async function main() {
     await applyTxNow(wlTx, admin, b);
   }
   const attestationTargets = [...new Set([admin, oracleAdmin, refAddress, ...recipients, commitA, commitB])];
+  // Self-cert (clearlist id 0) for sender so TL/TLI transfers are allowed under jurisdiction checks.
+  const selfCertTx = await TxUtils.createAttestTransaction(admin, {
+    revoke: false,
+    id: 0,
+    targetAddress: admin,
+    metaData: 'CA'
+  }, 9);
+  if (applyImmediate) {
+    const b = await TxUtils.getBlockCount();
+    await applyTxNow(selfCertTx, admin, b);
+  }
+
   for (const addr of attestationTargets) {
     const attestTx = await TxUtils.createAttestTransaction(admin, {
       revoke: false,
@@ -277,7 +306,7 @@ async function main() {
     await applyTxNow(depositTx, admin, b);
   }
 
-  const grantTx = await TxUtils.createGrantManagedTokenTransaction(admin, {
+  const grantTx = await broadcastGrantManagedToken(admin, {
     propertyId: receiptPropertyId,
     amountGranted: depositAmount,
     addressToGrantTo: refAddress,
@@ -291,16 +320,25 @@ async function main() {
     await applyTxNow(grantTx, admin, b);
   }
 
-  // 6) transfer wrapped token from ref to multiple addresses
+  // 6) distribute wrapped token to multiple addresses.
+  // Restricted procedural tokens are non-transferable via tx2, so use tx11 grants.
   const transferTxids = [];
   for (let i = 0; i < recipients.length; i++) {
     const to = recipients[i];
     const amt = Number(transferAmounts[i] ?? transferAmounts[transferAmounts.length - 1] ?? 0.5);
-    const txid = await TxUtils.sendTransaction(refAddress, to, receiptPropertyId, amt, false);
+    const txid = await broadcastGrantManagedToken(admin, {
+      propertyId: receiptPropertyId,
+      amountGranted: amt,
+      addressToGrantTo: to,
+      dlcTemplateId: templateId,
+      dlcContractId: contractId,
+      settlementState: 'FUNDED',
+      dlcHash: templateHash
+    });
     transferTxids.push({ to, amt, txid });
     if (applyImmediate) {
       const b = await TxUtils.getBlockCount();
-      await applyTxNow(txid, refAddress, b);
+      await applyTxNow(txid, admin, b);
     }
   }
 

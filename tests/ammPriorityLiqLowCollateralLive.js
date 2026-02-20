@@ -84,6 +84,34 @@ async function setAmmOnlyQuotes(contractId, markPrice, blockHeight) {
   return { buy, sell };
 }
 
+async function ensureAmmLiquidity(admin, contractId, blockHeight) {
+  const info = await ContractRegistry.getContractInfo(contractId);
+  const curPos = Number(info?.ammPool?.position || 0);
+  const maxPos = Number(info?.ammPool?.maxPosition || 0);
+  if (curPos > 0) return null;
+  if (maxPos <= 0) throw new Error(`AMM maxPosition is non-positive for contract ${contractId}`);
+
+  const addTx = await TxUtils.createAMMPoolTransaction(admin, {
+    isRedeem: 0,
+    isContract: 1,
+    id: contractId,
+    amount: Math.min(1, maxPos),
+    id2: 0,
+    amount2: 0
+  });
+  await applyTxNow(addTx, admin, blockHeight);
+  return addTx;
+}
+
+async function ensureTxTypeActive(admin, txType, blockHeight) {
+  const activation = Activation.getInstance();
+  const active = await activation.isTxTypeActive(txType);
+  if (active) return null;
+  const txid = await TxUtils.activationTransaction(admin, txType);
+  await applyTxNow(txid, admin, blockHeight);
+  return txid;
+}
+
 async function getBestAsk(contractId) {
   const ob = new Orderbook(String(contractId));
   const data = await ob.loadOrderBook(String(contractId), false);
@@ -110,6 +138,9 @@ async function main() {
   await Activation.getInstance().init();
   const startBlock = await TxUtils.getBlockCount();
 
+  await ensureTxTypeActive(admin, 10, startBlock); // AMM pool tx
+  await ensureTxTypeActive(admin, 18, startBlock); // on-chain contract trade
+
   const trader = await TxUtils.client.rpcCall('getnewaddress', [], true);
   const ltcTx = await TxUtils.client.rpcCall('sendtoaddress', [trader, ltcFund], true);
   const sendTokenTx = await TxUtils.sendTransaction(admin, trader, collateralId, tokenFund, 0);
@@ -121,6 +152,11 @@ async function main() {
 
   const markStart = Number(await OracleList.getOraclePrice(oracleId));
   if (!Number.isFinite(markStart) || markStart <= 0) throw new Error('Invalid oracle start price');
+
+  const ammSeedTx = await ensureAmmLiquidity(admin, seriesId, startBlock);
+  if (ammSeedTx) {
+    console.log('[amm-priority-low-collateral] seeded AMM liquidity', { seriesId, ammSeedTx });
+  }
 
   // Refresh AMM orderbook and keep AMM-only quotes.
   await AMMPool.updateOrdersForAllContractAMMs(startBlock);
