@@ -616,23 +616,23 @@ class Clearing {
 
             // Compute basis points difference
             const priceDiff = new BigNumber(indexPrice).minus(vwap);
-            const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2).toNumber(); // Convert to bps
+            const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2);
 
-            console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints} bps)`);
+            console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints.toFixed(2)} bps)`);
 
             // Apply clamp function
             const clampedBps = this.clampFundingRate(basisPoints);
 
             // Compute per-hour funding rate (divided by 8)
-            let fundingRate = new BigNumber(clampedBps).dividedBy(8).decimalPlaces(4).toNumber();
+            let fundingRate = new BigNumber(clampedBps || 0).dividedBy(8).decimalPlaces(4);
 
             // Cap max rate at ±100 bps per 8 hours (12.5 bps per hour)
-            if (Math.abs(fundingRate) > 12.5) {
-                fundingRate = Math.sign(fundingRate) * 12.5;
+            if (fundingRate.abs().gt(12.5)) {
+                fundingRate = fundingRate.isNegative() ? new BigNumber(-12.5) : new BigNumber(12.5);
             }
 
-            console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
-            return fundingRate;
+            console.log(`📈 Final Funding Rate: ${fundingRate.toFixed(4)} bps per hour`);
+            return fundingRate.toNumber();
         } catch (error) {
             console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
             return 0;
@@ -659,8 +659,11 @@ class Clearing {
 
     // **Clamp function for funding rate**
     static clampFundingRate(basisPoints) {
-        if (Math.abs(basisPoints) < 5) return 0; // Ignore small deviations
-        return Math.sign(basisPoints) * (Math.abs(basisPoints) - 5); // Reduce deviation >5bps by 5
+        const bps = new BigNumber(basisPoints || 0);
+        if (!bps.isFinite()) return new BigNumber(0);
+        if (bps.abs().lt(5)) return new BigNumber(0); // Ignore small deviations
+        const reduced = bps.abs().minus(5); // Reduce deviation >5bps by 5
+        return bps.isNegative() ? reduced.negated() : reduced;
     }
 
 
@@ -2341,51 +2344,55 @@ class Clearing {
     static _sweepAmmLiquidityFirst(obData, liqOrder, maxFill, liqBoundaryPrice, inverse) {
         const sideKey = liqOrder.sell ? 'buy' : 'sell';
         const side = Array.isArray(obData?.[sideKey]) ? obData[sideKey] : [];
-        const qtyCap = Number(maxFill || 0);
+        const qtyCap = new BigNumber(maxFill || 0);
+        const boundaryBN = new BigNumber(liqBoundaryPrice || 0);
 
         const result = {
             filledSize: 0,
             matches: []
         };
 
-        if (qtyCap <= 0 || side.length === 0) return result;
+        if (qtyCap.lte(0) || side.length === 0) return result;
 
         // For liquidation, AMM is the first preferred counterparty, but only at "safe" prices.
         const ammLevels = side
             .filter(o => o && o.sender === 'amm' && Number(o.amount || 0) > 0)
             .sort((a, b) => {
-                const pa = Number(a.price || 0);
-                const pb = Number(b.price || 0);
+                const pa = new BigNumber(a.price || 0);
+                const pb = new BigNumber(b.price || 0);
                 if (liqOrder.sell) {
                     // Selling liquidation should hit highest bids first.
-                    if (pb !== pa) return pb - pa;
+                    const cmp = pb.comparedTo(pa);
+                    if (cmp !== 0) return cmp;
                 } else {
                     // Buying liquidation should hit lowest asks first.
-                    if (pa !== pb) return pa - pb;
+                    const cmp = pa.comparedTo(pb);
+                    if (cmp !== 0) return cmp;
                 }
                 return Number(a.blockTime || 0) - Number(b.blockTime || 0);
             });
 
         let remaining = qtyCap;
+        let filledBN = new BigNumber(0);
         for (const level of ammLevels) {
-            if (remaining <= 0) break;
+            if (remaining.lte(0)) break;
 
-            const px = Number(level.price || 0);
-            const avail = Number(level.amount || 0);
-            if (!Number.isFinite(px) || !Number.isFinite(avail) || avail <= 0) continue;
+            const px = new BigNumber(level.price || 0);
+            const avail = new BigNumber(level.amount || 0);
+            if (!px.isFinite() || !avail.isFinite() || avail.lte(0)) continue;
 
             const isGood = !inverse
-                ? (liqOrder.sell ? px >= liqBoundaryPrice : px <= liqBoundaryPrice)
-                : (liqOrder.sell ? px <= liqBoundaryPrice : px >= liqBoundaryPrice);
+                ? (liqOrder.sell ? px.gte(boundaryBN) : px.lte(boundaryBN))
+                : (liqOrder.sell ? px.lte(boundaryBN) : px.gte(boundaryBN));
 
             if (!isGood) continue;
 
-            const take = Math.min(remaining, avail);
-            if (take <= 0) continue;
+            const take = BigNumber.min(remaining, avail);
+            if (take.lte(0)) continue;
 
             const liqLegBase = {
                 ...liqOrder,
-                amount: take,
+                amount: take.toNumber(),
                 contractId: liqOrder.contractId,
                 sender: liqOrder.address,
                 txid: liqOrder.txid || 'liq',
@@ -2395,7 +2402,7 @@ class Clearing {
 
             const ammLegBase = {
                 ...level,
-                amount: take,
+                amount: take.toNumber(),
                 contractId: liqOrder.contractId,
                 sender: level.sender || 'amm',
                 txid: level.txid || 'amm',
@@ -2414,7 +2421,7 @@ class Clearing {
                         ...ammLegBase,
                         buyerAddress: ammLegBase.sender
                     },
-                    tradePrice: px,
+                    tradePrice: px.toNumber(),
                     txid: ammLegBase.txid
                 };
             } else {
@@ -2427,18 +2434,19 @@ class Clearing {
                         ...liqLegBase,
                         buyerAddress: liqOrder.address
                     },
-                    tradePrice: px,
+                    tradePrice: px.toNumber(),
                     txid: ammLegBase.txid
                 };
             }
 
             result.matches.push(match);
-            result.filledSize += take;
-            remaining -= take;
+            filledBN = filledBN.plus(take);
+            remaining = remaining.minus(take);
 
             level.amount = new BigNumber(level.amount || 0).minus(take).toNumber();
         }
 
+        result.filledSize = filledBN.toNumber();
         obData[sideKey] = side.filter(o => Number(o.amount || 0) > 0);
         return result;
     }
