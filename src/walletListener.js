@@ -160,7 +160,7 @@ app.post('/tl_getAttestations', async (req, res) => {
     }
 });*/
 
-app.post('./tl_loadWallet', async (req, res) => {
+app.post('/tl_loadWallet', async (req, res) => {
     try {
         const {} = req.body;
         const wallet = TxUtils.load()
@@ -196,9 +196,8 @@ app.post('/tl_gettransactionforblock', async (req, res) => {
 
 app.post('/tl_getMaxProcessedHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const txInfo = await Consensus.getMaxProcessedBlock()
-        res.json(txInfo);
+        const maxProcessedHeight = await Consensus.getMaxProcessedBlock();
+        res.status(200).json({ maxProcessedHeight: maxProcessedHeight ?? null });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
@@ -207,42 +206,61 @@ app.post('/tl_getMaxProcessedHeight', async (req, res) => {
 
 app.post('/tl_getMaxParsedHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const height = await TxIndex.findMaxIndexedBlock()
-        res.json(height);
+        const maxParsedHeight = await TxIndex.findMaxIndexedBlock();
+        res.status(200).json({ maxParsedHeight: maxParsedHeight ?? null });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
 
-app.post('/tl_getTrackHeight'), async (req,res) =>{
+app.post('/tl_getTrackHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const height = await Consensus.getTrackHeight()
-        res.json(height);
+        // TrackHeight is persisted in consensus DB; do not initialize Main for read-only status.
+        const consensusDB = await db.getDatabase('consensus');
+        const trackDoc = await consensusDB.findOneAsync({ _id: 'TrackHeight' });
+        const trackHeight = trackDoc ? trackDoc.value : null;
+        const maxProcessedHeight = await Consensus.getMaxProcessedBlock();
+        res.status(200).json({
+            trackHeight: trackHeight ?? maxProcessedHeight ?? null,
+            source: trackHeight != null ? 'track' : 'maxProcessed'
+        });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
-}
+});
 
-app.post('/tl_checkSync'), async (req,res) =>{
+app.post('/tl_checkSync', async (req, res) => {
     try {
-        const {} = req.body;
-        const res = await Main.checkSync()
-        res.json(res);
+        // Lightweight sync check from persisted heights to keep this endpoint stable under load.
+        const [consensusHeight, txIndexHeight] = await Promise.all([
+            Consensus.getMaxProcessedBlock(),
+            TxIndex.findMaxIndexedBlock()
+        ]);
+        res.status(200).json({
+            available: true,
+            consensus: consensusHeight ?? null,
+            txIndex: txIndexHeight ?? null
+        });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
-}
+});
 
 app.post('/tl_pause', async (req, res) => {
     try {
         const {} = req.body;
-        const pause = Main.setPause()
-        res.json(pause);
+        const mainInstance = typeof Main.getInstance === 'function' ? await Main.getInstance() : null;
+        if (!mainInstance || typeof mainInstance.setPause !== 'function') {
+            return res.status(200).json({
+                available: false,
+                reason: 'Main.setPause unavailable'
+            });
+        }
+        const pause = mainInstance.setPause();
+        res.json({ available: true, pause });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);

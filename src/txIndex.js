@@ -37,8 +37,8 @@ class TxIndex {
     }
 
     static async initializeIndex(genesisBlock) {
-             try {
-            const base = await db.getDatabase('txIndex')
+        const base = await db.getDatabase('txIndex');
+        try {
             const existingGenesisBlock = await base.findOneAsync({ _id: 'genesisBlock' });
             if (existingGenesisBlock) {
                 console.log('Genesis block is already initialized:', existingGenesisBlock.value);
@@ -257,13 +257,16 @@ class TxIndex {
                 if (markerPosition === -1||markerPosition>6) {
                     //console.error('Marker "tl" not found in OP_RETURN data');
                     return null;
-                }else if(markerHex = opReturnData.substring(4, 8)){
+                }else if(markerHex==opReturnData.substring(4, 8)){
                     payloadStart= 8
                 }else if(markerHex==opReturnData.substring(5, 9)){
                     payloadStart= 9
                 }else if(markerHex==opReturnData.substring(6,10)){
                     payloadStart=10
-                }; // '746c' for 'tl'
+                } else {
+                    // Fallback to marker-relative offset for non-standard but valid prefixes.
+                    payloadStart = markerPosition + markerHex.length;
+                } // '746c' for 'tl'
                 let marker = Buffer.from(markerHex, 'hex').toString();  // Extract and log the actual payload
                 const payloadHex = opReturnData.substring(payloadStart);
                 const payloadBuff = Buffer.from(payloadHex, 'hex')
@@ -463,8 +466,8 @@ class TxIndex {
      */
     static async getTransactionData(txId) {
         try {
-            const blockHeight = await TxIndex.fetchChainTip()
-            const txData = await db.getDatabase('txIndex').findOneAsync({ _id: indexKey });
+            const txIndexDB = await db.getDatabase('txIndex');
+            const txData = await txIndexDB.findOneAsync({ _id: { $regex: new RegExp(`^tx-\\d+-${txId}$`) } });
 
             if (txData) {
                 console.log(`Transaction data found for ${txId}:`, txData);
@@ -475,7 +478,7 @@ class TxIndex {
             }
         } catch (error) {
             console.error(`Error retrieving transaction data for ${txId}:`, error);
-            reject(error);
+            throw error;
         }
     }
 

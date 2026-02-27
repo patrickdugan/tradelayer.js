@@ -30,8 +30,7 @@ describe('Option clearing adjustments', () => {
     jest.doMock('../src/tradeHistoryManager.js', () => ({}));
 
     const Clearing = require('../src/clearing.js');
-    const clearing = new Clearing();
-    const out = await clearing.computeOptionAdjustments('3', 'writer1', 150, 1000, 144);
+    const out = await Clearing.computeOptionAdjustments('3', 'writer1', 150, 1000, 144);
 
     expect(out.maintNaked).toBe(30);
     expect(out.premiumMTM).toBe(-60);

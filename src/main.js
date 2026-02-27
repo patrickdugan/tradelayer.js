@@ -65,7 +65,7 @@ const AMM = require('./amm.js')
 const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
 const genesisBlock = 3082500
 const COIN = 100000000
-const pause = false
+let pause = false
 
 const GENESIS_BLOCK_HEIGHTS = {
     BTC: {
@@ -232,7 +232,7 @@ class Main {
             const chainTip = await this.getBlockCountAsync()
             console.log('sync index retrieved chaintip '+chainTip)
             // If the chain tip is greater than the max indexed block, sync the index
-            if (chainTip > maxIndexedBlock && (maxIndexedBlock !=0 || maxIndexedBlock != {})){
+            if (chainTip > maxIndexedBlock && maxIndexedBlock !== 0 && maxIndexedBlock !== null){
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
                 console.log('building tx index '+maxIndexedBlock)
                 return await TxIndex.extractBlockData(maxIndexedBlock)
@@ -260,7 +260,7 @@ class Main {
             if (error.type === 'NotFoundError') {
                 // If no saved state, start constructing consensus from genesis block
                 console.log("no consensus found")
-                return this.constructConsensusFromIndex(genesisBlockHeight, false);
+                return this.constructConsensusFromIndex(this.genesisBlock, false);
             } else {
                 console.error('Error loading consensus state:', error);
                 throw error;
@@ -581,9 +581,9 @@ class Main {
         
         if(pause){
             while(pause){
-                await delay(1000)
+                await this.delay(1000)
             }
-            return syncIfNecessary()
+            return this.syncIfNecessary()
         }else{
                 this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip); // Start processing new blocks as they come
         }
@@ -627,7 +627,7 @@ class Main {
             for (let blockNumber = latestProcessedBlock + 1; blockNumber <= chainTip; blockNumber++) {
                 
                 const networkIsUp = await this.checkNetworkStatus();
-                if (!networkIsUp) {
+                if (!networkIsUp.status) {
                     console.log('Network down, entering recovery mode.');
                     blockNumber = await this.enterRecoveryMode(latestProcessedBlock, blockNumber);
                 }
@@ -654,7 +654,7 @@ class Main {
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
             await this.saveTrackHeight(chainTip)
         }
-        return syncIfNecessary()
+        return this.syncIfNecessary()
     }
 
         async checkNetworkStatus() {
@@ -688,7 +688,7 @@ class Main {
                 // Handle errors such as ECONNREFUSED (cannot connect to the node)
                 if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
                     console.error(`Network error: ${error.message}. Could not reach the Bitcoin node.`);
-                    return { status: 'down', reason: 'Connection refused or timeout' };
+                    return { status: false, reason: 'Connection refused or timeout' };
                 } else {
                     console.error('An unexpected error occurred:', error);
                     throw error; // Rethrow if it's an unexpected error

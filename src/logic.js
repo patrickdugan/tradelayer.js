@@ -201,7 +201,7 @@ const Logic = {
                 await Logic.processStakeFraudProof(params.senderAddress, params, params.block);
                 break;
             case 31:
-                Logic.batchSettlement(params);
+                await Logic.batchSettlement(params);
                 break;
             case 32:
                 await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);

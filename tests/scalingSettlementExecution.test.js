@@ -139,4 +139,21 @@ describe('Scaling settlement execution paths', () => {
 
     expect(scalingApi.recordSettlement).toHaveBeenCalledWith('channel-1', 'settle-king-via-23', 3, 210);
   });
+
+  test('typeSwitch awaits tx31 batchSettlement completion', async () => {
+    const { Logic } = loadLogic({
+      channel: { A: { 1: 60 }, B: { 1: 30 } },
+      scalingDoc: { _id: 'channel-1', trades: [], keepAlives: [], settlements: [], closes: [], netSettles: [] }
+    });
+
+    let finished = false;
+    Logic.batchSettlement = jest.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      finished = true;
+    });
+
+    await Logic.typeSwitch(31, { valid: true, senderAddress: 'channel-1' });
+    expect(finished).toBe(true);
+    expect(Logic.batchSettlement).toHaveBeenCalledTimes(1);
+  });
 });
