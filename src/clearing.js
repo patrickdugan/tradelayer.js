@@ -2860,44 +2860,48 @@ class Clearing {
     }
 
     static computeExerciseContracts(meta, qty) {
-      const signedQty = Number(qty || 0);
-      const absQty = Math.abs(signedQty);
-      if (!absQty) return 0;
+      const signedQty = new BigNumber(qty || 0);
+      const absQty = signedQty.abs();
+      if (absQty.isZero()) return 0;
 
       if (meta.type === 'Call') {
-        return signedQty > 0 ? absQty : -absQty;
+        return signedQty.gt(0) ? absQty.toNumber() : absQty.negated().toNumber();
       }
       // Put
-      return signedQty > 0 ? -absQty : absQty;
+      return signedQty.gt(0) ? absQty.negated().toNumber() : absQty.toNumber();
     }
 
     static applyAssignedUnderlyingPosition(pos, contractDelta, entryPrice, marginTransfer) {
-      const delta = Number(contractDelta || 0);
-      if (!delta) return;
+      const delta = new BigNumber(contractDelta || 0);
+      if (delta.isZero()) return;
 
-      const px = Number(entryPrice || 0);
-      const marginShift = Number(marginTransfer || 0);
-      const before = Number(pos.contracts || 0);
-      const after = before + delta;
+      const px = new BigNumber(entryPrice || 0);
+      const marginShift = new BigNumber(marginTransfer || 0);
+      const before = new BigNumber(pos.contracts || 0);
+      const after = before.plus(delta);
 
-      const beforeSign = Math.sign(before);
-      const afterSign = Math.sign(after);
-      const deltaSign = Math.sign(delta);
-      const isFlip = before !== 0 && delta !== 0 && beforeSign !== deltaSign && Math.abs(delta) > Math.abs(before);
+      const beforeSign = before.comparedTo(0);
+      const afterSign = after.comparedTo(0);
+      const deltaSign = delta.comparedTo(0);
+      const isFlip =
+        !before.isZero() &&
+        !delta.isZero() &&
+        beforeSign !== deltaSign &&
+        delta.abs().gt(before.abs());
 
-      if (after === 0) {
+      if (after.isZero()) {
         pos.avgPrice = 0;
-      } else if (!isFlip && (before === 0 || beforeSign === afterSign)) {
-        const oldCost = before * Number(pos.avgPrice || 0);
-        const newCost = delta * px;
-        pos.avgPrice = (oldCost + newCost) / after;
+      } else if (!isFlip && (before.isZero() || beforeSign === afterSign)) {
+        const oldCost = before.times(new BigNumber(pos.avgPrice || 0));
+        const newCost = delta.times(px);
+        pos.avgPrice = oldCost.plus(newCost).div(after).toNumber();
       } else {
-        pos.avgPrice = px;
+        pos.avgPrice = px.toNumber();
       }
 
-      pos.contracts = after;
-      pos.margin = Number(pos.margin || 0) + marginShift;
-      pos.lastMark = Number.isFinite(Number(pos.lastMark)) ? Number(pos.lastMark) : px;
+      pos.contracts = after.toNumber();
+      pos.margin = new BigNumber(pos.margin || 0).plus(marginShift).toNumber();
+      pos.lastMark = Number.isFinite(Number(pos.lastMark)) ? Number(pos.lastMark) : px.toNumber();
     }
 
     /**
@@ -2938,8 +2942,8 @@ class Clearing {
           const optPos = pos.options[ticker];
           if (!optPos) continue;
 
-          const qty = Number(optPos.contracts || 0);
-          if (!qty) {
+          const qty = new BigNumber(optPos.contracts || 0);
+          if (qty.isZero()) {
             // remove the empty slot to keep map clean
             delete pos.options[ticker];
             continue;
@@ -2949,8 +2953,8 @@ class Clearing {
           if (!meta) continue;
 
           // Intrinsic payoff at settlement
-          const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-          const marginHeld = Number(optPos.margin || 0);
+          const iv = new BigNumber(Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0)) || 0);
+          const marginHeld = new BigNumber(optPos.margin || 0);
           const isITM = new BigNumber(iv || 0).gt(0);
 
           if (isITM) {
@@ -2976,13 +2980,13 @@ class Clearing {
               exerciseDelta,
               Number(meta.strike || spot || 0),
               0,
-              marginHeld,
+              marginHeld.toNumber(),
               'optionExpireAssign',
               currentBlockHeight
             );
           } else {
             // OTM expiry: no assignment, only release option margin.
-            const marginDelta = marginHeld ? -marginHeld : 0;
+            const marginDelta = marginHeld.isZero() ? 0 : marginHeld.negated().toNumber();
             await TallyMap.updateBalance(
               address,
               collateralPropertyId,
@@ -3004,10 +3008,10 @@ class Clearing {
             address,
             ticker,
             0,                 // position after (expired → closed)
-            -qty,              // delta contracts to flat
-            iv,                // settlement intrinsic (for audit)
+            qty.negated().toNumber(), // delta contracts to flat
+            iv.toNumber(),      // settlement intrinsic (for audit)
             0,                 // uPNL delta
-            marginHeld ? -marginHeld : 0, // margin freed
+            marginHeld.isZero() ? 0 : marginHeld.negated().toNumber(), // margin freed
             isITM ? 'optionExpireExercised' : 'optionExpire',
             currentBlockHeight
           );
