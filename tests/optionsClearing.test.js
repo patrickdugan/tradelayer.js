@@ -32,8 +32,8 @@ describe('Option clearing adjustments', () => {
     const Clearing = require('../src/clearing.js');
     const out = await Clearing.computeOptionAdjustments('3', 'writer1', 150, 1000, 144);
 
-    expect(out.maintNaked).toBe(30);
-    expect(out.premiumMTM).toBe(-60);
-    expect(out.intrinsicNet).toBe(-60);
+    expect(out.maintNaked.toNumber()).toBe(30);
+    expect(out.premiumMTM.toNumber()).toBe(-60);
+    expect(out.intrinsicNet.toNumber()).toBe(-60);
   });
 });

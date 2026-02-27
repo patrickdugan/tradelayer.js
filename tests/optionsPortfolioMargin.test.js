@@ -5,7 +5,7 @@ describe('Options portfolio maintenance', () => {
     const maint = Options.portfolioMaintenance([
       { type: 'Call', strike: 120, qty: -2, expiryBlock: 1000 }
     ], 150);
-    expect(maint).toBe(30);
+    expect(maint.toNumber()).toBe(30);
   });
 
   test('covered call spread receives offset vs naked', () => {
@@ -18,9 +18,9 @@ describe('Options portfolio maintenance', () => {
       { type: 'Call', strike: 150, qty: 1, expiryBlock: 1000 }
     ], 150);
 
-    expect(naked).toBe(15);
-    expect(spread).toBeLessThan(naked);
-    expect(spread).toBe(12);
+    expect(naked.toNumber()).toBe(15);
+    expect(spread.lt(naked)).toBe(true);
+    expect(spread.toNumber()).toBe(12);
   });
 
   test('unwinding long wing reverts spread back to naked maintenance', () => {
@@ -32,8 +32,8 @@ describe('Options portfolio maintenance', () => {
       { type: 'Call', strike: 120, qty: -1, expiryBlock: 1000 }
     ], 150);
 
-    expect(spread).toBe(12);
-    expect(afterUnwind).toBe(15);
-    expect(afterUnwind).toBeGreaterThan(spread);
+    expect(spread.toNumber()).toBe(12);
+    expect(afterUnwind.toNumber()).toBe(15);
+    expect(afterUnwind.gt(spread)).toBe(true);
   });
 });

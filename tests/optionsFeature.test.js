@@ -71,7 +71,7 @@ describe('Options feature wiring', () => {
 
   test('naked maintenance uses 10 percent rule', () => {
     const Options = require('../src/options');
-    expect(Options.nakedMaintenance('Call', 120, 150)).toBe(15);
-    expect(Options.nakedMaintenance('Put', 120, 150)).toBe(12);
+    expect(Options.nakedMaintenance('Call', 120, 150).toNumber()).toBe(15);
+    expect(Options.nakedMaintenance('Put', 120, 150).toNumber()).toBe(12);
   });
 });

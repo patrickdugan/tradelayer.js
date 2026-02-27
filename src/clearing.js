@@ -2951,7 +2951,7 @@ class Clearing {
           // Intrinsic payoff at settlement
           const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
           const marginHeld = Number(optPos.margin || 0);
-          const isITM = iv > 0;
+          const isITM = new BigNumber(iv || 0).gt(0);
 
           if (isITM) {
             const exerciseDelta = this.computeExerciseContracts(meta, qty);
@@ -3341,8 +3341,8 @@ class Clearing {
       // If you store a vol index on the series, grab it; else fallback conservatively
       const volAnnual = Number(seriesInfo?.volAnnual || 0); // e.g. 0.6 means 60% annualized
       const bpd = Math.max(1, Number(blocksPerDay || 144));
-      let premiumMTM = 0;
-      let intrinsicNet = 0;
+      let premiumMTM = new BigNumber(0);
+      let intrinsicNet = new BigNumber(0);
       const legs = [];
 
       for (const [ticker, o] of Object.entries(optionsBag)) {
@@ -3353,25 +3353,29 @@ class Clearing {
         const daysToExpiry = blocksToExp / bpd;
 
         // qty is signed: >0 long options, <0 short options
-        const qty = Number(o.contracts || 0);
-        if (!qty) continue;
+        const qty = new BigNumber(o.contracts || 0);
+        if (qty.isZero()) continue;
         legs.push({
           type: meta.type,
-          strike: Number(meta.strike || 0),
+          strike: new BigNumber(meta.strike || 0),
           qty,
           expiryBlock: Number(meta.expiryBlock || 0)
         });
 
         // MTM premium approximation (treating options as assets for equity)
-        const px = Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry);
-        premiumMTM += px * qty;
+        const px = new BigNumber(
+          Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry) || 0
+        );
+        premiumMTM = premiumMTM.plus(px.times(qty));
 
         // Intrinsic (floor/ceiling) can be used as an extra conservative cushion
-        const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-        intrinsicNet += iv * qty;
+        const iv = new BigNumber(
+          Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0)) || 0
+        );
+        intrinsicNet = intrinsicNet.plus(iv.times(qty));
       }
 
-      const maintNaked = Options.portfolioMaintenance(legs, Number(spot || 0));
+      const maintNaked = new BigNumber(Options.portfolioMaintenance(legs, Number(spot || 0)) || 0);
       return { premiumMTM, intrinsicNet, maintNaked, optionCount: legs.length };
     }
 
