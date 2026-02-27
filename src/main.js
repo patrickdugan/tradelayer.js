@@ -7,26 +7,11 @@ const util = require('util')
 const ReOrgChecker = require('./reOrg.js');
 // main.js
 const initialize = require('./init');
-let client 
-let db
-(async () => {
-    try {
-        console.log('initializing from the top')
-        const { Client, Db } = await initialize();
-        client = Client
-        db = Db
-        console.log('Client and Database initialized successfully.');
-
-        // Now proceed with the rest of your app setup
-        /*const Main = require('./main-logic'); // Adjust based on your main logic setup
-        const app = new Main(client, db);      // Pass the initialized instances if needed
-        app.start(); // Start your app logic*/
-
-    } catch (error) {
-        console.error('Failed to initialize client or database.', error);
-        process.exit(1);
-    }
-})();
+const Database = require('./db.js');
+let client = null;
+let db = Database;
+let activationInstance = null;
+let runtimeInitPromise = null;
 
 const fs = require('fs'); // File system module
 
@@ -47,16 +32,6 @@ const Oracles = require('./oracle.js')
 const Activation = require('./activation.js')
 const Orderbook = require('./orderbook.js')
 const Persistence = require('./persistence.js');
-let activation
-
-(async () => {
-    activation = Activation.getInstance()
-    await activation.init();
-    console.log(`App initialized with Chain: ${activation.chain}, Testnet: ${activation.test}, Admin Address: ${activation.adminAddress}`);
-    
-    // Continue with the rest of your application setup
-    // Initialize other components or start the server, etc.
-})();
 
 const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
@@ -66,6 +41,31 @@ const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = requ
 const genesisBlock = 3082500
 const COIN = 100000000
 let pause = false
+
+async function bootstrapRuntime() {
+    if (client && db && activationInstance) return;
+    if (runtimeInitPromise) {
+        await runtimeInitPromise;
+        return;
+    }
+
+    runtimeInitPromise = (async () => {
+        const { Client, Db } = await initialize();
+        client = Client;
+        db = Db || Database;
+
+        activationInstance = Activation.getInstance();
+        await activationInstance.init();
+        console.log(`App initialized with Chain: ${activationInstance.chain}, Testnet: ${activationInstance.test}, Admin Address: ${activationInstance.adminAddress}`);
+        console.log('Client and Database initialized successfully.');
+    })();
+
+    try {
+        await runtimeInitPromise;
+    } finally {
+        runtimeInitPromise = null;
+    }
+}
 
 const GENESIS_BLOCK_HEIGHTS = {
     BTC: {
@@ -85,6 +85,7 @@ const GENESIS_BLOCK_HEIGHTS = {
 class Main {
     static instance;
     static isInitializing = false;  // Add a flag to track initialization
+    static initPromise = null;
 
 
     constructor() {
@@ -107,20 +108,42 @@ class Main {
         Main.instance = this;
     }
 
+    static async configureRuntime({ client: runtimeClient, db: runtimeDb, activation } = {}) {
+        if (runtimeClient) {
+            client = runtimeClient;
+        }
+        if (runtimeDb) {
+            db = runtimeDb;
+        }
+        if (activation) {
+            activationInstance = activation;
+        }
+    }
+
+    static async ensureRuntime() {
+        if (client && db && activationInstance) return;
+        await bootstrapRuntime();
+    }
+
     static async getInstance() {
-        if (!Main.instance && !Main.isInitializing) {
-            Main.isInitializing = true;
+        if (Main.instance) {
+            return Main.instance;
+        }
+
+        if (Main.initPromise) {
+            return Main.initPromise;
+        }
+
+        Main.isInitializing = true;
+        Main.initPromise = (async () => {
+            await Main.ensureRuntime();
             console.log('Initializing Main instance...');
 
-            // 1. Construct Main first
             Main.instance = new Main();
-
-            // 2. Detect network from the initialized client instance
             const net = await Main.instance.client.getChain();
             const test = await Main.instance.client.getTest();
             console.log("[Main] Detected network:", net, "test:", test);
 
-            // 3. Initialize Persistence ONCE only via its own singleton
             Main.instance.blockchainPersistence = await Persistence.getInstance({
                 network: net,
                 test: test,
@@ -128,10 +151,15 @@ class Main {
             });
 
             Main.persistenceInitialized = true;
-            Main.isInitializing = false;
-        }
+            return Main.instance;
+        })();
 
-        return Main.instance;
+        try {
+            return await Main.initPromise;
+        } finally {
+            Main.isInitializing = false;
+            Main.initPromise = null;
+        }
     }
 
 
@@ -140,19 +168,16 @@ class Main {
     }
 
     async initialize() {
-          await this.delay(1500)
+        await this.delay(1500)
+        await Main.ensureRuntime();
+        this.client = client;
+
         console.log('db status '+db)
-        if(!db&&this.client){
-            console.log('have client, awaiting db')
-            await db.init(this.client.chain)
-            await this.delay(300)
-            console.log('db status recheck '+db.initialized)
-        }else if(!db.initialized&&!this.client.chain){
-            console.log('no client no db, trying init again')
-            const { Client, Db } = await initialize();   
-               await this.delay(300)
-            console.log('db+client status recheck '+db.initialized+this.client.chain)
-        } 
+        if (!db.initialized) {
+            await db.init(this.client.chain);
+            await this.delay(300);
+            console.log('db status recheck '+db.initialized);
+        }
         const txIndex = await TxIndex.getInstance();
         this.test = await this.client.getTest()
         this.chain = await this.client.getChain()
@@ -525,7 +550,7 @@ class Main {
                   decodedParams.block = blockHeight;
 
                   // activation checks as you already have...
-                  if (decodedParams.type > 0) {
+                  if (decodedParams.type > 0 && activationInstance && typeof activationInstance.getActivationBlock === 'function') {
                     const activationBlock = activationInstance.getActivationBlock(decodedParams.type);
                     if (blockHeight < activationBlock) {
                       decodedParams.valid = false;

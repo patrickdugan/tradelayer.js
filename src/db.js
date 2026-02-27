@@ -108,8 +108,4 @@ class Database {
 }
 
 const databaseInstance = new Database();
-(async () => {
-    await databaseInstance.init();
-})();
-
 module.exports = databaseInstance;
