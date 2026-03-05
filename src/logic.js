@@ -37,6 +37,7 @@ const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
 const { ProceduralRegistry } = require('./procedural.js');
 const { BitvmCacheRegistry } = require('./bitvmCache.js');
+const { verifyBundleHash } = require('./bitvmBundle.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -1863,6 +1864,17 @@ const Logic = {
 
         if (mode === 'bitvm_cache' || mode === 'bitvmcache' || mode === 'cache') {
             requireProperty();
+            const requireBundle = String(process.env.TL_BITVM_REQUIRE_BUNDLE || '').trim() === '1';
+            if (requireBundle) {
+                const bundleHash = settlement.bundleHash || params.bundleHash || '';
+                const bundlePath = settlement.bundlePath || params.bundlePath || '';
+                const bundleCheck = await verifyBundleHash(bundleHash, bundlePath);
+                if (!bundleCheck?.valid) {
+                    throw new Error(`BitVM bundle verification failed: ${bundleCheck?.reason || 'unknown'}`);
+                }
+                settlement.bundleHash = bundleCheck.bundleHash || bundleHash;
+                settlement.bundlePath = bundleCheck.bundlePath || bundlePath;
+            }
             const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
             if (!check?.hasSufficient) {
                 throw new Error(`Insufficient balance for bitvm cache: ${check?.reason || 'unknown'}`);

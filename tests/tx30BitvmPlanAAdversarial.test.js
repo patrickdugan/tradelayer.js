@@ -5,6 +5,17 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     const ledger = new Map();
     const updates = [];
     const proceduralDocs = new Map();
+    const bundleVerify = jest.fn(async (expectedBundleHash, explicitPath) => {
+      const normalized = String(expectedBundleHash || '').trim().toLowerCase();
+      if (!normalized) {
+        return { valid: false, reason: 'Missing bundleHash' };
+      }
+      return {
+        valid: true,
+        bundleHash: normalized,
+        bundlePath: explicitPath || 'mock-bundle-path'
+      };
+    });
 
     const balKey = (a, p) => `${a}:${p}`;
     const getBal = (a, p) => Number(ledger.get(balKey(a, p)) || 0);
@@ -52,6 +63,10 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
         transitionContract: jest.fn(async () => ({}))
       }
     }));
+    jest.doMock('../src/bitvmBundle.js', () => ({
+      verifyBundleHash: bundleVerify,
+      computeBundleHash: jest.fn(() => 'mock-hash')
+    }));
 
     jest.doMock('../src/channels.js', () => ({}));
     jest.doMock('../src/activation.js', () => ({ getInstance: () => ({}) }));
@@ -75,7 +90,7 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     const Logic = require('../src/logic.js');
     const bitvmDocById = (cacheId) => proceduralDocs.get(`bitvm-cache-${cacheId}`);
     const firstBitvmDoc = () => [...proceduralDocs.values()].find((d) => d && d.type === 'bitvmCache');
-    return { Logic, ledger, updates, setBal, getBal, bitvmDocById, firstBitvmDoc };
+    return { Logic, ledger, updates, setBal, getBal, bitvmDocById, firstBitvmDoc, bundleVerify };
   }
 
   function relayBlob(settlement) {
@@ -150,6 +165,107 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
 
     expect(getBal('BITVM_CACHE::ct-1', 5)).toBe(0);
     expect(getBal('winner', 5)).toBe(12);
+  });
+
+  test('bundle gate: requires bundle hash when TL_BITVM_REQUIRE_BUNDLE=1', async () => {
+    const prev = process.env.TL_BITVM_REQUIRE_BUNDLE;
+    process.env.TL_BITVM_REQUIRE_BUNDLE = '1';
+    try {
+      const { Logic, setBal } = loadHarness();
+      setBal('loser', 5, 100);
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          dlcRef: 'ct-bundle-missing',
+          stateHash: 'state-bundle-missing',
+          relayBlob: relayBlob({
+            mode: 'bitvm_cache',
+            propertyId: 5,
+            amount: 12,
+            fromAddress: 'loser',
+            toAddress: 'winner',
+            cacheAddress: 'BITVM_CACHE::ct-bundle-missing',
+            challengeBlocks: 1
+          })
+        }, 1200)
+      ).rejects.toThrow(/bundle verification failed/i);
+    } finally {
+      if (typeof prev === 'undefined') delete process.env.TL_BITVM_REQUIRE_BUNDLE;
+      else process.env.TL_BITVM_REQUIRE_BUNDLE = prev;
+    }
+  });
+
+  test('bundle gate: rejects invalid bundle hash verification', async () => {
+    const prev = process.env.TL_BITVM_REQUIRE_BUNDLE;
+    process.env.TL_BITVM_REQUIRE_BUNDLE = '1';
+    try {
+      const { Logic, setBal, bundleVerify } = loadHarness();
+      setBal('loser', 5, 100);
+      bundleVerify.mockResolvedValueOnce({ valid: false, reason: 'Provided bundleHash mismatch' });
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          dlcRef: 'ct-bundle-bad',
+          stateHash: 'state-bundle-bad',
+          relayBlob: relayBlob({
+            mode: 'bitvm_cache',
+            propertyId: 5,
+            amount: 12,
+            fromAddress: 'loser',
+            toAddress: 'winner',
+            cacheAddress: 'BITVM_CACHE::ct-bundle-bad',
+            challengeBlocks: 1,
+            bundleHash: 'bad-bundle-hash'
+          })
+        }, 1201)
+      ).rejects.toThrow(/bundle verification failed/i);
+    } finally {
+      if (typeof prev === 'undefined') delete process.env.TL_BITVM_REQUIRE_BUNDLE;
+      else process.env.TL_BITVM_REQUIRE_BUNDLE = prev;
+    }
+  });
+
+  test('bundle gate: accepts valid bundle hash verification', async () => {
+    const prev = process.env.TL_BITVM_REQUIRE_BUNDLE;
+    process.env.TL_BITVM_REQUIRE_BUNDLE = '1';
+    try {
+      const { Logic, setBal, firstBitvmDoc, getBal, bundleVerify } = loadHarness();
+      setBal('loser', 5, 100);
+
+      await Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        dlcRef: 'ct-bundle-good',
+        stateHash: 'state-bundle-good',
+        relayBlob: relayBlob({
+          mode: 'bitvm_cache',
+          propertyId: 5,
+          amount: 12,
+          fromAddress: 'loser',
+          toAddress: 'winner',
+          cacheAddress: 'BITVM_CACHE::ct-bundle-good',
+          challengeBlocks: 1,
+          bundleHash: 'GOOD-BUNDLE-HASH',
+          bundlePath: 'C:\\temp\\bundle.json'
+        })
+      }, 1202);
+
+      expect(bundleVerify).toHaveBeenCalledWith('GOOD-BUNDLE-HASH', 'C:\\temp\\bundle.json');
+      const cache = firstBitvmDoc();
+      expect(cache).toBeTruthy();
+      expect(getBal('loser', 5)).toBe(88);
+      expect(getBal('BITVM_CACHE::ct-bundle-good', 5)).toBe(12);
+    } finally {
+      if (typeof prev === 'undefined') delete process.env.TL_BITVM_REQUIRE_BUNDLE;
+      else process.env.TL_BITVM_REQUIRE_BUNDLE = prev;
+    }
   });
 
   test('adversarial scam payout with wrong recipient is rejected', async () => {
