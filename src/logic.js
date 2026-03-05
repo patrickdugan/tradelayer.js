@@ -1923,6 +1923,10 @@ const Logic = {
             if (!cacheId) {
                 throw new Error('bitvm_resolve requires cacheId');
             }
+            const declaredResolver = String(settlement.resolverAddress || '').trim();
+            if (declaredResolver && declaredResolver !== senderAddress) {
+                throw new Error('bitvm_resolve sender must match resolverAddress');
+            }
 
             const resolved = await BitvmCacheRegistry.resolve(cacheId, {
                 verdict: settlement.verdict,

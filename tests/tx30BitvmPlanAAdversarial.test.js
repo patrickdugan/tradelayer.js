@@ -442,4 +442,42 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     expect(getBal('BITVM_CACHE::ct-6', 5)).toBe(0);
     expect(getBal('winner', 5)).toBe(11);
   });
+
+  test('resolve rejects mismatched resolver identity', async () => {
+    const { Logic, setBal, firstBitvmDoc } = loadHarness();
+    setBal('loser', 5, 30);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-7',
+      relayBlob: relayBlob({
+        mode: 'bitvm_cache',
+        propertyId: 5,
+        amount: 6,
+        fromAddress: 'loser',
+        toAddress: 'winner',
+        cacheAddress: 'BITVM_CACHE::ct-7',
+        challengeBlocks: 0
+      })
+    }, 700);
+
+    const cache = firstBitvmDoc();
+    await expect(
+      Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        stateHash: 'state-7',
+        relayBlob: relayBlob({
+          mode: 'bitvm_resolve',
+          cacheId: cache.cacheId,
+          verdict: 'reject',
+          resolverAddress: 'different-resolver',
+          reason: 'identity mismatch attempt'
+        })
+      }, 701)
+    ).rejects.toThrow(/sender must match resolverAddress/i);
+  });
 });
