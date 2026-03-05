@@ -39,6 +39,7 @@ const { ProceduralRegistry } = require('./procedural.js');
 const { BitvmCacheRegistry } = require('./bitvmCache.js');
 const { verifyBundleHash } = require('./bitvmBundle.js');
 const BitvmRisk = require('./bitvmRisk.js');
+const BinohashAdapter = require('./experimental/binohash/binohashAdapter.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -113,6 +114,27 @@ function verifyStateAnchoredSettlement(params, relayParsed, settlement) {
     const transitions = Array.isArray(payloadDoc?.transitions) ? payloadDoc.transitions.map((x) => String(x || '').toLowerCase()) : [];
     if (transitions.length > 0 && !transitions.includes(expectedTransitionHash)) {
         throw new Error('State-root gate: transition not included in payload transitions');
+    }
+
+    const scheme = String(process.env.TL_ORACLE_STATE_COMMIT_SCHEME || '').trim().toLowerCase();
+    if (scheme === 'binohash') {
+        const binoRoot = String(payloadDoc?.binohash?.root || payloadDoc?.binoRoot || '').trim().toLowerCase();
+        if (!binoRoot) {
+            throw new Error('State-root gate: binohash root missing');
+        }
+        if (stateRoot !== binoRoot) {
+            throw new Error('State-root gate: stateRoot must equal binohash root');
+        }
+
+        const proof = Array.isArray(settlement.binoProof) ? settlement.binoProof : [];
+        const proofCheck = BinohashAdapter.verifyProof({
+            transitionHash: transitionHash || expectedTransitionHash,
+            root: binoRoot,
+            proof
+        });
+        if (!proofCheck.valid) {
+            throw new Error(`State-root gate: ${proofCheck.reason}`);
+        }
     }
 }
 

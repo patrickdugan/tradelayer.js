@@ -1,5 +1,6 @@
 describe('tx30 relay settlement modes', () => {
   const crypto = require('crypto');
+  const BinohashAdapter = require('../src/experimental/binohash/binohashAdapter');
 
   function loadHarness() {
     jest.resetModules();
@@ -251,6 +252,123 @@ describe('tx30 relay settlement modes', () => {
     } finally {
       if (typeof prev === 'undefined') delete process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
       else process.env.TL_ORACLE_REQUIRE_STATE_ROOT = prev;
+    }
+  });
+
+  test('binohash scheme rejects bad inclusion proof', async () => {
+    const prevReq = process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+    const prevScheme = process.env.TL_ORACLE_STATE_COMMIT_SCHEME;
+    process.env.TL_ORACLE_REQUIRE_STATE_ROOT = '1';
+    process.env.TL_ORACLE_STATE_COMMIT_SCHEME = 'binohash';
+    try {
+      const { Logic } = loadHarness();
+      const settlement = {
+        mode: 'pnl_sweep',
+        propertyId: 5,
+        amount: 2,
+        fromAddress: 'liqPool',
+        toAddress: 'winner'
+      };
+      const anchored = mkAnchoredPayload(settlement, { dlcRef: '', stateHash: 's6' });
+      const wrong = BinohashAdapter.buildProofFromTransitionHashes(['a'.repeat(64)], 0);
+      const payloadDoc = {
+        stateRoot: wrong.root,
+        binohash: { root: wrong.root },
+        transitions: [anchored.transitionHash]
+      };
+      const balancePayloadB64 = Buffer.from(JSON.stringify(payloadDoc), 'utf8').toString('base64');
+      const payloadHash = crypto.createHash('sha256').update(Buffer.from(balancePayloadB64, 'base64')).digest('hex');
+      const relayBlob = JSON.stringify({
+        eventId: 'ev6',
+        outcome: 'SETTLED',
+        outcomeIndex: 0,
+        stateHash: 's6',
+        timestamp: 6,
+        payloadHash,
+        balancePayloadB64,
+        settlement: {
+          ...settlement,
+          stateRoot: wrong.root,
+          transitionHash: anchored.transitionHash,
+          binoProof: wrong.proof
+        }
+      });
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          stateHash: 's6',
+          relayBlob
+        }, 505)
+      ).rejects.toThrow(/binohash/i);
+    } finally {
+      if (typeof prevReq === 'undefined') delete process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+      else process.env.TL_ORACLE_REQUIRE_STATE_ROOT = prevReq;
+      if (typeof prevScheme === 'undefined') delete process.env.TL_ORACLE_STATE_COMMIT_SCHEME;
+      else process.env.TL_ORACLE_STATE_COMMIT_SCHEME = prevScheme;
+    }
+  });
+
+  test('binohash scheme accepts valid inclusion proof', async () => {
+    const prevReq = process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+    const prevScheme = process.env.TL_ORACLE_STATE_COMMIT_SCHEME;
+    process.env.TL_ORACLE_REQUIRE_STATE_ROOT = '1';
+    process.env.TL_ORACLE_STATE_COMMIT_SCHEME = 'binohash';
+    try {
+      const { Logic, updates } = loadHarness();
+      const settlement = {
+        mode: 'pnl_sweep',
+        propertyId: 5,
+        amount: 2,
+        fromAddress: 'liqPool',
+        toAddress: 'winner'
+      };
+      const anchored = mkAnchoredPayload(settlement, { dlcRef: '', stateHash: 's7' });
+      const proofPack = BinohashAdapter.buildProofFromTransitionHashes([anchored.transitionHash], 0);
+
+      const payloadDoc = {
+        stateRoot: proofPack.root,
+        binohash: { root: proofPack.root },
+        transitions: [anchored.transitionHash]
+      };
+      const balancePayloadB64 = Buffer.from(JSON.stringify(payloadDoc), 'utf8').toString('base64');
+      const payloadHash = crypto.createHash('sha256').update(Buffer.from(balancePayloadB64, 'base64')).digest('hex');
+
+      const relayBlob = JSON.stringify({
+        eventId: 'ev7',
+        outcome: 'SETTLED',
+        outcomeIndex: 0,
+        stateHash: 's7',
+        timestamp: 7,
+        payloadHash,
+        balancePayloadB64,
+        settlement: {
+          ...settlement,
+          stateRoot: proofPack.root,
+          transitionHash: anchored.transitionHash,
+          binoProof: proofPack.proof
+        }
+      });
+
+      await Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        stateHash: 's7',
+        relayBlob
+      }, 506);
+
+      expect(updates).toEqual([
+        ['liqPool', 5, -2, 0, 0, 0, 'oraclePnlSweep', 506],
+        ['winner', 5, 2, 0, 0, 0, 'oraclePnlSweep', 506]
+      ]);
+    } finally {
+      if (typeof prevReq === 'undefined') delete process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+      else process.env.TL_ORACLE_REQUIRE_STATE_ROOT = prevReq;
+      if (typeof prevScheme === 'undefined') delete process.env.TL_ORACLE_STATE_COMMIT_SCHEME;
+      else process.env.TL_ORACLE_STATE_COMMIT_SCHEME = prevScheme;
     }
   });
 });
