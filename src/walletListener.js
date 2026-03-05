@@ -404,6 +404,122 @@ app.post('/tl_propertyFeeCache', async(req,res)=>{
     }
 })
 
+function envNum(name, fallback = 0) {
+    const raw = process.env[name];
+    if (raw === undefined || raw === null || raw === '') return Number(fallback || 0);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : Number(fallback || 0);
+}
+
+function parseWindowIndex(id) {
+    const m = String(id || '').match(/^bitvm-risk-window-\d+-(\d+)$/);
+    if (!m) return null;
+    const idx = Number(m[1]);
+    return Number.isFinite(idx) ? idx : null;
+}
+
+app.post('/tl_bitvmStatus', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const propertyIdRaw = body.propertyId;
+        const propertyId = Number(propertyIdRaw);
+        const hasPropertyFilter = Number.isFinite(propertyId) && propertyId > 0;
+        const dlcRef = String(body.dlcRef || '').trim();
+        const expiringWithinBlocks = Math.max(1, Math.floor(envNum('TL_BITVM_EXPIRING_WITHIN_BLOCKS', 6)));
+
+        const currentBlock = Number(await Consensus.getMaxProcessedBlock()) || 0;
+        const proceduralDB = await db.getDatabase('procedural');
+        const caches = await proceduralDB.findAsync({ type: 'bitvmCache' });
+        const globalRisk = await proceduralDB.findAsync({ type: 'bitvmRiskEscrowGlobal' });
+        const dlcRisk = await proceduralDB.findAsync({ type: 'bitvmRiskEscrowDlc' });
+        const windowRisk = await proceduralDB.findAsync({ type: 'bitvmRiskWindow' });
+
+        const filteredCaches = caches.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            if (dlcRef && String(doc.dlcRef || '') !== dlcRef) return false;
+            return true;
+        });
+
+        const pendingStatuses = new Set(['PENDING', 'CHALLENGED']);
+        const openCaches = filteredCaches.filter((doc) => pendingStatuses.has(String(doc.status || '').toUpperCase())).length;
+        const activeChallenges = filteredCaches.filter((doc) => String(doc.status || '').toUpperCase() === 'CHALLENGED').length;
+        const expiringSoon = filteredCaches.filter((doc) => {
+            const status = String(doc.status || '').toUpperCase();
+            if (!pendingStatuses.has(status)) return false;
+            const deadline = Number(doc.challengeDeadlineBlock || 0);
+            if (!Number.isFinite(deadline) || deadline <= 0) return false;
+            return deadline <= currentBlock + expiringWithinBlocks;
+        }).length;
+        const fraudProofsSubmitted = filteredCaches.reduce((sum, doc) => {
+            const n = Array.isArray(doc.challenged) ? doc.challenged.length : 0;
+            return sum + n;
+        }, 0);
+
+        const filteredGlobalRisk = globalRisk.filter((doc) => {
+            if (!hasPropertyFilter) return true;
+            return Number(doc.propertyId) === propertyId;
+        });
+        const pendingEscrow = filteredGlobalRisk.reduce((sum, doc) => sum + (Number(doc.pendingAmount || 0) || 0), 0);
+
+        const filteredDlcRisk = dlcRisk.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            if (dlcRef && String(doc.dlcRef || '') !== dlcRef) return false;
+            return true;
+        });
+        const pendingEscrowPerDlc = filteredDlcRisk.reduce((max, doc) => {
+            const amt = Number(doc.pendingAmount || 0) || 0;
+            return amt > max ? amt : max;
+        }, 0);
+
+        const windowBlocks = Math.max(1, Math.floor(envNum('TL_BITVM_SCHED_WINDOW_BLOCKS', 144)));
+        const currentWindowIdx = Math.floor(Math.max(0, currentBlock) / windowBlocks);
+        const currentWindowRows = windowRisk.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            const idx = parseWindowIndex(doc._id);
+            return idx === currentWindowIdx;
+        });
+
+        const depositsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.depositAmount || 0) || 0), 0);
+        const withdrawalsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.withdrawAmount || 0) || 0), 0);
+        const sweepsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.sweepAmount || 0) || 0), 0);
+
+        const commitSchemeRaw = String(process.env.TL_ORACLE_STATE_COMMIT_SCHEME || '').trim().toLowerCase();
+        const status = {
+            source: 'walletListener',
+            atBlock: currentBlock,
+            featureEnabled: process.env.TL_ORACLE_REQUIRE_STATE_ROOT === '1',
+            commitScheme: commitSchemeRaw === 'binohash' ? 'experimental-binohash' : 'legacy-merkle',
+            updatedAt: Date.now(),
+            cache: {
+                openCaches,
+                pendingEscrow,
+                pendingEscrowCap: envNum('TL_BITVM_MAX_PENDING_ESCROW', 0),
+                pendingEscrowPerDlc: pendingEscrowPerDlc,
+                pendingEscrowPerDlcCap: envNum('TL_BITVM_MAX_PENDING_ESCROW_PER_DLC', 0),
+            },
+            challenge: {
+                active: activeChallenges,
+                expiringSoon,
+                fraudProofsSubmitted,
+                watchtowerLastTick: 0,
+            },
+            sweep: {
+                windowBlocks,
+                depositsThisWindow,
+                withdrawalsThisWindow,
+                sweepsThisWindow,
+                maxDepositPerWindow: envNum('TL_BITVM_MAX_DEPOSIT_PER_WINDOW', 0),
+                maxWithdrawPerWindow: envNum('TL_BITVM_MAX_WITHDRAW_PER_WINDOW', 0),
+                maxSweepPerWindow: envNum('TL_BITVM_MAX_SWEEP_PER_WINDOW', 0),
+            }
+        };
+        res.json(status);
+    } catch (error) {
+        console.error('Error fetching bitvm status:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // Get activations
 app.post('/tl_getActivations', async (req, res) => {
     try {
