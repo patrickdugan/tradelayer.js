@@ -15,11 +15,13 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
 const secp = require('tiny-secp256k1');
 const TxUtils = require('../src/txUtils');
 const Types = require('../src/types');
 const Logic = require('../src/logic');
 const Activation = require('../src/activation');
+const { computeBundleHash } = require('../src/bitvmBundle');
 
 function env(name, fallback = '') {
   const v = process.env[name];
@@ -142,6 +144,29 @@ function relayBlob(settlement, stateHash, relayPrivkey) {
   return 'b64:' + Buffer.from(JSON.stringify(doc), 'utf8').toString('base64');
 }
 
+function resolveBundleForCache() {
+  const requireBundle = String(process.env.TL_BITVM_REQUIRE_BUNDLE || '').trim() === '1';
+  if (!requireBundle) return { bundleHash: '', bundlePath: '' };
+
+  const explicitHash = env('TL_BITVM_BUNDLE_HASH', '').trim().toLowerCase();
+  const bundlePath = env('TL_BITVM_BUNDLE_PATH', '').trim();
+  if (explicitHash) return { bundleHash: explicitHash, bundlePath };
+
+  const defaultPath = 'C:\\projects\\UTXORef\\UTXO-Ref\\bitvm3\\utxo_referee\\artifacts\\m1_challenge_bundle_latest.json';
+  const effectivePath = bundlePath || defaultPath;
+  const raw = fs.readFileSync(effectivePath, 'utf8');
+  const parsed = JSON.parse(raw);
+  const declared = String(parsed.bundleHash || '').trim().toLowerCase();
+  const computed = String(computeBundleHash(parsed) || '').trim().toLowerCase();
+  if (!declared) {
+    throw new Error(`TL_BITVM_REQUIRE_BUNDLE=1 but bundle artifact has no bundleHash: ${effectivePath}`);
+  }
+  if (declared !== computed) {
+    throw new Error(`TL_BITVM_REQUIRE_BUNDLE=1 but bundle artifact self-check failed: ${effectivePath}`);
+  }
+  return { bundleHash: declared, bundlePath: effectivePath };
+}
+
 async function main() {
   const oracleAdmin = env('TL_ORACLE_ADMIN_ADDRESS') || env('TL_ADMIN_ADDRESS');
   const loser = env('TL_LOSER_ADDRESS', oracleAdmin);
@@ -157,6 +182,7 @@ async function main() {
   const cacheId = env('TL_BITVM_CACHE_ID', crypto.randomBytes(32).toString('hex'));
   const cacheAddress = env('TL_BITVM_CACHE_ADDRESS', `BITVM_CACHE::${dlcRef}`);
   const relayPrivkey = getRelaySigningKey();
+  const { bundleHash, bundlePath } = resolveBundleForCache();
 
   if (!oracleAdmin) {
     throw new Error('Missing TL_ORACLE_ADMIN_ADDRESS (or TL_ADMIN_ADDRESS fallback)');
@@ -185,7 +211,10 @@ async function main() {
     verdict,
     cacheId,
     cacheAddress,
-    dlcRef
+    dlcRef,
+    requireBundle: String(process.env.TL_BITVM_REQUIRE_BUNDLE || '').trim() === '1',
+    bundleHash: bundleHash || undefined,
+    bundlePath: bundlePath || undefined
   });
 
   const cacheStateHash = `cache-${Date.now()}`;
@@ -208,7 +237,9 @@ async function main() {
       fromAddress: loser,
       toAddress: winner,
       cacheAddress,
-      challengeBlocks
+      challengeBlocks,
+      bundleHash: bundleHash || undefined,
+      bundlePath: bundlePath || undefined
     }, cacheStateHash, relayPrivkey)
   });
   if (applyImmediate) await applyTxNow(cacheTx, oracleAdmin, block);
