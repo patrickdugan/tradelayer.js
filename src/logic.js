@@ -1867,6 +1867,17 @@ const Logic = {
             if (!check?.hasSufficient) {
                 throw new Error(`Insufficient balance for bitvm cache: ${check?.reason || 'unknown'}`);
             }
+            const cacheBondAmount = Number(settlement.cacheBondAmount || 0);
+            const cacheBondPropertyId = Number(settlement.cacheBondPropertyId || propertyId);
+            if (!Number.isFinite(cacheBondAmount) || cacheBondAmount < 0) {
+                throw new Error('Invalid bitvm cacheBondAmount');
+            }
+            if (cacheBondAmount > 0) {
+                const bondCheck = await TallyMap.hasSufficientBalance(senderAddress, cacheBondPropertyId, cacheBondAmount);
+                if (!bondCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm cache bond: ${bondCheck?.reason || 'unknown'}`);
+                }
+            }
 
             const cacheDoc = await BitvmCacheRegistry.open(settlement, {
                 senderAddress,
@@ -1877,6 +1888,10 @@ const Logic = {
 
             await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'bitvmCacheLock', block);
             await TallyMap.updateBalance(cacheDoc.cacheAddress, propertyId, amount, 0, 0, 0, 'bitvmCacheLock', block);
+            if (cacheBondAmount > 0 && cacheDoc?.bonds?.cacheBond?.vaultAddress) {
+                await TallyMap.updateBalance(senderAddress, cacheBondPropertyId, -cacheBondAmount, 0, 0, 0, 'bitvmCacheBondLock', block);
+                await TallyMap.updateBalance(cacheDoc.bonds.cacheBond.vaultAddress, cacheBondPropertyId, cacheBondAmount, 0, 0, 0, 'bitvmCacheBondLock', block);
+            }
             return;
         }
 
@@ -1885,12 +1900,32 @@ const Logic = {
             if (!cacheId) {
                 throw new Error('bitvm_challenge requires cacheId');
             }
+            const challengerAddress = settlement.challengerAddress || senderAddress;
+            const challengeBondAmount = Number(settlement.challengeBondAmount || 0);
+            const challengeBondPropertyId = Number(settlement.challengeBondPropertyId || propertyId || 0);
+            if (!Number.isFinite(challengeBondAmount) || challengeBondAmount < 0) {
+                throw new Error('Invalid bitvm challengeBondAmount');
+            }
+            if (challengeBondAmount > 0) {
+                const bondCheck = await TallyMap.hasSufficientBalance(challengerAddress, challengeBondPropertyId, challengeBondAmount);
+                if (!bondCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm challenge bond: ${bondCheck?.reason || 'unknown'}`);
+                }
+            }
             await BitvmCacheRegistry.challenge(cacheId, {
-                challengerAddress: settlement.challengerAddress || senderAddress,
+                challengerAddress,
                 evidenceHash: settlement.evidenceHash || params.evidenceHash || '',
                 reason: settlement.reason || '',
-                block
+                block,
+                challengeBondAmount,
+                challengeBondPropertyId
             });
+            if (challengeBondAmount > 0) {
+                const challengedDoc = await BitvmCacheRegistry.get(cacheId);
+                const vault = challengedDoc?.bonds?.challengeBond?.vaultAddress || `BITVM_BOND_CHALLENGE::${cacheId}`;
+                await TallyMap.updateBalance(challengerAddress, challengeBondPropertyId, -challengeBondAmount, 0, 0, 0, 'bitvmChallengeBondLock', block);
+                await TallyMap.updateBalance(vault, challengeBondPropertyId, challengeBondAmount, 0, 0, 0, 'bitvmChallengeBondLock', block);
+            }
             return;
         }
 
@@ -1942,6 +1977,70 @@ const Logic = {
                 }
                 await TallyMap.updateBalance(resolved.cacheAddress, resolved.propertyId, -resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
                 await TallyMap.updateBalance(resolved.fromAddress, resolved.propertyId, resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+
+                const cacheBond = resolved?.bonds?.cacheBond || null;
+                if (cacheBond && Number(cacheBond.amount || 0) > 0) {
+                    const upheldChallenger = (resolved?.challenged?.[resolved.challenged.length - 1]?.challengerAddress) || resolved?.bonds?.challengeBond?.payerAddress || '';
+                    const cAmt = Number(cacheBond.amount);
+                    const cPid = Number(cacheBond.propertyId);
+                    const cVault = String(cacheBond.vaultAddress || '');
+                    if (upheldChallenger && cVault) {
+                        const cCheck = await TallyMap.hasSufficientBalance(cVault, cPid, cAmt);
+                        if (!cCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm cache bond slash: ${cCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(cVault, cPid, -cAmt, 0, 0, 0, 'bitvmCacheBondSlash', block);
+                        await TallyMap.updateBalance(upheldChallenger, cPid, cAmt, 0, 0, 0, 'bitvmCacheBondSlash', block);
+                    }
+                }
+
+                const challengeBond = resolved?.bonds?.challengeBond || null;
+                if (challengeBond && Number(challengeBond.amount || 0) > 0) {
+                    const chAmt = Number(challengeBond.amount);
+                    const chPid = Number(challengeBond.propertyId);
+                    const chVault = String(challengeBond.vaultAddress || '');
+                    const chPayer = String(challengeBond.payerAddress || '');
+                    if (chVault && chPayer) {
+                        const chCheck = await TallyMap.hasSufficientBalance(chVault, chPid, chAmt);
+                        if (!chCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm challenge bond return: ${chCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(chVault, chPid, -chAmt, 0, 0, 0, 'bitvmChallengeBondReturn', block);
+                        await TallyMap.updateBalance(chPayer, chPid, chAmt, 0, 0, 0, 'bitvmChallengeBondReturn', block);
+                    }
+                }
+            } else {
+                const cacheBond = resolved?.bonds?.cacheBond || null;
+                if (cacheBond && Number(cacheBond.amount || 0) > 0) {
+                    const cAmt = Number(cacheBond.amount);
+                    const cPid = Number(cacheBond.propertyId);
+                    const cVault = String(cacheBond.vaultAddress || '');
+                    const cPayer = String(cacheBond.payerAddress || '');
+                    if (cVault && cPayer) {
+                        const cCheck = await TallyMap.hasSufficientBalance(cVault, cPid, cAmt);
+                        if (!cCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm cache bond return: ${cCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(cVault, cPid, -cAmt, 0, 0, 0, 'bitvmCacheBondReturn', block);
+                        await TallyMap.updateBalance(cPayer, cPid, cAmt, 0, 0, 0, 'bitvmCacheBondReturn', block);
+                    }
+                }
+
+                const challengeBond = resolved?.bonds?.challengeBond || null;
+                if (challengeBond && Number(challengeBond.amount || 0) > 0) {
+                    const chAmt = Number(challengeBond.amount);
+                    const chPid = Number(challengeBond.propertyId);
+                    const chVault = String(challengeBond.vaultAddress || '');
+                    const target = String((resolved?.bonds?.cacheBond?.payerAddress) || resolved?.openerAddress || resolved?.fromAddress || '');
+                    if (chVault && target) {
+                        const chCheck = await TallyMap.hasSufficientBalance(chVault, chPid, chAmt);
+                        if (!chCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm challenge bond slash: ${chCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(chVault, chPid, -chAmt, 0, 0, 0, 'bitvmChallengeBondSlash', block);
+                        await TallyMap.updateBalance(target, chPid, chAmt, 0, 0, 0, 'bitvmChallengeBondSlash', block);
+                    }
+                }
             }
             return;
         }

@@ -480,4 +480,121 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
       }, 701)
     ).rejects.toThrow(/sender must match resolverAddress/i);
   });
+
+  test('economics: uphold slashes cache bond to challenger and returns challenge bond', async () => {
+    const { Logic, setBal, getBal, firstBitvmDoc } = loadHarness();
+    setBal('oracleAdmin', 5, 20);
+    setBal('loser', 5, 30);
+    setBal('challenger', 5, 10);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-8',
+      relayBlob: relayBlob({
+        mode: 'bitvm_cache',
+        propertyId: 5,
+        amount: 6,
+        fromAddress: 'loser',
+        toAddress: 'winner',
+        cacheAddress: 'BITVM_CACHE::ct-8',
+        challengeBlocks: 0,
+        cacheBondAmount: 4,
+        cacheBondPropertyId: 5
+      })
+    }, 800);
+
+    const cache = firstBitvmDoc();
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-8',
+      relayBlob: relayBlob({
+        mode: 'bitvm_challenge',
+        cacheId: cache.cacheId,
+        challengerAddress: 'challenger',
+        challengeBondAmount: 3,
+        challengeBondPropertyId: 5
+      })
+    }, 801);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-8',
+      relayBlob: relayBlob({
+        mode: 'bitvm_resolve',
+        cacheId: cache.cacheId,
+        verdict: 'uphold',
+        resolverAddress: 'oracleAdmin'
+      })
+    }, 802);
+
+    expect(getBal('loser', 5)).toBe(30);
+    expect(getBal('oracleAdmin', 5)).toBe(16); // 20 - 4 cache bond (not returned)
+    expect(getBal('challenger', 5)).toBe(14); // 10 - 3 + 3 + 4
+    expect(getBal('BITVM_BOND_CACHE::' + cache.cacheId, 5)).toBe(0);
+    expect(getBal('BITVM_BOND_CHALLENGE::' + cache.cacheId, 5)).toBe(0);
+  });
+
+  test('economics: reject returns cache bond and slashes challenge bond to opener', async () => {
+    const { Logic, setBal, getBal, firstBitvmDoc } = loadHarness();
+    setBal('oracleAdmin', 5, 20);
+    setBal('loser', 5, 30);
+    setBal('challenger', 5, 10);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-9',
+      relayBlob: relayBlob({
+        mode: 'bitvm_cache',
+        propertyId: 5,
+        amount: 5,
+        fromAddress: 'loser',
+        toAddress: 'winner',
+        cacheAddress: 'BITVM_CACHE::ct-9',
+        challengeBlocks: 0,
+        cacheBondAmount: 4,
+        cacheBondPropertyId: 5
+      })
+    }, 900);
+
+    const cache = firstBitvmDoc();
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-9',
+      relayBlob: relayBlob({
+        mode: 'bitvm_challenge',
+        cacheId: cache.cacheId,
+        challengerAddress: 'challenger',
+        challengeBondAmount: 3,
+        challengeBondPropertyId: 5
+      })
+    }, 901);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-9',
+      relayBlob: relayBlob({
+        mode: 'bitvm_resolve',
+        cacheId: cache.cacheId,
+        verdict: 'reject',
+        resolverAddress: 'oracleAdmin'
+      })
+    }, 902);
+
+    expect(getBal('oracleAdmin', 5)).toBe(23); // 20 -4 +4 +3
+    expect(getBal('challenger', 5)).toBe(7); // 10 -3 (slashed)
+    expect(getBal('BITVM_BOND_CACHE::' + cache.cacheId, 5)).toBe(0);
+    expect(getBal('BITVM_BOND_CHALLENGE::' + cache.cacheId, 5)).toBe(0);
+  });
 });

@@ -54,6 +54,14 @@ class BitvmCacheRegistry {
     const toAddress = settlement.toAddress || settlement.recipientAddress || context.senderAddress || '';
     const cacheAddress = settlement.cacheAddress || `BITVM_CACHE::${context.dlcRef || context.stateHash || 'default'}`;
     const challengeBlocks = this._challengeBlocks(settlement.challengeBlocks);
+    const cacheBondAmount = Number(settlement.cacheBondAmount || 0);
+    const cacheBondPropertyId = Number(settlement.cacheBondPropertyId || propertyId);
+    if (!Number.isFinite(cacheBondAmount) || cacheBondAmount < 0) {
+      throw new Error('Invalid bitvm cacheBondAmount');
+    }
+    if (cacheBondAmount > 0 && (!Number.isFinite(cacheBondPropertyId) || cacheBondPropertyId <= 0)) {
+      throw new Error('Invalid bitvm cacheBondPropertyId');
+    }
     const cacheId = this.buildCacheId({
       cacheId: settlement.cacheId,
       dlcRef: context.dlcRef,
@@ -88,10 +96,27 @@ class BitvmCacheRegistry {
       fromAddress,
       toAddress,
       cacheAddress,
+      openerAddress: context.senderAddress || '',
       propertyId,
       amount,
+      cacheBondAmount,
+      cacheBondPropertyId,
       challenged: [],
       releasedAtBlock: null,
+      bonds: {
+        cacheBond: {
+          amount: cacheBondAmount,
+          propertyId: cacheBondPropertyId,
+          payerAddress: context.senderAddress || '',
+          vaultAddress: cacheBondAmount > 0 ? `BITVM_BOND_CACHE::${cacheId}` : ''
+        },
+        challengeBond: {
+          amount: 0,
+          propertyId,
+          payerAddress: '',
+          vaultAddress: `BITVM_BOND_CHALLENGE::${cacheId}`
+        }
+      },
       createdAt: Date.now()
     };
     await base.updateAsync({ _id: key }, { $set: doc }, { upsert: true });
@@ -119,6 +144,26 @@ class BitvmCacheRegistry {
     doc.status = CACHE_STATUS.CHALLENGED;
     doc.challenged = challenged;
     doc.lastChallengeBlock = Number(detail.block || 0);
+    const challengeBondAmount = Number(detail.challengeBondAmount || 0);
+    const challengeBondPropertyId = Number(detail.challengeBondPropertyId || doc?.propertyId || 0);
+    if (!Number.isFinite(challengeBondAmount) || challengeBondAmount < 0) {
+      throw new Error('Invalid bitvm challengeBondAmount');
+    }
+    if (challengeBondAmount > 0 && (!Number.isFinite(challengeBondPropertyId) || challengeBondPropertyId <= 0)) {
+      throw new Error('Invalid bitvm challengeBondPropertyId');
+    }
+    if (!doc.bonds) doc.bonds = {};
+    if (!doc.bonds.challengeBond) {
+      doc.bonds.challengeBond = { amount: 0, propertyId: challengeBondPropertyId, payerAddress: '', vaultAddress: `BITVM_BOND_CHALLENGE::${cacheId}` };
+    }
+    if (challengeBondAmount > 0 && Number(doc.bonds.challengeBond.amount || 0) === 0) {
+      doc.bonds.challengeBond = {
+        amount: challengeBondAmount,
+        propertyId: challengeBondPropertyId,
+        payerAddress: detail.challengerAddress || '',
+        vaultAddress: `BITVM_BOND_CHALLENGE::${cacheId}`
+      };
+    }
     await base.updateAsync({ _id: key }, { $set: doc }, { upsert: true });
     return doc;
   }
