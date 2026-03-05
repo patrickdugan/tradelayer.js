@@ -1056,7 +1056,8 @@ async addInputs(utxos, rawTx) {
         const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
-        const serializedTx = rawTx.serialize();
+        // litecore-lib-ltc can over-trigger local dust checks for this mixed OP_RETURN/reference-output shape.
+        const serializedTx = rawTx.uncheckedSerialize();
         const txid = await this.client.sendrawtransaction(serializedTx);
 
         console.log(`Option trade transaction sent successfully. TXID: ${txid}`);
@@ -1067,21 +1068,32 @@ async addInputs(utxos, rawTx) {
         const payload = Encode.encodeGrantManagedToken(params);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const recipientAddress = params.addressToGrantTo || params.referenceAddress || '';
+        // Maintain a concrete reference output for tx11 so serialization keeps a non-dust spendable output.
+        const includeReferenceOutput =
+            String(process.env.TL_GRANT_INCLUDE_REFERENCE_OUTPUT || 'true').toLowerCase() === 'true';
+        const grantReferenceOutput = Math.max(DUST_THRESHOLD, 300000);
+        const hasReferenceOutput = includeReferenceOutput && !!recipientAddress;
         let rawTx = new litecore.Transaction()
             .from(utxo)
             .addData(payload)
             .fee(STANDARD_FEE);
 
-        if (recipientAddress) {
-            rawTx = rawTx.to(recipientAddress, DUST_THRESHOLD);
+        if (hasReferenceOutput) {
+            rawTx = rawTx.to(recipientAddress, grantReferenceOutput);
         }
 
-        rawTx = rawTx.change(thisAddress);
+        // Avoid creating dust change outputs; if too small, leave remainder as additional fee.
+        const spendSats = STANDARD_FEE + (hasReferenceOutput ? grantReferenceOutput : 0);
+        const inputSats = Number(utxo?.satoshis || 0);
+        const changeSats = inputSats - spendSats;
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.change(thisAddress);
+        }
 
         const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
-        const serializedTx = rawTx.serialize();
+        const serializedTx = rawTx.uncheckedSerialize();
         const txid = await this.client.sendrawtransaction(serializedTx);
         console.log(`Grant managed token tx sent successfully. TXID: ${txid}`);
         return txid;
@@ -1109,16 +1121,20 @@ async addInputs(utxos, rawTx) {
         const payload = Encode.encodeStakeFraudProof(params);
         const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const relayFee = STANDARD_FEE * 3;
-        const rawTx = new litecore.Transaction()
+        const inputSats = Math.round(Number(utxo.satoshis || 0));
+        const changeSats = inputSats - relayFee;
+        let rawTx = new litecore.Transaction()
             .from(utxo)
             .addData(payload)
-            .change(thisAddress)
             .fee(relayFee);
+        if (changeSats > DUST_THRESHOLD) {
+            rawTx = rawTx.to(thisAddress, changeSats);
+        }
 
         const privateKey = await this.client.dumpprivkey(thisAddress);
         rawTx.sign(privateKey);
 
-        const serializedTx = rawTx.serialize();
+        const serializedTx = rawTx.uncheckedSerialize();
         const txid = await this.client.sendrawtransaction(serializedTx);
         console.log(`Stake/Fraud/Relay tx sent successfully. TXID: ${txid}`);
         return txid;

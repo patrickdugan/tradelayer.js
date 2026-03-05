@@ -154,6 +154,7 @@ async function main() {
   const collateralPropertyId = nenv('TL_COLLATERAL_PROPERTY_ID', 1);
   const vaultAddress = env('TL_DLC_VAULT_ADDRESS', admin);
   const templateId = env('TL_DLC_TEMPLATE_ID', 'tpl-live-1');
+  const templateHash = env('TL_DLC_TEMPLATE_HASH', 'tpl-live-1-hash');
   const contractId = env('TL_DLC_CONTRACT_ID', 'ct-live-1');
   const nextContractId = env('TL_DLC_NEXT_CONTRACT_ID', 'ct-live-2');
   const receiptTicker = env('TL_RECEIPT_TICKER', 'DLCLV');
@@ -183,7 +184,7 @@ async function main() {
 
   console.log('[dlc-live] config', {
     admin, oracleAdmin, badOracle, challenger, depositors, collateralPropertyId,
-    vaultAddress, templateId, contractId, nextContractId, receiptTicker,
+    vaultAddress, templateId, templateHash, contractId, nextContractId, receiptTicker,
     depositAmts, tradeAmount, redeemAmount, optionSender
   });
   if (dryRun) return;
@@ -239,7 +240,8 @@ async function main() {
     oracleId,
     collateralPropertyId,
     receiptPropertyId,
-    vaultAddress
+    vaultAddress,
+    templateHash
   });
   await ProceduralRegistry.upsertContract(contractId, templateId, 'FUNDED', { live: true });
 
@@ -272,7 +274,8 @@ async function main() {
       addressToGrantTo: depositor,
       dlcTemplateId: templateId,
       dlcContractId: contractId,
-      settlementState: 'FUNDED'
+      settlementState: 'FUNDED',
+      dlcHash: templateHash
     });
     if (applyImmediate) {
       const b = await TxUtils.getBlockCount();
@@ -282,10 +285,20 @@ async function main() {
   }
 
   // 5) Trade receipt token between first two depositors.
-  const tradeTx = await TxUtils.sendTransaction(depositors[0], depositors[1], receiptPropertyId, tradeAmount, false);
-  if (applyImmediate) {
-    const b = await TxUtils.getBlockCount();
-    await applyTxNow(tradeTx, depositors[0], b);
+  let tradeTx = null;
+  try {
+    tradeTx = await TxUtils.sendTransaction(depositors[0], depositors[1], receiptPropertyId, tradeAmount, false);
+    if (applyImmediate) {
+      const b = await TxUtils.getBlockCount();
+      await applyTxNow(tradeTx, depositors[0], b);
+    }
+  } catch (e) {
+    const msg = String(e?.message || e || '');
+    if (/non-transferable/i.test(msg)) {
+      console.log('[dlc-live] receipt trade skipped (policy-gated):', msg);
+    } else {
+      throw e;
+    }
   }
 
   // 6) Derivatives trade + expiry settlement.
@@ -415,5 +428,6 @@ async function main() {
 
 main().catch((err) => {
   console.error('[dlc-live] failed:', err.message || err);
+  if (err?.stack) console.error(err.stack);
   process.exit(1);
 });

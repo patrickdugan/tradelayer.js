@@ -36,6 +36,7 @@ const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
 const { ProceduralRegistry } = require('./procedural.js');
+const { BitvmCacheRegistry } = require('./bitvmCache.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -1820,12 +1821,14 @@ const Logic = {
         const fromAddress = settlement.fromAddress || settlement.holderAddress || senderAddress;
         const toAddress = settlement.toAddress || settlement.recipientAddress || senderAddress;
         const pm = PropertyManager.getInstance();
-
-        if (!Number.isFinite(propertyId) || propertyId <= 0) {
-            throw new Error('Invalid settlement propertyId in relayBlob');
-        }
+        const requireProperty = () => {
+            if (!Number.isFinite(propertyId) || propertyId <= 0) {
+                throw new Error('Invalid settlement propertyId in relayBlob');
+            }
+        };
 
         if (mode === 'redemption' || mode === 'redeem') {
+            requireProperty();
             if (!Number.isFinite(amount) || amount <= 0) {
                 throw new Error('Invalid redemption amount in relayBlob');
             }
@@ -1834,6 +1837,7 @@ const Logic = {
         }
 
         if (mode === 'rollover' || mode === 'roll') {
+            requireProperty();
             const nextPropertyId = Number(settlement.nextPropertyId);
             if (!Number.isFinite(amount) || amount <= 0) {
                 throw new Error('Invalid rollover amount in relayBlob');
@@ -1847,12 +1851,94 @@ const Logic = {
         }
 
         if (mode === 'pnl_sweep' || mode === 'pnlsweep' || mode === 'sweep') {
+            requireProperty();
             const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
             if (!check?.hasSufficient) {
                 throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
             }
             await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'oraclePnlSweep', block);
             await TallyMap.updateBalance(toAddress, propertyId, amount, 0, 0, 0, 'oraclePnlSweep', block);
+            return;
+        }
+
+        if (mode === 'bitvm_cache' || mode === 'bitvmcache' || mode === 'cache') {
+            requireProperty();
+            const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for bitvm cache: ${check?.reason || 'unknown'}`);
+            }
+
+            const cacheDoc = await BitvmCacheRegistry.open(settlement, {
+                senderAddress,
+                dlcRef: params.dlcRef,
+                stateHash: params.stateHash,
+                block
+            });
+
+            await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'bitvmCacheLock', block);
+            await TallyMap.updateBalance(cacheDoc.cacheAddress, propertyId, amount, 0, 0, 0, 'bitvmCacheLock', block);
+            return;
+        }
+
+        if (mode === 'bitvm_challenge' || mode === 'bitvmchallenge' || mode === 'challenge') {
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_challenge requires cacheId');
+            }
+            await BitvmCacheRegistry.challenge(cacheId, {
+                challengerAddress: settlement.challengerAddress || senderAddress,
+                evidenceHash: settlement.evidenceHash || params.evidenceHash || '',
+                reason: settlement.reason || '',
+                block
+            });
+            return;
+        }
+
+        if (mode === 'bitvm_payout' || mode === 'bitvmpayout' || mode === 'payout') {
+            requireProperty();
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_payout requires cacheId');
+            }
+
+            const finalized = await BitvmCacheRegistry.finalize(cacheId, {
+                toAddress,
+                amount,
+                propertyId,
+                block,
+                txid: params.txid || ''
+            });
+
+            const check = await TallyMap.hasSufficientBalance(finalized.cacheAddress, finalized.propertyId, finalized.amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for bitvm payout: ${check?.reason || 'unknown'}`);
+            }
+            await TallyMap.updateBalance(finalized.cacheAddress, finalized.propertyId, -finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
+            await TallyMap.updateBalance(finalized.toAddress, finalized.propertyId, finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
+            return;
+        }
+
+        if (mode === 'bitvm_resolve' || mode === 'bitvmresolve' || mode === 'resolve') {
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_resolve requires cacheId');
+            }
+
+            const resolved = await BitvmCacheRegistry.resolve(cacheId, {
+                verdict: settlement.verdict,
+                resolverAddress: settlement.resolverAddress || senderAddress,
+                reason: settlement.reason || '',
+                block
+            });
+
+            if (String(resolved.status) === 'RESOLVED_UPHELD') {
+                const refundCheck = await TallyMap.hasSufficientBalance(resolved.cacheAddress, resolved.propertyId, resolved.amount);
+                if (!refundCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm uphold refund: ${refundCheck?.reason || 'unknown'}`);
+                }
+                await TallyMap.updateBalance(resolved.cacheAddress, resolved.propertyId, -resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+                await TallyMap.updateBalance(resolved.fromAddress, resolved.propertyId, resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+            }
             return;
         }
     },

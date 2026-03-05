@@ -33,6 +33,7 @@ async function run() {
   const depA = 'depositor-A';
   const depB = 'depositor-B';
   const depC = 'depositor-C';
+  const templateHash = 'tpl-1-hash';
 
   const pm = PropertyManager.getInstance();
   const activation = Activation.getInstance();
@@ -51,7 +52,8 @@ async function run() {
   await ProceduralRegistry.upsertTemplate('tpl-1', {
     oracleId,
     collateralPropertyId: tLTC,
-    receiptPropertyId: dlcToken
+    receiptPropertyId: dlcToken,
+    templateHash
   });
   await ProceduralRegistry.upsertContract('ct-1', 'tpl-1', 'FUNDED', {
     createdBy: admin
@@ -69,7 +71,7 @@ async function run() {
   async function depositAndMint(address, amount, block) {
     await TallyMap.updateBalance(address, tLTC, -amount, 0, 0, 0, 'dlcDeposit', block);
     await TallyMap.updateBalance('DLC::ct-1', tLTC, amount, 0, 0, 0, 'dlcVaultIn', block);
-    await Logic.grantManagedToken(dlcToken, amount, address, admin, block, 'tpl-1', 'ct-1', 'FUNDED');
+    await Logic.grantManagedToken(dlcToken, amount, address, admin, block, templateHash, 'tpl-1', 'ct-1', 'FUNDED');
   }
 
   await depositAndMint(depA, 120, 3);

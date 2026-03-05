@@ -19,7 +19,11 @@
     "test:amm-contract-taker-live": "node tests/ammContractTakerLive.js",
     "test:scaling-settlement-live": "node tests/scalingSettlementLive.js",
     "test:dlc-scenario": "node tests/dlcMultiDepositorScenario.js",
-    "test:dlc-live": "node tests/dlcLiveIntegration.js"
+    "test:dlc-live": "node tests/dlcLiveIntegration.js",
+    "test:bitvm-plan-a-live": "node tests/tx30BitvmPlanALive.js",
+    "test:bitvm-plan-a-live:uphold": "node tests/tx30BitvmPlanAMatrix.js --verdict uphold",
+    "test:bitvm-plan-a-live:reject": "node tests/tx30BitvmPlanAMatrix.js --verdict reject",
+    "test:bitvm-plan-a-live:both": "node tests/tx30BitvmPlanAMatrix.js --both"
   },
   "jest": {
     "testPathIgnorePatterns": [

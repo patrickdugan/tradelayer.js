@@ -268,7 +268,7 @@ class ClientWrapper {
   }
 
   listunspent() {
-    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))();
+    return this.rpcCall('listunspent', [], true);
   }
 
 
