@@ -23,7 +23,8 @@
     "test:bitvm-plan-a-live": "node tests/tx30BitvmPlanALive.js",
     "test:bitvm-plan-a-live:uphold": "node tests/tx30BitvmPlanAMatrix.js --verdict uphold",
     "test:bitvm-plan-a-live:reject": "node tests/tx30BitvmPlanAMatrix.js --verdict reject",
-    "test:bitvm-plan-a-live:both": "node tests/tx30BitvmPlanAMatrix.js --both"
+    "test:bitvm-plan-a-live:both": "node tests/tx30BitvmPlanAMatrix.js --both",
+    "test:bitvm-watchtower-live": "node tests/bitvmWatchtowerLive.js"
   },
   "jest": {
     "testPathIgnorePatterns": [

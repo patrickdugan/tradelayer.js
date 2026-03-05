@@ -21,9 +21,11 @@ Status key:
 - Replace placeholder/protocol-only resolution with full BitVM challenge-game settlement source.
 - Wire witness bundle verification to executable challenge contracts/UTXO flows.
 
-## 4. Watchtower + Liveness `[ ]`
-- Add automated watchers for pending cache windows and unresolved challenges.
-- Alert and auto-submit required challenge/prove transactions before deadlines.
+## 4. Watchtower + Liveness `[x]`
+- Added one-shot watchtower scanner: `tests/bitvmWatchtowerLive.js`.
+- Supports `TL_WATCH_MODE=alert|challenge` and deadline window checks.
+- In `challenge` mode, auto-submits tx30 `bitvm_challenge` for due-soon caches.
+- Exposed npm wrappers in protocol and desktop wallet repos.
 
 ## 5. Wallet UX + Operator Controls `[ ]`
 - Surface cache lifecycle states: `PENDING`, `CHALLENGED`, `RESOLVED_UPHELD`, `RELEASED`.
