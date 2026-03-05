@@ -713,4 +713,102 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     expect(getBal('BITVM_BOND_CACHE::' + cache.cacheId, 5)).toBe(0);
     expect(getBal('BITVM_BOND_CHALLENGE::' + cache.cacheId, 5)).toBe(0);
   });
+
+  test('risk caps: pending escrow cap blocks excess cache opens', async () => {
+    const prevPending = process.env.TL_BITVM_MAX_PENDING_ESCROW;
+    const prevWindow = process.env.TL_BITVM_SCHED_WINDOW_BLOCKS;
+    process.env.TL_BITVM_MAX_PENDING_ESCROW = '20';
+    process.env.TL_BITVM_SCHED_WINDOW_BLOCKS = '50';
+    try {
+      const { Logic, setBal } = loadHarness();
+      setBal('loser', 5, 200);
+
+      await Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        dlcRef: 'cap-a',
+        stateHash: 'cap-a',
+        relayBlob: relayBlob({
+          mode: 'bitvm_cache',
+          propertyId: 5,
+          amount: 11,
+          fromAddress: 'loser',
+          toAddress: 'winner',
+          cacheAddress: 'BITVM_CACHE::cap-a',
+          challengeBlocks: 5
+        })
+      }, 1000);
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          dlcRef: 'cap-b',
+          stateHash: 'cap-b',
+          relayBlob: relayBlob({
+            mode: 'bitvm_cache',
+            propertyId: 5,
+            amount: 10,
+            fromAddress: 'loser',
+            toAddress: 'winner',
+            cacheAddress: 'BITVM_CACHE::cap-b',
+            challengeBlocks: 5
+          })
+        }, 1001)
+      ).rejects.toThrow(/escrow cap exceeded/i);
+    } finally {
+      if (typeof prevPending === 'undefined') delete process.env.TL_BITVM_MAX_PENDING_ESCROW;
+      else process.env.TL_BITVM_MAX_PENDING_ESCROW = prevPending;
+      if (typeof prevWindow === 'undefined') delete process.env.TL_BITVM_SCHED_WINDOW_BLOCKS;
+      else process.env.TL_BITVM_SCHED_WINDOW_BLOCKS = prevWindow;
+    }
+  });
+
+  test('risk caps: sweep window cap throttles oversized pnl_sweep', async () => {
+    const prevSweep = process.env.TL_BITVM_MAX_SWEEP_PER_WINDOW;
+    const prevWindow = process.env.TL_BITVM_SCHED_WINDOW_BLOCKS;
+    process.env.TL_BITVM_MAX_SWEEP_PER_WINDOW = '5';
+    process.env.TL_BITVM_SCHED_WINDOW_BLOCKS = '100';
+    try {
+      const { Logic, setBal } = loadHarness();
+      setBal('pool', 5, 100);
+
+      await Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        stateHash: 'sw-1',
+        relayBlob: relayBlob({
+          mode: 'pnl_sweep',
+          propertyId: 5,
+          amount: 3,
+          fromAddress: 'pool',
+          toAddress: 'winner'
+        })
+      }, 1100);
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          stateHash: 'sw-2',
+          relayBlob: relayBlob({
+            mode: 'pnl_sweep',
+            propertyId: 5,
+            amount: 3,
+            fromAddress: 'pool',
+            toAddress: 'winner'
+          })
+        }, 1101)
+      ).rejects.toThrow(/sweep window cap exceeded/i);
+    } finally {
+      if (typeof prevSweep === 'undefined') delete process.env.TL_BITVM_MAX_SWEEP_PER_WINDOW;
+      else process.env.TL_BITVM_MAX_SWEEP_PER_WINDOW = prevSweep;
+      if (typeof prevWindow === 'undefined') delete process.env.TL_BITVM_SCHED_WINDOW_BLOCKS;
+      else process.env.TL_BITVM_SCHED_WINDOW_BLOCKS = prevWindow;
+    }
+  });
 });

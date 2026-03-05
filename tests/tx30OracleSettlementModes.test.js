@@ -1,4 +1,6 @@
 describe('tx30 relay settlement modes', () => {
+  const crypto = require('crypto');
+
   function loadHarness() {
     jest.resetModules();
 
@@ -59,6 +61,26 @@ describe('tx30 relay settlement modes', () => {
 
     const Logic = require('../src/logic.js');
     return { Logic, updates, redeemCalls, grantCalls, transitions };
+  }
+
+  function mkAnchoredPayload(settlement, params = {}) {
+    const transitionHash = crypto.createHash('sha256').update(JSON.stringify({
+      mode: String(settlement.mode || settlement.action || '').toLowerCase(),
+      propertyId: Number(settlement.propertyId || 0),
+      amount: Number(settlement.amount || 0),
+      fromAddress: String(settlement.fromAddress || settlement.holderAddress || ''),
+      toAddress: String(settlement.toAddress || settlement.recipientAddress || ''),
+      cacheId: String(settlement.cacheId || ''),
+      dlcRef: String(params.dlcRef || ''),
+      stateHash: String(params.stateHash || '')
+    })).digest('hex');
+    const payloadDoc = {
+      stateRoot: 'root-a1',
+      transitions: [transitionHash]
+    };
+    const balancePayloadB64 = Buffer.from(JSON.stringify(payloadDoc), 'utf8').toString('base64');
+    const payloadHash = crypto.createHash('sha256').update(Buffer.from(balancePayloadB64, 'base64')).digest('hex');
+    return { transitionHash, payloadDoc, balancePayloadB64, payloadHash };
   }
 
   test('relayBlob settlement mode=redeem burns procedural balance', async () => {
@@ -150,5 +172,85 @@ describe('tx30 relay settlement modes', () => {
       ['winner', 5, 1.75, 0, 0, 0, 'oraclePnlSweep', 502]
     ]);
   });
-});
 
+  test('state-root gate rejects unanchored settlement when required', async () => {
+    const prev = process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+    process.env.TL_ORACLE_REQUIRE_STATE_ROOT = '1';
+    try {
+      const { Logic } = loadHarness();
+      const relayBlob = JSON.stringify({
+        eventId: 'ev4',
+        outcome: 'SETTLED',
+        outcomeIndex: 0,
+        stateHash: 's4',
+        timestamp: 4,
+        settlement: {
+          mode: 'pnl_sweep',
+          propertyId: 5,
+          amount: 2,
+          fromAddress: 'liqPool',
+          toAddress: 'winner'
+        }
+      });
+
+      await expect(
+        Logic.processStakeFraudProof('oracleAdmin', {
+          action: 2,
+          oracleId: 1,
+          relayType: 1,
+          stateHash: 's4',
+          relayBlob
+        }, 503)
+      ).rejects.toThrow(/state-root gate/i);
+    } finally {
+      if (typeof prev === 'undefined') delete process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+      else process.env.TL_ORACLE_REQUIRE_STATE_ROOT = prev;
+    }
+  });
+
+  test('state-root gate accepts anchored settlement when required', async () => {
+    const prev = process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+    process.env.TL_ORACLE_REQUIRE_STATE_ROOT = '1';
+    try {
+      const { Logic, updates } = loadHarness();
+      const settlement = {
+        mode: 'pnl_sweep',
+        propertyId: 5,
+        amount: 2,
+        fromAddress: 'liqPool',
+        toAddress: 'winner'
+      };
+      const anchored = mkAnchoredPayload(settlement, { dlcRef: '', stateHash: 's5' });
+      const relayBlob = JSON.stringify({
+        eventId: 'ev5',
+        outcome: 'SETTLED',
+        outcomeIndex: 0,
+        stateHash: 's5',
+        timestamp: 5,
+        payloadHash: anchored.payloadHash,
+        balancePayloadB64: anchored.balancePayloadB64,
+        settlement: {
+          ...settlement,
+          stateRoot: anchored.payloadDoc.stateRoot,
+          transitionHash: anchored.transitionHash
+        }
+      });
+
+      await Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        stateHash: 's5',
+        relayBlob
+      }, 504);
+
+      expect(updates).toEqual([
+        ['liqPool', 5, -2, 0, 0, 0, 'oraclePnlSweep', 504],
+        ['winner', 5, 2, 0, 0, 0, 'oraclePnlSweep', 504]
+      ]);
+    } finally {
+      if (typeof prev === 'undefined') delete process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
+      else process.env.TL_ORACLE_REQUIRE_STATE_ROOT = prev;
+    }
+  });
+});

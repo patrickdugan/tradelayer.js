@@ -38,6 +38,7 @@ const OptionsEngine = require('./options.js');
 const { ProceduralRegistry } = require('./procedural.js');
 const { BitvmCacheRegistry } = require('./bitvmCache.js');
 const { verifyBundleHash } = require('./bitvmBundle.js');
+const BitvmRisk = require('./bitvmRisk.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -55,6 +56,63 @@ function parseRelayBlobRaw(relayBlob) {
         return JSON.parse(raw);
     } catch {
         return null;
+    }
+}
+
+function sha256Hex(input) {
+    return require('crypto').createHash('sha256').update(input).digest('hex');
+}
+
+function verifyStateAnchoredSettlement(params, relayParsed, settlement) {
+    const requireStateRoot = String(process.env.TL_ORACLE_REQUIRE_STATE_ROOT || '').trim() === '1';
+    if (!requireStateRoot) return;
+    if (!relayParsed || typeof relayParsed !== 'object') {
+        throw new Error('State-root gate: missing parsed relay bundle');
+    }
+    const payloadHash = String(relayParsed.payloadHash || '').trim().toLowerCase();
+    const payloadB64 = String(relayParsed.balancePayloadB64 || '').trim();
+    if (!payloadHash || !payloadB64) {
+        throw new Error('State-root gate: payloadHash/balancePayloadB64 required');
+    }
+    const computedPayloadHash = sha256Hex(Buffer.from(payloadB64, 'base64'));
+    if (computedPayloadHash !== payloadHash) {
+        throw new Error('State-root gate: payload hash mismatch');
+    }
+
+    let payloadDoc = null;
+    try {
+        payloadDoc = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+    } catch {
+        throw new Error('State-root gate: invalid balance payload encoding');
+    }
+
+    const stateRoot = String(settlement.stateRoot || payloadDoc?.stateRoot || '').trim().toLowerCase();
+    const payloadStateRoot = String(payloadDoc?.stateRoot || '').trim().toLowerCase();
+    if (!stateRoot || !payloadStateRoot) {
+        throw new Error('State-root gate: missing settlement/payload stateRoot');
+    }
+    if (stateRoot !== payloadStateRoot) {
+        throw new Error('State-root gate: stateRoot mismatch');
+    }
+
+    const transitionHash = String(settlement.transitionHash || '').trim().toLowerCase();
+    const expectedTransitionHash = sha256Hex(JSON.stringify({
+        mode: String(settlement.mode || settlement.action || '').toLowerCase(),
+        propertyId: Number(settlement.propertyId || 0),
+        amount: Number(settlement.amount || 0),
+        fromAddress: String(settlement.fromAddress || settlement.holderAddress || ''),
+        toAddress: String(settlement.toAddress || settlement.recipientAddress || ''),
+        cacheId: String(settlement.cacheId || ''),
+        dlcRef: String(params?.dlcRef || ''),
+        stateHash: String(params?.stateHash || '')
+    }));
+    if (transitionHash && transitionHash !== expectedTransitionHash) {
+        throw new Error('State-root gate: transitionHash mismatch');
+    }
+
+    const transitions = Array.isArray(payloadDoc?.transitions) ? payloadDoc.transitions.map((x) => String(x || '').toLowerCase()) : [];
+    if (transitions.length > 0 && !transitions.includes(expectedTransitionHash)) {
+        throw new Error('State-root gate: transition not included in payload transitions');
     }
 }
 
@@ -1815,6 +1873,7 @@ const Logic = {
         const relayParsed = parseRelayBlobRaw(params.relayBlob);
         const settlement = relayParsed?.settlement || relayParsed?.settle || null;
         if (!settlement || typeof settlement !== 'object') return;
+        verifyStateAnchoredSettlement(params, relayParsed, settlement);
 
         const mode = String(settlement.mode || settlement.action || '').toLowerCase();
         const propertyId = Number(settlement.propertyId);
@@ -1853,6 +1912,7 @@ const Logic = {
 
         if (mode === 'pnl_sweep' || mode === 'pnlsweep' || mode === 'sweep') {
             requireProperty();
+            await BitvmRisk.onSweep({ propertyId, amount, block });
             const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
             if (!check?.hasSufficient) {
                 throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
@@ -1884,6 +1944,12 @@ const Logic = {
             if (!Number.isFinite(cacheBondAmount) || cacheBondAmount < 0) {
                 throw new Error('Invalid bitvm cacheBondAmount');
             }
+            await BitvmRisk.onCacheOpen({
+                propertyId,
+                amount,
+                dlcRef: params.dlcRef || '',
+                block
+            });
             if (cacheBondAmount > 0) {
                 const bondCheck = await TallyMap.hasSufficientBalance(senderAddress, cacheBondPropertyId, cacheBondAmount);
                 if (!bondCheck?.hasSufficient) {
@@ -1962,6 +2028,12 @@ const Logic = {
             }
             await TallyMap.updateBalance(finalized.cacheAddress, finalized.propertyId, -finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
             await TallyMap.updateBalance(finalized.toAddress, finalized.propertyId, finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
+            await BitvmRisk.onEscrowRelease({
+                propertyId: finalized.propertyId,
+                amount: finalized.amount,
+                dlcRef: finalized.dlcRef || params.dlcRef || '',
+                block
+            });
             return;
         }
 
@@ -1989,6 +2061,12 @@ const Logic = {
                 }
                 await TallyMap.updateBalance(resolved.cacheAddress, resolved.propertyId, -resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
                 await TallyMap.updateBalance(resolved.fromAddress, resolved.propertyId, resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+                await BitvmRisk.onEscrowRelease({
+                    propertyId: resolved.propertyId,
+                    amount: resolved.amount,
+                    dlcRef: resolved.dlcRef || params.dlcRef || '',
+                    block
+                });
 
                 const cacheBond = resolved?.bonds?.cacheBond || null;
                 if (cacheBond && Number(cacheBond.amount || 0) > 0) {
