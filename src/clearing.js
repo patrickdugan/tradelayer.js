@@ -2489,8 +2489,7 @@ class Clearing {
         //------------------------------------------------------------
         const tally = tallySnapshot || await Tally.getTally(liquidatingAddress, collateralId);
 
-        const maintReq = new Big(await marginMap.checkMarginMaintainance(
-          liquidatingAddress,
+        const maintReq = new Big(await marginMap.computeMaintenanceMarginRequirement(
           contractId,
           position
         ) || 0);
@@ -2554,7 +2553,7 @@ class Clearing {
         let liq = await marginMap.generateLiquidationOrder(
           position,
           contractId,
-          liquidationType === "total",
+          liqAmount,
           blockHeight,
           markPrice,
           computedLiqPrice
