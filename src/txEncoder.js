@@ -3,6 +3,13 @@ const base94 = require('./base94.js');
 const base256 = require('./base256.js');
 const marker = 'tl';
 
+const SettleType = {
+    KEEP_ALIVE: 0,
+    CLOSE_POSITION: 1,
+    NET_SETTLE: 2,
+    KING_SETTLE: 3
+};
+
 const Encode = {
 
     encodeAmount: (amt) => {
@@ -34,6 +41,8 @@ const Encode = {
             params.managed ? '1' : '0', //turn into enum
             params.backupAddress,
             params.nft ? '1' : '0',
+            params.coloredCoinHybrid ? '1' : '0',
+            params.proceduralType?.toString(36) ?? '',
         ];
         const type = 1;
         const typeStr = type?.toString(36) ?? '0';
@@ -131,6 +140,9 @@ const Encode = {
             clearLists,
             isColoredOutput,
         ];
+        if (Number.isInteger(params.commitClearlistId)) {
+            payload.push(params.commitClearlistId.toString(36));
+        }
         const type = 4;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
@@ -270,16 +282,15 @@ const Encode = {
     // Encode Grant Managed Token Transaction
     encodeGrantManagedToken: (params) => {
         const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
-        const propertyId = (params.propertyid ?? params.propertyId)?.toString(36) ?? '0';
-        const commitClearlistId = (params.commitClearlistId === '' || params.commitClearlistId === undefined || params.commitClearlistId === null)
-            ? ''
-            : Number(params.commitClearlistId).toString(36);
         const payload = [
-            propertyId,
+            (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountGranted?.toString(36) ?? '0',
-            params.addressToGrantTo || '',
-            params?.dlcHash || '',
-            commitClearlistId
+            params.addressToGrantTo,
+            '',
+            params?.dlcTemplateId || '',
+            params?.dlcContractId || '',
+            params?.settlementState || '',
+            params?.dlcHash || ''
         ];
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';
@@ -288,11 +299,13 @@ const Encode = {
 
     // Encode Redeem Managed Token Transaction
     encodeRedeemManagedToken: (params) => {
-        const amountGranted = new BigNumber(params.amountGranted).times(1e8).toNumber();
+        const amountDestroyed = new BigNumber(params.amountDestroyed ?? params.amountGranted ?? 0).times(1e8).toNumber();
         const payload = [
-            params.propertyid?.toString(36) ?? '0',
-            amountGranted?.toString(36) ?? '0',
-            params.addressToGrantTo,
+            (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
+            amountDestroyed?.toString(36) ?? '0',
+            params?.dlcTemplateId || '',
+            params?.dlcContractId || '',
+            params?.settlementState || ''
         ];
         const type = 12;
         const typeStr = type?.toString(36) ?? '0';
@@ -445,26 +458,53 @@ const Encode = {
 
     // Encode Settle Channel PNL Transaction
     encodeSettleChannelPNL: (params) => {
-        const macroBatch = Boolean(params.macroBatch);
-        const tradeId = params.tradeid || params.txidNeutralized1 || '';
-        const settleId = params.settleid || params.txidNeutralized2 || '';
-        const batchTxids = Array.isArray(params.batchTxids) ? params.batchTxids.join(';') : tradeId;
-        const field0 = macroBatch ? batchTxids : base256.hexToBase256(tradeId);
-        const field1 = settleId ? base256.hexToBase256(settleId) : '';
-        const base94Encoded = base94.decimalToBase94(params.markPrice);
+        const settleType = params.settleType !== undefined
+            ? Number(params.settleType)
+            : (params.close ? 1 : 0);
         const payload = [
-            field0,
-            field1,
-            base94Encoded,
-            params.close ? '1' : '0',
+            (params.txidNeutralized1 || params.tradeid || ''),
+            (params.txidNeutralized2 || params.settleid || ''),
+            base94.decimalToBase94(params.markPrice || 0),
+            settleType.toString(),
             params.columnAIsSeller ? '1' : '0',
             params.columnAIsMaker ? '1' : '0',
-            macroBatch ? '1' : '0'
+            base94.decimalToBase94(params.netAmount || 0),
+            base94.decimalToBase94(params.expiryBlock || 0)
         ];
+        if (params.blockStart !== undefined || params.blockEnd !== undefined || params.propertyId !== undefined) {
+            payload.push(
+                base94.decimalToBase94(params.blockStart || 0),
+                base94.decimalToBase94(params.blockEnd || 0),
+                base94.decimalToBase94(params.propertyId || 0),
+                params.aPaysBDirection ? '1' : '0',
+                (params.channelRoot || ''),
+                base94.decimalToBase94(params.totalContracts || 0),
+                base94.decimalToBase94(params.neutralizedCount || 0)
+            );
+        }
         const type = 23;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
     },
+
+    // Encode King Settlement Transaction (Type 31)
+    encodeKingSettle: (params) => {
+        const payload = [
+            base94.decimalToBase94(params.blockStart || 0),
+            base94.decimalToBase94(params.blockEnd || 0),
+            base94.decimalToBase94(params.propertyId || 0),
+            base94.decimalToBase94(params.netAmount || 0),
+            params.aPaysBDirection ? '1' : '0',
+            (params.channelRoot || ''),
+            base94.decimalToBase94(params.totalContracts || 0),
+            base94.decimalToBase94(params.neutralizedCount || 0)
+        ];
+        const type = 31;
+        const typeStr = type?.toString(36) ?? '0';
+        return marker + typeStr + payload.join(',');
+    },
+
+
 
     // Encode Mint Synthetic Transaction
     encodeMintSynthetic: (params) => {
@@ -509,7 +549,7 @@ const Encode = {
             params.contractId,
             Encode.encodeAmount(params.price)?.toString(36) ?? '0',
             params.amount?.toString(36) ?? '0',
-            params.columnAIsSeller,
+            params.columnAIsSeller ? '1' : '0',
             params.expiryBlock?.toString(36) ?? '0',
             params.columnAIsMaker ? '1' : '0'
         ];
@@ -557,14 +597,23 @@ const Encode = {
         return marker + typeStr + payload.join(',');
     },
 
-    // Encode Issue Invoice Transaction
+    // Encode Oracle Stake/Fraud/Relay Transaction
     encodeStakeFraudProof: (params) => {
+        const amount = new BigNumber(params.amount || 0).times(1e8).integerValue(BigNumber.ROUND_DOWN).toString(36);
         const payload = [
-            params.propertyIdToReceivePayment?.toString(36) ?? '0',
-            params.amount?.toString(36) ?? '0',
-            params.dueDateBlock?.toString(36) ?? '0',
-            params.optionalPropertyIdCollateral ? params.optionalPropertyIdCollateral?.toString(36) ?? '0' : '0',
-            params.receivesPayToToken ? '1' : '0',
+            Number(params.action || 0).toString(36),     // 0=stake,1=fraud,2=relay
+            Number(params.oracleId || 0).toString(36),
+            Number(params.stakedPropertyId || 0).toString(36),
+            amount,
+            params.accusedAddress || '',
+            params.evidenceHash || '',
+            Number(params.relayType || 0).toString(36),
+            params.stateHash || '',
+            params.dlcRef || '',
+            params.settlementState || '',
+            params.relayBlob || '',
+            params.autoRoll ? '1' : '0',
+            params.nextDlcRef || ''
         ];
         const type = 30;
         const typeStr = type?.toString(36) ?? '0';

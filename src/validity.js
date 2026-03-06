@@ -15,9 +15,68 @@ const VolumeIndex = require('./volumeIndex.js')
 const SyntheticRegistry = require('./vaults.js')
 const Vesting = require('./vesting.js')
 const Scaling = require('./scaling.js')
+const DlcOracleBridge = require('./dlcOracleBridge.js')
+const { ProceduralRegistry } = require('./procedural.js')
 //const whiteLists = require('./whitelists.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 const OptionsEngine = require('./options.js');
+
+// npm i bitcoinjs-lib bip32 tiny-secp256k1
+const bitcoin = require('bitcoinjs-lib');
+const ecc = require('tiny-secp256k1');
+const { BIP32Factory } = require('bip32');
+const bip32 = BIP32Factory(ecc);
+const { ScalingL2, SettleType, SettleStatus } = require('./scaling.js');
+
+/**
+ * Derive a child address from an account-level xpub.
+ *
+ * Assumes xpub is already at the account level, e.g.:
+ *   m/84'/0'/0'  (mainnet segwit account)  OR
+ *   m/84'/1'/0'  (testnet)
+ *
+ * Then you derive: change/index  =>  m/.../change/index
+ */
+function addressFromXpubP2WPKH({
+  xpub,
+  network = bitcoin.networks.bitcoin, // or bitcoin.networks.testnet
+  change = 0, // 0 = external receive, 1 = internal change
+  index = 0
+}) {
+  if (change !== 0 && change !== 1) throw new Error('change must be 0 or 1');
+  if (!Number.isInteger(index) || index < 0) throw new Error('index must be a non-negative integer');
+
+  const node = bip32.fromBase58(xpub, network);
+
+  // From xpub: only non-hardened derives are possible
+  const child = node.derive(change).derive(index);
+
+  const { address } = bitcoin.payments.p2wpkh({
+    pubkey: child.publicKey,
+    network
+  });
+
+  if (!address) throw new Error('failed to derive address');
+  return address;
+}
+
+// Example
+// const addr = addressFromXpubP2WPKH({ xpub: 'xpub...', network: bitcoin.networks.bitcoin, change: 0, index: 0 });
+// console.log(addr);
+function belongsToXpubP2WPKH({
+  xpub,
+  address,
+  network = bitcoin.networks.bitcoin,
+  change = 0,
+  maxIndex = 5000
+}) {
+  for (let i = 0; i <= maxIndex; i++) {
+    const derived = addressFromXpubP2WPKH({ xpub, network, change, index: i });
+    if (derived === address) return { ok: true, index: i };
+  }
+  return { ok: false };
+}
+
 
 const Validity = {
 
@@ -41,6 +100,14 @@ const Validity = {
 
                 if (x <= 0 || x > MAX_SAFE_AMOUNT) return false;
                 return (typeof x === 'number' && Number.isFinite(x) && !isNaN(x) && x > 0)
+        },
+
+        isRestrictedProceduralToken(propertyData) {
+            const typeNum = Number(propertyData?.type);
+            const isProcedural = typeNum === 7 || propertyData?.type === 'Procedural';
+            const proceduralType = Number(propertyData?.proceduralType ?? -1);
+            // Procedural type 1 is DLC-receipt style and intentionally non-transferable/non-spot-tradeable.
+            return isProcedural && proceduralType === 1;
         },
         //Type 0: Activation
         validateActivateTradeLayer: async (sender, params, txid) => {
@@ -136,6 +203,17 @@ const Validity = {
                 params.reason += 'Invalid property ID for vesting type; ';
             }
 
+            if (params.proceduralType !== null && params.proceduralType !== undefined) {
+                if (!params.managed) {
+                    params.valid = false;
+                    params.reason += 'Procedural token type requires managed issuance; ';
+                }
+                if (!Number.isInteger(params.proceduralType) || params.proceduralType < 0) {
+                    params.valid = false;
+                    params.reason += 'Invalid procedural type enum; ';
+                }
+            }
+
             const is = await Validity.isActivated(params.block,txid,1)
             console.log(is)
             if (!is) {
@@ -175,12 +253,23 @@ const Validity = {
                 }
             }
 
-            const propertyData = await PropertyList.getPropertyData(params.propertyIds)
-            console.log(JSON.stringify(propertyData))
-            if(propertyData==null||propertyData==undefined){
-                params.valid = false
-                params.reason = 'propertyId not found in Property List'
-                return params
+            const propertyIds = Array.isArray(params.propertyIds)
+                ? params.propertyIds
+                : [params.propertyIds];
+            let propertyData = null;
+            for (const pid of propertyIds) {
+                const pData = await PropertyList.getPropertyData(pid);
+                console.log(JSON.stringify(pData));
+                if (pData == null || pData == undefined) {
+                    params.valid = false;
+                    params.reason = 'propertyId not found in Property List';
+                    return params;
+                }
+                if (Validity.isRestrictedProceduralToken(pData)) {
+                    params.valid = false;
+                    params.reason += `Property ${pid} is restricted procedural and non-transferable; `;
+                }
+                if (!propertyData) propertyData = pData;
             }
 
             const admin = activationInstance.getAdmin()
@@ -228,13 +317,6 @@ const Validity = {
             }*/
 
                     // Whitelist validation logic
-            let propertyIds = [];
-
-                if (Array.isArray(params.propertyIds)) {
-                    propertyIds = params.propertyIds;
-                } else if (Number.isInteger(params.propertyIds)) {
-                    propertyIds = [params.propertyIds];
-                }
 
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
 
@@ -305,11 +387,15 @@ const Validity = {
             }
             
 
-            const property = PropertyList.getPropertyData(params.propertyId)
+            const property = await PropertyList.getPropertyData(params.propertyId)
 
             if (property==null) {
                 params.valid = false;
                 params.reason += 'Invalid property ID; ';
+            }
+            if (Validity.isRestrictedProceduralToken(property)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be token-traded; ';
             }
 
             if (!Validity.isValidNumber(params.amount)) {
@@ -461,6 +547,10 @@ const Validity = {
                 params.reason="Null returning for propertyData"
                 return params
             }
+            if (Validity.isRestrictedProceduralToken(propertyData)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be committed/traded in token channels; ';
+            }
                     // Whitelist validation logic
   
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
@@ -550,6 +640,18 @@ const Validity = {
                     params.reason += 'clearLists contains non-integer values. ';
                 }
             }
+            if (params.commitClearlistId !== null && params.commitClearlistId !== undefined) {
+                if (!Number.isInteger(params.commitClearlistId) || params.commitClearlistId < 0) {
+                    params.valid = false;
+                    params.reason += 'commitClearlistId must be a non-negative integer. ';
+                } else if (params.commitClearlistId > 0) {
+                    const approved = await ClearList.isAddressInClearlistOrDerived(params.commitClearlistId, sender);
+                    if (!approved) {
+                        params.valid = false;
+                        params.reason += `Sender address not listed in commit clearlist ${params.commitClearlistId}; `;
+                    }
+                }
+            }
 
             return params;
         },
@@ -625,6 +727,10 @@ const Validity = {
                 params.valid = false
                 params.reason += 'Null returning for propertyData'
                 return params
+            }
+            if (Validity.isRestrictedProceduralToken(propertyData1) || Validity.isRestrictedProceduralToken(propertyData2)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be spot token-traded; ';
             }
 
             const senderWhitelists = Array.isArray(propertyData1.whitelistId) ? propertyData1.whitelistId : [propertyData1.whitelistId];
@@ -798,7 +904,7 @@ const Validity = {
 
             if(!validateAddress(params.backupAddress)){
                 const valid = await TxUtils.validateAddressWrapper(params.backupAddress)
-                if(!valid.isValid){
+                if(!valid.isValid && !valid.isvalid){
                     params.valid= false
                     params.reason = 'Destination address is not validly formed.'
                 }
@@ -834,18 +940,32 @@ const Validity = {
                     params.reason += 'Invalid new address; ';
                 }
 
+                const targets = [Boolean(params.whitelist), Boolean(params.oracle), Boolean(params.token)].filter(Boolean).length;
+                if (targets !== 1) {
+                    params.valid = false;
+                    params.reason += 'Exactly one admin target (whitelist/oracle/token) must be selected; ';
+                }
+
                 // Validate admin based on the type
                 if (params.whitelist) {
                     const whitelistInfo = await ClearList.getList(params.id);
-                    if (whitelistInfo.adminAddress !== sender||whitelistInfo.backupAddress!==sender) {
+                    if (!whitelistInfo) {
+                        params.valid = false;
+                        params.reason += 'Whitelist not found; ';
+                    } else if (whitelistInfo.adminAddress !== sender && whitelistInfo.backupAddress !== sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the whitelist; ';
                     }
                 }
 
                 if(params.oracle) {
-                    const admin = await OracleList.isAdmin(sender, params.id);
-                    if (!oracleInfo || oracleInfo.adminAddress !== sender||oracleInfo.backupAddress!==sender) {
+                    const oracleInfo = await OracleList.getOracleInfo(params.id);
+                    const adminAddr = oracleInfo?.adminAddress || oracleInfo?.name?.adminAddress;
+                    const backupAddr = oracleInfo?.backupAddress || oracleInfo?.name?.backupAddress;
+                    if (!oracleInfo) {
+                        params.valid = false;
+                        params.reason += 'Oracle not found; ';
+                    } else if (adminAddr !== sender && backupAddr !== sender) {
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the oracle; ';
                     }
@@ -853,12 +973,16 @@ const Validity = {
 
                 if(params.token) {
                     const tokenInfo = await PropertyList.getPropertyData(params.id)
-                    if (tokenInfo.issuer !== sender||tokenInfo.backupAddress!==sender){
+                    if (!tokenInfo) {
+                        params.valid = false;
+                        params.reason += 'Token not found; ';
+                    } else if (tokenInfo.issuer !== sender && tokenInfo.backupAddress !== sender){
                         params.valid = false;
                         params.reason += 'Sender is not the admin of the token;' 
                     }
 
-                    if(tokenInfo.type!==2){
+                    const managedType = tokenInfo?.type;
+                    if(!(managedType === 2 || managedType === 'Managed')){
                         params.valid = false
                         params.reason += "Not a managed token with a usable admin address"
                     }
@@ -893,13 +1017,34 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            if (typeof params.targetAddress !== 'string') {
+            // Resolve ref:N to address from tx outputs
+            if (params.ref !== false && params.ref !== undefined) {
+                const outputs = await TxUtils.getTransactionOutputs(txid);
+                let matchingOutput = null;
+                for (let i = 0; i < outputs.length; i++) {
+                    if (outputs[i].vout === Number(params.ref)) {
+                        matchingOutput = outputs[i];
+                        break;
+                    }
+                }
+                if (matchingOutput && matchingOutput.address) {
+                    params.targetAddress = matchingOutput.address;
+                } else {
+                    params.valid = false;
+                    params.reason += `Could not resolve ref:${params.ref} to an address; `;
+                }
+            }
+
+            if (typeof params.targetAddress !== 'string' || params.targetAddress === '') {
                 params.valid = false;
                 params.reason += 'Invalid target address; ';
             }
 
             // Fetch the clearlistId from params or wherever it's stored
             const clearlistId = params.id;
+            const isListZero = Number(clearlistId) === 0;
+            const targetTag = (params.targetAddress || '').toString().trim().toUpperCase();
+            const isBanlistUpdate = isListZero && targetTag === 'BANLIST';
 
             // Assuming ClearList or an equivalent instance is available
             console.log('this clearlist id' +clearlistId)
@@ -910,18 +1055,39 @@ const Validity = {
                 params.reason += `Clearlist with ID ${clearlistId} not found; `;
             } else if(clearlistId!=0){
                 // Check if the sender matches the admin address of the clearlist
-                if (sender !== clearlist.adminAddress) {
+                const clearlistAdmin = clearlist.adminAddress || clearlist.admin;
+                if (sender !== clearlistAdmin) {
                     params.valid = false;
                     params.reason += `Sender ${sender} is not authorized to issue or revoke attestations for clearlist ${clearlistId}; `;
                 }
             }
             console.log('params in validate attestation '+sender+' '+params.targetAddress)
-            if(sender!=params.targetAddress&&clearlistId==0){
+            if (isListZero && isBanlistUpdate) {
+                const admin = activationInstance.getAdmin();
+                if (sender !== admin) {
+                    params.valid = false;
+                    params.reason += 'Only protocol admin can update global banlist via list id 0; ';
+                }
+                const bannedCountriesGlobal = String(params.metaData || '')
+                    .split(/[,\s;|]+/)
+                    .map(v => v.trim().toUpperCase())
+                    .filter(Boolean);
+                const invalidCode = bannedCountriesGlobal.find(code => !/^[A-Z]{2}$/.test(code));
+                if (bannedCountriesGlobal.length === 0 || invalidCode) {
+                    params.valid = false;
+                    params.reason += 'Banlist update requires 2-letter country codes in metaData; ';
+                }
+            } else if(sender!=params.targetAddress&&isListZero){
                     params.valid = false;
                     params.reason += `Sender and target address must be the same for self-cert (clearlist id 0) `;
             }
 
-            if(params.revoke==true&&!ClearList.isAddressInClearlist(params.targetAddress)){
+            if (isListZero && !isBanlistUpdate && (!params.metaData || !/^[A-Za-z]{2}$/.test(String(params.metaData).trim()))) {
+                params.valid = false;
+                params.reason += 'Self-cert (clearlist id 0) requires 2-letter country code metaData; ';
+            }
+
+            if(params.revoke==true&&!await ClearList.isAddressInClearlist(clearlistId, params.targetAddress)){
                     params.valid = false;
                     params.reason += `Target Address has no attestation to revoke `;
             }
@@ -944,7 +1110,9 @@ const Validity = {
             params.reason += 'Tx type not yet activated ';
         }
 
-        if (!Validity.isValidNumber(params.amount) || !Validity.isValidNumber(params.amount2)) {
+        const amountOk = Validity.isValidNumber(params.amount);
+        const amount2Ok = params.isContract ? true : Validity.isValidNumber(params.amount2);
+        if (!amountOk || !amount2Ok) {
             params.valid = false;
             params.reason += 'Invalid or missing amount; ';
             return params;
@@ -956,34 +1124,42 @@ const Validity = {
             params.reason = 'Transaction type activated after tx';
         }
 
-        if (typeof params.targetAddress !== 'string') {
-            params.valid = false;
-            params.reason += 'Invalid target address; ';
-        }
-
-        const propertyData1 = await PropertyList.getPropertyData(params.id);
-        const propertyData2 = await PropertyList.getPropertyData(params.id2);
-        if (propertyData1 === 2 || propertyData1 === 3 || propertyData2 === 2 || propertyData2 === 3) {
-            params.valid = false;
-            params.reason = "Cannot trade vesting tokens";
-        }
-
-        // Whitelist validation
-        const senderWhitelists = [].concat(propertyData1.whitelistId || []);
-        const desiredLists = [].concat(propertyData2.whitelistId || []);
-
-        for (const whitelistId of senderWhitelists) {
-            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-            if (!whitelisted) {
+        if (params.isContract) {
+            const series = await ContractRegistry.getContractInfo(params.id);
+            if (!series) {
                 params.valid = false;
-                params.reason += `Sender address not in clearlist for offered token ${whitelistId}; `;
+                params.reason += `Contract series ${params.id} not found; `;
             }
-        }
-        for (const whitelistId of desiredLists) {
-            const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
-            if (!whitelisted) {
+        } else {
+            const propertyData1 = await PropertyList.getPropertyData(params.id);
+            const propertyData2 = await PropertyList.getPropertyData(params.id2);
+            if (!propertyData1 || !propertyData2) {
                 params.valid = false;
-                params.reason += `Trader address not in clearlist ${whitelistId}; `;
+                params.reason += 'Property AMM requires valid id/id2 properties; ';
+                return params;
+            }
+            if (propertyData1 === 2 || propertyData1 === 3 || propertyData2 === 2 || propertyData2 === 3) {
+                params.valid = false;
+                params.reason = "Cannot trade vesting tokens";
+            }
+
+            // Whitelist validation
+            const senderWhitelists = [].concat(propertyData1.whitelistId || []);
+            const desiredLists = [].concat(propertyData2.whitelistId || []);
+
+            for (const whitelistId of senderWhitelists) {
+                const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+                if (!whitelisted) {
+                    params.valid = false;
+                    params.reason += `Sender address not in clearlist for offered token ${whitelistId}; `;
+                }
+            }
+            for (const whitelistId of desiredLists) {
+                const whitelisted = await ClearList.isAddressInClearlist(whitelistId, sender);
+                if (!whitelisted) {
+                    params.valid = false;
+                    params.reason += `Trader address not in clearlist ${whitelistId}; `;
+                }
             }
         }
 
@@ -1040,56 +1216,6 @@ const Validity = {
                 return params;
             }
 
-            if (params.commitClearlistId !== '' && params.commitClearlistId !== undefined && params.commitClearlistId !== null) {
-                const clearlistIdNum = Number(params.commitClearlistId);
-                if (!Number.isInteger(clearlistIdNum) || clearlistIdNum < 0) {
-                    params.valid = false;
-                    params.reason += 'commitClearlistId must be a non-negative integer; ';
-                } else {
-                    params.commitClearlistId = clearlistIdNum;
-                }
-            }
-
-            const propertyData = await PropertyList.getPropertyData(params.propertyId);
-            const propertyType = Number(propertyData?.type);
-            const hasDlcContext = Boolean(params.dlcHash);
-            const isProcedural = propertyType === 7 || propertyData?.type === 'Procedural' || hasDlcContext;
-            const refAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
-
-            if (!params.addressToGrantTo) {
-                if (isProcedural) {
-                    if (refAddress) {
-                        params.addressToGrantTo = refAddress;
-                    } else {
-                        params.valid = false;
-                        params.reason += 'Destination address missing for procedural issuance (reference required); ';
-                        return params;
-                    }
-                }
-                if (!isProcedural) {
-                    // Non-procedural managed token issuance defaults to sender/admin.
-                    params.addressToGrantTo = sender;
-                }
-            }
-
-            if (isProcedural) {
-                if (!refAddress) {
-                    params.valid = false;
-                    params.reason += 'Procedural issuance requires reference address; ';
-                } else if (params.addressToGrantTo !== refAddress) {
-                    params.valid = false;
-                    params.reason += 'Procedural issuance recipient must match reference address; ';
-                }
-            }
-
-            if(!validateAddress(params.addressToGrantTo)){
-                const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
-                if(!valid.isvalid){
-                    params.valid= false
-                    params.reason += 'Destination address is not validly formed.'
-                }
-            }
-
             const is = await Validity.isActivated(params.block,txid,11)
             console.log(is)
             if (!is) {
@@ -1103,11 +1229,46 @@ const Validity = {
                 params.reason += 'Property is not of managed type or admin does not match';
             }
 
-            if (params.valid && params.commitClearlistId > 0) {
-                const listed = await ClearList.isAddressInClearlist(params.commitClearlistId, params.addressToGrantTo);
-                if (!listed) {
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            if (!params.addressToGrantTo) {
+                const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
+                if (fallbackAddress) {
+                    params.addressToGrantTo = fallbackAddress;
+                } else if (!isProcedural) {
+                    // Non-procedural tx11 grants default to sender address when no explicit destination is provided.
+                    params.addressToGrantTo = sender;
+                }
+            }
+            if (!params.addressToGrantTo) {
+                params.valid = false;
+                params.reason += isProcedural
+                    ? 'Destination address missing for procedural issuance; '
+                    : 'Destination address missing (payload + reference); ';
+                return params;
+            }
+            if(!validateAddress(params.addressToGrantTo)){
+                const valid = await TxUtils.validateAddressWrapper(params.addressToGrantTo)
+                if(!valid.isvalid){
+                    params.valid= false
+                    params.reason += 'Destination address is not validly formed.'
+                }
+            }
+            if (isProcedural) {
+                if (!params.dlcHash) {
                     params.valid = false;
-                    params.reason += `Recipient not in clearlist ${params.commitClearlistId}; `;
+                    params.reason += 'Missing dlcHash for procedural issuance; ';
+                    return params;
+                }
+                const gate = await ProceduralRegistry.ensureIssuanceContext(
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState,
+                    params.dlcHash
+                );
+                if (!gate.valid) {
+                    params.valid = false;
+                    params.reason += gate.reason + '; ';
                 }
             }
 
@@ -1138,22 +1299,30 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isPropertyAdmin = PropertyList.isAdmin(params.senderAddress, params.propertyId);
-            if (!isPropertyAdmin) {
+            const propertyData = await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            const isManagedAdmin = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
+            if (!isManagedAdmin && !isProcedural) {
                 params.valid = false;
-                params.reason += 'Sender is not admin of the property; ';
+                params.reason += 'Sender is not admin of a managed property; ';
             }
 
-            const isManagedProperty = PropertyList.isManagedProperty(params.propertyId);
-            if (!isManagedProperty) {
+            const tally = await TallyMap.getTally(sender, params.propertyId);
+            if (Number(tally?.available || 0) < Number(params.amountDestroyed || 0)) {
                 params.valid = false;
-                params.reason += 'Property is not of managed type; ';
+                params.reason += 'Cannot redeem tokens; insufficient balance; ';
             }
 
-            const canRedeemTokens = TallyMap.canRedeemTokens(params.senderAddress, params.propertyId, params.amount);
-            if (!canRedeemTokens) {
-                params.valid = false;
-                params.reason += 'Cannot redeem tokens; insufficient balance or other criteria not met; ';
+            if (isProcedural) {
+                const gate = await ProceduralRegistry.ensureRedemptionContext(
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
+                if (!gate.valid) {
+                    params.valid = false;
+                    params.reason += gate.reason + '; ';
+                }
             }
 
             return params;
@@ -1726,8 +1895,39 @@ const Validity = {
                     params.reason += 'Commiter B cannot handle TL or TLI from a banned country or lacking country code attestation';
                 }
             }
-            
-            
+
+            // --- Channel clearList enforcement ---
+            // At least one counterparty must be attested in any declared clearlist.
+            // Two non-cleared parties must not trade; a non-cleared party may trade with a cleared one.
+            if (channel.clearLists) {
+                const allLists = [
+                    ...(channel.clearLists.A || []),
+                    ...(channel.clearLists.B || [])
+                ];
+
+                if (allLists.length > 0) {
+                    let aApproved = false;
+                    let bApproved = false;
+
+                    for (const listId of allLists) {
+                        if (!aApproved && commitAddressA && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                            aApproved = true;
+                        }
+                        if (!bApproved && commitAddressB && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                        }
+                        if (aApproved || bApproved) break;
+                    }
+
+                    if (!aApproved && !bApproved) {
+                        params.valid = false;
+                        params.reason += `Neither committer A (${commitAddressA}) nor B (${commitAddressB}) is attested in channel clearLists [${allLists}]; `;
+                    }
+                }
+            }
+
+            if (!params.valid) return params;
+
               const collateralPropertyId = contractDetails.collateralPropertyId
             const initialMarginPerContract = await ContractRegistry.getInitialMargin(params.contractId, params.price);
             let totalInitialMargin = BigNumber(initialMarginPerContract).times(params.amount).toNumber();
@@ -2034,6 +2234,13 @@ const Validity = {
                 params.reason += "Should be a UTXO trade"
             }
 
+            const offeredProperty = await PropertyList.getPropertyData(params.propertyIdOffered);
+            const desiredProperty = await PropertyList.getPropertyData(params.propertyIdDesired);
+            if (Validity.isRestrictedProceduralToken(offeredProperty) || Validity.isRestrictedProceduralToken(desiredProperty)) {
+                params.valid = false;
+                params.reason += 'Restricted procedural token cannot be token-traded in channels; ';
+            }
+
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.senderAddress);
             if(commitAddressA==null&&commitAddressB==null){
                 params.valid=false
@@ -2072,11 +2279,44 @@ const Validity = {
 
             const channel = await Channels.getChannel(sender)
             console.log('channel returned ' +JSON.stringify(channel))
+
+            // --- Channel clearList enforcement ---
+            // At least one counterparty must be attested in any declared clearlist.
+            // Two non-cleared parties must not trade; a non-cleared party may trade with a cleared one.
+            if (channel && channel.clearLists) {
+                const allLists = [
+                    ...(channel.clearLists.A || []),
+                    ...(channel.clearLists.B || [])
+                ];
+
+                if (allLists.length > 0) {
+                    let aApproved = false;
+                    let bApproved = false;
+
+                    for (const listId of allLists) {
+                        if (!aApproved && commitAddressA && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressA)) {
+                            aApproved = true;
+                        }
+                        if (!bApproved && commitAddressB && await ClearList.isAddressInClearlistOrDerived(listId, commitAddressB)) {
+                            bApproved = true;
+                        }
+                        if (aApproved || bApproved) break;
+                    }
+
+                    if (!aApproved && !bApproved) {
+                        params.valid = false;
+                        params.reason += `Neither committer A (${commitAddressA}) nor B (${commitAddressB}) is attested in channel clearLists [${allLists}]; `;
+                    }
+                }
+
+                if (!params.valid) return params;
+            }
+
             let balanceA
             let balanceB
             let propertyIdOfferedString = params.propertyIdOffered.toString()
             let propertyIdDesiredString = params.propertyIdDesired.toString()
-            let sufficientOffered 
+            let sufficientOffered
             let sufficientDesired
            
             if(params.columnAIsOfferer==true){
@@ -2209,18 +2449,18 @@ const Validity = {
             params.reason = '';
             params.valid = true;
 
-             if(params.ref !== false && params.ref !== null && params.ref !== undefined){
-                console.log('ref '+ params.ref)
+             if(params.ref){
+                //console.log(params.ref)
                 const outputs = await TxUtils.getTransactionOutputs(txid)
 
                 let matchingOutput = null;
-                console.log(JSON.stringify(outputs)) 
+                //console.log(JSON.stringify(outputs)) 
                 // Loop through the outputs array to find the one with the matching vout
                 for (let i = 0; i < outputs.length; i++) {
-                    console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
+                    //console.log('in the for '+i+' '+outputs[i].vout+' '+params.ref)
                     if (outputs[i].vout === Number(params.ref)) {
                         matchingOutput = outputs[i];
-                        console.log('match output '+matchingOutput)
+                        //console.log('match output '+matchingOutput)
                         break; // Exit loop once the matching output is found
                     }
                 }
@@ -2253,9 +2493,9 @@ const Validity = {
                 params.reason += 'propertyId or amount not specified while withdrawAll is false'
        
             }
-            console.log('channel address '+params.channelAddress)
+
             const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(params.channelAddress);
-            console.log('commit addresses in validate withdrawal '+commitAddressA+' '+commitAddressB)
+          
             if (!commitAddressA&&!commitAddressB) {
                 params.valid = false;
                 params.reason += 'Channel not instantiated; ';
@@ -2263,24 +2503,31 @@ const Validity = {
             }
 
             const channel = await Channels.getChannel(params.channelAddress)
-            let isColumnA;
-            let balance;
-
+            let isColumnA = params.column
+            let balance 
             console.log('inside validate withdrawal '+sender+' '+Boolean(sender==channel.participants.A)+Boolean(sender==channel.participants.B))
-
-            if(sender!=channel.participants.A && sender!=channel.participants.B) {
+            if (sender!=channel.participants.A&&sender!=channel.participants.B) {
                 params.valid = false;
                 params.reason += 'Sender not authorized for the channel';
             }else{
                 if(sender==channel.participants.A){
-                    isColumnA = true;
-                    balance = channel.A[params.propertyId];
-                } else if(sender==channel.participants.B){
-                    isColumnA = false;
-                    balance = channel.B[params.propertyId];
+                    isColumnA=true
+                    balance=channel.A[params.propertyId]
+                    console.log('column ' +params.column)
+                    if(params.column==false){
+                        params.valid = false;
+                        params.reason += 'Sender does not match with column';
+                    }
+                }else if(sender==channel.participants.B){
+                    console.log('checking this column disqualification logic works '+params.column)
+                    isColumnA=false
+                    balance=channel.B[params.propertyId]
+                    if(params.column==true){
+                        params.valid = false;
+                        params.reason += 'Sender does not match with column';
+                    }
                 }
             }
-
             //if column is true then it's column B because 0 comes before 1 and A before B
             console.log('inside validate withdrawal '+params.column +'isColumnA '+isColumnA+' balance '+balance+' withdraw amount '+params.amount)
              if(params.column==undefined){
@@ -2289,7 +2536,7 @@ const Validity = {
             }
             
             if (balance < params.amount) {
-                params.amount=balance
+                 params.valid = false;
                 params.reason += 'Insufficient balance for withdrawal; ';
             }
 
@@ -2460,50 +2707,6 @@ const Validity = {
             }
 
 
-            return params;
-        },
-
-        // 23: Settle Channel PNL
-        validateSettleChannelPNL: async (sender, params, txid) => {
-            params.reason = '';
-            params.valid = true;
-
-            const isAlreadyActivated = await activationInstance.isTxTypeActive(23);
-            if(isAlreadyActivated==false){
-                params.valid=false
-                params.reason += 'Tx type not yet activated '
-            }
-
-            const is = await Validity.isActivated(params.block,txid,23)
-            console.log(is)
-            if (!is) {
-                params.valid = false;
-                params.reason = 'Transaction type activated after tx';
-            }
-
-            const isValidChannel = channelRegistry.isValidChannel(params.channelAddress);
-            if (!isValidChannel) {
-                params.valid = false;
-                params.reason += 'Invalid channel; ';
-            }
-
-            const isValidContract = marginMap.isValidContract(params.contractId);
-            if (!isValidContract) {
-                params.valid = false;
-                params.reason += 'Invalid contract for settlement; ';
-            }
-
-            const canSettle = marginMap.canSettlePNL(params.channelAddress, params.contractId, params.amountSettled);
-            if (!canSettle) {
-                params.valid = false;
-                params.reason += 'Cannot settle PNL; terms not met; ';
-            }
-
-            const isNuetralized = await Scaling.isThisSettlementAlreadyNuetralized(sender, txid)
-            if(isNuetralized){
-                params.valid = false
-                params.reason += "Settlement already invalidated by later settlement that updates it. "
-            }
             return params;
         },
 
@@ -2746,10 +2949,14 @@ const Validity = {
         validateOptionTrade: async (sender, params, txid) => {
           params.reason = '';
           params.valid = true;
+          params.contractId = params.contractId || params.ticker;
+          params.blockHeight = params.blockHeight ?? params.block;
 
           // --- Parse primary & combo ---
           const tA = OptionsEngine.parseTicker(params.contractId);
           if (!tA) { params.valid=false; params.reason+='Invalid primary ticker; '; return params; }
+          const seriesIdNum = Number(tA.seriesId);
+          if (!Number.isFinite(seriesIdNum)) { params.valid=false; params.reason+='Invalid option series id; '; return params; }
           let tB = null;
           if (params.comboTicker) {
             tB = OptionsEngine.parseTicker(params.comboTicker);
@@ -2757,7 +2964,7 @@ const Validity = {
           }
 
           // --- Series existence ---
-          const seriesInfo = await ContractRegistry.getContractInfo(tA.seriesId);
+          const seriesInfo = await ContractRegistry.getContractInfo(seriesIdNum);
           if (!seriesInfo) { params.valid=false; params.reason+='Option series not found; '; return params; }
           const collateralPropertyId = seriesInfo.collateralPropertyId;
           const inverse = !!seriesInfo.inverse;
@@ -2779,18 +2986,20 @@ const Validity = {
 
           // --- Margin requirement (spreads w/ premium adj; naked otherwise) ---
           let requiredMargin = 0;
+          let netPremium = Number(params.price || 0) * Number(params.amount || 0);
 
           if (params.comboTicker && params.comboAmount) {
             const qty = Math.min(Number(params.amount||0), Number(params.comboAmount||0));
 
-            // width via strike difference; inverse-safe using your estimatePNL
-            const loss = estimatePNL(qty, tA.strike, tB.strike, inverse, seriesInfo.notionalValue);
-            requiredMargin = Math.abs(loss);
+            // Width-based spread loss approximation for option packages.
+            const width = Math.abs(Number(tA.strike || 0) - Number(tB.strike || 0));
+            const notional = Math.abs(Number(seriesInfo.notionalValue || 1));
+            requiredMargin = width * qty * notional;
 
             // premium adjustment (credit reduces margin; debit = margin)
             const leg1Premium = Number(params.price || 0) * Number(params.amount || 0);
             const leg2Premium = Number(params.comboPrice || 0) * Number(params.comboAmount || 0);
-            const netPremium  = leg1Premium - leg2Premium;
+            netPremium  = leg1Premium - leg2Premium;
 
             if (netPremium > 0) {
               requiredMargin = Math.max(0, requiredMargin - netPremium);
@@ -2805,14 +3014,17 @@ const Validity = {
           } else {
             requiredMargin = (Number(tA.strike||0) / 10) * Number(params.amount||0);
           }
+          params.netPremium = netPremium;
 
           // --- Reduce/Flip & rPNL (per side) for the OPTION ticker itself ---
-          const mm = await MarginMap.getInstance(tA.seriesId);
+          const mm = await MarginMap.getInstance(seriesIdNum);
 
           // Find who is seller/buyer in *this* tx by your columnA flag
-          const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+          const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1" || params.columnAIsSeller==="true");
           const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
           const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
+          const effectiveSeller = AIsSeller ? effectiveA : effectiveB;
+          const effectiveBuyer = AIsSeller ? effectiveB : effectiveA;
 
           // Load existing option positions under the specific ticker string
           const sellerBlob = mm.margins.get(sellerAddr) || {};
@@ -2841,16 +3053,141 @@ const Validity = {
           params.rpnlSeller = OptionsEngine.rpnlForClose(sellerRF.exSide, sellerRF.closedQty, tradePx, sellerOpt.avgPrice);
           params.rpnlBuyer  = OptionsEngine.rpnlForClose(buyerRF.exSide,  buyerRF.closedQty,  tradePx, buyerOpt.avgPrice);
 
-          // --- Balance check with requiredMargin (credit) ---
-          params.creditMargin = requiredMargin; // expose to logic.js
+          const hasOpenShortSameBucket = (blob, tickerMeta, ignoreTicker) => {
+            const bag = (blob && blob.options) ? blob.options : {};
+            for (const [tk, op] of Object.entries(bag)) {
+              if (tk === ignoreTicker) continue;
+              const m = OptionsEngine.parseTicker(tk);
+              if (!m) continue;
+              if (Number(m.expiryBlock) !== Number(tickerMeta.expiryBlock)) continue;
+              if (String(m.type) !== String(tickerMeta.type)) continue;
+              if (Number(op?.contracts || 0) < 0) return true;
+            }
+            return false;
+          };
 
-          if (effectiveA < requiredMargin && effectiveB < requiredMargin) {
+          // Policy:
+          // - If reducing a long wing while there is an open short in same bucket, single-leg unwind is forbidden.
+          // - Combo unwind must cover at least as much short as long being reduced.
+          if (!params.comboTicker || !params.comboAmount) {
+            if (sellerRF.closedQty > 0 && sellerRF.exSide === 'LONG' && hasOpenShortSameBucket(sellerBlob, tA, params.contractId)) {
+              params.valid = false;
+              params.reason += 'Spread unwind requires combo trade; cover short leg first; ';
+            }
+            if (buyerRF.closedQty > 0 && buyerRF.exSide === 'LONG' && hasOpenShortSameBucket(buyerBlob, tA, params.contractId)) {
+              params.valid = false;
+              params.reason += 'Spread unwind requires combo trade; cover short leg first; ';
+            }
+          } else {
+            const sellerCombo = (sellerBlob.options && sellerBlob.options[params.comboTicker]) || { contracts: 0, avgPrice: 0 };
+            const buyerCombo  = (buyerBlob.options  && buyerBlob.options[params.comboTicker])  || { contracts: 0, avgPrice: 0 };
+            const sellerComboDelta = +Math.abs(Number(params.comboAmount || 0)); // opposite leg for spread package
+            const buyerComboDelta  = -Math.abs(Number(params.comboAmount || 0));
+            const sellerComboRF = OptionsEngine.computeReduceFlip(Number(sellerCombo.contracts || 0), sellerComboDelta);
+            const buyerComboRF  = OptionsEngine.computeReduceFlip(Number(buyerCombo.contracts || 0),  buyerComboDelta);
+
+            const sellerLongClosed = (sellerRF.exSide === 'LONG' ? Number(sellerRF.closedQty || 0) : 0)
+              + (sellerComboRF.exSide === 'LONG' ? Number(sellerComboRF.closedQty || 0) : 0);
+            const sellerShortClosed = (sellerRF.exSide === 'SHORT' ? Number(sellerRF.closedQty || 0) : 0)
+              + (sellerComboRF.exSide === 'SHORT' ? Number(sellerComboRF.closedQty || 0) : 0);
+            const buyerLongClosed = (buyerRF.exSide === 'LONG' ? Number(buyerRF.closedQty || 0) : 0)
+              + (buyerComboRF.exSide === 'LONG' ? Number(buyerComboRF.closedQty || 0) : 0);
+            const buyerShortClosed = (buyerRF.exSide === 'SHORT' ? Number(buyerRF.closedQty || 0) : 0)
+              + (buyerComboRF.exSide === 'SHORT' ? Number(buyerComboRF.closedQty || 0) : 0);
+
+            if (sellerLongClosed > 0 && sellerShortClosed < sellerLongClosed) {
+              params.valid = false;
+              params.reason += 'Combo unwind must cover shorts first; ';
+            }
+            if (buyerLongClosed > 0 && buyerShortClosed < buyerLongClosed) {
+              params.valid = false;
+              params.reason += 'Combo unwind must cover shorts first; ';
+            }
+          }
+
+          // --- Seller portfolio transition margin ---
+          // If seller is reducing a leg, portfolio requirement can go either way:
+          // - close short/covered risk -> unlock margin
+          // - unwind protection first -> lock additional naked margin
+          const markSpot = params.sellerReducing
+            ? (Number(await Validity.hasReferencePrice(seriesIdNum, params.blockHeight)) || 0)
+            : 0;
+          const sellerOptionsBefore = (sellerBlob.options && typeof sellerBlob.options === 'object')
+            ? sellerBlob.options
+            : {};
+          const beforeLegs = [];
+          for (const [tk, op] of Object.entries(sellerOptionsBefore)) {
+            const m = OptionsEngine.parseTicker(tk);
+            if (!m) continue;
+            const q = Number(op?.contracts || 0);
+            if (!q) continue;
+            beforeLegs.push({
+              type: m.type,
+              strike: Number(m.strike || 0),
+              qty: q,
+              expiryBlock: Number(m.expiryBlock || 0)
+            });
+          }
+          const beforeMaint = params.sellerReducing
+            ? OptionsEngine.portfolioMaintenance(beforeLegs, markSpot)
+            : 0;
+
+          const afterMap = {};
+          for (const [tk, op] of Object.entries(sellerOptionsBefore)) {
+            afterMap[tk] = {
+              contracts: Number(op?.contracts || 0),
+              avgPrice: Number(op?.avgPrice || 0),
+              margin: Number(op?.margin || 0)
+            };
+          }
+          const sellerPrimaryDelta = -Math.abs(Number(params.amount || 0));
+          afterMap[params.contractId] = afterMap[params.contractId] || { contracts: 0, avgPrice: 0, margin: 0 };
+          afterMap[params.contractId].contracts += sellerPrimaryDelta;
+
+          if (params.comboTicker && params.comboAmount) {
+            const sellerComboDelta = +Math.abs(Number(params.comboAmount || 0));
+            afterMap[params.comboTicker] = afterMap[params.comboTicker] || { contracts: 0, avgPrice: 0, margin: 0 };
+            afterMap[params.comboTicker].contracts += sellerComboDelta;
+          }
+
+          const afterLegs = [];
+          for (const [tk, op] of Object.entries(afterMap)) {
+            const m = OptionsEngine.parseTicker(tk);
+            if (!m) continue;
+            const q = Number(op?.contracts || 0);
+            if (!q) continue;
+            afterLegs.push({
+              type: m.type,
+              strike: Number(m.strike || 0),
+              qty: q,
+              expiryBlock: Number(m.expiryBlock || 0)
+            });
+          }
+          const afterMaint = params.sellerReducing
+            ? OptionsEngine.portfolioMaintenance(afterLegs, markSpot)
+            : 0;
+          const portfolioDelta = params.sellerReducing
+            ? Number((afterMaint - beforeMaint).toFixed(8))
+            : 0;
+
+          // --- Balance check with requiredMargin / transition delta ---
+          params.creditMargin = params.sellerReducing ? portfolioDelta : requiredMargin;
+
+          if (!params.sellerReducing && effectiveSeller < requiredMargin) {
             params.valid = false;
             params.reason += 'Insufficient collateral for option margin; ';
           }
+          if (params.sellerReducing && portfolioDelta > 0 && effectiveSeller < portfolioDelta) {
+            params.valid = false;
+            params.reason += 'Insufficient collateral for option margin transition; ';
+          }
+          if (netPremium > 0 && effectiveBuyer < netPremium) {
+            params.valid = false;
+            params.reason += 'Insufficient collateral for option premium; ';
+          }
 
           // --- Expiry guard ---
-          if (params.blockHeight && params.blockHeight >= tA.expiryBlock) {
+          if (params.blockHeight && Number(params.blockHeight) >= tA.expiryBlock) {
             params.valid = false;
             params.reason += 'Option already expired; ';
           }
@@ -2897,20 +3234,421 @@ const Validity = {
         return isValidChannel && isValidContractTerms;
     },
 
-    // 30: Issue Invoice
-    validateStakeFraudProof: (params, invoiceRegistry, tallyMap) => {
-        // Check if the issuer has sufficient balance of the property to receive payment
-        const hasSufficientBalance = tallyMap.hasSufficientBalance(params.issuerAddress, params.propertyIdToReceivePayment, params.amount);
-        // Validate invoice terms (due date, collateral, etc.)
-        const isValidInvoiceTerms = invoiceRegistry.isValidInvoiceTerms(params.dueDateBlock, params.propertyIdCollateral);
+    // 30: Oracle stake / fraud proof / relay
+    validateStakeFraudProof: async (sender, params, txid) => {
+        params.reason = '';
+        params.valid = true;
 
-        return hasSufficientBalance.hasSufficient && isValidInvoiceTerms;
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(30);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated ';
+        }
+
+        const is = await Validity.isActivated(params.block, txid, 30);
+        if (!is) {
+            params.valid = false;
+            params.reason += 'Transaction type activated after tx; ';
+        }
+
+        if (![0, 1, 2].includes(Number(params.action))) {
+            params.valid = false;
+            params.reason += 'Invalid action, expected 0/1/2; ';
+            return params;
+        }
+
+        const oracle = await OracleList.getOracleInfo(params.oracleId);
+        if (!oracle) {
+            params.valid = false;
+            params.reason += 'Invalid oracle id; ';
+            return params;
+        }
+
+        if (Number(params.action) === 0) {
+            if (!Number.isInteger(params.stakedPropertyId) || params.stakedPropertyId <= 0) {
+                params.valid = false;
+                params.reason += 'Invalid staked property id; ';
+            } else {
+                const stakeProperty = await PropertyList.getPropertyData(params.stakedPropertyId);
+                if (!stakeProperty) {
+                    params.valid = false;
+                    params.reason += 'Staked property does not exist; ';
+                }
+            }
+
+            if (!Validity.isValidNumber(params.amount)) {
+                params.valid = false;
+                params.reason += 'Invalid stake amount; ';
+            } else {
+                const senderBal = await TallyMap.getTally(sender, params.stakedPropertyId);
+                if (Number(senderBal?.available || 0) < Number(params.amount || 0)) {
+                    params.valid = false;
+                    params.reason += 'Insufficient available balance for stake; ';
+                }
+            }
+        }
+
+        if (Number(params.action) === 1) {
+            if (!params.accusedAddress || typeof params.accusedAddress !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing accused address; ';
+            }
+            if (!params.evidenceHash || typeof params.evidenceHash !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing evidence hash; ';
+            }
+            if (!Validity.isValidNumber(params.amount)) {
+                params.valid = false;
+                params.reason += 'Invalid slash amount; ';
+            }
+        }
+
+        if (Number(params.action) === 2) {
+            const adminAddr = oracle?.adminAddress || oracle?.name?.adminAddress;
+            const backupAddr = oracle?.backupAddress || oracle?.name?.backupAddress;
+            if (sender !== adminAddr && sender !== backupAddr) {
+                params.valid = false;
+                params.reason += 'Relay sender is not oracle admin/backup; ';
+            }
+            if (!params.stateHash || typeof params.stateHash !== 'string') {
+                params.valid = false;
+                params.reason += 'Missing state hash; ';
+            }
+            if (!Number.isInteger(params.relayType) || params.relayType < 0) {
+                params.valid = false;
+                params.reason += 'Invalid relay type; ';
+            }
+            if (params.autoRoll && !params.nextDlcRef) {
+                params.valid = false;
+                params.reason += 'autoRoll requires nextDlcRef; ';
+            }
+            if (params.relayBlob) {
+                const bundle = DlcOracleBridge.parseRelayBlob(params.relayBlob);
+                const relayCheck = DlcOracleBridge.validateRelayBundle(bundle, params.stateHash);
+                if (!relayCheck.valid) {
+                    params.valid = false;
+                    params.reason += relayCheck.reason + '; ';
+                }
+            }
+        }
+
+        return params;
     },
 
-    //31: BatchSettlement
-    validateBatchSettlement: (sender, params, txid, block) =>{
+    /**
+ * Validity.js Integration Patch for L2 Scaling
+ * 
+ * Replace your existing validateSettleChannelPNL (lines ~2465-2507)
+ * Add validateKingSettle for type 31
+ */
 
+
+    validateSettleChannelPNL: async (sender, params, txid) => {
+        params.reason = '';
+        params.valid = true;
+
+        // Activation check
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(23);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx type not yet activated; ';
+            return params;
+        }
+
+        const is = await Validity.isActivated(params.block, txid, 23);
+        if (!is) {
+            params.valid = false;
+            params.reason = 'Transaction type activated after tx';
+            return params;
+        }
+
+        // Validate settleType enum (0=KEEP_ALIVE, 1=CLOSE_POSITION, 2=NET_SETTLE, 3=KING_SETTLE)
+        const validSettleTypes = [0, 1, 2, 3]; // SettleType enum values
+        if (!validSettleTypes.includes(params.settleType)) {
+            params.valid = false;
+            params.reason += `Invalid settleType: ${params.settleType}, expected 0-3; `;
+            return params;
+        }
+
+        // Validate channel exists
+        const channel = await Channels.getChannel(sender);
+        if (!channel) {
+            params.valid = false;
+            params.reason += 'Channel not found for sender; ';
+            return params;
+        }
+
+        const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+        if (!commitAddressA || !commitAddressB) {
+            params.valid = false;
+            params.reason += 'Sender is not a channel participant; ';
+            return params;
+        }
+
+        // txidNeutralized1 required for non-king settle types
+        const isKingSettle = params.settleType === 3;
+        if (!isKingSettle && !params.txidNeutralized1) {
+            params.valid = false;
+            params.reason += 'Missing txidNeutralized1 (trade reference); ';
+            return params;
+        }
+
+        if (!isKingSettle) {
+            // Check if already neutralized by later settlement
+            const isNeutralized = await ScalingL2.isSettlementNeutralized(sender, params.txidNeutralized1);
+            if (isNeutralized) {
+                params.valid = false;
+                params.reason += 'Settlement already superseded by later settlement; ';
+                return params;
+            }
+        }
+
+        // Type-specific validation
+        switch (params.settleType) {
+            case 0: // KEEP_ALIVE
+                // Tx 2: Just needs valid trade reference
+                const tradeStatus = await ScalingL2.getTradeStatus(params.txidNeutralized1);
+                if (tradeStatus.status === 'expired') {
+                    params.valid = false;
+                    params.reason += 'Cannot keep-alive an expired trade; ';
+                }
+                break;
+
+            case 1: // CLOSE_POSITION
+                // Tx 3: Needs mark price and txidNeutralized2
+                if (!params.markPrice || params.markPrice <= 0) {
+                    params.valid = false;
+                    params.reason += 'Invalid mark price for close; ';
+                }
+                if (!params.txidNeutralized2) {
+                    params.valid = false;
+                    params.reason += 'Missing txidNeutralized2 (keep-alive reference); ';
+                }
+                // Validate mark price is within bounds
+                if (params.contractId) {
+                    const contractDetails = await ContractRegistry.getContractInfo(params.contractId);
+                    if (contractDetails) {
+                        const priceCheck = Validity.isTradePriceWithinLeverageBounds({
+                            tradePrice: params.markPrice,
+                            markPrice: await Validity.hasReferencePrice(params.contractId, params.block),
+                            leverage: contractDetails.leverage,
+                            bufferBps: 100 // Wider buffer for settlements
+                        });
+                        if (!priceCheck.valid) {
+                            params.valid = false;
+                            params.reason += 'Mark price outside leverage bounds; ';
+                        }
+                    }
+                }
+                break;
+
+            case 2: // NET_SETTLE
+                // Tx 4: PnL direction and amount required
+                if (params.netAmount === undefined || params.netAmount === null) {
+                    params.valid = false;
+                    params.reason += 'Missing netAmount for NET_SETTLE; ';
+                }
+                if (params.propertyId === undefined || params.propertyId === null) {
+                    params.valid = false;
+                    params.reason += 'Missing propertyId for NET_SETTLE; ';
+                }
+                if (params.columnAIsSeller === undefined) {
+                    params.valid = false;
+                    params.reason += 'Missing columnAIsSeller direction flag; ';
+                }
+                // Verify the net amount doesn't exceed channel balances
+                if (channel && params.propertyId) {
+                    const colKey = params.propertyId.toString();
+                    const payerBalance = params.columnAIsSeller ? 
+                        (channel.A[colKey] || 0) : (channel.B[colKey] || 0);
+                    if (Math.abs(params.netAmount) > payerBalance) {
+                        params.valid = false;
+                        params.reason += `Net amount ${params.netAmount} exceeds payer balance ${payerBalance}; `;
+                    }
+                }
+                break;
+
+            case 3: // KING_SETTLE
+                if (params.propertyId === undefined || params.propertyId === null) {
+                    params.valid = false;
+                    params.reason += 'Missing propertyId for KING_SETTLE; ';
+                }
+                if (params.netAmount === undefined || params.netAmount === null) {
+                    params.valid = false;
+                    params.reason += 'Missing netAmount for KING_SETTLE; ';
+                }
+                if (params.aPaysBDirection === undefined && params.columnAIsSeller === undefined) {
+                    params.valid = false;
+                    params.reason += 'Missing direction flag for KING_SETTLE; ';
+                }
+                if (!params.channelRoot) {
+                    params.valid = false;
+                    params.reason += 'Missing channelRoot for KING_SETTLE; ';
+                }
+                if (params.blockStart !== undefined && params.blockEnd !== undefined && params.blockStart > params.blockEnd) {
+                    params.valid = false;
+                    params.reason += 'Invalid block range for KING_SETTLE (start > end); ';
+                }
+                break;
+
+        }
+
+        // Block expiry check - anti-free-option mechanism
+        if (params.expiryBlock && params.block > params.expiryBlock) {
+            params.valid = false;
+            params.reason += `Settlement expired at block ${params.expiryBlock}, current: ${params.block}; `;
+        }
+
+        return params;
     },
+
+        /**
+         * Type 31: King Settlement (the sweep)
+         * Collapses all L2 state to a single on-chain settlement
+         */
+        validateKingSettle: async (sender, params, txid) => {
+            params.reason = '';
+            params.valid = true;
+
+            // Activation check
+            const isAlreadyActivated = await activationInstance.isTxTypeActive(31);
+            if (!isAlreadyActivated) {
+                params.valid = false;
+                params.reason += 'Tx type not yet activated; ';
+                return params;
+            }
+
+            const is = await Validity.isActivated(params.block, txid, 31);
+            if (!is) {
+                params.valid = false;
+                params.reason = 'Transaction type activated after tx';
+                return params;
+            }
+
+            // Must have block range
+            if (!params.blockStart || !params.blockEnd) {
+                params.valid = false;
+                params.reason += 'Missing block range (blockStart/blockEnd); ';
+                return params;
+            }
+
+            if (params.blockStart > params.blockEnd) {
+                params.valid = false;
+                params.reason += 'Invalid block range: start > end; ';
+                return params;
+            }
+
+            // Current block must be within or after the range
+            if (params.block < params.blockStart) {
+                params.valid = false;
+                params.reason += 'Cannot settle future block range; ';
+                return params;
+            }
+
+            // Validate channel
+            const channel = await Channels.getChannel(sender);
+            if (!channel) {
+                params.valid = false;
+                params.reason += 'Channel not found; ';
+                return params;
+            }
+
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
+            if (!commitAddressA || !commitAddressB) {
+                params.valid = false;
+                params.reason += 'Invalid channel participants; ';
+                return params;
+            }
+
+            // Property ID must be valid
+            if (!params.propertyId || params.propertyId < 1) {
+                params.valid = false;
+                params.reason += 'Invalid propertyId; ';
+                return params;
+            }
+
+            // Net amount required
+            if (params.netAmount === undefined) {
+                params.valid = false;
+                params.reason += 'Missing netAmount; ';
+                return params;
+            }
+
+            // Payment direction required
+            if (params.aPaysBDirection === undefined) {
+                params.valid = false;
+                params.reason += 'Missing payment direction (aPaysBDirection); ';
+                return params;
+            }
+
+            // Channel root reference required
+            if (!params.channelRoot) {
+                params.valid = false;
+                params.reason += 'Missing channelRoot (founding UTXO reference); ';
+                return params;
+            }
+
+            // Validate payer has sufficient balance
+            const colKey = params.propertyId.toString();
+            const payerBalance = params.aPaysBDirection ? 
+                (channel.A[colKey] || 0) : (channel.B[colKey] || 0);
+            
+            if (Math.abs(params.netAmount) > payerBalance) {
+                params.valid = false;
+                params.reason += `Net amount ${params.netAmount} exceeds payer balance ${payerBalance}; `;
+                return params;
+            }
+
+            // Count pending settlements that will be neutralized
+            const scalingDb = await db.getDatabase('scaling');
+            const doc = await scalingDb.findOneAsync({ _id: sender });
+            let neutralizedCount = 0;
+            
+            if (doc) {
+                for (const arr of ['settlements', 'trades', 'netSettles']) {
+                    if (doc[arr]) {
+                        for (const item of doc[arr]) {
+                            if (item.block >= params.blockStart && 
+                                item.block <= params.blockEnd &&
+                                item.status !== 'neutralized' &&
+                                item.status !== 'swept') {
+                                neutralizedCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Store count for audit
+            params.neutralizedCount = neutralizedCount;
+
+            return params;
+        },
+
+// ============================================
+// INTEGRATION: Add to your Validity object
+// ============================================
+
+/*
+In your Validity object (validity.js), update the methods:
+
+1. Replace the existing validateSettleChannelPNL with the new one above
+
+2. Add validateKingSettle:
+
+    // 31: King Settlement
+    validateKingSettle: validateKingSettle,
+
+3. Update the Validity object export to include both
+
+Example integration point (around line 2900 in your file):
+
+    //31: BatchSettlement -> rename to KingSettle
+    validateKingSettle: async (sender, params, txid) => {
+        // Use the validateKingSettle function above
+    },
+
+*/
 
     // 32: Batch Move Zk Rollup
     validateBatchMoveZkRollup: (params, zkVerifier, tallyMap) => {

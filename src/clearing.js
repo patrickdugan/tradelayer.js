@@ -5,7 +5,9 @@ const BigNumber = require('bignumber.js');
 // Access the database where oracle data is stored
 const Options = require('./options.js');
 const MarginMap = require('./marginMap.js')
-const Insurance = require('./insurance.js')
+function getInsuranceModule() {
+    return require('./insurance.js');
+}
 const Orderbooks = require('./orderbook.js')
 const Channels = require('./channels.js')
 const PropertyManager = require('./property.js')
@@ -15,6 +17,15 @@ const PnlIou = require('./iou.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 
 const _positionCache = new Map(); 
+const SATS = new BigNumber(1e8);
+
+function toSatsInt(value) {
+    return new BigNumber(value || 0).times(SATS).integerValue(BigNumber.ROUND_HALF_UP);
+}
+
+function fromSats(sats) {
+    return new BigNumber(sats || 0).div(SATS);
+}
 
 class Clearing {
     // ... other methods ...
@@ -35,6 +46,21 @@ class Clearing {
     // native contractId -> { price, blockHeight }
     static latestNativeMarkById = new Map();
     // contractId -> { price: number, blockHeight: number }
+
+    static computeLossCoverage(available, margin, optionAdj = {}) {
+      const avail = new BigNumber(available || 0);
+      const mar = new BigNumber(margin || 0);
+      const maintBase = mar.div(2);
+      const optionMTM = new BigNumber(optionAdj.premiumMTM || 0);
+      const optionMaint = new BigNumber(optionAdj.maintNaked || 0);
+      const coverage = avail.plus(maintBase).plus(optionMTM).minus(optionMaint);
+      return {
+        coverage,
+        maintBase,
+        optionMTM,
+        optionMaint
+      };
+    }
 
     // =========================================
     // TRADE TRACKING
@@ -377,7 +403,7 @@ class Clearing {
        //Clearing.recordClearingRun(blockHeight,realtime)
         // 1. Fee Cache Buy
         //await Clearing.feeCacheBuy(blockHeight);
-        await Channels.processWithdrawals(blockHeight);
+
         // 2. Set channels as closed if needed
         await Channels.removeEmptyChannels(blockHeight);
 
@@ -439,41 +465,49 @@ class Clearing {
         for (const propertyData of propertyIndex) {
             const propertyId = propertyData.id;
             let propertyTotal = new BigNumber(0);
+            let propertyTotalSats = new BigNumber(0);
 
             // ✅ 1️⃣ Fetch total balance from TallyMap
             const tallyTotal = await TallyMap.getTotalForProperty(propertyId);
             console.log(`📌 Tally total for ${propertyId}: ${tallyTotal}`);
             propertyTotal = propertyTotal.plus(tallyTotal);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(tallyTotal));
 
             // ✅ 2️⃣ Add feeCache balance
             const feeCacheBalance = await TallyMap.loadFeeCacheForProperty(propertyId);
             console.log('fee cache balance '+feeCacheBalance)
             propertyTotal = propertyTotal.plus(feeCacheBalance);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(feeCacheBalance));
 
             // ✅ 3️⃣ Properly Aggregate Insurance Fund Balances
             const insuranceBalance = await InsuranceFund.getTotalBalanceForProperty(propertyId);
             propertyTotal = propertyTotal.plus(insuranceBalance);
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(insuranceBalance));
             console.log(`📌 Insurance balance for ${propertyId}: ${insuranceBalance}`);
             if(typeof propertyId=="number"){
                 const vaultTotal = await Vaults.getTotalBalanceForProperty(propertyId)
                 console.log('vaultTotal '+vaultTotal)
                 propertyTotal = propertyTotal.plus(vaultTotal)
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vaultTotal));
             }
 
             // ✅ 4️⃣ Include vesting from `TLVEST` → `TL` & `TLI` → `TLIVEST`
             if (propertyId === 1) {
                 const vestingTLVEST = await TallyMap.getTotalTally(2); // Get vesting of TLVEST
                 propertyTotal = propertyTotal.plus(vestingTLVEST.vesting);
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vestingTLVEST.vesting));
                 console.log(`📌 Added vesting from TLVEST to TL: ${vestingTLVEST.vesting}`);
             }
             if (propertyId === 4) {
                 const vestingTLI = await TallyMap.getTotalTally(3); // Get vesting of TLI
                 propertyTotal = propertyTotal.plus(vestingTLI.vesting);
+                propertyTotalSats = propertyTotalSats.plus(toSatsInt(vestingTLI.vesting));
                 //console.log(`📌 Added vesting from TLI to TLIVEST: ${vestingTLI.vesting}`);
             }
             const propertyInIou =await PnlIou.getTotalForProperty(propertyId)
             console.log('adding Iou '+propertyTotal.toNumber()+' Iou'+propertyInIou)
             propertyTotal= propertyTotal.plus(propertyInIou)
+            propertyTotalSats = propertyTotalSats.plus(toSatsInt(propertyInIou));
 
             // ✅ 5️⃣ Compare Against Expected Circulating Supply
             let expectedCirculation = new BigNumber(propertyData.totalInCirculation);
@@ -482,33 +516,33 @@ class Clearing {
                 expectedCirculation = await Vaults.getTotalOutstandingForProperty(propertyId);
                 console.log('vault diversion ')
             }
-            console.log('total '+propertyTotal.toNumber()+' expected '+expectedCirculation.toNumber())
-            if(!propertyTotal.eq(expectedCirculation)){
-                if(!(propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
-                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8)
-                    const differenceNum = difference.toNumber()
-                    if(differenceNum>0.00000001||differenceNum<-0.00000001){
-                        // Historical Property 5 drift exists in legacy testnet history; backfill via IOU bucket
-                        // so replay can continue and consensus stays supply-neutral.
+            const expectedSats = toSatsInt(expectedCirculation);
+            const differenceSats = propertyTotalSats.minus(expectedSats);
+            console.log('total '+fromSats(propertyTotalSats).toFixed(8)+' expected '+fromSats(expectedSats).toFixed(8))
+            if(!differenceSats.isZero()){
+                if(!(propertyId === 2 || propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
+                    const difference = fromSats(differenceSats).toFixed(8)
+                    if(differenceSats.gt(1)||differenceSats.lt(-1)){
+                        // Legacy replay reconciliation for historical imbalance in Property 5.
                         if (Number(propertyId) === 5) {
-                            const reconcileAbs = difference.abs().toNumber()
-                            if (difference.gt(0)) {
-                                await PnlIou.addProfit(0, propertyId, reconcileAbs, block)
+                            const reconcileAbs = fromSats(differenceSats.abs()).toNumber();
+                            if (differenceSats.lt(0)) {
+                                await PnlIou.addLoss(0, Number(propertyId), reconcileAbs, block);
                             } else {
-                                await PnlIou.addLoss(0, propertyId, reconcileAbs, block)
+                                await PnlIou.addProfit(0, Number(propertyId), reconcileAbs, block);
                             }
-                            console.warn(`[supply-reconcile] property=${propertyId} block=${block} diff=${differenceNum} backfilled=${reconcileAbs}`)
-                        } else {
-                            throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${differenceNum}: Expected ${expectedCirculation.toFixed()}, Found ${propertyTotal.toFixed()}`+' on block '+block);
+                            console.warn(`[supply-reconcile] property=${propertyId} block=${block} diff=${difference} backfilled=${reconcileAbs}`);
+                            continue;
                         }
-                    }else if(differenceNum==-0.00000001){
-                        TallyMap.recordTallyMapDelta('system',block,propertyId,differenceNum,0,0,0,0,0,'salvageDust','')
+                         throw new Error(`❌ Supply mismatch for Property ${propertyId}, diff ${difference}: Expected ${fromSats(expectedSats).toFixed(8)}, Found ${fromSats(propertyTotalSats).toFixed(8)}`+' on block '+block);
+                    }else if(differenceSats.eq(-1)){
+                        TallyMap.recordTallyMapDelta('system',block,propertyId,Number(difference),0,0,0,0,0,'salvageDust','')
                         const fund = await InsuranceFund.getInstance(propertyId,false)
-                        await fund.deposit(1,0.00000001,block)
+                        await fund.deposit(String(propertyId), '0.00000001', block)
                     }
                 } else {
-                    const difference = propertyTotal.minus(expectedCirculation).decimalPlaces(8).toNumber()
-                    console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${expectedCirculation.toFixed()}, Found: ${propertyTotal.toFixed()}), but it's allowed.`);
+                    const difference = fromSats(differenceSats).toFixed(8)
+                    console.warn(`⚠️ Property ${propertyId} supply changed, diff ${difference} (Expected: ${fromSats(expectedSats).toFixed(8)}, Found: ${fromSats(propertyTotalSats).toFixed(8)}), but it's allowed.`);
                 }
             }
         }
@@ -582,23 +616,23 @@ class Clearing {
 
             // Compute basis points difference
             const priceDiff = new BigNumber(indexPrice).minus(vwap);
-            const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2).toNumber(); // Convert to bps
+            const basisPoints = priceDiff.dividedBy(vwap).times(10000).decimalPlaces(2);
 
-            console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints} bps)`);
+            console.log(`📊 [Funding Rate Calc] VWAP: ${vwap}, Index Price: ${indexPrice}, Diff: ${priceDiff.toFixed(2)} (${basisPoints.toFixed(2)} bps)`);
 
             // Apply clamp function
             const clampedBps = this.clampFundingRate(basisPoints);
 
             // Compute per-hour funding rate (divided by 8)
-            let fundingRate = new BigNumber(clampedBps).dividedBy(8).decimalPlaces(4).toNumber();
+            let fundingRate = new BigNumber(clampedBps || 0).dividedBy(8).decimalPlaces(4);
 
             // Cap max rate at ±100 bps per 8 hours (12.5 bps per hour)
-            if (Math.abs(fundingRate) > 12.5) {
-                fundingRate = Math.sign(fundingRate) * 12.5;
+            if (fundingRate.abs().gt(12.5)) {
+                fundingRate = fundingRate.isNegative() ? new BigNumber(-12.5) : new BigNumber(12.5);
             }
 
-            console.log(`📈 Final Funding Rate: ${fundingRate} bps per hour`);
-            return fundingRate;
+            console.log(`📈 Final Funding Rate: ${fundingRate.toFixed(4)} bps per hour`);
+            return fundingRate.toNumber();
         } catch (error) {
             console.error(`❌ Error calculating funding rate for contract ${contractId}:`, error);
             return 0;
@@ -607,6 +641,8 @@ class Clearing {
 
 
     static async getIndexPrice(contractId, blockHeight) {
+        const ContractRegistry = require('./contractRegistry.js');
+        const Oracle = require('./oracle.js');
         // Load contract info (get from memory, or from DB)
         const contractInfo = await ContractRegistry.getContractInfo(contractId); // or your method
 
@@ -623,18 +659,33 @@ class Clearing {
 
     // **Clamp function for funding rate**
     static clampFundingRate(basisPoints) {
-        if (Math.abs(basisPoints) < 5) return 0; // Ignore small deviations
-        return Math.sign(basisPoints) * (Math.abs(basisPoints) - 5); // Reduce deviation >5bps by 5
+        const bps = new BigNumber(basisPoints || 0);
+        if (!bps.isFinite()) return new BigNumber(0);
+        if (bps.abs().lt(5)) return new BigNumber(0); // Ignore small deviations
+        const reduced = bps.abs().minus(5); // Reduce deviation >5bps by 5
+        return bps.isNegative() ? reduced.negated() : reduced;
     }
 
 
     static async applyFundingToPositions(contractId, fundingRate, block) {
+        const ContractRegistry = require('./contractRegistry.js');
         const margins = await MarginMap.getInstance(contractId);
         const openPositions = await margins.getAllPositions(contractId);
-        const notionalPerContract = await ContractRegistry.getNotionalValue(contractId); // Fetch notional value
+        const refPrice = await Clearing.getIndexPrice(contractId, block);
+        const notionalBlob = await ContractRegistry.getNotionalValue(contractId, refPrice);
+        const notionalPerContract = Number(notionalBlob?.notionalValue ?? notionalBlob ?? 0);
+        const notionalBN = new BigNumber(notionalPerContract || 0);
+        const fundingRateBN = new BigNumber(fundingRate || 0);
 
         if (!openPositions.length) {
             //console.log(`⚠️ No positions found for contract ${contractId}`);
+            return;
+        }
+        if (!notionalBN.isFinite() || notionalBN.lte(0) || !fundingRateBN.isFinite()) {
+            console.warn(`[funding-skip] contract=${contractId} block=${block} invalid notional/rate`, {
+                notionalPerContract,
+                fundingRate
+            });
             return;
         }
 
@@ -647,8 +698,13 @@ class Clearing {
 
         // **Calculate total funding owed by each side**
         for (let pos of openPositions) {
-            const contractsBN = new BigNumber(Math.abs(pos.contracts));
-            const fundingAmount = contractsBN.times(notionalPerContract).times(fundingRate / 10000).decimalPlaces(8);
+            const contractsBN = new BigNumber(Math.abs(Number(pos.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.lte(0)) continue;
+            const fundingAmount = contractsBN
+                .times(notionalBN)
+                .times(fundingRateBN.div(10000))
+                .decimalPlaces(8);
+            if (!fundingAmount.isFinite()) continue;
 
             if (fundingRate > 0 && pos.contracts > 0) {
                 longFunding = longFunding.plus(fundingAmount); // Longs owe shorts
@@ -669,31 +725,45 @@ class Clearing {
 
 
     static async processFundingPayments(payers, receivers, totalFunding, contractId, block) {
-        if (totalFunding.isZero()) return;
+        const ContractRegistry = require('./contractRegistry.js');
+        const Tally = require('./tally.js');
+        const totalFundingBN = new BigNumber(totalFunding || 0);
+        if (!totalFundingBN.isFinite() || totalFundingBN.isZero()) return;
 
         const collateralId = await ContractRegistry.getCollateralId(contractId);
-        let totalContracts = payers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        let totalContracts = payers.reduce((sum, pos) => {
+            const c = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            return c.isFinite() ? sum.plus(c) : sum;
+        }, new BigNumber(0));
 
         if (totalContracts.isZero()) return;
 
         for (let pos of payers) {
-            let contractsBN = new BigNumber(Math.abs(pos.contracts));
-            let amountOwed = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            let contractsBN = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.isZero()) continue;
+            let amountOwed = totalFundingBN.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            if (!amountOwed.isFinite()) continue;
 
             console.log(`💸 Funding Deduction: ${pos.address} pays ${amountOwed}`);
 
-            await TallyMap.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
+            await Tally.updateBalance(pos.address, collateralId, -amountOwed.toNumber(), 0, 0, 0, 'fundingFee', block);
         }
 
-        totalContracts = receivers.reduce((sum, pos) => sum.plus(Math.abs(pos.contracts)), new BigNumber(0));
+        totalContracts = receivers.reduce((sum, pos) => {
+            const c = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            return c.isFinite() ? sum.plus(c) : sum;
+        }, new BigNumber(0));
+        if (totalContracts.isZero()) return;
 
         for (let pos of receivers) {
-            let contractsBN = new BigNumber(Math.abs(pos.contracts));
-            let amountReceived = totalFunding.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            let contractsBN = new BigNumber(Math.abs(Number(pos?.contracts || 0)));
+            if (!contractsBN.isFinite() || contractsBN.isZero()) continue;
+            let amountReceived = totalFundingBN.times(contractsBN.dividedBy(totalContracts)).decimalPlaces(8);
+            if (!amountReceived.isFinite()) continue;
 
             console.log(`💰 Funding Credit: ${pos.address} receives ${amountReceived}`);
 
-            await TallyMap.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
+            await Tally.updateBalance(pos.address, collateralId, amountReceived.toNumber(), 0, 0, 0, 'fundingCredit', block);
         }
     }
 
@@ -733,6 +803,15 @@ class Clearing {
                 // **For oracle contracts, get the latest oracle price**
                 const oracleId = contractInfo.underlyingOracleId;
                 const latestOracleData = await OracleRegistry.getOraclePrice(oracleId);
+
+                if (typeof latestOracleData === 'number') {
+                    if (!Number.isFinite(latestOracleData)) {
+                        console.warn(`Invalid numeric oracle data for Oracle ID ${oracleId}.`);
+                        return null;
+                    }
+                    console.log(`Latest oracle price for contract ${contractId}: ${latestOracleData}`);
+                    return latestOracleData;
+                }
 
                 if (!latestOracleData || latestOracleData.blockHeight > blockHeight) {
                     console.warn(`⚠️ No valid oracle data found for Oracle ID ${oracleId}.`);
@@ -1783,13 +1862,25 @@ class Clearing {
         const loss = pnl.abs();
         const available   = new BigNumber(tally.available || 0);
         const margin      = new BigNumber(tally.margin || 0);
-        const maintMargin = margin.div(2);
-        const coverage    = available.plus(maintMargin);
+        const optionAdj = await Clearing.computeOptionAdjustments(
+          contractId,
+          pos.address,
+          thisPrice || lastPrice,
+          blockHeight,
+          144
+        );
+        const coverageParts = Clearing.computeLossCoverage(
+          available,
+          margin,
+          optionAdj
+        );
+        const coverage = coverageParts.coverage;
 
         console.log(
           `  LOSS=${loss.toFixed()} ` +
           `coverage=${coverage.toFixed()} ` +
-          `(avail=${available.toFixed()} maint=${maintMargin.toFixed()})`
+          `(avail=${available.toFixed()} maint=${coverageParts.maintBase.toFixed()} ` +
+          `optMTM=${coverageParts.optionMTM.toFixed()} optMaint=${coverageParts.optionMaint.toFixed()})`
         );
 
         totalNeg = totalNeg.plus(loss);
@@ -1835,7 +1926,8 @@ class Clearing {
           pos,
           loss,
           shortfall: loss.minus(coverage),
-          coverage
+          coverage,
+          optionAdj
         });
       }
 
@@ -2249,6 +2341,116 @@ class Clearing {
         return result;
     }
 
+    static _sweepAmmLiquidityFirst(obData, liqOrder, maxFill, liqBoundaryPrice, inverse) {
+        const sideKey = liqOrder.sell ? 'buy' : 'sell';
+        const side = Array.isArray(obData?.[sideKey]) ? obData[sideKey] : [];
+        const qtyCap = new BigNumber(maxFill || 0);
+        const boundaryBN = new BigNumber(liqBoundaryPrice || 0);
+
+        const result = {
+            filledSize: 0,
+            matches: []
+        };
+
+        if (qtyCap.lte(0) || side.length === 0) return result;
+
+        // For liquidation, AMM is the first preferred counterparty, but only at "safe" prices.
+        const ammLevels = side
+            .filter(o => o && o.sender === 'amm' && Number(o.amount || 0) > 0)
+            .sort((a, b) => {
+                const pa = new BigNumber(a.price || 0);
+                const pb = new BigNumber(b.price || 0);
+                if (liqOrder.sell) {
+                    // Selling liquidation should hit highest bids first.
+                    const cmp = pb.comparedTo(pa);
+                    if (cmp !== 0) return cmp;
+                } else {
+                    // Buying liquidation should hit lowest asks first.
+                    const cmp = pa.comparedTo(pb);
+                    if (cmp !== 0) return cmp;
+                }
+                return Number(a.blockTime || 0) - Number(b.blockTime || 0);
+            });
+
+        let remaining = qtyCap;
+        let filledBN = new BigNumber(0);
+        for (const level of ammLevels) {
+            if (remaining.lte(0)) break;
+
+            const px = new BigNumber(level.price || 0);
+            const avail = new BigNumber(level.amount || 0);
+            if (!px.isFinite() || !avail.isFinite() || avail.lte(0)) continue;
+
+            const isGood = !inverse
+                ? (liqOrder.sell ? px.gte(boundaryBN) : px.lte(boundaryBN))
+                : (liqOrder.sell ? px.lte(boundaryBN) : px.gte(boundaryBN));
+
+            if (!isGood) continue;
+
+            const take = BigNumber.min(remaining, avail);
+            if (take.lte(0)) continue;
+
+            const liqLegBase = {
+                ...liqOrder,
+                amount: take.toNumber(),
+                contractId: liqOrder.contractId,
+                sender: liqOrder.address,
+                txid: liqOrder.txid || 'liq',
+                maker: false,
+                liq: true
+            };
+
+            const ammLegBase = {
+                ...level,
+                amount: take.toNumber(),
+                contractId: liqOrder.contractId,
+                sender: level.sender || 'amm',
+                txid: level.txid || 'amm',
+                maker: true,
+                liq: Boolean(level.isLiq)
+            };
+
+            let match;
+            if (liqOrder.sell) {
+                match = {
+                    sellOrder: {
+                        ...liqLegBase,
+                        sellerAddress: liqOrder.address
+                    },
+                    buyOrder: {
+                        ...ammLegBase,
+                        buyerAddress: ammLegBase.sender
+                    },
+                    tradePrice: px.toNumber(),
+                    txid: ammLegBase.txid
+                };
+            } else {
+                match = {
+                    sellOrder: {
+                        ...ammLegBase,
+                        sellerAddress: ammLegBase.sender
+                    },
+                    buyOrder: {
+                        ...liqLegBase,
+                        buyerAddress: liqOrder.address
+                    },
+                    tradePrice: px.toNumber(),
+                    txid: ammLegBase.txid
+                };
+            }
+
+            result.matches.push(match);
+            filledBN = filledBN.plus(take);
+            remaining = remaining.minus(take);
+
+            level.amount = new BigNumber(level.amount || 0).minus(take).toNumber();
+        }
+
+        result.filledSize = filledBN.toNumber();
+        obData[sideKey] = side.filter(o => Number(o.amount || 0) > 0);
+        return result;
+    }
+
        static async handleLiquidation(
         ctxKey,
         orderbook,
@@ -2287,8 +2489,7 @@ class Clearing {
         //------------------------------------------------------------
         const tally = tallySnapshot || await Tally.getTally(liquidatingAddress, collateralId);
 
-        const maintReq = new Big(await marginMap.checkMarginMaintainance(
-          liquidatingAddress,
+        const maintReq = new Big(await marginMap.computeMaintenanceMarginRequirement(
           contractId,
           position
         ) || 0);
@@ -2352,7 +2553,7 @@ class Clearing {
         let liq = await marginMap.generateLiquidationOrder(
           position,
           contractId,
-          liquidationType === "total",
+          liqAmount,
           blockHeight,
           markPrice,
           computedLiqPrice
@@ -2405,20 +2606,39 @@ class Clearing {
           // amount in the same call.
           // ============================================================
           const safeSize = Number(splat.goodFilledSize || 0);
+          let remainingSafeSize = safeSize;
           const liqOb = { ...liq, amount: safeSize };
 
           console.log('safe size!? '+safeSize)
-
-          obData = await orderbook.insertOrder(liqOb, obData, liqOb.sell, true);
           let trades= []
+          const ammSweep = Clearing._sweepAmmLiquidityFirst(
+            obData,
+            liqOb,
+            remainingSafeSize,
+            computedLiqPrice,
+            inverse
+          );
 
-          const matchResult = await orderbook.matchContractOrders(obData);   
-          if (matchResult.matches && matchResult.matches.length > 0) {
-                trades= await orderbook.processContractMatches(matchResult.matches, blockHeight, false,markPrice);
+          if (ammSweep.matches.length > 0) {
+            const ammTrades = await orderbook.processContractMatches(ammSweep.matches, blockHeight, false, markPrice);
+            if (Array.isArray(ammTrades) && ammTrades.length > 0) trades.push(...ammTrades);
+            remainingSafeSize -= Number(ammSweep.filledSize || 0);
+            console.log(`[LIQ AMM-FIRST] filled=${ammSweep.filledSize} remainingSafe=${remainingSafeSize}`);
+          }
+
+          let matchResult = { matches: [], orderBook: obData };
+          if (remainingSafeSize > 0) {
+            const liqRemainder = { ...liqOb, amount: remainingSafeSize };
+            obData = await orderbook.insertOrder(liqRemainder, obData, liqRemainder.sell, true);
+            matchResult = await orderbook.matchContractOrders(obData);
+            if (matchResult.matches && matchResult.matches.length > 0) {
+                const extraTrades = await orderbook.processContractMatches(matchResult.matches, blockHeight, false, markPrice);
+                if (Array.isArray(extraTrades) && extraTrades.length > 0) trades.push(...extraTrades);
+            }
           }
 
           console.log('liq match result '+JSON.stringify(matchResult))
-          await orderbook.saveOrderBook(matchResult.orderBook, obKey);
+          await orderbook.saveOrderBook(matchResult.orderBook || obData, obKey);
 
            // PATCH 1: set obFill to what actually matched (best-effort from match objects)
           let filledFromMatches = 0;
@@ -2433,7 +2653,7 @@ class Clearing {
           }
 
           // Never exceed requested liqAmount
-          obFill = new Big(Math.min(filledFromMatches, liqAmount));
+          obFill = new Big(Math.min(filledFromMatches + Number(ammSweep.filledSize || 0), liqAmount));
           console.log('obFill after matches '+obFill.toNumber()+' '+filledFromMatches+' '+liqAmount)
 
                 
@@ -2626,29 +2846,111 @@ class Clearing {
       }
 
 
+    static resolveOptionExerciseTarget(seriesId, seriesInfo, optionExpiryBlock) {
+      const sid = Number(seriesId);
+      if (!seriesInfo || !seriesInfo.contracts || !Array.isArray(seriesInfo.contracts.unexpired)) {
+        return sid;
+      }
+
+      const exp = Number(optionExpiryBlock || 0);
+      if (!Number.isFinite(exp) || exp <= 0) return sid;
+
+      const candidates = seriesInfo.contracts.unexpired
+        .map((c) => ({
+          id: c && c.id != null ? c.id : sid,
+          expirationBlock: Number(c && c.expirationBlock)
+        }))
+        .filter((c) => Number.isFinite(c.expirationBlock) && c.expirationBlock >= exp)
+        .sort((a, b) => a.expirationBlock - b.expirationBlock);
+
+      return candidates.length ? candidates[0].id : sid;
+    }
+
+    static computeExerciseContracts(meta, qty) {
+      const signedQty = new BigNumber(qty || 0);
+      const absQty = signedQty.abs();
+      if (absQty.isZero()) return 0;
+
+      if (meta.type === 'Call') {
+        return signedQty.gt(0) ? absQty.toNumber() : absQty.negated().toNumber();
+      }
+      // Put
+      return signedQty.gt(0) ? absQty.negated().toNumber() : absQty.toNumber();
+    }
+
+    static applyAssignedUnderlyingPosition(pos, contractDelta, entryPrice, marginTransfer) {
+      const delta = new BigNumber(contractDelta || 0);
+      if (delta.isZero()) return;
+
+      const px = new BigNumber(entryPrice || 0);
+      const marginShift = new BigNumber(marginTransfer || 0);
+      const before = new BigNumber(pos.contracts || 0);
+      const after = before.plus(delta);
+
+      const beforeSign = before.comparedTo(0);
+      const afterSign = after.comparedTo(0);
+      const deltaSign = delta.comparedTo(0);
+      const isFlip =
+        !before.isZero() &&
+        !delta.isZero() &&
+        beforeSign !== deltaSign &&
+        delta.abs().gt(before.abs());
+
+      if (after.isZero()) {
+        pos.avgPrice = 0;
+      } else if (!isFlip && (before.isZero() || beforeSign === afterSign)) {
+        const oldCost = before.times(new BigNumber(pos.avgPrice || 0));
+        const newCost = delta.times(px);
+        pos.avgPrice = oldCost.plus(newCost).div(after).toNumber();
+      } else {
+        pos.avgPrice = px.toNumber();
+      }
+
+      pos.contracts = after.toNumber();
+      pos.margin = new BigNumber(pos.margin || 0).plus(marginShift).toNumber();
+      pos.lastMark = Number.isFinite(Number(pos.lastMark)) ? Number(pos.lastMark) : px.toNumber();
+    }
+
     /**
      * Settle all options expiring at or before currentBlock for a given series.
-     * Intrinsic only (European-style cash). Premium MTM is for equity/liq calcs only.
+     * OTM legs cash-settle and release option margin.
+     * ITM legs are forcibly exercised into underlying exposure.
      */
     static async settleOptionExpiries(seriesId, currentBlockHeight, spot, blocksPerDay, txid) {
+      const ContractRegistry = require('./contractRegistry.js');
       const mm = await MarginMap.getInstance(seriesId);
       const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
       if (!seriesInfo) return;
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
       const expTickers = await mm.getExpiringTickersUpTo(currentBlockHeight);
-      if (!expTickers.length) return;
+      let tickersToSettle = Array.isArray(expTickers) ? [...expTickers] : [];
+      if (!tickersToSettle.length) {
+        const fallback = new Set();
+        for (const [, pos] of mm.margins.entries()) {
+          if (!pos || !pos.options) continue;
+          for (const ticker of Object.keys(pos.options)) {
+            const meta = Options.parseTicker(ticker);
+            if (!meta) continue;
+            if (Number(meta.expiryBlock || 0) <= Number(currentBlockHeight)) {
+              fallback.add(ticker);
+            }
+          }
+        }
+        tickersToSettle = Array.from(fallback);
+      }
+      if (!tickersToSettle.length) return;
 
       // For each address with positions
       for (const [address, pos] of mm.margins.entries()) {
         if (!pos || !pos.options) continue;
 
-        for (const ticker of expTickers) {
+        for (const ticker of tickersToSettle) {
           const optPos = pos.options[ticker];
           if (!optPos) continue;
 
-          const qty = Number(optPos.contracts || 0);
-          if (!qty) {
+          const qty = new BigNumber(optPos.contracts || 0);
+          if (qty.isZero()) {
             // remove the empty slot to keep map clean
             delete pos.options[ticker];
             continue;
@@ -2658,28 +2960,52 @@ class Clearing {
           if (!meta) continue;
 
           // Intrinsic payoff at settlement
-          const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-          const cash = iv * Math.abs(qty); // per-contract * absolute qty
+          const iv = new BigNumber(Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0)) || 0);
+          const marginHeld = new BigNumber(optPos.margin || 0);
+          const isITM = new BigNumber(iv || 0).gt(0);
 
-          // Long options receive; short options pay
-          const availableDelta = qty > 0 ? +cash : -cash;
+          if (isITM) {
+            const exerciseDelta = this.computeExerciseContracts(meta, qty);
+            const assignmentTarget = this.resolveOptionExerciseTarget(
+              seriesId,
+              seriesInfo,
+              meta.expiryBlock
+            );
 
-          // Free any margin previously held on this option leg
-          const marginHeld = Number(optPos.margin || 0);
-          const marginDelta = marginHeld ? -marginHeld : 0;
+            // Move option-leg collateral into core series margin and open assigned delta at strike.
+            this.applyAssignedUnderlyingPosition(
+              pos,
+              exerciseDelta,
+              Number(meta.strike || spot || 0),
+              marginHeld
+            );
 
-          // Tally: available +/- intrinsic; margin -= marginHeld
-          await TallyMap.updateBalance(
-            address,
-            collateralPropertyId,
-            availableDelta, // availableChange
-            0,              // reservedChange
-            marginDelta,    // marginChange
-            0,              // vestingChange
-            'optionExpire',
-            currentBlockHeight,
-            txid
-          );
+            await mm.recordMarginMapDelta(
+              address,
+              String(assignmentTarget),
+              Number(pos.contracts || 0),
+              exerciseDelta,
+              Number(meta.strike || spot || 0),
+              0,
+              marginHeld.toNumber(),
+              'optionExpireAssign',
+              currentBlockHeight
+            );
+          } else {
+            // OTM expiry: no assignment, only release option margin.
+            const marginDelta = marginHeld.isZero() ? 0 : marginHeld.negated().toNumber();
+            await TallyMap.updateBalance(
+              address,
+              collateralPropertyId,
+              0,              // availableChange
+              0,              // reservedChange
+              marginDelta,    // marginChange
+              0,              // vestingChange
+              'optionExpire',
+              currentBlockHeight,
+              txid
+            );
+          }
 
           // Remove the option sub-position from the blob
           delete pos.options[ticker];
@@ -2689,11 +3015,11 @@ class Clearing {
             address,
             ticker,
             0,                 // position after (expired → closed)
-            -qty,              // delta contracts to flat
-            iv,                // settled at intrinsic (for audit)
+            qty.negated().toNumber(), // delta contracts to flat
+            iv.toNumber(),      // settlement intrinsic (for audit)
             0,                 // uPNL delta
-            marginHeld ? -marginHeld : 0, // margin freed
-            'optionExpire',
+            marginHeld.isZero() ? 0 : marginHeld.negated().toNumber(), // margin freed
+            isITM ? 'optionExpireExercised' : 'optionExpire',
             currentBlockHeight
           );
         }
@@ -2704,6 +3030,7 @@ class Clearing {
 
       // Global index cleanup (remove those expiries)
       await mm.cleanupExpiredTickersUpTo(currentBlockHeight);
+      await mm.saveMarginMap(currentBlockHeight);
     }
 
     static getLatestPositionByAddress(trades, address) {
@@ -2885,7 +3212,7 @@ class Clearing {
           if (totalLoss.gte(0)) {
               const ContractRegistry = require('./contractRegistry.js');
               const isOracleContract = await ContractRegistry.isOracleContract(contractId);
-              const insurance = await Insurance.getInstance(contractId, isOracleContract);
+              const insurance = await getInsuranceModule().getInstance(contractId, isOracleContract);
 
               const payout = await insurance.calcPayout(totalLoss.abs(), blockHeight);
               console.log('payout to distribute '+payout)
@@ -3000,17 +3327,34 @@ class Clearing {
      *     maintNaked    // maintenance add-on for naked shorts (padding for triggers)
      *   }
      */
-    async computeOptionAdjustments(seriesId, address, spot, currentBlockHeight, blocksPerDay) {
+    static async computeOptionAdjustments(seriesId, address, spot, currentBlockHeight, blocksPerDay) {
+      const ContractRegistry = require('./contractRegistry.js');
       const mm = await MarginMap.getInstance(seriesId);
       const pos = mm.margins.get(address) || {};
-      const optionsBag = pos.options || {};
+      const optionsBag = { ...(pos.options || {}) };
+
+      const numericSeries = Number(seriesId);
+      const altSeriesId = Number.isFinite(numericSeries) ? String(numericSeries) : seriesId;
+      if (altSeriesId !== seriesId) {
+        const alt = await MarginMap.getInstance(altSeriesId);
+        const altPos = alt.margins.get(address) || {};
+        const altBag = altPos.options || {};
+        for (const [ticker, o] of Object.entries(altBag)) {
+          const cur = optionsBag[ticker] || { contracts: 0, avgPrice: 0, margin: 0 };
+          optionsBag[ticker] = {
+            contracts: Number(cur.contracts || 0) + Number(o.contracts || 0),
+            avgPrice: Number(o.avgPrice ?? cur.avgPrice ?? 0),
+            margin: Number(cur.margin || 0) + Number(o.margin || 0)
+          };
+        }
+      }
       const seriesInfo = await ContractRegistry.getContractInfo(seriesId);
       // If you store a vol index on the series, grab it; else fallback conservatively
       const volAnnual = Number(seriesInfo?.volAnnual || 0); // e.g. 0.6 means 60% annualized
       const bpd = Math.max(1, Number(blocksPerDay || 144));
-      let premiumMTM = 0;
-      let intrinsicNet = 0;
-      let maintNaked = 0;
+      let premiumMTM = new BigNumber(0);
+      let intrinsicNet = new BigNumber(0);
+      const legs = [];
 
       for (const [ticker, o] of Object.entries(optionsBag)) {
         const meta = Options.parseTicker(ticker);
@@ -3020,24 +3364,30 @@ class Clearing {
         const daysToExpiry = blocksToExp / bpd;
 
         // qty is signed: >0 long options, <0 short options
-        const qty = Number(o.contracts || 0);
-        if (!qty) continue;
+        const qty = new BigNumber(o.contracts || 0);
+        if (qty.isZero()) continue;
+        legs.push({
+          type: meta.type,
+          strike: new BigNumber(meta.strike || 0),
+          qty,
+          expiryBlock: Number(meta.expiryBlock || 0)
+        });
 
         // MTM premium approximation (treating options as assets for equity)
-        const px = Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry);
-        premiumMTM += px * qty;
+        const px = new BigNumber(
+          Options.priceEUApprox(meta.type, Number(spot || 0), Number(meta.strike || 0), volAnnual, daysToExpiry) || 0
+        );
+        premiumMTM = premiumMTM.plus(px.times(qty));
 
         // Intrinsic (floor/ceiling) can be used as an extra conservative cushion
-        const iv = Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0));
-        intrinsicNet += iv * qty;
-
-        // Naked maintenance padding for shorts only (10× rule via helper)
-        if (qty < 0) {
-          maintNaked += Options.nakedMaintenance(meta.type, Number(meta.strike || 0), Number(spot || 0)) * Math.abs(qty);
-        }
+        const iv = new BigNumber(
+          Options.intrinsic(meta.type, Number(meta.strike || 0), Number(spot || 0)) || 0
+        );
+        intrinsicNet = intrinsicNet.plus(iv.times(qty));
       }
 
-      return { premiumMTM, intrinsicNet, maintNaked };
+      const maintNaked = new BigNumber(Options.portfolioMaintenance(legs, Number(spot || 0)) || 0);
+      return { premiumMTM, intrinsicNet, maintNaked, optionCount: legs.length };
     }
 
     static async saveClearingSettlementEvent(contractId, settlementDetails, blockHeight) {

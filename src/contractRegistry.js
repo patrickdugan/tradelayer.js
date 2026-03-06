@@ -172,9 +172,18 @@ class ContractRegistry {
     static async getAMM(contractId) {
         console.log('inside get AMM')
         const contractInfo = await ContractRegistry.getContractInfo(contractId);
-        if (contractInfo && contractInfo.amm) {
-            // Assuming the AMM object is stored inside the contractInfo object
-            return contractInfo.amm;
+        if (contractInfo && contractInfo.ammPool) {
+            const pool = contractInfo.ammPool;
+            if (pool instanceof AMMPool) return pool;
+            const hydrated = new AMMPool(
+                Number(pool.position || 0),
+                Number(pool.maxPosition || 1),
+                Number(pool.maxQuoteSize || 10),
+                Number(pool.contractType || contractId)
+            );
+            hydrated.lpAddresses = { ...(pool.lpAddresses || {}) };
+            hydrated.ammOrders = Array.isArray(pool.ammOrders) ? pool.ammOrders : [];
+            return hydrated;
         } else {
             throw new Error(`AMM object not found for contract ID ${contractId}`);
         }
@@ -417,19 +426,26 @@ class ContractRegistry {
         }
 
     static async getNotionalValue(contractId, mark) {
-        
-            // Assuming contractData is the data structure for the contract
-
-        //console.log('inside get notional '+contractId)
-            const contractData = await ContractRegistry.getContractInfo(contractId);
-            console.log('blaiven '+JSON.stringify(contractData))
-            const BNMark = new BigNumber(mark)
-            const BNNotional = new BigNumber(contractData.notionalValue)
-            console.log('checking notional and mark in getNotionalValue '+contractData.notionalValue +' '+mark)
+        const contractData = await ContractRegistry.getContractInfo(contractId);
+        if (!contractData) {
+            return { notionalValue: 0, notionalPerContract: 0 };
+        }
+        console.log('blaiven '+JSON.stringify(contractData))
+        const BNNotional = new BigNumber(contractData.notionalValue || 0);
+        let BNMark = new BigNumber(mark || 0);
+        if (!BNMark.isFinite() || BNMark.lte(0)) {
+            if (contractData.underlyingOracleId != null) {
+                const oracleMark = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
+                BNMark = new BigNumber(oracleMark || 0);
+            }
+        }
+        console.log('checking notional and mark in getNotionalValue '+contractData.notionalValue +' '+BNMark.toString())
         try {
            if (contractData.native && contractData.inverse) {
             console.log(`Calculating Notional Value for Inverse Native Contract`);
-
+            if (!BNMark.isFinite() || BNMark.lte(0)) {
+                return { notionalValue: 0, notionalPerContract: Number(BNNotional) || 0 };
+            }
             const notionalValue = new BigNumber(1)
                 .dividedBy(BNMark)
                 .multipliedBy(BNNotional)
@@ -441,23 +457,28 @@ class ContractRegistry {
             return{notionalValue:notionalValue, notionalPerContract:contractData.notionalValue};
         }else if (!contractData.native && !contractData.inverse) {
             console.log(`Calculating Notional Value for Linear Contract`+BNNotional+' '+BNMark);
+            if (!BNMark.isFinite() || BNMark.lte(0)) {
+                return { notionalValue: Number(BNNotional) || 0, notionalPerContract: contractData.notionalValue };
+            }
             const notionalValue = BNNotional.times(BNMark).decimalPlaces(8).toNumber();
 
             console.log(`Calculated Notional Value: ${notionalValue}`);
             return{notionalValue:notionalValue, notionalPerContract:contractData.notionalValue};
         }else if (!contractData.native && contractData.inverse) {
                 console.log(`Calculating Notional Value for Inverse Oracle Contract`);
-
-                const latestPrice = await OracleRegistry.getOraclePrice(contractData.underlyingOracleId);
+                if (!BNMark.isFinite() || BNMark.lte(0)) {
+                    return { notionalValue: 0, notionalPerContract: contractData.notionalValue };
+                }
                 const notionalValue = new BigNumber(1)
                     .dividedBy(BNMark)
                     .multipliedBy(BNNotional)
                     .decimalPlaces(8)
                     .toNumber();
 
-                console.log(`Calculated Notional Value: ${value}`);
-                return {notionalValue:notionalValue, perContractNotional:contractData.notionalValue};
+                console.log(`Calculated Notional Value: ${notionalValue}`);
+                return {notionalValue:notionalValue, notionalPerContract:contractData.notionalValue};
             }
+            return { notionalValue: Number(BNNotional) || 0, notionalPerContract: contractData.notionalValue };
         } catch (error) {
             console.error(`Error retrieving notional value for contractId ${contractId}:`, error);
             throw error;
@@ -654,6 +675,14 @@ class ContractRegistry {
             totalInitialMargin = new BigNumber(totalInitialMargin).minus(feeInfo.buyerFee).decimalPlaces(8).toNumber();
         } else if (feeInfo.sellFeeFromReserve && side === false) {
             totalInitialMargin = new BigNumber(totalInitialMargin).minus(feeInfo.sellerFee).decimalPlaces(8).toNumber();
+        }
+
+        const isVirtualAmmSender = (sender === 'amm') || (typeof sender === 'string' && sender.startsWith('amm:'));
+        if (channel === false && isVirtualAmmSender) {
+            console.log('virtual AMM sender: skip tally collateral movement, set margin only in map');
+            console.log('about to setInitialMargin ' + sender + contractId + ' ' + totalInitialMargin);
+            position = await marginMap.setInitialMargin(sender, contractId, totalInitialMargin, block, position);
+            return position;
         }
 
         // ------------------------------------------------------------

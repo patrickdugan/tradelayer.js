@@ -184,6 +184,29 @@ class ClientWrapper {
     return util.promisify(this.client.cmd.bind(this.client, 'getnetworkinfo'))()
   }
 
+  getWalletPath() {
+    const wallet = process.env.RPC_WALLET || process.env.LTC_WALLET || process.env.WALLET_NAME;
+    return wallet ? `/wallet/${wallet}` : null;
+  }
+
+  rpcCall(method, params = [], walletScoped = false) {
+    const path = walletScoped ? this.getWalletPath() : null;
+    const rpc = this.client && this.client.rpc;
+    if (!rpc || typeof rpc.call !== 'function' || !path) {
+      return util.promisify(this.client.cmd.bind(this.client, method))(...params);
+    }
+
+    return new Promise((resolve, reject) => {
+      rpc.call(
+        method,
+        params,
+        (result) => resolve(result),
+        (err) => reject(err),
+        path
+      );
+    });
+  }
+
   getTransaction(txId) {
     return util.promisify(this.client.cmd.bind(this.client, 'gettransaction'))(txId);
   }
@@ -201,7 +224,7 @@ class ClientWrapper {
   }
 
   listUnspent(...params) {
-    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))(...params);
+    return this.rpcCall('listunspent', params, true);
   }
 
   decoderawtransaction(...params) {
@@ -209,11 +232,11 @@ class ClientWrapper {
   }
 
   signrawtransactionwithwallet(...params) {
-    return util.promisify(this.client.cmd.bind(this.client, 'signrawtransactionwithwallet'))(...params);
+    return this.rpcCall('signrawtransactionwithwallet', params, true);
   }
 
   dumpprivkey(...params) {
-    return util.promisify(this.client.cmd.bind(this.client, 'dumpprivkey'))(...params);
+    return this.rpcCall('dumpprivkey', params, true);
   }
 
   sendrawtransaction(...params) {
@@ -233,19 +256,19 @@ class ClientWrapper {
   }
 
   listlabels(...params) {
-    return util.promisify(this.client.cmd.bind(this.client, 'listlabels'))(...params);
+    return this.rpcCall('listlabels', params, true);
   }
 
   getaddressesbylabel(label) {
-    return util.promisify(this.client.cmd.bind(this.client, 'getaddressesbylabel'))(label);
+    return this.rpcCall('getaddressesbylabel', [label], true);
   }
 
   getwalletinfo() {
-    return util.promisify(this.client.cmd.bind(this.client, 'getwalletinfo'))();
+    return this.rpcCall('getwalletinfo', [], true);
   }
 
   listunspent() {
-    return util.promisify(this.client.cmd.bind(this.client, 'listunspent'))();
+    return this.rpcCall('listunspent', [], true);
   }
 
 

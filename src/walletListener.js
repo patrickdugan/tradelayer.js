@@ -22,6 +22,8 @@ const db = require('./db.js')
 const IssuanceIntent = require('./issuanceIntent.js')
 
 let isInitialized = false; // A flag to track the initialization status
+let isInitializing = false;
+let initPromise = null;
 const app = express();
 const port = 3000; // Choose a port that suits your setup
 
@@ -62,24 +64,38 @@ const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1,'tlt
             lastInitCall = now;
         }
 
-        if (!isInitialized) {
-            console.log('Waiting for ClientWrapper initialization...');
-            const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
-            
-            console.log('Client and Database initialized successfully.');
-
-            // Initialize Main only after ClientWrapper is ready
-            const mainProcessor = await Main.getInstance(client);  // Pass client to Main
-            mainProcessor.initialize();
-            
-            isInitialized = true;  // Mark as initialized
-            res.status(200).send('Main process initialized successfully');
-        } else {
+        if (isInitialized) {
             res.status(200).send('Main process already initialized');
+            return;
         }
+        if (isInitializing && initPromise) {
+            await initPromise;
+            res.status(200).send(isInitialized ? 'Main process initialized successfully' : 'Main process initialization failed');
+            return;
+        }
+
+        console.log('Waiting for ClientWrapper initialization...');
+        const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized
+        
+        console.log('Client and Database initialized successfully.');
+
+        // Initialize Main only after ClientWrapper is ready
+        const mainProcessor = await Main.getInstance(client);  // Pass client to Main
+        isInitializing = true;
+        initPromise = (async () => {
+            await mainProcessor.initialize();
+            isInitialized = true;  // Mark as initialized only after successful init
+        })();
+
+        await initPromise;
+        res.status(200).send('Main process initialized successfully');
     } catch (error) {
+        isInitialized = false;
         console.error('Error during initialization:', error);
         res.status(500).send('Error: ' + error.message);
+    } finally {
+        isInitializing = false;
+        initPromise = null;
     }
 });
 // Validate address
@@ -193,7 +209,7 @@ app.post('/tl_prepareCommitFromIssuance', async (req, res) => {
     }
 });*/
 
-app.post('./tl_loadWallet', async (req, res) => {
+app.post('/tl_loadWallet', async (req, res) => {
     try {
         const {} = req.body;
         const wallet = TxUtils.load()
@@ -229,9 +245,8 @@ app.post('/tl_gettransactionforblock', async (req, res) => {
 
 app.post('/tl_getMaxProcessedHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const txInfo = await Consensus.getMaxProcessedBlock()
-        res.json(txInfo);
+        const maxProcessedHeight = await Consensus.getMaxProcessedBlock();
+        res.status(200).json({ maxProcessedHeight: maxProcessedHeight ?? null });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
@@ -240,42 +255,61 @@ app.post('/tl_getMaxProcessedHeight', async (req, res) => {
 
 app.post('/tl_getMaxParsedHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const height = await TxIndex.findMaxIndexedBlock()
-        res.json(height);
+        const maxParsedHeight = await TxIndex.findMaxIndexedBlock();
+        res.status(200).json({ maxParsedHeight: maxParsedHeight ?? null });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
 
-app.post('/tl_getTrackHeight'), async (req,res) =>{
+app.post('/tl_getTrackHeight', async (req, res) => {
     try {
-        const {} = req.body;
-        const height = await Consensus.getTrackHeight()
-        res.json(height);
+        // TrackHeight is persisted in consensus DB; do not initialize Main for read-only status.
+        const consensusDB = await db.getDatabase('consensus');
+        const trackDoc = await consensusDB.findOneAsync({ _id: 'TrackHeight' });
+        const trackHeight = trackDoc ? trackDoc.value : null;
+        const maxProcessedHeight = await Consensus.getMaxProcessedBlock();
+        res.status(200).json({
+            trackHeight: trackHeight ?? maxProcessedHeight ?? null,
+            source: trackHeight != null ? 'track' : 'maxProcessed'
+        });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
-}
+});
 
-app.post('/tl_checkSync'), async (req,res) =>{
+app.post('/tl_checkSync', async (req, res) => {
     try {
-        const {} = req.body;
-        const res = await Main.checkSync()
-        res.json(res);
+        // Lightweight sync check from persisted heights to keep this endpoint stable under load.
+        const [consensusHeight, txIndexHeight] = await Promise.all([
+            Consensus.getMaxProcessedBlock(),
+            TxIndex.findMaxIndexedBlock()
+        ]);
+        res.status(200).json({
+            available: true,
+            consensus: consensusHeight ?? null,
+            txIndex: txIndexHeight ?? null
+        });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
     }
-}
+});
 
 app.post('/tl_pause', async (req, res) => {
     try {
         const {} = req.body;
-        const pause = Main.setPause()
-        res.json(pause);
+        const mainInstance = typeof Main.getInstance === 'function' ? await Main.getInstance() : null;
+        if (!mainInstance || typeof mainInstance.setPause !== 'function') {
+            return res.status(200).json({
+                available: false,
+                reason: 'Main.setPause unavailable'
+            });
+        }
+        const pause = mainInstance.setPause();
+        res.json({ available: true, pause });
     } catch (error) {
         console.error('Error validating address:', error);
         res.status(500).send('Error: ' + error.message);
@@ -356,8 +390,8 @@ app.post('/tl_listProperties', async (req, res) => {
 app.post('/tl_listClearlists', async (req, res) => {
     try {
         console.log('Express calling clearlists');
-        const clearLists = await Clearlist.loadClearlists();
-        res.json(propertiesArray);
+        const clearLists = await ClearList.loadClearlists();
+        res.json(clearLists);
     } catch (error) {
         console.error('Error fetching property list:', error);
         res.status(500).send('Error: ' + error.message);
@@ -371,10 +405,27 @@ app.post('/tl_showClearlist', async (req, res) => {
         // Corrected the destructuring syntax
         const { id } = req.body;
         
-        const clearLists = await Clearlist.getList(id);
-        res.json(clearLists);
+        const clearList = await ClearList.getClearlistById(Number(id));
+        res.json(clearList);
     } catch (error) {
         console.error('Error fetching property list:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+// Protocol-canonical clearlist lookup for infra/attestation tooling.
+// Returns the clearlist registry record (admin + backup + metadata) or false if not found.
+app.post('/tl_getClearlistById', async (req, res) => {
+    try {
+        const { id } = req.body;
+        const n = Number(id);
+        if (!Number.isInteger(n) || n < 0) {
+            return res.status(400).json({ error: 'Invalid clearlist id' });
+        }
+        const clearList = await ClearList.getClearlistById(n);
+        res.json(clearList);
+    } catch (error) {
+        console.error('Error fetching clearlist:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
@@ -401,6 +452,143 @@ app.post('/tl_propertyFeeCache', async(req,res)=>{
         res.status(500).send('Error: ' + error.message);
     }
 })
+
+function envNum(name, fallback = 0) {
+    const raw = process.env[name];
+    if (raw === undefined || raw === null || raw === '') return Number(fallback || 0);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : Number(fallback || 0);
+}
+
+function parseWindowIndex(id) {
+    const m = String(id || '').match(/^bitvm-risk-window-\d+-(\d+)$/);
+    if (!m) return null;
+    const idx = Number(m[1]);
+    return Number.isFinite(idx) ? idx : null;
+}
+
+app.post('/tl_bitvmStatus', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const propertyIdRaw = body.propertyId;
+        const propertyId = Number(propertyIdRaw);
+        const hasPropertyFilter = Number.isFinite(propertyId) && propertyId > 0;
+        const dlcRef = String(body.dlcRef || '').trim();
+        const expiringWithinBlocks = Math.max(1, Math.floor(envNum('TL_BITVM_EXPIRING_WITHIN_BLOCKS', 6)));
+
+        const currentBlock = Number(await Consensus.getMaxProcessedBlock()) || 0;
+        const proceduralDB = await db.getDatabase('procedural');
+        const caches = await proceduralDB.findAsync({ type: 'bitvmCache' });
+        const globalRisk = await proceduralDB.findAsync({ type: 'bitvmRiskEscrowGlobal' });
+        const dlcRisk = await proceduralDB.findAsync({ type: 'bitvmRiskEscrowDlc' });
+        const windowRisk = await proceduralDB.findAsync({ type: 'bitvmRiskWindow' });
+
+        const filteredCaches = caches.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            if (dlcRef && String(doc.dlcRef || '') !== dlcRef) return false;
+            return true;
+        });
+
+        const pendingStatuses = new Set(['PENDING', 'CHALLENGED']);
+        const openCaches = filteredCaches.filter((doc) => pendingStatuses.has(String(doc.status || '').toUpperCase())).length;
+        const activeChallenges = filteredCaches.filter((doc) => String(doc.status || '').toUpperCase() === 'CHALLENGED').length;
+        const expiringSoon = filteredCaches.filter((doc) => {
+            const status = String(doc.status || '').toUpperCase();
+            if (!pendingStatuses.has(status)) return false;
+            const deadline = Number(doc.challengeDeadlineBlock || 0);
+            if (!Number.isFinite(deadline) || deadline <= 0) return false;
+            return deadline <= currentBlock + expiringWithinBlocks;
+        }).length;
+        const expiringTargets = filteredCaches
+            .filter((doc) => {
+                const status = String(doc.status || '').toUpperCase();
+                if (!pendingStatuses.has(status)) return false;
+                const deadline = Number(doc.challengeDeadlineBlock || 0);
+                if (!Number.isFinite(deadline) || deadline <= 0) return false;
+                return deadline <= currentBlock + expiringWithinBlocks;
+            })
+            .sort((a, b) => Number(a.challengeDeadlineBlock || 0) - Number(b.challengeDeadlineBlock || 0))
+            .slice(0, 50)
+            .map((doc) => ({
+                cacheId: String(doc.cacheId || ''),
+                dlcRef: String(doc.dlcRef || ''),
+                propertyId: Number(doc.propertyId || 0),
+                amount: Number(doc.amount || 0),
+                fromAddress: String(doc.fromAddress || ''),
+                toAddress: String(doc.toAddress || ''),
+                challengeDeadlineBlock: Number(doc.challengeDeadlineBlock || 0),
+                resolverAddress: String(doc.resolverAddress || '')
+            }));
+        const fraudProofsSubmitted = filteredCaches.reduce((sum, doc) => {
+            const n = Array.isArray(doc.challenged) ? doc.challenged.length : 0;
+            return sum + n;
+        }, 0);
+
+        const filteredGlobalRisk = globalRisk.filter((doc) => {
+            if (!hasPropertyFilter) return true;
+            return Number(doc.propertyId) === propertyId;
+        });
+        const pendingEscrow = filteredGlobalRisk.reduce((sum, doc) => sum + (Number(doc.pendingAmount || 0) || 0), 0);
+
+        const filteredDlcRisk = dlcRisk.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            if (dlcRef && String(doc.dlcRef || '') !== dlcRef) return false;
+            return true;
+        });
+        const pendingEscrowPerDlc = filteredDlcRisk.reduce((max, doc) => {
+            const amt = Number(doc.pendingAmount || 0) || 0;
+            return amt > max ? amt : max;
+        }, 0);
+
+        const windowBlocks = Math.max(1, Math.floor(envNum('TL_BITVM_SCHED_WINDOW_BLOCKS', 144)));
+        const currentWindowIdx = Math.floor(Math.max(0, currentBlock) / windowBlocks);
+        const currentWindowRows = windowRisk.filter((doc) => {
+            if (hasPropertyFilter && Number(doc.propertyId) !== propertyId) return false;
+            const idx = parseWindowIndex(doc._id);
+            return idx === currentWindowIdx;
+        });
+
+        const depositsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.depositAmount || 0) || 0), 0);
+        const withdrawalsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.withdrawAmount || 0) || 0), 0);
+        const sweepsThisWindow = currentWindowRows.reduce((sum, doc) => sum + (Number(doc.sweepAmount || 0) || 0), 0);
+
+        const commitSchemeRaw = String(process.env.TL_ORACLE_STATE_COMMIT_SCHEME || '').trim().toLowerCase();
+        const status = {
+            source: 'walletListener',
+            atBlock: currentBlock,
+            featureEnabled: process.env.TL_ORACLE_REQUIRE_STATE_ROOT === '1',
+            commitScheme: commitSchemeRaw === 'binohash' ? 'experimental-binohash' : 'legacy-merkle',
+            updatedAt: Date.now(),
+            cache: {
+                openCaches,
+                pendingEscrow,
+                pendingEscrowCap: envNum('TL_BITVM_MAX_PENDING_ESCROW', 0),
+                pendingEscrowPerDlc: pendingEscrowPerDlc,
+                pendingEscrowPerDlcCap: envNum('TL_BITVM_MAX_PENDING_ESCROW_PER_DLC', 0),
+            },
+            challenge: {
+                active: activeChallenges,
+                expiringSoon,
+                expiringTargets,
+                fraudProofsSubmitted,
+                watchtowerLastTick: 0,
+            },
+            sweep: {
+                windowBlocks,
+                depositsThisWindow,
+                withdrawalsThisWindow,
+                sweepsThisWindow,
+                maxDepositPerWindow: envNum('TL_BITVM_MAX_DEPOSIT_PER_WINDOW', 0),
+                maxWithdrawPerWindow: envNum('TL_BITVM_MAX_WITHDRAW_PER_WINDOW', 0),
+                maxSweepPerWindow: envNum('TL_BITVM_MAX_SWEEP_PER_WINDOW', 0),
+            }
+        };
+        res.json(status);
+    } catch (error) {
+        console.error('Error fetching bitvm status:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
 
 // Get activations
 app.post('/tl_getActivations', async (req, res) => {

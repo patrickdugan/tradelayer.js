@@ -1,6 +1,14 @@
 const db = require('./db.js');
 const path = require('path');
 const BigNumber = require('bignumber.js')
+function getTallyMap() {
+    // Lazy-load to avoid circular dependency returning a partial export.
+    return require('./tally.js');
+}
+
+function quantize8(value) {
+    return new BigNumber(value || 0).decimalPlaces(8, BigNumber.ROUND_HALF_UP).toNumber();
+}
 
 class PropertyManager {
     static instance = null;
@@ -59,7 +67,7 @@ class PropertyManager {
         return maxId + 1;
     }
 
-    async createToken(ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
+    async createToken(ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta = {}) {
         // Check if the ticker already exists
 
         if (this.propertyIndex.has(ticker)) {
@@ -72,12 +80,12 @@ class PropertyManager {
         }
 
         const propertyId = await this.getNextPropertyId();
-        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress);
+        await this.addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta);
         console.log(`Token created: ID = ${propertyId}, Ticker = ${ticker}, Type = ${type}`);
         return propertyId;
       }
 
-    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress) {
+    async addProperty(propertyId, ticker, totalInCirculation, type, whitelistId, issuer, backupAddress, meta = {}) {
         
         const propertyTypeIndexes = {
             'Fixed': 1,
@@ -86,6 +94,7 @@ class PropertyManager {
             'Vesting': 4,
             'Synthetic': 5,
             'Non-Fungible': 6,
+            'Procedural': 7,
         };
 
         if (!propertyTypeIndexes[type]) {
@@ -101,31 +110,42 @@ class PropertyManager {
 
         if (existingProperty) {
             // If property exists, update totalInCirculation and other fields if necessary
-            existingProperty.totalInCirculation = BigNumber(existingProperty.totalInCirculation).plus(totalInCirculation).toNumber();
+            existingProperty.totalInCirculation = quantize8(
+                BigNumber(existingProperty.totalInCirculation).plus(totalInCirculation)
+            );
             existingProperty.ticker = ticker || existingProperty.ticker;
             existingProperty.type = propertyTypeIndexes[type];
             existingProperty.whitelistId = whitelistId || existingProperty.whitelistId;
             existingProperty.issuer = issuer || existingProperty.issuer;
             existingProperty.backupAddress = backupAddress || existingProperty.backupAddress;
+            if (meta.proceduralType !== undefined && meta.proceduralType !== null) {
+                existingProperty.proceduralType = Number(meta.proceduralType);
+            }
         } else {
             // If property does not exist, create a new one
             existingProperty = {
                 ticker,
-                totalInCirculation,
+                totalInCirculation: quantize8(totalInCirculation),
                 type: propertyTypeIndexes[type],
                 whitelistId: whitelistId,
                 issuer: issuer,
-                backupAddress: backupAddress
+                backupAddress: backupAddress,
+                proceduralType: (meta.proceduralType !== undefined && meta.proceduralType !== null)
+                    ? Number(meta.proceduralType)
+                    : undefined
             };
         }
 
         let blob =  {
             ticker,
-            totalInCirculation,
+            totalInCirculation: quantize8(totalInCirculation),
             type: propertyTypeIndexes[type],
             whitelistId: whitelistId,
             issuer: issuer,
-            backupAddress: backupAddress
+            backupAddress: backupAddress,
+            proceduralType: (meta.proceduralType !== undefined && meta.proceduralType !== null)
+                ? Number(meta.proceduralType)
+                : undefined
         }
 
         this.propertyIndex.set(propertyId,existingProperty);
@@ -183,9 +203,9 @@ class PropertyManager {
                 throw new Error(`Property with ID ${propertyId} not found.`);
             }
 
-            // Check if the property type is 2 (Managed)
+            // Check if the property type is managed/procedural
             const propertyData = propertyEntry[1];
-            return propertyData.type === 2&&propertyData.issuer===address;
+            return (propertyData.type === 2 || propertyData.type === 7) && propertyData.issuer===address;
         } catch (error) {
             console.error(`Error checking if property ID ${propertyId} is managed:`, error);
             return false;
@@ -202,7 +222,9 @@ class PropertyManager {
             throw new Error('Property not found');
         }
 
-        propertyData.totalInCirculation = BigNumber(propertyData.totalInCirculation).plus(amountChange).toNumber();
+        propertyData.totalInCirculation = quantize8(
+            BigNumber(propertyData.totalInCirculation).plus(amountChange)
+        );
 
         // Update the property data in the database
         const base= await db.getDatabase('propertyList')
@@ -292,16 +314,20 @@ class PropertyManager {
     }
 
     async grantTokens(propertyId, recipient, amount,block) {
-        const propertyData = await this.getPropertyData(propertyId);
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
         if (!propertyData) {
             throw new Error(`Property with ID ${propertyId} not found.`);
         }
 
         // Update managed supply
-        propertyData.totalInCirculation += amount;
+        propertyData.totalInCirculation = quantize8(
+            new BigNumber(propertyData.totalInCirculation).plus(amount)
+        );
+        await PropertyManager.load();
+        this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to credit the amount to recipient
-        await TallyMap.updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
+        await getTallyMap().updateBalance(recipient, propertyId, amount,0,0,0,'grantToken',block);
 
         // Save changes
         await this.save();
@@ -309,21 +335,25 @@ class PropertyManager {
     }
 
     async redeemTokens(propertyId, recipient, amount,block) {
-        const propertyData = await this.getPropertyData(propertyId);
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
         if (!propertyData) {
             throw new Error(`Property with ID ${propertyId} not found.`);
         }
 
         // Ensure enough managed tokens available for redemption
-        if (propertyData.totalInCirculation < amount) {
+        if (new BigNumber(propertyData.totalInCirculation).lt(amount)) {
             throw new Error(`Insufficient managed tokens for redemption for property ${propertyId}.`);
         }
 
         // Update managed supply
-        propertyData.totalInCirculation -= amount;
+        propertyData.totalInCirculation = quantize8(
+            new BigNumber(propertyData.totalInCirculation).minus(amount)
+        );
+        await PropertyManager.load();
+        this.propertyIndex.set(Number(propertyId), propertyData);
 
         // Update tally map to debit the amount from recipient
-        await TallyMap.updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
+        await getTallyMap().updateBalance(recipient, propertyId, -amount,0,0,0,'redeemToken',block);
 
         // Save changes
         await this.save();
@@ -374,28 +404,31 @@ class PropertyManager {
 
     static async updateAdmin(propertyId, newAddress, backup) {
         try {
-            // Ensure the property index is loaded
-            await PropertyManager.load();
+            const base = await db.getDatabase('propertyList');
+            const indexDoc = await base.findOneAsync({ _id: 'propertyIndex' });
+            if (!indexDoc || !indexDoc.value) {
+                throw new Error('Property index not found.');
+            }
 
-            // Check if the property exists
-            if (!PropertyManager.instance.propertyIndex.has(propertyId)) {
+            const parsedData = JSON.parse(indexDoc.value);
+            const idx = parsedData.findIndex(entry => Number(entry[0]) === Number(propertyId));
+            if (idx < 0) {
                 throw new Error(`Property with ID ${propertyId} does not exist.`);
             }
 
-            // Get the property data
-            const propertyData = await getPropertyData(propertyId);
-
-            if(backup){
-                properData.backupAddress=newAddress
-            }else{
-                 // Update the admin address
-                propertyData.issuer = newAddress; 
+            const propertyData = parsedData[idx][1];
+            if (backup) {
+                propertyData.backupAddress = newAddress;
+            } else {
+                propertyData.issuer = newAddress;
             }
+            parsedData[idx][1] = propertyData;
 
-            // Update the property index with the modified property data
-            this.propertyIndex.set(propertyId, propertyData);
-
-            await this.save();
+            await base.updateAsync(
+                { _id: 'propertyIndex' },
+                { $set: { value: JSON.stringify(parsedData) } },
+                { upsert: true }
+            );
 
             console.log(`Admin address for property ID ${propertyId} updated to ${newAddress}.`);
         } catch (error) {

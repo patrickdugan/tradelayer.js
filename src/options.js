@@ -1,6 +1,8 @@
-// options.js
-// Singleton helper for option tickers, reduce/flip bookkeeping, rPNL, and simple valuation.
-// No state stored; singleton export for convenience.
+const BigNumber = require('bignumber.js');
+
+function bn(v) {
+  return new BigNumber(v || 0);
+}
 
 class OptionsEngine {
   // "series-expiry-(C|P)-strike?"
@@ -21,17 +23,13 @@ class OptionsEngine {
     return { seriesId, expiryBlock, type, strike, raw: t };
   }
 
-  /**
-   * Given existing signed qty and a signed delta, compute how much is closing vs flipping.
-   * existing >0 long, <0 short. delta >0 buy, <0 sell.
-   */
   computeReduceFlip(existingQty, deltaQty) {
     const ex = Number(existingQty) || 0;
-    const d  = Number(deltaQty)    || 0;
+    const d = Number(deltaQty) || 0;
     const after = ex + d;
 
     const exSide = ex > 0 ? 'LONG' : ex < 0 ? 'SHORT' : null;
-    const dSide  = d  > 0 ? 'LONG' : d  < 0 ? 'SHORT' : null;
+    const dSide = d > 0 ? 'LONG' : d < 0 ? 'SHORT' : null;
 
     let closedQty = 0;
     let flipQty = 0;
@@ -44,83 +42,106 @@ class OptionsEngine {
     }
 
     const afterSide = after > 0 ? 'LONG' : after < 0 ? 'SHORT' : null;
-
     return { existing: ex, delta: d, after, exSide, dSide, afterSide, closedQty, flipQty };
   }
 
-  /**
-   * Realized PnL when reducing an option position.
-   * Long reduce: (trade - avg) * qty
-   * Short reduce: (avg - trade) * qty
-   */
   rpnlForClose(exSide, closedQty, tradePrice, avgPrice) {
-    const q = Number(closedQty)   || 0;
-    const p = Number(tradePrice)  || 0;
-    const a = Number(avgPrice)    || 0;
-    if (!q || !exSide) return 0;
-    return exSide === 'LONG' ? (p - a) * q : (a - p) * q;
+    const q = bn(closedQty);
+    const p = bn(tradePrice);
+    const a = bn(avgPrice);
+    if (q.isZero() || !exSide) return bn(0);
+    return exSide === 'LONG' ? p.minus(a).times(q) : a.minus(p).times(q);
   }
 
-  /**
-   * Intrinsic value at spot S (European payoff at mark).
-   */
   intrinsic(type, K, S) {
-    const k = Number(K) || 0;
-    const s = Number(S) || 0;
-    if (type === 'Call') return Math.max(0, s - k);
-    return Math.max(0, k - s);
+    const k = bn(K);
+    const s = bn(S);
+    if (type === 'Call') return BigNumber.max(0, s.minus(k));
+    return BigNumber.max(0, k.minus(s));
   }
 
-  /**
-   * Very light EU price proxy using Bachelier (normal) to avoid heavy math deps:
-   * price ≈ intrinsic + v * sqrt(T) * phi(0)   (with a tiny convexity tweak)
-   * where v = vol (in price units), T in years.
-   * If you store a per-series vol index σ_annual (as decimal), you can use
-   * a Bachelier-like proxy with v = σ_annual * S for calls; puts symmetric.
-   * If vol is missing, fallback to intrinsic.
-   */
   priceEUApprox(type, S, K, volAnnual, daysToExpiry) {
-    const s = Number(S) || 0;
-    const k = Number(K) || 0;
-    const T = Math.max(0, Number(daysToExpiry || 0)) / 365;
+    const s = bn(S);
+    const k = bn(K);
+    const tYears = Math.max(0, Number(daysToExpiry || 0)) / 365;
     const iv = this.intrinsic(type, k, s);
-    if (!volAnnual || !T) return iv;
+    if (!volAnnual || !tYears) return iv;
 
-    const sigma = Number(volAnnual);          // if you store as decimal (e.g. 0.6)
-    const v = sigma * s;                      // price vol in Bachelier
-    const noise = v * Math.sqrt(T) * 0.3989;  // ≈ φ(0) ~ 0.3989
-    // keep it conservative: intrinsic plus a slice of noise
-    return Math.max(iv, iv + noise);
+    const sigma = Number(volAnnual);
+    const v = s.times(sigma);
+    const noise = v.times(Math.sqrt(tYears)).times(0.3989);
+    return BigNumber.max(iv, iv.plus(noise));
   }
 
-  /**
-   * Maintenance for *naked* shorts (10x leverage padding, your rule of thumb).
-   * Use strike/10 as generic notional for puts, and S/10 for calls (conservative).
-   * You can tune this per-series if you store policy on the registry.
-   */
   nakedMaintenance(type, K, S) {
-    if (type === 'Call') return (Number(S) || 0) / 10; // ~10x leverage on spot notional
-    return (Number(K) || 0) / 10;                      // puts on strike notional
+    if (type === 'Call') return bn(S).div(10);
+    return bn(K).div(10);
   }
 
-  /**
-   * Mark-to-model exposure for a set of option positions (for liquidation offsets).
-   * positions: [{ type:'Call'|'Put', strike, qty (signed), avgPrice?, expiryBlock }]
-   * Returns total premium value (signed) at current S, using vol index and time.
-   */
   mtmExposure(positions, S, volAnnual, blocksToExpiry, blocksPerDay) {
-    const bpd = Math.max(1, Number(blocksPerDay || 144)); // default ~ Bitcoin-like
+    const bpd = Math.max(1, Number(blocksPerDay || 144));
     const days = Math.max(0, Number(blocksToExpiry || 0) / bpd);
-    let prem = 0, intr = 0;
-    for (const p of (positions || [])) {
+    let prem = bn(0);
+    let intr = bn(0);
+    for (const p of positions || []) {
       const price = this.priceEUApprox(p.type, S, p.strike, volAnnual, days);
-      prem += price * (Number(p.qty) || 0);
-      intr += this.intrinsic(p.type, p.strike, S) * (Number(p.qty) || 0);
+      const qty = bn(p.qty || 0);
+      prem = prem.plus(price.times(qty));
+      intr = intr.plus(this.intrinsic(p.type, p.strike, S).times(qty));
     }
     return { premium: prem, intrinsic: intr };
   }
+
+  portfolioMaintenance(positions, spot) {
+    const byKey = new Map();
+    for (const p of positions || []) {
+      const type = p?.type;
+      const expiry = Number(p?.expiryBlock || 0);
+      if (!type) continue;
+      const k = `${type}:${expiry}`;
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push({
+        type,
+        expiryBlock: expiry,
+        strike: bn(p?.strike || 0),
+        qty: bn(p?.qty || 0)
+      });
+    }
+
+    let total = bn(0);
+
+    for (const legs of byKey.values()) {
+      const shorts = legs.filter((x) => x.qty.lt(0)).map((x) => ({ ...x, rem: x.qty.abs() }));
+      const longs = legs.filter((x) => x.qty.gt(0)).map((x) => ({ ...x, rem: bn(x.qty) }));
+
+      for (const s of shorts) {
+        total = total.plus(this.nakedMaintenance(s.type, s.strike, spot).times(s.rem));
+      }
+
+      for (const s of shorts) {
+        for (const l of longs) {
+          if (s.rem.lte(0) || l.rem.lte(0)) continue;
+          if (s.type !== l.type) continue;
+          const protective =
+            (s.type === 'Call' && l.strike.gt(s.strike)) ||
+            (s.type === 'Put' && l.strike.lt(s.strike));
+          if (!protective) continue;
+
+          const coveredQty = BigNumber.min(s.rem, l.rem);
+          const width = l.strike.minus(s.strike).abs();
+          const offset = width.div(10).times(coveredQty);
+          const maxOffset = this.nakedMaintenance(s.type, s.strike, spot).times(coveredQty);
+
+          total = total.minus(BigNumber.min(offset, maxOffset));
+          s.rem = s.rem.minus(coveredQty);
+          l.rem = l.rem.minus(coveredQty);
+        }
+      }
+    }
+
+    return total.isNegative() ? bn(0) : total;
+  }
 }
 
-// Export as a singleton instance.
 const Options = new OptionsEngine();
 module.exports = Options;

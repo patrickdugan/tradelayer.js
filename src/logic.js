@@ -23,6 +23,7 @@ const PropertyManager = require('./property.js'); // Manages properties
 const ContractRegistry = require('./contractRegistry.js'); // Registry for contracts
 const ClearList = require('./clearlist.js')
 const Scaling = require('./scaling.js')
+const { ScalingL2: ScalingLogic } = require('./scaling.js');
 //const Consensus = require('./consensus.js'); // Functions for handling consensus
 const Channels = require('./channels.js')
 const Encode = require('./txEncoder.js'); // Encodes transactions
@@ -34,7 +35,108 @@ const VolumeIndex = require('./volumeIndex.js')
 const SynthRegistry = require('./vaults.js')
 const TradeHistory = require('./tradeHistoryManager.js')
 const OptionsEngine = require('./options.js');
-const IssuanceIntent = require('./issuanceIntent.js');
+const { ProceduralRegistry } = require('./procedural.js');
+const { BitvmCacheRegistry } = require('./bitvmCache.js');
+const { verifyBundleHash } = require('./bitvmBundle.js');
+const BitvmRisk = require('./bitvmRisk.js');
+const BinohashAdapter = require('./experimental/binohash/binohashAdapter.js');
+
+const SettleType = {
+    KEEP_ALIVE: 0,
+    CLOSE_POSITION: 1,
+    NET_SETTLE: 2,
+    KING_SETTLE: 3
+};
+
+function parseRelayBlobRaw(relayBlob) {
+    if (!relayBlob) return null;
+    try {
+        const raw = (typeof relayBlob === 'string' && relayBlob.startsWith('b64:'))
+            ? Buffer.from(relayBlob.slice(4), 'base64').toString('utf8')
+            : relayBlob;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+function sha256Hex(input) {
+    return require('crypto').createHash('sha256').update(input).digest('hex');
+}
+
+function verifyStateAnchoredSettlement(params, relayParsed, settlement) {
+    const requireStateRoot = String(process.env.TL_ORACLE_REQUIRE_STATE_ROOT || '').trim() === '1';
+    if (!requireStateRoot) return;
+    if (!relayParsed || typeof relayParsed !== 'object') {
+        throw new Error('State-root gate: missing parsed relay bundle');
+    }
+    const payloadHash = String(relayParsed.payloadHash || '').trim().toLowerCase();
+    const payloadB64 = String(relayParsed.balancePayloadB64 || '').trim();
+    if (!payloadHash || !payloadB64) {
+        throw new Error('State-root gate: payloadHash/balancePayloadB64 required');
+    }
+    const computedPayloadHash = sha256Hex(Buffer.from(payloadB64, 'base64'));
+    if (computedPayloadHash !== payloadHash) {
+        throw new Error('State-root gate: payload hash mismatch');
+    }
+
+    let payloadDoc = null;
+    try {
+        payloadDoc = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+    } catch {
+        throw new Error('State-root gate: invalid balance payload encoding');
+    }
+
+    const stateRoot = String(settlement.stateRoot || payloadDoc?.stateRoot || '').trim().toLowerCase();
+    const payloadStateRoot = String(payloadDoc?.stateRoot || '').trim().toLowerCase();
+    if (!stateRoot || !payloadStateRoot) {
+        throw new Error('State-root gate: missing settlement/payload stateRoot');
+    }
+    if (stateRoot !== payloadStateRoot) {
+        throw new Error('State-root gate: stateRoot mismatch');
+    }
+
+    const transitionHash = String(settlement.transitionHash || '').trim().toLowerCase();
+    const expectedTransitionHash = sha256Hex(JSON.stringify({
+        mode: String(settlement.mode || settlement.action || '').toLowerCase(),
+        propertyId: Number(settlement.propertyId || 0),
+        amount: Number(settlement.amount || 0),
+        fromAddress: String(settlement.fromAddress || settlement.holderAddress || ''),
+        toAddress: String(settlement.toAddress || settlement.recipientAddress || ''),
+        cacheId: String(settlement.cacheId || ''),
+        dlcRef: String(params?.dlcRef || ''),
+        stateHash: String(params?.stateHash || '')
+    }));
+    if (transitionHash && transitionHash !== expectedTransitionHash) {
+        throw new Error('State-root gate: transitionHash mismatch');
+    }
+
+    const transitions = Array.isArray(payloadDoc?.transitions) ? payloadDoc.transitions.map((x) => String(x || '').toLowerCase()) : [];
+    if (transitions.length > 0 && !transitions.includes(expectedTransitionHash)) {
+        throw new Error('State-root gate: transition not included in payload transitions');
+    }
+
+    const scheme = String(process.env.TL_ORACLE_STATE_COMMIT_SCHEME || '').trim().toLowerCase();
+    if (scheme === 'binohash') {
+        const binoRoot = String(payloadDoc?.binohash?.root || payloadDoc?.binoRoot || '').trim().toLowerCase();
+        if (!binoRoot) {
+            throw new Error('State-root gate: binohash root missing');
+        }
+        if (stateRoot !== binoRoot) {
+            throw new Error('State-root gate: stateRoot must equal binohash root');
+        }
+
+        const proof = Array.isArray(settlement.binoProof) ? settlement.binoProof : [];
+        const proofCheck = BinohashAdapter.verifyProof({
+            transitionHash: transitionHash || expectedTransitionHash,
+            root: binoRoot,
+            proof
+        });
+        if (!proofCheck.valid) {
+            throw new Error(`State-root gate: ${proofCheck.reason}`);
+        }
+    }
+}
 
 // logic.js
 const Logic = {
@@ -50,7 +152,18 @@ const Logic = {
                 await Logic.activateTradeLayer(params.txTypesToActivate, params.block, params.codeHash);
                 break;
             case 1:
-                await Logic.tokenIssue(params.senderAddress, params.initialAmount, params.ticker, params.url, params.whitelistId, params.isManaged, params.backupAddress, params.isNFT, params.block);
+                await Logic.tokenIssue(
+                    params.senderAddress,
+                    params.initialAmount,
+                    params.ticker,
+                    params.url,
+                    Array.isArray(params.whitelists) ? (params.whitelists[0] || 0) : (params.whitelistId || 0),
+                    params.managed ?? params.isManaged,
+                    params.backupAddress,
+                    params.nft ?? params.isNFT,
+                    params.block,
+                    params.proceduralType
+                );
                 break;
             case 2:
                 await Logic.sendToken(params.sendAll, params.senderAddress, params.address, params.propertyIds, params.amounts,params.block);
@@ -61,7 +174,17 @@ const Logic = {
                 break;
             case 4:
                 console.log('in the commit case '+params.txid)
-                await Logic.commitToken(params.senderAddress, params.channelAddress, params.propertyId, params.amount, params.payEnabled, params.clearLists, params.block, params.txid);
+                await Logic.commitToken(
+                    params.senderAddress,
+                    params.channelAddress,
+                    params.propertyId,
+                    params.amount,
+                    params.payEnabled,
+                    params.clearLists,
+                    params.block,
+                    params.txid,
+                    params.commitClearlistId
+                );
                 break;
             case 5:
                 await Logic.onChainTokenToToken(params.senderAddress, params.propertyIdOffered, params.propertyIdDesired, params.amountOffered, params.amountExpected, params.txid, params.block, params.stop, params.post);
@@ -70,16 +193,16 @@ const Logic = {
                 await Logic.cancelOrder(params.senderAddress, params.isContract, params.offeredPropertyId, params.desiredPropertyId, params.cancelAll, params.cancelParams, params.block);
                 break;
            case 7:
-                await Logic.createClearList(sender, params.name, params.url, params.description, params.backupAddress, params.block);
+                await Logic.createClearList(params.senderAddress, params.name, params.url, params.description, params.backupAddress, params.block);
                 break;
             case 8:
                 await Logic.updateAdmin(params.whitelist, params.token, params.oracle, params.id, params.newAddress, params.updateBackup, params.block);
                 break;
             case 9:
-                await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block);
+                await Logic.issueOrRevokeAttestation(params.sender, params.id, params.targetAddress, params.metaData, params.revoke, params.block, params.merkleRoot);
                 break;
             case 10:
-                await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id1, params.amount, params.id2, params.amount2);
+                await Logic.AMMPool(params.senderAddress, params.block, params.isRedeem, params.isContract, params.id, params.amount, params.id2, params.amount2);
                 break;
             case 11:
                 await Logic.grantManagedToken(
@@ -88,13 +211,22 @@ const Logic = {
                     params.addressToGrantTo,
                     params.senderAddress,
                     params.block,
-                    params.commitClearlistId,
-                    params.txid,
-                    params.dlcHash
+                    params.dlcHash,
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
                 );
                 break;
             case 12:
-                await Logic.redeemManagedToken(params.propertyId, params.amount, params.propertyManager, params.senderAddress, params.block);
+                await Logic.redeemManagedToken(
+                    params.propertyId,
+                    params.amountDestroyed,
+                    params.senderAddress,
+                    params.block,
+                    params.dlcTemplateId,
+                    params.dlcContractId,
+                    params.settlementState
+                );
                 break;
             case 13:
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.clearlists, params.lag, params.oracleRegistry, params.block);
@@ -139,7 +271,7 @@ const Logic = {
                 await Logic.payToTokens(params.tallyMap, params.propertyIdTarget, params.propertyIdUsed, params.amount, params.block);
                 break;
             case 27:
-                await processOptionTrade(sender, params, txid);
+                await Logic.processOptionTrade(params.senderAddress, params, params.txid);
                 break;
             case 28:
                 await Logic.tradeBaiUrbun(params.channelAddress, params.propertyIdDownPayment, params.propertyIdToBeSold, params.downPaymentPercent, params.amount, params.expiryBlock, params.tradeExpiryBlock, params.block);
@@ -148,10 +280,10 @@ const Logic = {
                 await Logic.tradeMurabaha(params.channelAddress, params.buyerAddress, params.sellerAddress, params.propertyId, params.costPrice, params.profitMargin, params.paymentBlockHeight, params.block);
                 break;
             case 30:
-                await Logic.issueInvoice(params.propertyManager, params.invoiceRegistry, params.propertyIdToReceivePayment, params.amount, params.dueDateBlock, params.propertyIdCollateral, params.receivesPayToToken, params.issuerNonce, params.block);
+                await Logic.processStakeFraudProof(params.senderAddress, params, params.block);
                 break;
             case 31:
-                Logic.batchSettlement(params);
+                await Logic.batchSettlement(params);
                 break;
             case 32:
                 await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);
@@ -188,11 +320,14 @@ const Logic = {
     },
 
 
-    async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block) {
+    async tokenIssue(sender, initialAmount, ticker, url = '', clearlistId = 0, isManaged = false, backupAddress = '', isNFT = false, block, proceduralType = null) {
         const propertyManager = PropertyManager.getInstance();
 
         // Determine the type of the token based on whether it's managed or an NFT
         let tokenType = isNFT ? 'Non-Fungible' : isManaged ? 'Managed' : 'Fixed';
+        if (proceduralType !== null && proceduralType !== undefined && isManaged) {
+            tokenType = 'Procedural';
+        }
 
         // Define the token data
         const tokenData = {
@@ -201,12 +336,21 @@ const Logic = {
             type: tokenType,
             clearlistId: clearlistId,
             issuer: sender,
-            backupAddress: backupAddress
+            backupAddress: backupAddress,
+            proceduralType
         };
 
         // Create the token in the property manager
         try {
-            var newPropertyId = await propertyManager.createToken(ticker, initialAmount, tokenType, clearlistId, sender, backupAddress);
+            var newPropertyId = await propertyManager.createToken(
+                ticker,
+                initialAmount,
+                tokenType,
+                clearlistId,
+                sender,
+                backupAddress,
+                { proceduralType }
+            );
             //console.log('created token, now creating the units at '+sender+ ' in amount '+initialAmount)
             await TallyMap.updateBalance(sender, newPropertyId, initialAmount, 0, 0, 0,'issuance',block);
             return `Token ${ticker} (ID: ${newPropertyId}) created. Type: ${tokenType}`;
@@ -372,6 +516,49 @@ const Logic = {
         return
 	},
 
+    _liquidityRewardQueue: new Map(),
+    _liquidityRewardVolumeCache: new Map(),
+
+    queueLiquidityReward(address, amount, block, txid, reason = 'liquidityReward') {
+        const amt = new BigNumber(amount || 0).decimalPlaces(8, BigNumber.ROUND_DOWN);
+        if (amt.lte(0)) return;
+        const blockKey = String(block);
+        let byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock) {
+            byBlock = new Map();
+            this._liquidityRewardQueue.set(blockKey, byBlock);
+        }
+        const prev = byBlock.get(address);
+        if (!prev) {
+            byBlock.set(address, { amount: amt, txid, reason });
+        } else {
+            prev.amount = prev.amount.plus(amt).decimalPlaces(8, BigNumber.ROUND_DOWN);
+            byBlock.set(address, prev);
+        }
+    },
+
+    async settleLiquidityRewards(block) {
+        const blockKey = String(block);
+        const byBlock = this._liquidityRewardQueue.get(blockKey);
+        if (!byBlock || byBlock.size === 0) return;
+        for (const [address, entry] of byBlock.entries()) {
+            if (entry.amount.lte(0)) continue;
+            await TallyMap.updateBalance(
+                address,
+                3,
+                entry.amount.toNumber(),
+                0,
+                0,
+                0,
+                entry.reason || 'liquidityReward',
+                block,
+                entry.txid
+            );
+        }
+        this._liquidityRewardQueue.delete(blockKey);
+        this._liquidityRewardVolumeCache.delete(blockKey);
+    },
+
 	async tradeTokenForUTXO(senderAddress, receiverAddress, propertyId, tokenAmount, columnA, satsExpected, tokenDeliveryAddress, satsReceived, price, paymentPercent, tagWithdraw, block, txid) {	   
         // Calculate the number of tokens to deliver based on the LTC received
         const receiverLTCReceivedBigNumber = new BigNumber(satsReceived);
@@ -477,39 +664,66 @@ const Logic = {
             };
             const orderbook = await Orderbook.getOrderbookInstance(key)
             await orderbook.recordTokenTrade(trade,block,txid)
-            TallyMap.updateFeeCache(propertyId,fee,1,block)
-            const isListedA = await ClearList.isAddressInClearlist(2, senderAddress);
-            const isListedB = await ClearList.isAddressInClearlist(2, receiverAddress)
-            let isTokenListed = false
+            const rewardAddressListId = Number(process.env.LIQUIDITY_REWARD_ADDRESS_CLEARLIST_ID || 2);
+            const rewardIssuerListId = Number(process.env.LIQUIDITY_REWARD_ISSUER_CLEARLIST_ID || 1);
+            const allowlistRaw = String(process.env.LIQUIDITY_REWARD_PROPERTY_ALLOWLIST || "");
+            const allowlist = new Set(
+                allowlistRaw.split(",").map(s => Number(s.trim())).filter(n => Number.isFinite(n))
+            );
+
+            const isListedA = await ClearList.isAddressInClearlist(rewardAddressListId, senderAddress).catch(() => false);
+            const isListedB = await ClearList.isAddressInClearlist(rewardAddressListId, receiverAddress).catch(() => false);
+            let isTokenListed = false;
             if (String(propertyId).startsWith('s-')) {
-                isTokenListed = true //need to add logic to look up the contractId inline to the synth id and then look up its pairs
-                                    // and then look up if those tokens are listed
-            }else{
-                let propertyInfo = PropertyManager.getPropertyData(propertyId)
-                if(propertyInfo.issuer){
-                    isTokenListed = await ClearList.isAddressInClearlist(1, propertyInfo.issuer);
+                isTokenListed = allowlist.size === 0 || allowlist.has(Number(propertyId));
+            } else {
+                const propertyInfo = await PropertyManager.getPropertyData(propertyId);
+                const allowById = allowlist.size === 0 || allowlist.has(Number(propertyId));
+                const allowByIssuer = propertyInfo?.issuer
+                    ? await ClearList.isAddressInClearlist(rewardIssuerListId, propertyInfo.issuer).catch(() => false)
+                    : false;
+                isTokenListed = allowById && (allowlist.size > 0 || allowByIssuer);
+            }
+
+            const eligibleParticipants = (isListedA ? 1 : 0) + (isListedB ? 1 : 0);
+            if (isTokenListed && eligibleParticipants > 0) {
+                const blockKey = String(block);
+                let cumulative = this._liquidityRewardVolumeCache.get(blockKey);
+                if (!cumulative) {
+                    cumulative = await VolumeIndex.getCumulativeVolumes(block + 1).catch(() => null);
+                    this._liquidityRewardVolumeCache.set(blockKey, cumulative || {});
+                }
+                const cumulativeLtc = Number(cumulative?.ltcPairTotalVolume || cumulative?.globalCumulativeVolume || 0);
+                const rewardBudget = await VolumeIndex.calculateLiquidityReward(tokenAmount, propertyId, {
+                    feePaid: fee,
+                    cumulativeLtc,
+                    block,
+                    maxShare: Number(process.env.LIQUIDITY_REWARD_MAX_SHARE || 0.35),
+                    minShare: Number(process.env.LIQUIDITY_REWARD_MIN_SHARE || 0.02),
+                    pivotLtc: Number(process.env.LIQUIDITY_REWARD_PIVOT_LTC || 1000),
+                    slope: Number(process.env.LIQUIDITY_REWARD_SLOPE || 1)
+                });
+
+                if (rewardBudget > 0) {
+                    const perAddress = new BigNumber(rewardBudget)
+                        .div(eligibleParticipants)
+                        .decimalPlaces(8, BigNumber.ROUND_DOWN);
+                    const spent = perAddress.times(eligibleParticipants);
+                    const remainder = new BigNumber(rewardBudget).minus(spent).decimalPlaces(8, BigNumber.ROUND_DOWN);
+
+                    if (isListedA) this.queueLiquidityReward(senderAddress, perAddress, block, txid, 'liquidityReward');
+                    if (isListedB) {
+                        const extra = remainder.gt(0) && !isListedA ? remainder : new BigNumber(0);
+                        this.queueLiquidityReward(receiverAddress, perAddress.plus(extra), block, txid, 'liquidityReward');
+                    } else if (isListedA && remainder.gt(0)) {
+                        this.queueLiquidityReward(senderAddress, remainder, block, txid, 'liquidityRewardRemainder');
+                    }
                 }
             }
-            console.log('is token/address listed for liquidity reward '+isListedA+' '+isListedB+' '+isTokenListed)    
-                if(isTokenListed){
-                        const liqRewardBaseline1= await VolumeIndex.baselineLiquidityReward(satsReceived,0.000025,0)
-                        const liqRewardBaseline2= await VolumeIndex.baselineLiquidityReward(tokenAmount,0.000025,propertyId)
-                        TallyMap.updateBalance(senderAddress,3,liqRewardBaseline1,0,0,0,'baselineLiquidityReward')
-                        TallyMap.updateBalance(receiverAddress,3,liqRewardBaseline2,0,0,0,'baselineLiquidityReward')
-                }
-                if(isListedA){
-                    const liqReward1= await VolumeIndex.calculateLiquidityReward(satsReceived,0)    
-                    TallyMap.updateBalance(senderAddress,3,liqReward1,0,0,0,'enhancedLiquidityReward')
-                }
-                if(isListedB){
-                    const liqReward2= await VolumeIndex.calculateLiquidityReward(tokenAmount,propertyId)
-                    TallyMap.updateBalance(receiverAddress,3,liqReward2,0,0,0,'enhancedLiquidityReward')
-
-                }
-                return
+            return
 	},
 	// commitToken: Commits tokens for a specific purpose
-	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid) {
+	async commitToken(senderAddress, channelAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid, commitClearlistId = null) {
        
         // Deduct tokens from sender's available balance
         await TallyMap.updateBalance(senderAddress, propertyId, -tokenAmount, 0, 0, 0,'commit',block);
@@ -518,7 +732,7 @@ const Logic = {
         await TallyMap.updateChannelBalance(channelAddress, propertyId, tokenAmount,'channelReceive',block);
         console.log('commiting tokens '+tokenAmount+' '+block+' '+txid)
         // Determine which column (A or B) to assign the tokens in the channel registry
-        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid);
+        await Channels.recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, block, txid, commitClearlistId);
 
         console.log(`Committed ${tokenAmount} tokens of propertyId ${propertyId} from ${senderAddress} to channel ${channelAddress}`);
         return;
@@ -634,7 +848,7 @@ const Logic = {
 		     * @param {string} [params.backupAddress] - Optional backup address for admin operations
 		     * @returns {Object} - The result of the clearlist creation
 		     */
-	async createClearList(adminAddress, name, url, description, backupAddress, block){
+ 	async createClearList(adminAddress, name, url, description, backupAddress, block){
 
 		        // Validate input parameters
 		        if (!adminAddress) {
@@ -642,13 +856,14 @@ const Logic = {
 		        }
 
 		        // Create the clearlist
-		        const clearlistData = await ClearList.createclearlist({
+		        // clearlist.js exports createClearlist; keep a stable call site here.
+		        const clearlistData = await ClearList.createClearlist(
 		            adminAddress,
 		            name,
 		            url,
                     description,
 		            backupAddress
-		        });
+		        );
 
 		        // Return a message with the new clearlist ID
 		        return {
@@ -656,31 +871,49 @@ const Logic = {
 		        };
 		},
 
-    async updateAdmin(whitelist,token,oracle, newAddress, id, updateBackup, block) {
+    async updateAdmin(whitelist,token,oracle, id, newAddress, updateBackup, block) {
 
 	    if(whitelist){
                 await ClearList.updateAdmin(id, newAddress,updateBackup);
         }else if(token){
                 await PropertyList.updateAdmin(id, newAddress,updateBackup);
         }else if(oracle){
-                await OracleList.updateAdmin(entityId, newAddress, updateBackup);
+                await OracleList.updateAdmin(id, newAddress, updateBackup);
         }
 
-	    console.log(`Admin updated for ${entityType} ${entityId}`);
+	    console.log(`Admin updated for id=${id}`);
         return
 	},
 
 
-    async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block) {
+    async issueOrRevokeAttestation(sender, clearlistId, targetAddress, metaData, revoke, block, merkleRoot) {
         const admin = activation.getAdmin()
-        if(sender==admin&&clearlistId==0){
-            console.log('admin updating banlist')
-            await Logic.updateBannedCountries(metaData,block)
-            return
+        const isListZero = Number(clearlistId) === 0;
+        const targetTag = (targetAddress || '').toString().trim().toUpperCase();
+        if (isListZero && targetTag === 'BANLIST') {
+            if (sender !== admin) {
+                throw new Error('Only protocol admin can update global banlist via list id 0');
+            }
+            const normalized = Array.isArray(metaData)
+                ? metaData
+                : String(metaData || '')
+                    .split(/[,\s;|]+/)
+                    .map(v => v.trim().toUpperCase())
+                    .filter(Boolean);
+            console.log('admin updating banlist', normalized);
+            await this.updateBannedCountries(normalized, block);
+            return;
         }
         if(!revoke){
-            console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block)
-             await ClearList.addAttestation(clearlistId, targetAddress,metaData, block);
+            console.log('params in add attest '+clearlistId,targetAddress,metaData,revoke,block,merkleRoot)
+            await ClearList.addAttestation(clearlistId, targetAddress, metaData, block);
+
+            // If a merkle root is provided, store it for xpub batch attestation
+            if (merkleRoot) {
+                await ClearList.storeMerkleRoot(clearlistId, merkleRoot, targetAddress, block);
+                console.log(`Merkle root ${merkleRoot} stored for clearlist ${clearlistId}`);
+            }
+
             console.log(`Address ${targetAddress} added to clearlist ${clearlistId}`);
         }else if(revoke==true){
             await ClearList.revokeAttestation(clearlistId,targetAddress,metaData, block)
@@ -695,7 +928,7 @@ const Logic = {
             }
 
             console.log('Using default global Banlist:', bannedCountriesGlobal);
-            await Clearlist.setBanList(bannedCountriesGlobal,block); // Update Clearlist object with default
+            await ClearList.setBanlist(bannedCountriesGlobal,block); // Update ClearList object with default
     },
 
 
@@ -705,7 +938,7 @@ const Logic = {
         if (isContract) {
             ammInstance = await ContractRegistry.getAMM(id);
         } else {
-            ammInstance = await PropertyRegistry.getAMM(id, id2);
+            ammInstance = await PropertyManager.getAMM(id, id2);
         }
 
         if (!ammInstance) {
@@ -721,56 +954,53 @@ const Logic = {
         }else if(!isRedeem&&!isContract){
             await ammInstance.addCapital(sender, id, amount,isContract, id2, amount2,block)
         }
-    },
 
-    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, commitClearlistId = '', txid = '', dlcHash = '') {
-        const manager = PropertyManager.getInstance();
-        const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
-        if (!isManagedAdmin) {
-            throw new Error('Sender is not admin of a managed property');
-        }
-
-        const propertyData = await PropertyManager.getPropertyData(propertyId);
-        const propertyType = Number(propertyData?.type);
-        const isProcedural = propertyType === 7 || propertyData?.type === 'Procedural' || Boolean(dlcHash);
-        const recipient = recipientAddress || senderAddress;
-
-        if (isProcedural && !recipientAddress) {
-            throw new Error('Procedural grant requires recipient/reference address');
-        }
-
-        await manager.grantTokens(propertyId, recipient, amount, block);
-
-        if (commitClearlistId !== '' && commitClearlistId !== undefined && commitClearlistId !== null) {
-            const clearlistIdNum = Number(commitClearlistId);
-            if (Number.isInteger(clearlistIdNum) && clearlistIdNum > 0 && txid) {
-                await IssuanceIntent.recordIntent(txid, {
-                    txid,
-                    propertyId,
-                    amount,
-                    senderAddress,
-                    recipientAddress: recipient,
-                    mode: 'commit',
-                    clearlistId: clearlistIdNum,
-                    status: 'minted'
-                });
+        if (isContract) {
+            const seriesInfo = await ContractRegistry.getContractInfo(id);
+            if (seriesInfo) {
+                seriesInfo.ammPool = {
+                    position: ammInstance.position,
+                    maxPosition: ammInstance.maxPosition,
+                    maxQuoteSize: ammInstance.maxQuoteSize,
+                    contractType: ammInstance.contractType,
+                    lpAddresses: { ...(ammInstance.lpAddresses || {}) },
+                    ammOrders: Array.isArray(ammInstance.ammOrders) ? ammInstance.ammOrders : []
+                };
+                const contractListDB = await db.getDatabase('contractList');
+                await contractListDB.updateAsync(
+                    { id: parseInt(id, 10), type: 'contractSeries' },
+                    { id: parseInt(id, 10), type: 'contractSeries', data: seriesInfo },
+                    { upsert: true }
+                );
             }
         }
-
-        console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipient}`);
-        return;
     },
 
-	async redeemManagedToken(propertyId, amount, address,block) {
+    async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, dlcHash = '', dlcTemplateId = '', dlcContractId = '', settlementState = '') {
+	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
+	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
+	    const pm = PropertyManager.getInstance();
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+        if (Number(propertyData?.type) === 7) {
+            const gate = await ProceduralRegistry.ensureIssuanceContext(dlcTemplateId, dlcContractId, settlementState, dlcHash);
+            if (!gate.valid) throw new Error(gate.reason);
+        }
+	    await pm.grantTokens(propertyId, recipientAddress, amount, block);
+	    console.log(`Granted ${amount} tokens of property ${propertyId} to ${recipientAddress}`);
+        return
+	},
 
-	    // Verify if the property is a managed type
-	    const isManaged = await propertyManager.verifyIfManaged(propertyId);
-	    if (!isManaged) {
-	        throw new Error('Property is not a managed type');
-	    }
-
-	    // Logic to redeem tokens from the admin's balance
-	    await PropertyManager.redeemTokens(address, propertyId, amount,block);
+	async redeemManagedToken(propertyId, amount, senderAddress, block, dlcTemplateId = '', dlcContractId = '', settlementState = '') {
+	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
+	    const pm = PropertyManager.getInstance();
+        const propertyData = await PropertyManager.getPropertyData(propertyId);
+        const isProcedural = Number(propertyData?.type) === 7;
+        if (!isManagedAdmin && !isProcedural) throw new Error('Sender is not admin of a managed property');
+        if (isProcedural) {
+            const gate = await ProceduralRegistry.ensureRedemptionContext(dlcTemplateId, dlcContractId, settlementState);
+            if (!gate.valid) throw new Error(gate.reason);
+        }
+	    await pm.redeemTokens(propertyId, senderAddress, amount, block);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
         return
 	},
@@ -1093,45 +1323,33 @@ const Logic = {
             txidNeutralized1,
             txidNeutralized2,
             markPrice,
-            close,
-            macroBatch = false,
-            batchTxids = []
+            close
         } = txParams;
 
-        if (txidNeutralized2) {
-            await Scaling.neutralizeSettlement(channelAddress, txidNeutralized2);
+        if(txidNeutralized2){
+            const settlement = await Scaling.nuetralizeSettlement(channel,txidNeutralized2)
         }
 
-        const parsedBatch = Array.isArray(batchTxids) && batchTxids.length > 0
-            ? batchTxids
-            : (typeof txidNeutralized1 === 'string' && txidNeutralized1.includes(';')
-                ? txidNeutralized1.split(';').map((s) => s.trim()).filter(Boolean)
-                : []);
-        const txidsToSettle = (macroBatch && parsedBatch.length > 0) ? parsedBatch : [txidNeutralized1];
-
-        for (const settleTxid of txidsToSettle) {
-            const trade = await Scaling.isTradePublished(settleTxid);
-            let offset;
-
-            if (trade.status === "unpublished") {
-                await Scaling.settlementLimbo(channelAddress, settleTxid);
-            } else if (trade.status === "expiredContract") {
-                await Logic.typeSwitch(19, trade.params);
-            } else if (trade.status === "expiredToken") {
-                await Logic.typeSwitch(20, trade.params);
-            } else if ((trade.status === "liveContract" || trade.status === "expiredContract") && close === true) {
-                offset = Scaling.generateOffset(trade.params, markPrice);
-                await Logic.typeSwitch(19, offset.params);
-            } else if ((trade.status === "liveToken" || trade.status === "expiredToken") && close === true) {
-                offset = Scaling.generateOffset(trade.params, markPrice);
-                await Logic.typeSwitch(20, offset.params);
-            } else {
-                const last = await Scaling.queryPriorSettlements(settleTxid, txidNeutralized2, channelAddress);
-                await Scaling.settlePNL(last, markPrice, settleTxid);
-            }
+        const trade = await Scaling.isTradePublished(txidNeutralized1)
+        let offset
+        if(trade.status=="unpublished"){
+            await Scaling.settlementLimbo(txid) //Must check settlement limbo for references in logic of channel trades
+        }else if(trade.status=="expiredContract"){
+            await Logic.typeSwitch(19,trade.params)
+        }else if(trade.status=="expiredToken"){
+            await Logic.typeSwitch(20,trade.params)
+        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
+            offset = Scaling.generateOffset(trade.params,markPrice)
+            await Logic.typeSwitch(19,offset.params)
+        }else if((trade.status=="liveContract"||trade.status=="expiredContract")&&close==true){
+            offset = Scaling.generateOffset(trade.params,markPrice)
+            await Logic.typeSwitch(20,offset.params)
+        }else if(trade.status=="live"&&!close){
+            const last = await Scaling.queryPriorSettlements(txidNuetralized1, txidNeutralized2, channelAddress)
+            const settlement = await Scaling.settlePNL(last,mark,txidNuetralized1)
         }
       
-        console.log(`PNL settled for channel ${channelAddress}, trades=${txidsToSettle.length}`);
+        console.log(`PNL settled for channel ${channelAddress}, contract ${contractId}`);
         return
     },
 
@@ -1388,17 +1606,24 @@ const Logic = {
     // inside logic.j
 
     async processOptionTrade(sender, params, txid){
+      params.contractId = params.contractId || params.ticker;
+      params.blockHeight = params.blockHeight ?? params.block;
       // Validate first (also populates creditMargin, reduce/flip flags, rPNL, closed sizes)
       const res = await Validity.validateOptionTrade(sender, params, txid);
       if (!res.valid) return res;
 
       const tMeta = OptionsEngine.parseTicker(params.contractId);
-      const seriesInfo = await ContractRegistry.getContractInfo(tMeta.seriesId);
+      const blockHeight = Number(params.blockHeight || 0);
+      const seriesIdNum = Number(tMeta?.seriesId);
+      if (!Number.isFinite(seriesIdNum)) {
+        return { valid: false, reason: 'Invalid option series id; ' };
+      }
+      const seriesInfo = await ContractRegistry.getContractInfo(seriesIdNum);
       const collateralPropertyId = seriesInfo.collateralPropertyId;
 
       // Resolve commits
       const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(sender);
-      const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1");
+      const AIsSeller = (params.columnAIsSeller===true || params.columnAIsSeller===1 || params.columnAIsSeller==="1" || params.columnAIsSeller==="true");
       const sellerAddr = AIsSeller ? commitAddressA : commitAddressB;
       const buyerAddr  = AIsSeller ? commitAddressB : commitAddressA;
 
@@ -1409,36 +1634,29 @@ const Logic = {
         await TallyMap.updateBalance(
           buyerAddr, collateralPropertyId,
           -np, 0, 0, 0,
-          'optionPremiumPay', params.blockHeight, txid
+          'optionPremiumPay', blockHeight, txid
         );
         // seller receives (available +)
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
           +np, 0, 0, 0,
-          'optionPremiumReceive', params.blockHeight, txid
+          'optionPremiumReceive', blockHeight, txid
         );
       }
 
-      // 2) Margin moves on seller
-      // - If reducing: free margin and realize PnL into available
-      // - Else opening/adding: lock margin (available -> margin)
+      // 2) Seller-side margin transition + rPNL.
+      // creditMargin is a signed delta:
+      //   >0 lock additional margin, <0 unlock margin, 0 no margin change.
       const credit = Number(params.creditMargin || 0);
-
-      if (params.sellerReducing) {
-        const r = Number(params.rpnlSeller || 0);
+      const r = Number(params.rpnlSeller || 0);
+      if (params.sellerReducing || credit !== 0) {
         await TallyMap.updateBalance(
           sellerAddr, collateralPropertyId,
-          r,           // availableChange (realized PnL)
+          r - credit,
           0,
-          -credit,     // marginChange (unlock)
+          credit,
           0,
-          'optionReduceSeller', params.blockHeight, txid
-        );
-      } else if (credit > 0) {
-        await TallyMap.updateBalance(
-          sellerAddr, collateralPropertyId,
-          -credit, 0, +credit, 0,
-          'optionMarginLock', params.blockHeight, txid
+          'optionSellerMarginTransition', blockHeight, txid
         );
       }
 
@@ -1449,18 +1667,18 @@ const Logic = {
         await TallyMap.updateBalance(
           buyerAddr, collateralPropertyId,
           r, 0, 0, 0, // we’re not adjusting buyer margin here (credit is seller’s requirement)
-          'optionReduceBuyer', params.blockHeight, txid
+          'optionReduceBuyer', blockHeight, txid
         );
       }
 
       // 4) Record positions into margin map (hybrid, nested by ticker)
-      const mm = await MarginMap.getInstance(tMeta.seriesId);
+      const mm = await MarginMap.getInstance(seriesIdNum);
       await mm.applyOptionTrade(
         sellerAddr,              // we write positions for both sides below
         params.contractId,
         -Math.abs(params.amount || 0), // seller delta negative (short if SELL)
         params.price,
-        params.blockHeight,
+        blockHeight,
         credit
       );
       await mm.applyOptionTrade(
@@ -1468,7 +1686,7 @@ const Logic = {
         params.contractId,
         +Math.abs(params.amount || 0), // buyer delta positive
         params.price,
-        params.blockHeight,
+        blockHeight,
         0 // buyer doesn’t post credit margin in our model
       );
 
@@ -1476,21 +1694,21 @@ const Logic = {
       if (params.comboTicker && params.comboAmount) {
         const cMeta = OptionsEngine.parseTicker(params.comboTicker);
         if (cMeta && cMeta.type) {
-          // Option combo leg: mirror deltas (typically opposite side)
+          // Option combo leg: opposite side to primary leg (spread package semantics).
           await mm.applyOptionTrade(
             sellerAddr,
             params.comboTicker,
-            -(Math.abs(params.comboAmount||0)), // seller side consistent
+            +(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
-            params.blockHeight,
+            blockHeight,
             0 // margin included in credit for the package already
           );
           await mm.applyOptionTrade(
             buyerAddr,
             params.comboTicker,
-            +(Math.abs(params.comboAmount||0)),
+            -(Math.abs(params.comboAmount||0)),
             params.comboPrice || 0,
-            params.blockHeight,
+            blockHeight,
             0
           );
         } else {
@@ -1502,10 +1720,14 @@ const Logic = {
             columnAIsSeller: params.columnAIsSeller,
             expiryBlock: params.expiryBlock,
             isMaker: params.isMaker,
-            blockHeight: params.blockHeight
+            blockHeight
           }, txid);
         }
       }
+
+      // Persist hybrid option/perp position updates so readers that reload from DB
+      // (e.g. liquidation/coverage reporting) observe the latest option legs.
+      await mm.saveMarginMap(blockHeight);
 
       // 6) (Optional) Persist trade history w/ rPNL fields for auditing
       if (typeof TradeHistory?.recordTrade === 'function') {
@@ -1513,13 +1735,13 @@ const Logic = {
           sellerAddr, params.contractId,
           -Math.abs(params.amount||0), params.price,
           Number(params.rpnlSeller||0),
-          params.blockHeight, txid
+          blockHeight, txid
         );
         await TradeHistory.recordTrade(
           buyerAddr, params.contractId,
           +Math.abs(params.amount||0), params.price,
           Number(params.rpnlBuyer||0),
-          params.blockHeight, txid
+          blockHeight, txid
         );
       }
 
@@ -1614,44 +1836,327 @@ const Logic = {
 	    console.log(`Murabaha contract created in channel ${channelAddress}`);
 	},
 
-    issueInvoice(propertyManager, invoiceRegistry, propertyIdToReceivePayment, amount, dueDateBlock, propertyIdCollateral = null, receivesPayToToken = false, issuerNonce) {
-	    // Validate input parameters
-	    if (!propertyManager.isPropertyIdValid(propertyIdToReceivePayment)) {
-	        throw new Error('Invalid property ID to receive payment');
-	    }
-	    if (propertyIdCollateral && !propertyManager.isPropertyIdValid(propertyIdCollateral)) {
-	        throw new Error('Invalid property ID for collateral');
-	    }
+    async processStakeFraudProof(senderAddress, params, block) {
+        const action = Number(params.action || 0);
+        if (action === 0) {
+            await TallyMap.updateBalance(senderAddress, params.stakedPropertyId, -params.amount, 0, params.amount, 0, 'oracleStake', block);
+            await OracleList.recordStake(params.oracleId, senderAddress, params.stakedPropertyId, params.amount, block);
+            return;
+        }
 
-	    // Generate an invoice ID
-	    const invoiceId = `${propertyIdToReceivePayment}-${dueDateBlock}-${issuerNonce}`;
+        if (action === 1) {
+            const result = await OracleList.applyFraudProof(
+                params.oracleId,
+                params.accusedAddress,
+                senderAddress,
+                params.amount,
+                params.evidenceHash,
+                block
+            );
+            if (result && Number(result.slashed || 0) > 0) {
+                await TallyMap.updateBalance(senderAddress, params.stakedPropertyId, result.slashed, 0, 0, 0, 'oracleFraudReward', block);
+            }
+            return;
+        }
 
-	    // Create the invoice object
-	    const invoice = {
-	        invoiceId,
-	        propertyIdToReceivePayment,
-	        amount,
-	        dueDateBlock,
-	        collateral: propertyIdCollateral ? {
-	            propertyId: propertyIdCollateral,
-	            locked: receivesPayToToken,
-	        } : null,
-	    };
+        if (action === 2) {
+            await OracleList.relayTradeLayerState(
+                params.oracleId,
+                senderAddress,
+                params.relayType,
+                params.stateHash,
+                params.dlcRef,
+                block,
+                params.relayBlob
+            );
+            await Logic.applyProceduralOracleSettlement(senderAddress, params, block);
+            if (params.dlcRef && params.settlementState) {
+                await ProceduralRegistry.transitionContract(params.dlcRef, params.settlementState, {
+                    oracleId: params.oracleId,
+                    stateHash: params.stateHash,
+                    blockHeight: block
+                });
+                if (params.autoRoll && params.nextDlcRef) {
+                    await ProceduralRegistry.transitionContract(params.nextDlcRef, 'FUNDED', {
+                        rolledFrom: params.dlcRef,
+                        oracleId: params.oracleId,
+                        stateHash: params.stateHash,
+                        blockHeight: block
+                    });
+                }
+            }
+            return;
+        }
 
-	    // Register the invoice in the invoice registry
-	    invoiceRegistry.registerInvoice(invoice);
+        throw new Error(`Unknown stake/fraud/relay action ${action}`);
+    },
 
-	    console.log(`Invoice issued with ID: ${invoiceId}`);
+    async applyProceduralOracleSettlement(senderAddress, params, block) {
+        const relayParsed = parseRelayBlobRaw(params.relayBlob);
+        const settlement = relayParsed?.settlement || relayParsed?.settle || null;
+        if (!settlement || typeof settlement !== 'object') return;
+        verifyStateAnchoredSettlement(params, relayParsed, settlement);
 
-	    // Optionally, if collateral is involved and receives payToToken, lock the collateral
-	    if (invoice.collateral && receivesPayToToken) {
-	        // Logic to lock collateral in association with this invoice
-	        // This might involve updating a collateral registry or similar system
-	    }
+        const mode = String(settlement.mode || settlement.action || '').toLowerCase();
+        const propertyId = Number(settlement.propertyId);
+        const amount = Number(settlement.amount || 0);
+        const fromAddress = settlement.fromAddress || settlement.holderAddress || senderAddress;
+        const toAddress = settlement.toAddress || settlement.recipientAddress || senderAddress;
+        const pm = PropertyManager.getInstance();
+        const requireProperty = () => {
+            if (!Number.isFinite(propertyId) || propertyId <= 0) {
+                throw new Error('Invalid settlement propertyId in relayBlob');
+            }
+        };
 
-	    // Return the invoice ID for reference
-	    return invoiceId;
-	},
+        if (mode === 'redemption' || mode === 'redeem') {
+            requireProperty();
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error('Invalid redemption amount in relayBlob');
+            }
+            await pm.redeemTokens(propertyId, fromAddress, amount, block);
+            return;
+        }
+
+        if (mode === 'rollover' || mode === 'roll') {
+            requireProperty();
+            const nextPropertyId = Number(settlement.nextPropertyId);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error('Invalid rollover amount in relayBlob');
+            }
+            if (!Number.isFinite(nextPropertyId) || nextPropertyId <= 0) {
+                throw new Error('Invalid rollover nextPropertyId in relayBlob');
+            }
+            await pm.redeemTokens(propertyId, fromAddress, amount, block);
+            await pm.grantTokens(nextPropertyId, toAddress, amount, block);
+            return;
+        }
+
+        if (mode === 'pnl_sweep' || mode === 'pnlsweep' || mode === 'sweep') {
+            requireProperty();
+            await BitvmRisk.onSweep({ propertyId, amount, block });
+            const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
+            }
+            await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'oraclePnlSweep', block);
+            await TallyMap.updateBalance(toAddress, propertyId, amount, 0, 0, 0, 'oraclePnlSweep', block);
+            return;
+        }
+
+        if (mode === 'bitvm_cache' || mode === 'bitvmcache' || mode === 'cache') {
+            requireProperty();
+            const requireBundle = String(process.env.TL_BITVM_REQUIRE_BUNDLE || '').trim() === '1';
+            if (requireBundle) {
+                const bundleHash = settlement.bundleHash || params.bundleHash || '';
+                const bundlePath = settlement.bundlePath || params.bundlePath || '';
+                const bundleCheck = await verifyBundleHash(bundleHash, bundlePath);
+                if (!bundleCheck?.valid) {
+                    throw new Error(`BitVM bundle verification failed: ${bundleCheck?.reason || 'unknown'}`);
+                }
+                settlement.bundleHash = bundleCheck.bundleHash || bundleHash;
+                settlement.bundlePath = bundleCheck.bundlePath || bundlePath;
+            }
+            const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for bitvm cache: ${check?.reason || 'unknown'}`);
+            }
+            const cacheBondAmount = Number(settlement.cacheBondAmount || 0);
+            const cacheBondPropertyId = Number(settlement.cacheBondPropertyId || propertyId);
+            if (!Number.isFinite(cacheBondAmount) || cacheBondAmount < 0) {
+                throw new Error('Invalid bitvm cacheBondAmount');
+            }
+            await BitvmRisk.onCacheOpen({
+                propertyId,
+                amount,
+                dlcRef: params.dlcRef || '',
+                block
+            });
+            if (cacheBondAmount > 0) {
+                const bondCheck = await TallyMap.hasSufficientBalance(senderAddress, cacheBondPropertyId, cacheBondAmount);
+                if (!bondCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm cache bond: ${bondCheck?.reason || 'unknown'}`);
+                }
+            }
+
+            const cacheDoc = await BitvmCacheRegistry.open(settlement, {
+                senderAddress,
+                dlcRef: params.dlcRef,
+                stateHash: params.stateHash,
+                block
+            });
+
+            await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'bitvmCacheLock', block);
+            await TallyMap.updateBalance(cacheDoc.cacheAddress, propertyId, amount, 0, 0, 0, 'bitvmCacheLock', block);
+            if (cacheBondAmount > 0 && cacheDoc?.bonds?.cacheBond?.vaultAddress) {
+                await TallyMap.updateBalance(senderAddress, cacheBondPropertyId, -cacheBondAmount, 0, 0, 0, 'bitvmCacheBondLock', block);
+                await TallyMap.updateBalance(cacheDoc.bonds.cacheBond.vaultAddress, cacheBondPropertyId, cacheBondAmount, 0, 0, 0, 'bitvmCacheBondLock', block);
+            }
+            return;
+        }
+
+        if (mode === 'bitvm_challenge' || mode === 'bitvmchallenge' || mode === 'challenge') {
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_challenge requires cacheId');
+            }
+            const challengerAddress = settlement.challengerAddress || senderAddress;
+            const challengeBondAmount = Number(settlement.challengeBondAmount || 0);
+            const challengeBondPropertyId = Number(settlement.challengeBondPropertyId || propertyId || 0);
+            if (!Number.isFinite(challengeBondAmount) || challengeBondAmount < 0) {
+                throw new Error('Invalid bitvm challengeBondAmount');
+            }
+            if (challengeBondAmount > 0) {
+                const bondCheck = await TallyMap.hasSufficientBalance(challengerAddress, challengeBondPropertyId, challengeBondAmount);
+                if (!bondCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm challenge bond: ${bondCheck?.reason || 'unknown'}`);
+                }
+            }
+            await BitvmCacheRegistry.challenge(cacheId, {
+                challengerAddress,
+                evidenceHash: settlement.evidenceHash || params.evidenceHash || '',
+                reason: settlement.reason || '',
+                block,
+                challengeBondAmount,
+                challengeBondPropertyId
+            });
+            if (challengeBondAmount > 0) {
+                const challengedDoc = await BitvmCacheRegistry.get(cacheId);
+                const vault = challengedDoc?.bonds?.challengeBond?.vaultAddress || `BITVM_BOND_CHALLENGE::${cacheId}`;
+                await TallyMap.updateBalance(challengerAddress, challengeBondPropertyId, -challengeBondAmount, 0, 0, 0, 'bitvmChallengeBondLock', block);
+                await TallyMap.updateBalance(vault, challengeBondPropertyId, challengeBondAmount, 0, 0, 0, 'bitvmChallengeBondLock', block);
+            }
+            return;
+        }
+
+        if (mode === 'bitvm_payout' || mode === 'bitvmpayout' || mode === 'payout') {
+            requireProperty();
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_payout requires cacheId');
+            }
+
+            const finalized = await BitvmCacheRegistry.finalize(cacheId, {
+                toAddress,
+                amount,
+                propertyId,
+                block,
+                txid: params.txid || ''
+            });
+
+            const check = await TallyMap.hasSufficientBalance(finalized.cacheAddress, finalized.propertyId, finalized.amount);
+            if (!check?.hasSufficient) {
+                throw new Error(`Insufficient balance for bitvm payout: ${check?.reason || 'unknown'}`);
+            }
+            await TallyMap.updateBalance(finalized.cacheAddress, finalized.propertyId, -finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
+            await TallyMap.updateBalance(finalized.toAddress, finalized.propertyId, finalized.amount, 0, 0, 0, 'bitvmPayoutRelease', block);
+            await BitvmRisk.onEscrowRelease({
+                propertyId: finalized.propertyId,
+                amount: finalized.amount,
+                dlcRef: finalized.dlcRef || params.dlcRef || '',
+                block
+            });
+            return;
+        }
+
+        if (mode === 'bitvm_resolve' || mode === 'bitvmresolve' || mode === 'resolve') {
+            const cacheId = String(settlement.cacheId || '');
+            if (!cacheId) {
+                throw new Error('bitvm_resolve requires cacheId');
+            }
+            const declaredResolver = String(settlement.resolverAddress || '').trim();
+            if (declaredResolver && declaredResolver !== senderAddress) {
+                throw new Error('bitvm_resolve sender must match resolverAddress');
+            }
+
+            const resolved = await BitvmCacheRegistry.resolve(cacheId, {
+                verdict: settlement.verdict,
+                resolverAddress: settlement.resolverAddress || senderAddress,
+                reason: settlement.reason || '',
+                block
+            });
+
+            if (String(resolved.status) === 'RESOLVED_UPHELD') {
+                const refundCheck = await TallyMap.hasSufficientBalance(resolved.cacheAddress, resolved.propertyId, resolved.amount);
+                if (!refundCheck?.hasSufficient) {
+                    throw new Error(`Insufficient balance for bitvm uphold refund: ${refundCheck?.reason || 'unknown'}`);
+                }
+                await TallyMap.updateBalance(resolved.cacheAddress, resolved.propertyId, -resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+                await TallyMap.updateBalance(resolved.fromAddress, resolved.propertyId, resolved.amount, 0, 0, 0, 'bitvmChallengeRefund', block);
+                await BitvmRisk.onEscrowRelease({
+                    propertyId: resolved.propertyId,
+                    amount: resolved.amount,
+                    dlcRef: resolved.dlcRef || params.dlcRef || '',
+                    block
+                });
+
+                const cacheBond = resolved?.bonds?.cacheBond || null;
+                if (cacheBond && Number(cacheBond.amount || 0) > 0) {
+                    const upheldChallenger = (resolved?.challenged?.[resolved.challenged.length - 1]?.challengerAddress) || resolved?.bonds?.challengeBond?.payerAddress || '';
+                    const cAmt = Number(cacheBond.amount);
+                    const cPid = Number(cacheBond.propertyId);
+                    const cVault = String(cacheBond.vaultAddress || '');
+                    if (upheldChallenger && cVault) {
+                        const cCheck = await TallyMap.hasSufficientBalance(cVault, cPid, cAmt);
+                        if (!cCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm cache bond slash: ${cCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(cVault, cPid, -cAmt, 0, 0, 0, 'bitvmCacheBondSlash', block);
+                        await TallyMap.updateBalance(upheldChallenger, cPid, cAmt, 0, 0, 0, 'bitvmCacheBondSlash', block);
+                    }
+                }
+
+                const challengeBond = resolved?.bonds?.challengeBond || null;
+                if (challengeBond && Number(challengeBond.amount || 0) > 0) {
+                    const chAmt = Number(challengeBond.amount);
+                    const chPid = Number(challengeBond.propertyId);
+                    const chVault = String(challengeBond.vaultAddress || '');
+                    const chPayer = String(challengeBond.payerAddress || '');
+                    if (chVault && chPayer) {
+                        const chCheck = await TallyMap.hasSufficientBalance(chVault, chPid, chAmt);
+                        if (!chCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm challenge bond return: ${chCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(chVault, chPid, -chAmt, 0, 0, 0, 'bitvmChallengeBondReturn', block);
+                        await TallyMap.updateBalance(chPayer, chPid, chAmt, 0, 0, 0, 'bitvmChallengeBondReturn', block);
+                    }
+                }
+            } else {
+                const cacheBond = resolved?.bonds?.cacheBond || null;
+                if (cacheBond && Number(cacheBond.amount || 0) > 0) {
+                    const cAmt = Number(cacheBond.amount);
+                    const cPid = Number(cacheBond.propertyId);
+                    const cVault = String(cacheBond.vaultAddress || '');
+                    const cPayer = String(cacheBond.payerAddress || '');
+                    if (cVault && cPayer) {
+                        const cCheck = await TallyMap.hasSufficientBalance(cVault, cPid, cAmt);
+                        if (!cCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm cache bond return: ${cCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(cVault, cPid, -cAmt, 0, 0, 0, 'bitvmCacheBondReturn', block);
+                        await TallyMap.updateBalance(cPayer, cPid, cAmt, 0, 0, 0, 'bitvmCacheBondReturn', block);
+                    }
+                }
+
+                const challengeBond = resolved?.bonds?.challengeBond || null;
+                if (challengeBond && Number(challengeBond.amount || 0) > 0) {
+                    const chAmt = Number(challengeBond.amount);
+                    const chPid = Number(challengeBond.propertyId);
+                    const chVault = String(challengeBond.vaultAddress || '');
+                    const target = String((resolved?.bonds?.cacheBond?.payerAddress) || resolved?.openerAddress || resolved?.fromAddress || '');
+                    if (chVault && target) {
+                        const chCheck = await TallyMap.hasSufficientBalance(chVault, chPid, chAmt);
+                        if (!chCheck?.hasSufficient) {
+                            throw new Error(`Insufficient balance for bitvm challenge bond slash: ${chCheck?.reason || 'unknown'}`);
+                        }
+                        await TallyMap.updateBalance(chVault, chPid, -chAmt, 0, 0, 0, 'bitvmChallengeBondSlash', block);
+                        await TallyMap.updateBalance(target, chPid, chAmt, 0, 0, 0, 'bitvmChallengeBondSlash', block);
+                    }
+                }
+            }
+            return;
+        }
+    },
 
 	batchMoveZkRollup(zkVerifier, rollupData, zkProof) {
 	    // Parse the Zero-Knowledge rollup data
@@ -1702,41 +2207,396 @@ const Logic = {
 		    );
 	},
 
-    batchSettlement(sender, params, txid, block){
+    /**
+ * L2 Scaling Logic
+ * 
+ * Preserves existing case format:
+ *   case 23: await Logic.settleChannelPNL(params.channelAddress, params.txParams, params.block, params.txid);
+ *   case 31: Logic.batchSettlement(params);
+ * 
+ * Internal enum switch routes to specific handlers
+ */
 
-    },
+        /**
+         * Type 23: Settle Channel PNL
+         * Routes internally based on settleType enum
+         */
+        async settleChannelPNL(channelAddress, txParams, block, txid) {
+            const {
+                txidNeutralized1,
+                txidNeutralized2,
+                markPrice,
+                settleType,
+                columnAIsSeller,
+                columnAIsMaker,
+                netAmount,
+                expiryBlock
+            } = txParams;
 
-    publishNewTx(ordinalRevealJSON, jsCode) {
-    // Validate the input JSON and JavaScript code
-    if (!isValidJSON(ordinalRevealJSON)) {
-        throw new Error('Invalid Ordinal Reveal JSON');
-    }
-    if (!isValidJavaScript(jsCode)) {
-        throw new Error('Invalid JavaScript code');
-    }
+            const channel = await Channels.getChannel(channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
 
-    // Minify the JavaScript code (assuming a minification function exists)
-    const minifiedJsCode = minifyJavaScript(jsCode);
+            console.log(`Processing settleType=${settleType} for channel ${channelAddress}`);
 
-    // Assign a new transaction type ID
-    const newTxTypeId = getNextTxTypeId();
+            // Enum switch for settle type routing
+            switch (settleType) {
+                case SettleType.KEEP_ALIVE:
+                    await this.processKeepAlive(channelAddress, txidNeutralized1, block, txid);
+                    break;
 
-    // Construct the new transaction with the ordinal reveal JSON and minified JS code
-    const newTx = {
-        txTypeId: newTxTypeId,
-        ordinalRevealJSON: ordinalRevealJSON,
-        smartContractCode: minifiedJsCode
-    };
+                case SettleType.CLOSE_POSITION:
+                    await this.processClosePosition(
+                        channelAddress,
+                        txidNeutralized1,
+                        txidNeutralized2,
+                        markPrice,
+                        columnAIsSeller,
+                        block,
+                        txid
+                    );
+                    break;
 
-        // Save the new transaction to the system's registry
-        // Assuming a function to save the transaction exists
-        saveNewTransaction(newTx);
+                case SettleType.NET_SETTLE:
+                    await this.processNetSettle(
+                        channelAddress,
+                        txidNeutralized1,
+                        txidNeutralized2,
+                        netAmount,
+                        columnAIsSeller,
+                        block,
+                        txid
+                    );
+                    break;
 
-        console.log(`Published new transaction type ID ${newTxTypeId}`);
+                case SettleType.KING_SETTLE:
+                    await this.batchSettlement({
+                        senderAddress: channelAddress,
+                        blockStart: Number(txParams.blockStart ?? block),
+                        blockEnd: Number(txParams.blockEnd ?? block),
+                        propertyId: Number(txParams.propertyId),
+                        netAmount: Number(txParams.netAmount ?? 0),
+                        aPaysBDirection: txParams.aPaysBDirection ?? txParams.columnAIsSeller ?? false,
+                        channelRoot: txParams.channelRoot || txidNeutralized1 || '',
+                        totalContracts: Number(txParams.totalContracts ?? 0),
+                        neutralizedCount: Number(txParams.neutralizedCount ?? 0),
+                        block,
+                        txid
+                    });
+                    break;
 
-        // Return the new transaction type ID and details
-        return { newTxTypeId, newTx };
-    },
+                default:
+                    console.error(`Unknown settleType: ${settleType}`);
+                    return;
+            }
+
+            await ScalingLogic.recordSettlement(channelAddress, txid, settleType, block);
+            console.log(`Settlement type ${settleType} completed for channel ${channelAddress}`);
+        },
+
+        /**
+         * Type 31: King Settlement (batch settlement sweep)
+         */
+        async batchSettlement(params) {
+            const {
+                senderAddress,
+                blockStart,
+                blockEnd,
+                propertyId,
+                netAmount,
+                aPaysBDirection,
+                channelRoot,
+                totalContracts,
+                neutralizedCount,
+                block,
+                txid
+            } = params;
+
+            const channelAddress = senderAddress;
+
+            console.log(`King Settlement: channel=${channelAddress}, blocks=${blockStart}-${blockEnd}`);
+
+            const channel = await Channels.getChannel(channelAddress);
+            const { commitAddressA, commitAddressB } = await Channels.getCommitAddresses(channelAddress);
+            const scalingDb = await db.getDatabase('scaling');
+
+            // 1. Sweep all L2 state in the block range
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (doc) {
+                let sweptCount = 0;
+                for (const arr of ['trades', 'keepAlives', 'settlements', 'closes', 'netSettles']) {
+                    if (doc[arr]) {
+                        for (const item of doc[arr]) {
+                            if (item.block >= blockStart && 
+                                item.block <= blockEnd &&
+                                item.status !== 'neutralized' &&
+                                item.status !== 'swept') {
+                                item.status = 'swept';
+                                item.sweptBy = txid;
+                                sweptCount++;
+                            }
+                        }
+                    }
+                }
+                await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+                console.log(`Swept ${sweptCount} L2 items`);
+            }
+
+            // 2. Execute the net PnL transfer on channel balances
+            const colKey = propertyId.toString();
+            const absAmount = Math.abs(netAmount);
+
+            if (aPaysBDirection) {
+                channel.A[colKey] = (channel.A[colKey] || 0) - absAmount;
+                channel.B[colKey] = (channel.B[colKey] || 0) + absAmount;
+                console.log(`King settle: A pays B ${absAmount} of property ${propertyId}`);
+            } else {
+                channel.B[colKey] = (channel.B[colKey] || 0) - absAmount;
+                channel.A[colKey] = (channel.A[colKey] || 0) + absAmount;
+                console.log(`King settle: B pays A ${absAmount} of property ${propertyId}`);
+            }
+
+            if (typeof Channels.setChannel === 'function') {
+                await Channels.setChannel(channelAddress, channel);
+            } else if (typeof Channels.updateChannel === 'function') {
+                await Channels.updateChannel(channelAddress, channel);
+            } else {
+                throw new Error('No channel persistence method available (setChannel/updateChannel)');
+            }
+
+            // 3. Record the king settlement
+            if (!doc) {
+                doc = { _id: channelAddress, kingSettlements: [] };
+            }
+            if (!doc.kingSettlements) doc.kingSettlements = [];
+            
+            doc.kingSettlements.push({
+                txid,
+                blockStart,
+                blockEnd,
+                propertyId,
+                netAmount,
+                aPaysBDirection,
+                channelRoot,
+                totalContracts,
+                neutralizedCount,
+                settledAtBlock: block,
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+
+            console.log(`King Settlement complete: ${totalContracts} contracts, ${neutralizedCount} txs swept, net=${netAmount}`);
+        },
+
+        /**
+         * Tx 2: Keep-Alive
+         */
+        async processKeepAlive(channelAddress, tradeTxid, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                doc = {
+                    _id: channelAddress,
+                    trades: [],
+                    keepAlives: [],
+                    settlements: [],
+                    closes: [],
+                    netSettles: [],
+                    kingSettlements: []
+                };
+            }
+
+            if (!doc.keepAlives) doc.keepAlives = [];
+            doc.keepAlives.push({
+                tradeTxid,
+                settleTxid,
+                block,
+                timestamp: Date.now()
+            });
+
+            if (doc.trades) {
+                const tradeIdx = doc.trades.findIndex(t => t.txid === tradeTxid);
+                if (tradeIdx >= 0) {
+                    doc.trades[tradeIdx].status = 'live';
+                    doc.trades[tradeIdx].keepAliveBlock = block;
+                }
+            }
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Keep-alive recorded: trade=${tradeTxid}, settle=${settleTxid}`);
+        },
+        /**
+         * Tx 3: Close Position
+         */
+        async processClosePosition(channelAddress, tradeTxid, keepAliveTxid, markPrice, columnAIsSeller, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                console.error(`No channel doc found for ${channelAddress}`);
+                return;
+            }
+
+            let originalTrade = null;
+            if (doc.trades) {
+                originalTrade = doc.trades.find(t => t.txid === tradeTxid);
+            }
+
+            if (!originalTrade) {
+                console.error(`Original trade ${tradeTxid} not found`);
+                return;
+            }
+
+            // Calculate PnL
+            const entryPrice = originalTrade.params?.price || 0;
+            const contracts = originalTrade.params?.amount || 0;
+            const priceDiff = markPrice - entryPrice;
+            const pnlAmount = Math.abs(priceDiff * contracts);
+            
+            let pnlDirection;
+            if (columnAIsSeller) {
+                pnlDirection = priceDiff < 0 ? 'BtoA' : 'AtoB';
+            } else {
+                pnlDirection = priceDiff > 0 ? 'BtoA' : 'AtoB';
+            }
+
+            // Neutralize original trade and keep-alive
+            if (doc.trades) {
+                const tradeIdx = doc.trades.findIndex(t => t.txid === tradeTxid);
+                if (tradeIdx >= 0) {
+                    doc.trades[tradeIdx].status = 'neutralized';
+                    doc.trades[tradeIdx].neutralizedBy = settleTxid;
+                }
+            }
+
+            if (doc.keepAlives) {
+                const kaIdx = doc.keepAlives.findIndex(k => k.settleTxid === keepAliveTxid);
+                if (kaIdx >= 0) {
+                    doc.keepAlives[kaIdx].status = 'neutralized';
+                    doc.keepAlives[kaIdx].neutralizedBy = settleTxid;
+                }
+            }
+
+            if (!doc.closes) doc.closes = [];
+            doc.closes.push({
+                settleTxid,
+                tradeTxid,
+                keepAliveTxid,
+                markPrice,
+                entryPrice,
+                contracts,
+                pnlAmount,
+                pnlDirection,
+                columnAIsSeller,
+                block,
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Close position: trade=${tradeTxid}, mark=${markPrice}, pnl=${pnlAmount} ${pnlDirection}`);
+
+            // Generate offset trade for clearing engine
+            if (originalTrade.params?.contractId) {
+                const closeParams = {
+                    ...originalTrade.params,
+                    price: markPrice,
+                    columnAIsSeller: !columnAIsSeller,
+                    isClose: true
+                };
+
+                await Logic.tradeContractChannel(
+                    closeParams.contractId,
+                    closeParams.price,
+                    closeParams.amount,
+                    closeParams.columnAIsSeller,
+                    block + 10,
+                    false,
+                    channelAddress,
+                    block,
+                    settleTxid + '_close',
+                    closeParams.columnAIsMaker
+                );
+            }
+        },
+
+        /**
+         * Tx 4: Net Settle
+         */
+        async processNetSettle(channelAddress, txidNeutralized1, txidNeutralized2, netAmount, columnAIsSeller, block, settleTxid) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            let doc = await scalingDb.findOneAsync({ _id: channelAddress });
+            if (!doc) {
+                doc = {
+                    _id: channelAddress,
+                    trades: [],
+                    keepAlives: [],
+                    settlements: [],
+                    closes: [],
+                    netSettles: [],
+                    kingSettlements: []
+                };
+            }
+
+            // Neutralize referenced settlements
+            const neutralizeTxid = (txid) => {
+                for (const arr of ['trades', 'keepAlives', 'settlements', 'closes']) {
+                    if (doc[arr]) {
+                        const idx = doc[arr].findIndex(item => 
+                            item.txid === txid || item.settleTxid === txid
+                        );
+                        if (idx >= 0) {
+                            doc[arr][idx].status = 'neutralized';
+                            doc[arr][idx].neutralizedBy = settleTxid;
+                        }
+                    }
+                }
+            };
+
+            if (txidNeutralized1) neutralizeTxid(txidNeutralized1);
+            if (txidNeutralized2) neutralizeTxid(txidNeutralized2);
+
+            if (!doc.netSettles) doc.netSettles = [];
+            doc.netSettles.push({
+                settleTxid,
+                txidNeutralized1,
+                txidNeutralized2,
+                netAmount,
+                columnAIsSeller,
+                direction: (columnAIsSeller && netAmount >= 0) || (!columnAIsSeller && netAmount < 0) 
+                    ? 'AtoB' : 'BtoA',
+                block,
+                status: 'pending',
+                timestamp: Date.now()
+            });
+
+            await scalingDb.updateAsync({ _id: channelAddress }, doc, { upsert: true });
+            console.log(`Net settle recorded: amount=${netAmount}, direction=${columnAIsSeller ? 'seller' : 'buyer'}`);
+        },
+
+        /**
+         * Record settlement in tracking
+         */
+        async recordSettlement(channelAddress, txid, settleType, block) {
+            const scalingDb = await db.getDatabase('scaling');
+            
+            await scalingDb.updateAsync(
+                { _id: channelAddress },
+                {
+                    $push: {
+                        settlements: {
+                            txid,
+                            settleType,
+                            block,
+                            status: 'live',
+                            timestamp: Date.now()
+                        }
+                    }
+                },
+                { upsert: true }
+            );
+        },
 
     bindSmartContract(){},
 
@@ -1746,3 +2606,5 @@ const Logic = {
 module.exports = Logic;
 
 // Example function to create and register a new token
+
+

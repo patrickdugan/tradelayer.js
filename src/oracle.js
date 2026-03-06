@@ -1,6 +1,10 @@
 var db = require('./db')
 var BigNumber = require('bignumber.js')
-const Insurance = require('./insurance.js')
+const crypto = require('crypto');
+const DlcOracleBridge = require('./dlcOracleBridge.js');
+function getInsuranceModule() {
+    return require('./insurance.js');
+}
 
 class OracleList {
     static instance = null;
@@ -74,14 +78,17 @@ class OracleList {
         // Prepare the query to find all entries with the specified oracleId
         const oracleDB = await db.getDatabase('oracleData');
         const oracleData = await oracleDB.findAsync({ oracleId: oracleId });
+        const priceRows = (oracleData || []).filter((row) =>
+            row && row.data && Number.isFinite(Number(row.data.price))
+        );
         
         // Check if any data was returned
-        if (oracleData.length === 0) {
+        if (priceRows.length === 0) {
             return 1
         }
         
         // Find the latest data point by blockHeight
-        const latestDataPoint = oracleData.reduce((latest, entry) => {
+        const latestDataPoint = priceRows.reduce((latest, entry) => {
             return (entry.blockHeight > latest.blockHeight) ? entry : latest;
         });
 
@@ -120,9 +127,16 @@ class OracleList {
                     oracleData.price = circuitLimitDown
                 }
             } 
-            // Update in-memory oracle data (optional)
+            // Preserve oracle metadata and only refresh the latest data payload.
             const oracleKey = `oracle-${oracleId}`;
-            instance.oracles.set(oracleKey, oracleData);
+            const existingMeta = instance.oracles.get(oracleKey) ||
+                await (await db.getDatabase('oracleList')).findOneAsync({ _id: oracleKey }) ||
+                { _id: oracleKey, id: Number(oracleId) };
+            instance.oracles.set(oracleKey, {
+                ...existingMeta,
+                data: oracleData,
+                lastPublishedBlock: blockHeight
+            });
 
             // Save oracle data to the database
             await instance.saveOracleData(oracleId, oracleData, blockHeight);
@@ -158,14 +172,16 @@ class OracleList {
         }
     }
 
-     static async isAdmin(senderAddress, oracleId) {
+    static async isAdmin(senderAddress, oracleId) {
         try {
             const oracleKey = `oracle-${oracleId}`;
             console.log('checking admin for oracle key '+oracleKey)
             const oracleDB = await db.getDatabase('oracleList');
             const oracleData = await oracleDB.findOneAsync({ _id: oracleKey });
 
-            if (oracleData && oracleData.name.adminAddress === senderAddress) {
+            const adminAddr = oracleData?.adminAddress || oracleData?.name?.adminAddress;
+            const backupAddr = oracleData?.backupAddress || oracleData?.name?.backupAddress;
+            if (adminAddr === senderAddress || backupAddr === senderAddress) {
                 return true; // The sender is the admin
             } else {
                 return false; // The sender is not the admin
@@ -208,32 +224,146 @@ class OracleList {
             throw new Error('Oracle not found');
         }
 
-        if(backup){
-            oracle.backupAddress=newAdminAddress
-        }else{
-            // Update the admin address
-            oracle.adminAddress = newAdminAddress;
-        }
+        const field = backup ? 'backupAddress' : 'adminAddress';
+        oracle[field] = newAdminAddress;
 
         // Update the oracle in the database
-        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { adminAddress: newAdminAddress } }, {});
+        await oracleDB.updateAsync({ _id: oracleKey }, { $set: { [field]: newAdminAddress } }, {});
 
         // Optionally, update the in-memory map if you are maintaining one
-        this.oracles.set(oracleKey, oracle);
+        instance.oracles.set(oracleKey, oracle);
 
         console.log(`Oracle ID ${oracleId} admin updated to ${newAdminAddress}`);
     }
 
-    static async createOracle(name, adminAddress) {
+    static async recordStake(oracleId, stakerAddress, stakedPropertyId, amount, blockHeight) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const key = `oracle-stake-${oracleId}-${stakerAddress}`;
+        const prev = await oracleDataDB.findOneAsync({ _id: key });
+        const previousAmount = Number(prev?.amount || 0);
+        const nextAmount = new BigNumber(previousAmount).plus(amount).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        const doc = {
+            _id: key,
+            type: 'stake',
+            oracleId,
+            stakerAddress,
+            stakedPropertyId,
+            amount: nextAmount,
+            blockHeight
+        };
+        await oracleDataDB.updateAsync({ _id: key }, { $set: doc }, { upsert: true });
+        return doc;
+    }
+
+    static async getStake(oracleId, stakerAddress) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        return oracleDataDB.findOneAsync({ _id: `oracle-stake-${oracleId}-${stakerAddress}` });
+    }
+
+    static async applyFraudProof(oracleId, accusedAddress, challengerAddress, slashAmount, evidenceHash, blockHeight) {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const stakeKey = `oracle-stake-${oracleId}-${accusedAddress}`;
+        const accusedStake = await oracleDataDB.findOneAsync({ _id: stakeKey });
+        if (!accusedStake) {
+            return { slashed: 0 };
+        }
+
+        const currentStake = Number(accusedStake.amount || 0);
+        const slash = Math.min(currentStake, Number(slashAmount || 0));
+        const nextStake = new BigNumber(currentStake).minus(slash).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber();
+        await oracleDataDB.updateAsync({ _id: stakeKey }, { $set: { amount: nextStake, blockHeight } }, { upsert: true });
+
+        const fraudKey = `oracle-fraud-${oracleId}-${blockHeight}-${String(evidenceHash || '').slice(0, 24)}`;
+        await oracleDataDB.updateAsync(
+            { _id: fraudKey },
+            {
+                $set: {
+                    _id: fraudKey,
+                    type: 'fraudProof',
+                    oracleId,
+                    accusedAddress,
+                    challengerAddress,
+                    slashAmount: slash,
+                    evidenceHash,
+                    blockHeight
+                }
+            },
+            { upsert: true }
+        );
+        return { slashed: slash };
+    }
+
+    static async relayTradeLayerState(oracleId, senderAddress, relayType, stateHash, dlcRef, blockHeight, relayBlob = '') {
+        const oracleDataDB = await db.getDatabase('oracleData');
+        const parsed = DlcOracleBridge.parseRelayBlob(relayBlob);
+        const sigHex = String(parsed?.signatureHex || '').trim().toLowerCase();
+        const effectiveStateHash = String(stateHash || parsed?.stateHash || '');
+        const effectiveDlcRef = String(dlcRef || '');
+
+        // Replay protection: a signed oracle attestation cannot be reused for a different
+        // DLC reference or state hash.
+        if (sigHex) {
+            const sigDigest = crypto.createHash('sha256').update(sigHex).digest('hex');
+            const sigKey = `oracle-relay-sig-${oracleId}-${sigDigest}`;
+            const prev = await oracleDataDB.findOneAsync({ _id: sigKey });
+            if (prev) {
+                const changedState = String(prev.stateHash || '') !== effectiveStateHash;
+                const changedDlcRef = String(prev.dlcRef || '') !== effectiveDlcRef;
+                if (changedState || changedDlcRef) {
+                    throw new Error('Relay signature replay detected for different stateHash/dlcRef');
+                }
+            } else {
+                await oracleDataDB.updateAsync(
+                    { _id: sigKey },
+                    {
+                        _id: sigKey,
+                        type: 'relaySigUse',
+                        oracleId,
+                        signatureHex: sigHex,
+                        stateHash: effectiveStateHash,
+                        dlcRef: effectiveDlcRef,
+                        firstSeenBlock: blockHeight
+                    },
+                    { upsert: true }
+                );
+            }
+        }
+
+        const relayKey = `oracle-relay-${oracleId}-${relayType}-${blockHeight}`;
+        const relayDoc = {
+            _id: relayKey,
+            type: 'relay',
+            oracleId,
+            senderAddress,
+            relayType,
+            stateHash,
+            dlcRef,
+            relayBlob,
+            blockHeight
+        };
+        await oracleDataDB.updateAsync({ _id: relayKey }, relayDoc, { upsert: true });
+        return relayDoc;
+    }
+
+    static async createOracle(nameOrConfig, adminAddress) {
         const instance = OracleList.getInstance(); // Get the singleton instance
-        const oracleId = OracleList.getNextId();
+        const oracleId = await OracleList.getNextId();
         const oracleKey = `oracle-${oracleId}`;
+        const config = (nameOrConfig && typeof nameOrConfig === 'object')
+            ? nameOrConfig
+            : { name: nameOrConfig, adminAddress };
+        const displayName = config.name || config.ticker || `oracle-${oracleId}`;
 
         const newOracle = {
             _id: oracleKey, // NeDB uses _id as the primary key
             id: oracleId,
-            name: name,
-            adminAddress: adminAddress,
+            name: displayName,
+            ticker: config.ticker || displayName,
+            url: config.url || '',
+            backupAddress: config.backupAddress || '',
+            clearlists: Array.isArray(config.clearlists) ? config.clearlists : [],
+            lag: Number.isFinite(Number(config.lag)) ? Number(config.lag) : 1,
+            adminAddress: config.adminAddress || adminAddress || '',
             data: {} // Initial data, can be empty or preset values
         };
 
@@ -247,7 +377,7 @@ class OracleList {
             // Also save the new oracle to the in-memory map
             instance.oracles.set(oracleKey, newOracle);
 
-            console.log(`New oracle created: ID ${oracleId}, Name: ${name}`);
+            console.log(`New oracle created: ID ${oracleId}, Name: ${displayName}`);
             return oracleId; // Return the new oracle ID
         } catch (error) {
             console.error('Error creating new oracle:', error);
@@ -255,9 +385,17 @@ class OracleList {
         }
     }
 
-    static getNextId() {
-        const instance = OracleList.getInstance(); // Get the singleton instance
+    static async getNextId() {
+        const oracleDB = await db.getDatabase('oracleList');
+        const docs = await oracleDB.findAsync({});
         let maxId = 0;
+        for (const doc of docs) {
+            const id = Number(doc?.id ?? (String(doc?._id || '').split('-')[1]));
+            if (Number.isFinite(id) && id > maxId) maxId = id;
+        }
+        if (maxId > 0) return maxId + 1;
+
+        const instance = OracleList.getInstance(); // Get the singleton instance
         for (const key of instance.oracles.keys()) {
             const currentId = parseInt(key.split('-')[1]);
             if (currentId > maxId) {
@@ -273,6 +411,7 @@ class OracleList {
         console.log('saving published oracle data to key '+recordKey)
         const oracleDataRecord = {
             _id: recordKey,
+            type: 'oracle',
             oracleId,
             data,
             blockHeight
@@ -296,6 +435,7 @@ class OracleList {
         try {
             const query = {
                 oracleId: oracleId,
+                type: 'oracle',
                 blockHeight: { $gte: startBlockHeight, $lte: endBlockHeight }
             };
             const oracleDataRecords = await oracleDataDB.findAsync(query);
@@ -334,7 +474,7 @@ class OracleList {
             console.log(`Oracle ID ${oracleId} has been closed`);
 
             // Call the insurance fund to perform the payout
-            await Insurance.liquidate(oracle.adminAddress,true);
+            await getInsuranceModule().liquidate(oracle.adminAddress,true);
 
             console.log(`Payout for Oracle ID ${oracleId} completed`);
         } catch (error) {

@@ -217,7 +217,7 @@ class Activation {
             27: { name: "Create Option Chain", active: false },
             28: { name: "Trade Bai Urbun", active: false },
             29: { name: "Trade Murabaha", active: false },
-            30: { name: "Issue Invoice", active: false },
+            30: { name: "Oracle Stake/Fraud/Relay", active: false },
             31: { name: "Batch Move Zk Rollup", active: false },
             32: { name: "Publish New Tx", active: false },
             33: { name: "Colored Coin", active: false },

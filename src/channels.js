@@ -143,7 +143,7 @@ static async getChannelBalancesForAddress(address, propertyId) {
           : (data?.participants?.A || ''),
         lastCommitmentBlock: data?.lastCommitmentTime ?? null,
         commitCount: Array.isArray(data?.commits) ? data.commits.length : 0,
-        // ever mark payEnabled=true in a commit? (handy hint for UI)
+        // did *we* ever mark payEnabled=true in a commit? (handy hint for UI)
         payEnabled: !!(Array.isArray(data?.commits) && data.commits.some(
           c => String(c.senderAddress || '').toLowerCase() === addrLC && c.payEnabled === true
         )),
@@ -184,20 +184,18 @@ static async getChannelBalancesForAddress(address, propertyId) {
       return m;
     }
 
-    static async loadChannelsRegistry(){
+    static async loadChannelsRegistry() {
+        // Load the channels registry from NeDB
         const channelsDB = await dbInstance.getDatabase('channels');
         try {
             const entries = await channelsDB.findAsync({});
-
-            if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
-                console.log('[loadChannelsRegistry] Loading from DB');
-                this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
-            } else {
-                console.log('[loadChannelsRegistry] Already loaded, skipping reload');
-            }    
-            return;
+            //console.log('loading channel DB '+JSON.stringify(entries))
+            this.channelsRegistry = new Map(entries.map(entry => [entry._id, entry.data]));
+            //console.log(JSON.stringify(Array.from(this.channelsRegistry.entries())));
+            return
         } catch (error) {
             if (error.message.includes('does not exist')) {
+                // If the collection does not exist, initialize an empty registry
                 this.channelsRegistry = new Map();
             } else {
                 throw error;
@@ -331,20 +329,22 @@ static async getChannelBalancesForAddress(address, propertyId) {
         }
     }
 
-    static async getChannel(channelId) {
-        // Load registry once if empty
-        if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
-            await this.loadChannelsRegistry();
-        }
-        
-        let channel = this.channelsRegistry.get(channelId);
-        console.log(Boolean(!channel), Boolean(channel==undefined), JSON.stringify(channel));
 
-        if (!channel || channel === undefined || channel === null) {
-            console.log('in getChannel - channel not found:', channelId);
-            channel = null;
+    static async getChannel(channelId) {
+        // Ensure the channels registry is loaded
+        let channel = this.channelsRegistry.get(channelId)
+        //console.log('inside getChannel '+channelId+' '+JSON.stringify(Array.from(this.channelsRegistry.entries())));
+        console.log(Boolean(!channel),Boolean(channel==undefined),JSON.stringify(channel))
+        if(!channel||channel==undefined||channel==null){
+            await this.loadChannelsRegistry();
+            channel = this.channelsRegistry.get(channelId)
+            console.log('in getChannel 2nd hit '+JSON.stringify(channel));
+            if(!channel){
+              channel=null
+            }
         }
-        return channel;
+
+        return channel
     }
 
     static async isValidChannel(channelAddress) {
@@ -363,32 +363,25 @@ static async getChannelBalancesForAddress(address, propertyId) {
     }
 
     static async getCommitAddresses(channelAddress) {
-        console.log('channel addr ' + channelAddress);
-        
-        // Only load if registry is empty
-        if (!this.channelsRegistry || this.channelsRegistry.size === 0) {
-            await this.loadChannelsRegistry();
-        }
-        
         let channel = this.channelsRegistry.get(channelAddress);
-        
-        if (!channel || channel === undefined || channel === null) {
-            console.log('channel not found in registry:', channelAddress);
-            return { commitAddressA: null, commitAddressB: null };
+        //console.log('inside getCommitAddresses '+JSON.stringify(channel)+' '+channelAddress)
+        if(!channel||channel==undefined||channel==null){
+          console.log('channel not found, loading from db')
+          await Channels.loadChannelsRegistry()
+          channel = this.channelsRegistry.get(channelAddress);
+          //console.log('checking channel obj again '+JSON.stringify(channel))
         }
-        
         if (channel && channel.participants) {
             const participants = channel.participants;
-            console.log('inside getCommitAddresses ' + participants.A + ' ' + participants.B);
+            //console.log('inside getCommitAddresses '+participants.A+ ' '+ participants.B)
             return {
                 commitAddressA: participants.A,
                 commitAddressB: participants.B
             };
         } else {
-            return { commitAddressA: null, commitAddressB: null };
+            return {commitAddressA: null,commitAddressB: null}; // Return null if the channel or participants data is not found
         }
     }
-
 
     static async addCommitment(channelId, commitment) {
         await this.db.updateAsync(
@@ -805,7 +798,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         //}
     }
 
-    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid){
+
+    static async recordCommitToChannel(channelAddress, senderAddress, propertyId, tokenAmount, payEnabled, clearLists, blockHeight, txid, commitClearlistId = null){
         console.log('inside record Commit '+channelAddress+' '+senderAddress+' '+propertyId+' '+tokenAmount+' '+blockHeight+ txid)
           if (!this.channelsRegistry) {
              await this.loadChannelsRegistry();
@@ -819,6 +813,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
                 commits: [],
                 A: {},
                 B: {},
+                clearLists: { A: [], B: [] },
+                payEnabled: { A: false, B: false },
                 lastCommitmentTime: blockHeight,
                 lastUsedColumn: null, // Initialize lastUsedColumn to null
                 channelPubkeys: {A:'',B:''}
@@ -874,7 +870,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             tokenAmount,
             block: blockHeight,
             columnAssigned: channelColumn,
-            payEnabled: payEnabled
+            payEnabled: payEnabled,
+            commitClearlistId
         };
 
         await Channels.recordChannelDelta({
@@ -890,9 +887,14 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
         });
 
 
-        if(payEnabled){        
-          channel.clearLists[channelColumn]=clearLists
-          channel.payEnabled[channelColumn]
+        // Always store clearLists on commit (controls counterparty restrictions)
+        if (!channel.clearLists) channel.clearLists = { A: [], B: [] };
+        if (!channel.payEnabled) channel.payEnabled = { A: false, B: false };
+        if (Array.isArray(clearLists) && clearLists.length > 0) {
+            channel.clearLists[channelColumn] = clearLists;
+        }
+        if (payEnabled) {
+            channel.payEnabled[channelColumn] = true;
         }
         channel.participants[channelColumn]=senderAddress;
         channel.commits.push(commitRecord);
@@ -932,19 +934,16 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             column: column
         };
         this.pendingWithdrawals.push(withdrawalObj);
-        console.log('add withdraw '+withdrawalObj)
         await this.savePendingWithdrawalToDB(withdrawalObj);
     }
 
     // Function to process withdrawals
     static async processWithdrawals(blockHeight) {
-        console.log('withdrawQueue length '+this.pendingWithdrawals.length)
         if (this.pendingWithdrawals.length === 0) {
             // Load pending withdrawals from the database if the array is empty
             const pendingWithdrawalsFromDB = await this.loadPendingWithdrawalsFromDB();
-            console.log('withdrawQueue length db'+pendingWithdrawalsFromDB.length)
             if(pendingWithdrawalsFromDB.length!=0){
-               console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
+               //console.log('inside process withdrawals '+JSON.stringify(Array.from(pendingWithdrawalsFromDB.entries())));
                 }
             if (pendingWithdrawalsFromDB.length === 0) {
                 return; // No pending withdrawals to process
@@ -953,7 +952,7 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
                 this.pendingWithdrawals.push(...pendingWithdrawalsFromDB);
             }
         }
-        console.log('about to process withdrawals '+blockHeight)
+        //console.log('about to process withdrawals '+blockHeight)
         // Process pending withdrawals
         for (let i = 0; i < this.pendingWithdrawals.length; i++) {
             const withdrawal = this.pendingWithdrawals[i];
@@ -971,18 +970,18 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
             // Function to get current block height
 
             // Check if it's time to process this withdrawal
-            console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
+            //console.log('seeing if block is advanced enough to clear waiting period '+withdrawal.blockHeight,blockHeight)
             if (blockHeight >= withdrawal.blockHeight + 7) {
                 // Check if sender has sufficient balance for withdrawal
                 
-                console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
+                //console.log('inside processing block '+JSON.stringify(thisChannel)+' '+channel)
                 let column
                 if(thisChannel.participants.A==senderAddress){
                   column = "A"
                 }else if(thisChannel.participants.B==senderAddress){
                   column = "B"
                 }else{
-                  console.log('sender not found on channel '+senderAddress + ' '+channel)
+                  //console.log('sender not found on channel '+senderAddress + ' '+channel)
                   continue
                 }
                     if(withdrawAll==true){
@@ -1082,9 +1081,9 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
       // Update balances and logic for withdrawal
       // Example logic, replace with actual business logic
       //console.log('checking channel obj in processWithdrawal '+JSON.stringify(channel))
-      console.log('in processWithdrawal '+channel[column][propertyId])
+      //console.log('in processWithdrawal '+channel[column][propertyId])
       const TallyLazy = require('./tally.js')
-      let has = await TallyLazy.hasSufficientChannel(channel.channel,propertyId,amount)
+      let has = await TallyLazy.hasSufficientReserve(channel.channel,propertyId,amount)
       console.log(amount, has.hasSufficient)
       if(has.hasSufficient==false){
          amount-=has.shortfall
@@ -1106,7 +1105,8 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
     }
 
 
-    static processTransfer(transaction) {
+    static async processTransfer(transaction) {
+      const clearlistManager = require('./clearlist.js');
       // Process a transfer within a trade channel
       const { fromChannel, toChannel, amount, propertyId, transferorIsColumnA, destinationColumn } = transaction;
       const sourceChannel = this.channelsRegistry.get(fromChannel);
@@ -1114,6 +1114,36 @@ static async bumpColumnAssignment(channel, forceAis, forceBis, block = 0) {
 
       if (!sourceChannel || !destinationChannel) {
         throw new Error('Channel(s) not found');
+      }
+
+      // Enforce channel clearLists: at least one side must be attested in any declared clearlist
+      const sourceColumn = transferorIsColumnA ? 'A' : 'B';
+      const sourceAddr = sourceChannel.participants?.[sourceColumn];
+      const destAddr = destinationChannel.participants?.[destinationColumn];
+      const allLists = [
+          ...(sourceChannel.clearLists?.A || []),
+          ...(sourceChannel.clearLists?.B || []),
+          ...(destinationChannel.clearLists?.A || []),
+          ...(destinationChannel.clearLists?.B || [])
+      ];
+
+      if (allLists.length > 0) {
+          let sourceApproved = false;
+          let destApproved = false;
+
+          for (const listId of allLists) {
+              if (!sourceApproved && sourceAddr && await clearlistManager.isAddressInClearlistOrDerived(listId, sourceAddr)) {
+                  sourceApproved = true;
+              }
+              if (!destApproved && destAddr && await clearlistManager.isAddressInClearlistOrDerived(listId, destAddr)) {
+                  destApproved = true;
+              }
+              if (sourceApproved || destApproved) break;
+          }
+
+          if (!sourceApproved && !destApproved) {
+              throw new Error(`Neither transferor (${sourceAddr}) nor destination (${destAddr}) is attested in channel clearLists [${allLists}]`);
+          }
       }
 
       // Update balances and logic for transfer

@@ -2,6 +2,7 @@
 const db = require('./db.js');
 const BigNumber = require('bignumber.js')
 const { v4: uuidv4 } = require('uuid');
+const Options = require('./options.js');
 
 
 class MarginMap {
@@ -915,12 +916,34 @@ class MarginMap {
     }
 
      /**
+     * Computes the numeric maintenance requirement for a position.
+     * @param {string} contractId - The ID of the contract.
+     * @param {object} position - Position snapshot.
+     * @returns {Promise<number>} maintenance requirement in collateral units
+     */
+    async computeMaintenanceMarginRequirement(contractId, position) {
+        if (!position) return 0;
+
+        const ContractRegistry = require('./contractRegistry.js')
+        const initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgPrice);
+        const initialMarginBN = new BigNumber(initialMargin || 0);
+        const contractsBN = new BigNumber(Math.abs(position.contracts || 0));
+        const maintenanceMarginFactorBN = new BigNumber(0.5);
+
+        return contractsBN
+            .times(initialMarginBN)
+            .times(maintenanceMarginFactorBN)
+            .decimalPlaces(8)
+            .toNumber();
+    }
+
+     /**
      * Checks whether the margin of a given position is below the maintenance margin.
      * If so, it could trigger liquidations or other necessary actions.
      * @param {string} address - The address of the position holder.
      * @param {string} contractId - The ID of the contract.
      */
-    async checkMarginMaintainance(address, contractId,position){
+    async isBelowMaintenanceMargin(address, contractId,position){
         if(!position){
             position = this.margins.get(address);
         }
@@ -930,14 +953,8 @@ class MarginMap {
             return;
         }
 
-        const ContractRegistry = require('./contractRegistry.js')
-        // Calculate the maintenance margin, which is half of the initial margin
-        let initialMargin = await ContractRegistry.getInitialMargin(contractId, position.avgPrice);
-        let initialMarginBN = new BigNumber(initialMargin)
-        let contractsBN = new BigNumber(Math.abs(position.contracts))
-        let maintenanceMarginFactorBN = new BigNumber(0.5)
-        let maintenanceMargin = contractsBN.times(initialMarginBN).times(maintenanceMarginFactorBN).decimalPlaces(8).toNumber();
-        console.log('components '+initialMargin+' '+position.contracts+' '+contractId+' '+position.avgPrice)
+        const maintenanceMargin = await this.computeMaintenanceMarginRequirement(contractId, position);
+        console.log('components '+maintenanceMargin+' '+position.contracts+' '+contractId+' '+position.avgPrice)
         console.log('checking maint margin '+position.margin+' '+position.unrealizedPNL+' <? '+maintenanceMargin)
         if (position.margin < maintenanceMargin) {
             console.log(`Margin below maintenance level for address ${address}. Initiating liquidation process.`);
@@ -1194,7 +1211,7 @@ class MarginMap {
                 const priceBN = new BigNumber(price)
                 const contractsBN = new BigNumber(contracts)
                 if (!pos) return 0;
-                const ContractRegistry = require('./ContractRegistry.js')
+                const ContractRegistry = require('./contractRegistry.js')
                 if (notional == null || isNaN(Number(notional))) {
                     // Lazy fetch from ContractRegistry
                     const info = await ContractRegistry.getContractInfo(contractId);
@@ -1404,13 +1421,13 @@ class MarginMap {
       if (protectiveStrikes.length === 0) return baseLiqPrice;
 
       if (netContracts > 0) {
-        // Long underlying: puts protect → lowest liq can’t fall below the highest protective strike
+        // Long underlying: puts protect downside -> liq cannot be below protective put strike.
         const floor = Math.max(...protectiveStrikes);
-        return Math.min(baseLiqPrice, floor);
+        return Math.max(baseLiqPrice, floor);
       } else {
-        // Short underlying: calls protect → highest liq can’t rise above the lowest protective strike
+        // Short underlying: calls protect upside -> liq cannot be above protective call strike.
         const cap = Math.min(...protectiveStrikes);
-        return Math.max(baseLiqPrice, cap);
+        return Math.min(baseLiqPrice, cap);
       }
     }
 

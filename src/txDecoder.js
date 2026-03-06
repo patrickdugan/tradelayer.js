@@ -48,7 +48,8 @@ const Decode = {
             managed: parts[3] === '1',
             backupAddress: parts[4] || '',
             nft: parts[5] === '1',
-            coloredCoinHybrid: parts[6]==='1'
+            coloredCoinHybrid: parts[6] === '1',
+            proceduralType: parts[7] ? parseInt(parts[7], 36) : null
         };
     },
 
@@ -159,6 +160,9 @@ const Decode = {
         }
 
         const isColoredOutput = parts[5] ==='1'
+        const commitClearlistId = parts[6] !== undefined && parts[6] !== ''
+            ? parseInt(parts[6], 36)
+            : null;
 
         return {
             propertyId,
@@ -167,7 +171,8 @@ const Decode = {
             ref,
             payEnabled,
             clearLists,
-            isColoredOutput
+            isColoredOutput,
+            commitClearlistId
         };
     },
 
@@ -274,13 +279,16 @@ const Decode = {
     // Decode Grant Managed Token Transaction
     decodeGrantManagedToken: (payload) => {
         const parts = payload.split(',');
-        const clearlistRaw = parts[4] || '';
+        const trailingHash = parts[7] || '';
+        const legacyHash = parts[3] || '';
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
             addressToGrantTo: parts[2] || '',
-            dlcHash: parts[3] || '',
-            commitClearlistId: clearlistRaw === '' ? '' : parseInt(clearlistRaw, 36)
+            dlcHash: trailingHash || legacyHash,
+            dlcTemplateId: parts[4] || '',
+            dlcContractId: parts[5] || '',
+            settlementState: parts[6] || ''
         };
     },
 
@@ -289,7 +297,10 @@ const Decode = {
         const parts = payload.split(',');
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
-            amountDestroyed: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber()
+            amountDestroyed: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            dlcTemplateId: parts[2] || '',
+            dlcContractId: parts[3] || '',
+            settlementState: parts[4] || ''
         };
     },
 
@@ -479,20 +490,15 @@ const Decode = {
     // Decode Settle Channel PNL Transaction
    decodeSettleChannelPNL: (payload) => {
         const parts = payload.split(',');
-        const macroBatch = parts[6] === '1';
 
         return {
-            txidNeutralized1: macroBatch
-                ? (parts[0] || '')
-                : base256.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
-            txidNeutralized2: parts[1]
-                ? base256.base256ToHex(parts[1] || '')
-                : '', // Decode from Base 256 to Hex
+            txidNeutralized1: base256.base256ToHex(parts[0] || ''), // Decode from Base 256 to Hex
+            txidNeutralized2: base256.base256ToHex(parts[1] || ''), // Decode from Base 256 to Hex
             markPrice: parseFloat(base94.fromBase94(parts[2] || '')), // Decode from Base 94 to decimal
             close: parts[3] === '1',
             columnAIsSeller: parts[4]=== '1',
             columnAIsMaker: parts[5]==='1',
-            macroBatch
+            macroBatch: parts[6] ==='1'
             // Boolean flag for closing trade
         };
     },
@@ -536,8 +542,10 @@ const Decode = {
     decodeOptionTrade: (payload) => {
         const parts = payload.split(',');
 
+        const ticker = parts[0];
         const result = {
-            ticker: parts[0],                                      // keep full ticker string
+            contractId: ticker,
+            ticker,                                                // backward compatibility
             price: Decode.decodeAmount(parts[1] || '0'),
             amount: parseInt(parts[2] || '0', 36),
             columnAIsSeller: parts[3]=== '1',
@@ -552,6 +560,64 @@ const Decode = {
         }
 
         return result;
+    },
+
+        // Type 23: Settle Channel PNL (polymorphic)
+    decodeSettleChannelPNL: (payload) => {
+        const parts = payload.split(',');
+        return {
+            txidNeutralized1: parts[0] || '',
+            txidNeutralized2: parts[1] || '',
+            markPrice: parseFloat(base94.fromBase94(parts[2] || '0')),
+            settleType: parseInt(parts[3] || '0'),
+            columnAIsSeller: parts[4] === '1',
+            columnAIsMaker: parts[5] === '1',
+            netAmount: parseFloat(base94.fromBase94(parts[6] || '0')),
+            expiryBlock: parseInt(base94.fromBase94(parts[7] || '0')),
+            // Optional king-style fields for settleType=3 routed through tx23
+            blockStart: parts[8] ? parseInt(base94.fromBase94(parts[8])) : undefined,
+            blockEnd: parts[9] ? parseInt(base94.fromBase94(parts[9])) : undefined,
+            propertyId: parts[10] ? parseInt(base94.fromBase94(parts[10])) : undefined,
+            aPaysBDirection: parts[11] ? (parts[11] === '1') : undefined,
+            channelRoot: parts[12] || undefined,
+            totalContracts: parts[13] ? parseInt(base94.fromBase94(parts[13])) : undefined,
+            neutralizedCount: parts[14] ? parseInt(base94.fromBase94(parts[14])) : undefined
+        };
+    },
+
+    // Type 31: King Settlement
+    decodeKingSettle: (payload) => {
+            const parts = payload.split(',');
+            return {
+                blockStart: parseInt(base94.fromBase94(parts[0] || '0')),
+                blockEnd: parseInt(base94.fromBase94(parts[1] || '0')),
+                propertyId: parseInt(base94.fromBase94(parts[2] || '0')),
+                netAmount: parseFloat(base94.fromBase94(parts[3] || '0')),
+                aPaysBDirection: parts[4] === '1',
+                channelRoot: parts[5] || '',
+                totalContracts: parseInt(base94.fromBase94(parts[6] || '0')),
+                neutralizedCount: parseInt(base94.fromBase94(parts[7] || '0'))
+            };
+        },
+
+    // Type 30: Oracle stake/fraud/relay
+    decodeStakeFraudProof: (payload) => {
+        const parts = payload.split(',');
+        return {
+            action: parseInt(parts[0] || '0', 36), // 0=stake,1=fraud,2=relay
+            oracleId: parseInt(parts[1] || '0', 36),
+            stakedPropertyId: parseInt(parts[2] || '0', 36),
+            amount: new BigNumber(parts[3] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
+            accusedAddress: parts[4] || '',
+            evidenceHash: parts[5] || '',
+            relayType: parseInt(parts[6] || '0', 36),
+            stateHash: parts[7] || '',
+            dlcRef: parts[8] || '',
+            settlementState: parts[9] || '',
+            relayBlob: parts[10] || '',
+            autoRoll: parts[11] === '1',
+            nextDlcRef: parts[12] || ''
+        };
     },
 
     decodeBatchMoveZkRollup: (payload) =>{
