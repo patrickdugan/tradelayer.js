@@ -450,6 +450,26 @@ app.post('/tl_bitvmStatus', async (req, res) => {
             if (!Number.isFinite(deadline) || deadline <= 0) return false;
             return deadline <= currentBlock + expiringWithinBlocks;
         }).length;
+        const expiringTargets = filteredCaches
+            .filter((doc) => {
+                const status = String(doc.status || '').toUpperCase();
+                if (!pendingStatuses.has(status)) return false;
+                const deadline = Number(doc.challengeDeadlineBlock || 0);
+                if (!Number.isFinite(deadline) || deadline <= 0) return false;
+                return deadline <= currentBlock + expiringWithinBlocks;
+            })
+            .sort((a, b) => Number(a.challengeDeadlineBlock || 0) - Number(b.challengeDeadlineBlock || 0))
+            .slice(0, 50)
+            .map((doc) => ({
+                cacheId: String(doc.cacheId || ''),
+                dlcRef: String(doc.dlcRef || ''),
+                propertyId: Number(doc.propertyId || 0),
+                amount: Number(doc.amount || 0),
+                fromAddress: String(doc.fromAddress || ''),
+                toAddress: String(doc.toAddress || ''),
+                challengeDeadlineBlock: Number(doc.challengeDeadlineBlock || 0),
+                resolverAddress: String(doc.resolverAddress || '')
+            }));
         const fraudProofsSubmitted = filteredCaches.reduce((sum, doc) => {
             const n = Array.isArray(doc.challenged) ? doc.challenged.length : 0;
             return sum + n;
@@ -500,6 +520,7 @@ app.post('/tl_bitvmStatus', async (req, res) => {
             challenge: {
                 active: activeChallenges,
                 expiringSoon,
+                expiringTargets,
                 fraudProofsSubmitted,
                 watchtowerLastTick: 0,
             },
