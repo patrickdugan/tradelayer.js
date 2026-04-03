@@ -140,7 +140,7 @@ async function issueManagedProperty(admin, ticker, applyImmediate, proceduralTyp
       throw err;
     }
 
-    const fallbackTicker = `DBS${Date.now().toString().slice(-5)}`.slice(0, 8);
+    const fallbackTicker = `BVM${Date.now().toString().slice(-3)}`.slice(0, 6);
     const fallbackIssueTx = await broadcastPayload(admin, Encode.encodeTokenIssue({
       initialAmount: 1,
       ticker: fallbackTicker,
@@ -204,7 +204,7 @@ async function grantManaged(admin, propertyId, amount, address, templateId, cont
   };
   const maxGrantSats = Math.max(0, Number(grantUtxo?.satoshis || 0) - grantFeeSats - grantSlackSats);
   const requestedGrantSats = Math.max(0, Math.round(Number(amount || 0) * 1e8));
-  const grantSats = Math.min(requestedGrantSats, maxGrantSats);
+  const grantSats = maxGrantSats;
   if (grantSats <= 0) {
     throw new Error(`Unable to size procedural grant for ${address}: utxo=${grantUtxo?.satoshis || 0} fee=${grantFeeSats} slack=${grantSlackSats}`);
   }
@@ -371,7 +371,7 @@ async function main() {
   const expiryBlocks = nenv('TL_EXPIRY_BLOCKS', 24);
   const adapterPathCount = nenv('TL_ADAPTER_PATH_COUNT', 20);
   const realizedLossBps = nenv('TL_REALIZED_LOSS_BPS', 3700);
-  const shortTicker = env('TL_SHORT_TICKER', `DBS${Date.now().toString().slice(-5)}`);
+  const shortTicker = env('TL_SHORT_TICKER', `BVM${Date.now().toString().slice(-3)}`);
   const stateOracleTicker = env('TL_STATE_ORACLE_TICKER', 'BITVMSTATE');
   const priceOracleTicker = env('TL_PRICE_ORACLE_TICKER', 'LTCUSD');
   const templateId = env('TL_TEMPLATE_ID', `tpl-short-router-${Date.now()}`);

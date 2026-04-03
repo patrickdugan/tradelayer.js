@@ -1,5 +1,6 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
+const TxUtils = require('../src/txUtils');
 
 function argsFromCli(argv) {
   const out = {};
@@ -80,18 +81,18 @@ function routerEnvFromCli(cli) {
   };
 }
 
-function dailyEnvFromCli(cli, routerSummary) {
+function dailyEnvFromCli(cli, routerSummary, walletEnv = {}) {
   const addresses = envFromCli(cli, 'addresses', 'TL_STATE_ADDRESSES', [
-    envFromCli(cli, 'alice', 'TL_ALICE_ADDRESS', ''),
-    envFromCli(cli, 'bob', 'TL_BOB_ADDRESS', ''),
-    envFromCli(cli, 'charlie', 'TL_CHARLIE_ADDRESS', ''),
-    envFromCli(cli, 'admin', 'TL_ADMIN_ADDRESS', ''),
-    envFromCli(cli, 'oracleAdmin', 'TL_ORACLE_ADMIN_ADDRESS', '')
+    envFromCli(cli, 'alice', 'TL_ALICE_ADDRESS', walletEnv.TL_ALICE_ADDRESS || ''),
+    envFromCli(cli, 'bob', 'TL_BOB_ADDRESS', walletEnv.TL_BOB_ADDRESS || ''),
+    envFromCli(cli, 'charlie', 'TL_CHARLIE_ADDRESS', walletEnv.TL_CHARLIE_ADDRESS || ''),
+    envFromCli(cli, 'admin', 'TL_ADMIN_ADDRESS', walletEnv.TL_ADMIN_ADDRESS || ''),
+    envFromCli(cli, 'oracleAdmin', 'TL_ORACLE_ADMIN_ADDRESS', walletEnv.TL_ORACLE_ADMIN_ADDRESS || '')
   ].filter(Boolean).join(','));
 
   return {
     TL_ORACLE_ID: envFromCli(cli, 'oracleId', 'TL_ORACLE_ID', String(routerSummary.stateOracleId || '')),
-    TL_ORACLE_ADMIN_ADDRESS: envFromCli(cli, 'oracleAdmin', 'TL_ORACLE_ADMIN_ADDRESS', ''),
+    TL_ORACLE_ADMIN_ADDRESS: envFromCli(cli, 'oracleAdmin', 'TL_ORACLE_ADMIN_ADDRESS', walletEnv.TL_ORACLE_ADMIN_ADDRESS || ''),
     TL_DLC_CONTRACT_ID: envFromCli(cli, 'dlcRef', 'TL_DLC_CONTRACT_ID', String(routerSummary.contractId || '')),
     TL_STATE_PROPERTY_ID: envFromCli(cli, 'propertyId', 'TL_STATE_PROPERTY_ID', String(routerSummary.shortPropertyId || '')),
     TL_STATE_ADDRESSES: addresses,
@@ -108,15 +109,54 @@ function dailyEnvFromCli(cli, routerSummary) {
   };
 }
 
+async function pickWalletAddresses() {
+  await TxUtils.init();
+  const loadedWallets = await TxUtils.client.rpcCall('listwallets', [], false).catch(() => []);
+  const preferredWallet = Array.isArray(loadedWallets) && loadedWallets.length > 0
+    ? (loadedWallets.includes('tl-wallet') ? 'tl-wallet' : String(loadedWallets[0]))
+    : '';
+  if (preferredWallet && !process.env.RPC_WALLET) {
+    process.env.RPC_WALLET = preferredWallet;
+  }
+  const utxos = await TxUtils.client.listUnspent(0, 9999999);
+  const grouped = new Map();
+  for (const utxo of utxos || []) {
+    if (!utxo?.address || Number(utxo.amount || 0) <= 0) continue;
+    const current = grouped.get(utxo.address) || { address: utxo.address, amount: 0, count: 0 };
+    current.amount += Number(utxo.amount || 0);
+    current.count += 1;
+    grouped.set(utxo.address, current);
+  }
+  return Array.from(grouped.values())
+    .sort((a, b) => b.amount - a.amount)
+    .map((row) => row.address);
+}
+
+async function inferWalletEnv(cli) {
+  const auto = String(envFromCli(cli, 'autoWallet', 'TL_AUTO_WALLET', 'true')).toLowerCase() !== 'false';
+  if (!auto) return {};
+
+  const addresses = await pickWalletAddresses();
+  const [admin = '', oracleAdmin = '', alice = '', bob = '', charlie = ''] = addresses;
+  return {
+    TL_ADMIN_ADDRESS: envFromCli(cli, 'admin', 'TL_ADMIN_ADDRESS', admin),
+    TL_ORACLE_ADMIN_ADDRESS: envFromCli(cli, 'oracleAdmin', 'TL_ORACLE_ADMIN_ADDRESS', oracleAdmin || admin),
+    TL_ALICE_ADDRESS: envFromCli(cli, 'alice', 'TL_ALICE_ADDRESS', alice || admin),
+    TL_BOB_ADDRESS: envFromCli(cli, 'bob', 'TL_BOB_ADDRESS', bob || alice || admin),
+    TL_CHARLIE_ADDRESS: envFromCli(cli, 'charlie', 'TL_CHARLIE_ADDRESS', charlie || bob || alice || admin)
+  };
+}
+
 async function main() {
   const cli = argsFromCli(process.argv.slice(2));
-  const routerStdout = spawnScript('utxoBitvmShortEpochRouterLive.js', routerEnvFromCli(cli));
+  const walletEnv = await inferWalletEnv(cli);
+  const routerStdout = spawnScript('utxoBitvmShortEpochRouterLive.js', { ...routerEnvFromCli(cli), ...walletEnv });
   const routerSummary = parseSummary(routerStdout, '[utxo-bitvm-short-epoch-router-live] summary ');
   if (!routerSummary) {
     throw new Error('Unable to parse router summary');
   }
 
-  const dailyStdout = spawnScript('dlcStateOracleRelayLive.js', dailyEnvFromCli(cli, routerSummary));
+  const dailyStdout = spawnScript('dlcStateOracleRelayLive.js', { ...dailyEnvFromCli(cli, routerSummary, walletEnv), ...walletEnv });
   const dailySummary = parseSummary(dailyStdout, '[state-oracle-live] summary ');
   if (!dailySummary) {
     throw new Error('Unable to parse daily oracle summary');
