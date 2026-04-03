@@ -547,11 +547,10 @@ const Validity = {
                 params.reason="Null returning for propertyData"
                 return params
             }
-            if (Validity.isRestrictedProceduralToken(propertyData)) {
-                params.valid = false;
-                params.reason += 'Restricted procedural token cannot be committed/traded in token channels; ';
-            }
-                    // Whitelist validation logic
+            // BitVM receipt-style procedural tokens must be able to enter a channel
+            // so the futures/channel path can reserve collateral and settle back out.
+            // Keep direct token-for-token channel trading restrictions elsewhere.
+            // Whitelist validation logic
   
             const senderWhitelists = Array.isArray(propertyData.whitelistId) ? propertyData.whitelistId : [propertyData.whitelistId];
             var passes = false
@@ -1204,6 +1203,16 @@ const Validity = {
                 return '';
             };
 
+            const toSatsInt = (value) => Math.round(Number(value || 0) * 1e8);
+            const getReferenceOutput = async () => {
+                if (typeof TxUtils.getTransactionOutputs !== 'function') {
+                    return null;
+                }
+                const outputs = await TxUtils.getTransactionOutputs(txid);
+                if (!Array.isArray(outputs) || outputs.length === 0) return null;
+                return outputs[outputs.length - 1];
+            };
+
             const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
             if(isAlreadyActivated==false){
                 params.valid=false
@@ -1223,14 +1232,22 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const isManagedProperty = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
+            const proceduralHints = Boolean(
+                params.dlcHash ||
+                params.dlcTemplateId ||
+                params.dlcContractId ||
+                params.settlementState
+            );
+            const propertyData = proceduralHints ? null : await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = proceduralHints || Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            const isManagedProperty = isProcedural ? true : await PropertyList.isManagedAndAdmin(params.propertyId, sender);
             if (!isManagedProperty) {
-                params.valid = false;
-                params.reason += 'Property is not of managed type or admin does not match';
+                if (!isProcedural) {
+                    params.valid = false;
+                    params.reason += 'Property is not of managed type or admin does not match';
+                }
             }
 
-            const propertyData = await PropertyList.getPropertyData(params.propertyId);
-            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
             if (!params.addressToGrantTo) {
                 const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
                 if (fallbackAddress) {
@@ -1255,6 +1272,19 @@ const Validity = {
                 }
             }
             if (isProcedural) {
+                const referenceOutput = await getReferenceOutput();
+                const referenceSats = Number(referenceOutput?.satoshis || 0);
+                const requestedSats = toSatsInt(params.amountGranted);
+                params.referenceAddress = referenceOutput?.address || params.referenceAddress || '';
+                params.referenceSatoshis = referenceSats;
+                if (referenceOutput) {
+                    if (requestedSats !== referenceSats) {
+                        params.valid = false;
+                        params.reason += `Procedural issuance amount ${requestedSats} does not match funding output ${referenceSats}; `;
+                        return params;
+                    }
+                    params.amountGranted = new BigNumber(referenceSats).div(1e8).decimalPlaces(8).toNumber();
+                }
                 if (!params.dlcHash) {
                     params.valid = false;
                     params.reason += 'Missing dlcHash for procedural issuance; ';
@@ -1299,9 +1329,14 @@ const Validity = {
                 params.reason = 'Transaction type activated after tx';
             }
 
-            const propertyData = await PropertyList.getPropertyData(params.propertyId);
-            const isProcedural = Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
-            const isManagedAdmin = await PropertyList.isManagedAndAdmin(params.propertyId, sender);
+            const proceduralHints = Boolean(
+                params.dlcTemplateId ||
+                params.dlcContractId ||
+                params.settlementState
+            );
+            const propertyData = proceduralHints ? null : await PropertyList.getPropertyData(params.propertyId);
+            const isProcedural = proceduralHints || Number(propertyData?.type) === 7 || propertyData?.type === 'Procedural';
+            const isManagedAdmin = isProcedural ? true : await PropertyList.isManagedAndAdmin(params.propertyId, sender);
             if (!isManagedAdmin && !isProcedural) {
                 params.valid = false;
                 params.reason += 'Sender is not admin of a managed property; ';
@@ -1314,11 +1349,14 @@ const Validity = {
             }
 
             if (isProcedural) {
-                const gate = await ProceduralRegistry.ensureRedemptionContext(
-                    params.dlcTemplateId,
-                    params.dlcContractId,
-                    params.settlementState
-                );
+                const gateFn = typeof ProceduralRegistry.ensureRedemptionRequestContext === 'function'
+                    ? ProceduralRegistry.ensureRedemptionRequestContext.bind(ProceduralRegistry)
+                    : (typeof ProceduralRegistry.ensureRedemptionContext === 'function'
+                        ? ProceduralRegistry.ensureRedemptionContext.bind(ProceduralRegistry)
+                        : null);
+                const gate = gateFn
+                    ? await gateFn(params.dlcTemplateId, params.dlcContractId, params.settlementState)
+                    : { valid: true };
                 if (!gate.valid) {
                     params.valid = false;
                     params.reason += gate.reason + '; ';

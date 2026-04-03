@@ -285,13 +285,16 @@ const Encode = {
         const payload = [
             (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountGranted?.toString(36) ?? '0',
-            params.addressToGrantTo,
+            params.redeemAddress || params.addressToGrantTo,
             '',
             params?.dlcTemplateId || '',
             params?.dlcContractId || '',
             params?.settlementState || '',
             params?.dlcHash || ''
         ];
+        if (Number.isInteger(params.commitClearlistId)) {
+            payload.push(params.commitClearlistId.toString(36));
+        }
         const type = 11;
         const typeStr = type?.toString(36) ?? '0';
         return marker + typeStr + payload.join(',');
@@ -304,8 +307,7 @@ const Encode = {
             (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountDestroyed?.toString(36) ?? '0',
             params?.dlcTemplateId || '',
-            params?.dlcContractId || '',
-            params?.settlementState || ''
+            params?.dlcContractId || ''
         ];
         const type = 12;
         const typeStr = type?.toString(36) ?? '0';
@@ -314,19 +316,52 @@ const Encode = {
 
     // Encode Publish Oracle Data Transaction
     encodePublishOracleData: (params) => {
-        const formattedPrice = new BigNumber(params.price).times(1e4).toNumber()
-        const payload = [
-            params.oracleid?.toString(36) ?? '0',
-            formattedPrice?.toString(36) ?? '0',
-        ];
-        if (params.high !== undefined) {
-            payload.push(params.high?.toString(36) ?? '0');
-        }
-        if (params.low !== undefined) {
-            payload.push(params.low?.toString(36) ?? '0');
-        }
-        if (params.close !== undefined) {
-            payload.push(params.close?.toString(36) ?? '0');
+        const oracleId = params.oracleid ?? params.oracleId ?? 0;
+        const kind = String(params.kind || params.payloadType || 'price').toLowerCase();
+        let payload;
+        if (kind === 'delta' || kind === 'd') {
+            payload = [
+                Number(oracleId).toString(36),
+                'd',
+                params.propertyId != null ? Number(params.propertyId).toString(36) : '0',
+                params.op || params.operation || '',
+                params.payloadHash || params.deltaHash || '',
+                params.deltaRef || params.payloadRef || '',
+            ];
+        } else if (kind === 'daily' || kind === 'blob' || kind === 'state') {
+            payload = [
+                Number(oracleId).toString(36),
+                'b',
+                params.propertyId != null ? Number(params.propertyId).toString(36) : '0',
+                params.windowStartBlock != null ? Number(params.windowStartBlock).toString(36) : '0',
+                params.windowEndBlock != null ? Number(params.windowEndBlock).toString(36) : '0',
+                params.payloadHash || params.stateHash || '',
+                params.blobRef || params.dailyRef || params.deltaRef || '',
+            ];
+        } else if (kind === 'roll' || kind === 'r') {
+            payload = [
+                Number(oracleId).toString(36),
+                'r',
+                params.propertyId != null ? Number(params.propertyId).toString(36) : '0',
+                params.rollHeight != null ? Number(params.rollHeight).toString(36) : '0',
+                params.payloadHash || params.rollHash || '',
+                params.rollRef || params.deltaRef || '',
+            ];
+        } else {
+            const formattedPrice = new BigNumber(params.price).times(1e4).toNumber()
+            payload = [
+                Number(oracleId).toString(36),
+                formattedPrice?.toString(36) ?? '0',
+            ];
+            if (params.high !== undefined) {
+                payload.push(params.high?.toString(36) ?? '0');
+            }
+            if (params.low !== undefined) {
+                payload.push(params.low?.toString(36) ?? '0');
+            }
+            if (params.close !== undefined) {
+                payload.push(params.close?.toString(36) ?? '0');
+            }
         }
         const type = 14;
         const typeStr = type?.toString(36) ?? '0';
@@ -600,6 +635,10 @@ const Encode = {
     // Encode Oracle Stake/Fraud/Relay Transaction
     encodeStakeFraudProof: (params) => {
         const amount = new BigNumber(params.amount || 0).times(1e8).integerValue(BigNumber.ROUND_DOWN).toString(36);
+        let relayBlob = params.relayBlob || '';
+        if (relayBlob && typeof relayBlob === 'string' && !relayBlob.startsWith('b64:')) {
+            relayBlob = 'b64:' + Buffer.from(relayBlob, 'utf8').toString('base64');
+        }
         const payload = [
             Number(params.action || 0).toString(36),     // 0=stake,1=fraud,2=relay
             Number(params.oracleId || 0).toString(36),
@@ -611,7 +650,7 @@ const Encode = {
             params.stateHash || '',
             params.dlcRef || '',
             params.settlementState || '',
-            params.relayBlob || '',
+            relayBlob,
             params.autoRoll ? '1' : '0',
             params.nextDlcRef || ''
         ];

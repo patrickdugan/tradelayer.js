@@ -232,7 +232,7 @@ const Logic = {
                 await Logic.createOracle(params.senderAddress, params.ticker, params.url, params.backupAddress, params.clearlists, params.lag, params.oracleRegistry, params.block);
                 break;
             case 14:
-                await Logic.publishOracleData(params.oracleId, params.price, params.high, params.low, params.close, params.block);
+                await Logic.publishOracleData(params, params.block);
                 break;
             case 15:
                 await Logic.closeOracle(params.oracleId, params.oracleRegistry, params.block);
@@ -978,10 +978,27 @@ const Logic = {
 
     async grantManagedToken(propertyId, amount, recipientAddress, senderAddress, block, dlcHash = '', dlcTemplateId = '', dlcContractId = '', settlementState = '') {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
-	    if (!isManagedAdmin) throw new Error('Sender is not admin of a managed property');
-	    const pm = PropertyManager.getInstance();
         const propertyData = await PropertyManager.getPropertyData(propertyId);
-        if (Number(propertyData?.type) === 7) {
+        const isProcedural = Boolean(dlcHash || dlcTemplateId || dlcContractId || settlementState)
+            || Number(propertyData?.type) === 7
+            || propertyData?.type === 'Procedural';
+	    if (!isManagedAdmin && !isProcedural) throw new Error('Sender is not admin of a managed property');
+	    if (isProcedural && !propertyData) {
+            await PropertyManager.load();
+            const bootstrapProperty = PropertyManager.getInstance();
+            await bootstrapProperty.addProperty(
+                propertyId,
+                `proc-${propertyId}`,
+                0,
+                'Procedural',
+                null,
+                senderAddress,
+                null,
+                { proceduralType: 1 }
+            );
+        }
+	    const pm = PropertyManager.getInstance();
+        if (isProcedural) {
             const gate = await ProceduralRegistry.ensureIssuanceContext(dlcTemplateId, dlcContractId, settlementState, dlcHash);
             if (!gate.valid) throw new Error(gate.reason);
         }
@@ -994,11 +1011,16 @@ const Logic = {
 	    const isManagedAdmin = await PropertyManager.isManagedAndAdmin(propertyId, senderAddress);
 	    const pm = PropertyManager.getInstance();
         const propertyData = await PropertyManager.getPropertyData(propertyId);
-        const isProcedural = Number(propertyData?.type) === 7;
+        const isProcedural = Boolean(dlcTemplateId || dlcContractId || settlementState)
+            || Number(propertyData?.type) === 7
+            || propertyData?.type === 'Procedural';
         if (!isManagedAdmin && !isProcedural) throw new Error('Sender is not admin of a managed property');
         if (isProcedural) {
-            const gate = await ProceduralRegistry.ensureRedemptionContext(dlcTemplateId, dlcContractId, settlementState);
+            const gate = await ProceduralRegistry.ensureRedemptionRequestContext(dlcTemplateId, dlcContractId, settlementState);
             if (!gate.valid) throw new Error(gate.reason);
+            await TallyMap.updateBalance(senderAddress, propertyId, -amount, amount, 0, 0, 'proceduralRedeemRequest', block);
+            console.log(`Reserved ${amount} procedural tokens of property ${propertyId} for redemption request from ${senderAddress}`);
+            return;
         }
 	    await pm.redeemTokens(propertyId, senderAddress, amount, block);
 	    console.log(`Redeemed ${amount} tokens of property ${propertyId}`);
@@ -1013,10 +1035,38 @@ const Logic = {
 	    return oracleId;
 	},
 
-    async publishOracleData(oracleId, price, high, low, close, block) {
-        console.log('publishing Oracle Data '+oracleId + ' '+ price)
+    async publishOracleData(oracleIdOrParams, price, high, low, close, block) {
+        const params = (oracleIdOrParams && typeof oracleIdOrParams === 'object' && !Array.isArray(oracleIdOrParams))
+            ? oracleIdOrParams
+            : {
+                oracleId: oracleIdOrParams,
+                price,
+                high,
+                low,
+                close,
+                block
+            };
+        const oracleId = Number(params.oracleId || 0);
+        const kind = String(params.kind || params.payloadType || 'price').toLowerCase();
+        console.log('publishing Oracle Data ' + oracleId + ' kind=' + kind + ' ' + (kind === 'delta' ? params.propertyId : params.price));
+
 	    // Publish data to the oracle
-	    await OracleList.publishData(oracleId, price, high, low, close, block);
+	    await OracleList.publishData(oracleId, {
+            kind,
+            price: params.price,
+            high: params.high,
+            low: params.low,
+            close: params.close,
+            propertyId: params.propertyId,
+            payloadHash: params.payloadHash,
+            deltaRef: params.deltaRef,
+            windowStartBlock: params.windowStartBlock,
+            windowEndBlock: params.windowEndBlock,
+            blobRef: params.blobRef,
+            balancePayloadB64: params.balancePayloadB64,
+            payloadB64: params.payloadB64,
+            stateHash: params.stateHash
+        }, params.block ?? block);
 	    console.log(`Data published to oracle ${oracleId}`);
         return
 	},

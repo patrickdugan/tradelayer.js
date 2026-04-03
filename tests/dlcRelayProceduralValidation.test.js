@@ -58,7 +58,8 @@ describe('DLC relay signature + procedural token validity gates', () => {
   } = {}) {
     jest.resetModules();
     jest.doMock('../src/txUtils.js', () => ({
-      validateAddressWrapper: jest.fn(async () => ({ isvalid: true }))
+      validateAddressWrapper: jest.fn(async () => ({ isvalid: true })),
+      getTransactionOutputs: jest.fn(async () => ([{ address: 'tltc1qabc', satoshis: 100000000, vout: 0 }]))
     }));
     jest.doMock('../src/activation.js', () => ({
       getInstance: () => ({

@@ -1,5 +1,5 @@
 /**
- * Live helper: publish address-balance bucket state into tx30 relayBlob.
+ * Live helper: publish the canonical daily address state blob into tx30 relayBlob.
  *
  * Required env:
  * - TL_ORACLE_ID
@@ -10,6 +10,11 @@
  *
  * Optional env:
  * - TL_STATE_BUCKET_SIZE (default 1)
+ * - TL_STATE_FROM_BLOCK (default current block - 1)
+ * - TL_STATE_TO_BLOCK (default current block)
+ * - TL_STATE_INCLUDE_ZERO=true|false (default false)
+ * - TL_STATE_OMIT_NOOP=true|false (default true)
+ * - TL_STATE_INCLUDE_OPS=issue,send,redeem,rpnl
  * - TL_DRY_RUN=true|false (default true)
  * - TL_APPLY_IMMEDIATE=true|false (default true)
  */
@@ -17,7 +22,7 @@
 const TxUtils = require('../src/txUtils');
 const Types = require('../src/types');
 const Logic = require('../src/logic');
-const { buildAddressBalancePayload, encodeBalancePayload, payloadHashFromB64 } = require('../src/stateOracle');
+const { buildAddressDailyPayload, encodeBalancePayload, payloadHashFromB64 } = require('../src/stateOracle');
 const { createOracleSigner } = require('./makeshiftOracle');
 
 function env(name, fallback = '') {
@@ -81,16 +86,27 @@ async function main() {
   const propertyId = nenv('TL_STATE_PROPERTY_ID', 0);
   const addresses = csv(env('TL_STATE_ADDRESSES'));
   const bucketSize = nenv('TL_STATE_BUCKET_SIZE', 1);
+  const includeZero = benv('TL_STATE_INCLUDE_ZERO', false);
+  const omitNoOpAddresses = benv('TL_STATE_OMIT_NOOP', true);
+  const includeOps = csv(env('TL_STATE_INCLUDE_OPS', 'issue,send,redeem,rpnl'));
 
   if (!oracleId || !oracleAdmin || !dlcRef || !propertyId || addresses.length === 0) {
     throw new Error('Missing required env for state-oracle relay');
   }
 
   await TxUtils.init();
-  const payload = await buildAddressBalancePayload({
+  const currentBlock = await TxUtils.getBlockCount();
+  const fromBlock = nenv('TL_STATE_FROM_BLOCK', Math.max(0, currentBlock - 1));
+  const toBlock = nenv('TL_STATE_TO_BLOCK', currentBlock);
+  const payload = await buildAddressDailyPayload({
     propertyId,
     addresses,
-    bucketSize
+    fromBlock,
+    toBlock,
+    bucketSize,
+    includeZero,
+    omitNoOpAddresses,
+    includeOps
   });
   const balancePayloadB64 = encodeBalancePayload(payload);
   const payloadHash = payloadHashFromB64(balancePayloadB64);
@@ -98,8 +114,8 @@ async function main() {
 
   const signer = createOracleSigner();
   const signedBundle = signer.signBundle({
-    eventId: `${dlcRef}-balance`,
-    outcome: 'BALANCE_BUCKETS',
+    eventId: `${dlcRef}-daily`,
+    outcome: 'DAILY_STATE',
     outcomeIndex: 2,
     stateHash,
     payloadHash,
@@ -107,6 +123,11 @@ async function main() {
   });
   const relayBlobDoc = {
     ...signedBundle,
+    kind: 'daily',
+    propertyId,
+    windowStartBlock: payload.windowStartBlock,
+    windowEndBlock: payload.windowEndBlock,
+    blobRef: `${dlcRef}-daily-${payload.windowEndBlock}`,
     balancePayloadB64
   };
   const relayBlob = 'b64:' + Buffer.from(JSON.stringify(relayBlobDoc), 'utf8').toString('base64');
@@ -116,9 +137,26 @@ async function main() {
     dlcRef,
     propertyId,
     bucketSize,
+    fromBlock,
+    toBlock,
     rows: payload.rows.length,
     payloadHash
   });
+  console.log('[state-oracle-live] summary ' + JSON.stringify({
+    oracleId,
+    dlcRef,
+    propertyId,
+    bucketSize,
+    fromBlock,
+    toBlock,
+    rowCount: payload.rows.length,
+    payloadHash,
+    blobRef: relayBlobDoc.blobRef,
+    windowStartBlock: relayBlobDoc.windowStartBlock,
+    windowEndBlock: relayBlobDoc.windowEndBlock,
+    kind: relayBlobDoc.kind,
+    stateHash
+  }));
   if (dryRun) return;
 
   const txid = await TxUtils.createStakeFraudProofTransaction(oracleAdmin, {

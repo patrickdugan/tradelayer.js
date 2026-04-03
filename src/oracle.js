@@ -96,7 +96,7 @@ class OracleList {
         return latestDataPoint.data.price;
     }
 
-    static async publishData(oracleId, price, high, low, close, blockHeight) {
+    static async publishData(oracleId, dataOrPrice, high, low, close, blockHeight) {
         const lastBlock = OracleList.lastOracleUpdateBlock.get(oracleId);
 
         if (lastBlock !== undefined && lastBlock >= blockHeight) {
@@ -110,23 +110,47 @@ class OracleList {
         try {
             const instance = OracleList.getInstance();
 
-            // Prepare oracle data
-            const oracleData = { price, high, low, close };
-            const lastPrice = await OracleList.getOraclePrice(oracleId)
-            console.log('last price '+lastPrice)
-            const priceBN = new BigNumber(price)
-            const lastPriceBN = new BigNumber(lastPrice)
-            const circuitLimitUp = new BigNumber(1.05).times(lastPriceBN).decimalPlaces(4).toNumber()
-            const circuitLimitDown = new BigNumber(0.95).times(lastPriceBN).decimalPlaces(4).toNumber()
-            console.log('price, limits '+price, lastPrice, circuitLimitDown, circuitLimitUp)
-            console.log('ergo, >limit up , <limit down' + Boolean(price>circuitLimitUp)+' '+Boolean(price<circuitLimitDown))
-            if(lastPrice!=1){
-                if(price>circuitLimitUp){
-                    oracleData.price = circuitLimitUp
-                }else if(price <circuitLimitDown){
-                    oracleData.price = circuitLimitDown
+            const isStructured = dataOrPrice && typeof dataOrPrice === 'object' && !Array.isArray(dataOrPrice);
+            const oracleData = isStructured
+                ? {
+                    kind: String(dataOrPrice.kind || dataOrPrice.payloadType || 'price').toLowerCase(),
+                    price: dataOrPrice.price,
+                    high: dataOrPrice.high,
+                    low: dataOrPrice.low,
+                    close: dataOrPrice.close,
+                    propertyId: dataOrPrice.propertyId != null ? Number(dataOrPrice.propertyId) : undefined,
+                    op: dataOrPrice.op || dataOrPrice.operation || '',
+                    windowStartBlock: dataOrPrice.windowStartBlock != null ? Number(dataOrPrice.windowStartBlock) : undefined,
+                    windowEndBlock: dataOrPrice.windowEndBlock != null ? Number(dataOrPrice.windowEndBlock) : undefined,
+                    payloadHash: dataOrPrice.payloadHash || '',
+                    deltaRef: dataOrPrice.deltaRef || '',
+                    rollHeight: dataOrPrice.rollHeight != null ? Number(dataOrPrice.rollHeight) : undefined,
+                    rollRef: dataOrPrice.rollRef || '',
+                    blobRef: dataOrPrice.blobRef || dataOrPrice.dailyRef || '',
+                    balancePayloadB64: dataOrPrice.balancePayloadB64 || '',
+                    payloadB64: dataOrPrice.payloadB64 || '',
+                    stateHash: dataOrPrice.stateHash || ''
                 }
-            } 
+                : { kind: 'price', price: dataOrPrice, high, low, close };
+
+            if (oracleData.kind !== 'delta') {
+                const lastPrice = await OracleList.getOraclePrice(oracleId)
+                console.log('last price '+lastPrice)
+                const priceBN = new BigNumber(oracleData.price)
+                const lastPriceBN = new BigNumber(lastPrice)
+                const circuitLimitUp = new BigNumber(1.05).times(lastPriceBN).decimalPlaces(4).toNumber()
+                const circuitLimitDown = new BigNumber(0.95).times(lastPriceBN).decimalPlaces(4).toNumber()
+                console.log('price, limits '+oracleData.price, lastPrice, circuitLimitDown, circuitLimitUp)
+                console.log('ergo, >limit up , <limit down' + Boolean(oracleData.price>circuitLimitUp)+' '+Boolean(oracleData.price<circuitLimitDown))
+                if(lastPrice!=1){
+                    if(oracleData.price>circuitLimitUp){
+                        oracleData.price = circuitLimitUp
+                    }else if(oracleData.price <circuitLimitDown){
+                        oracleData.price = circuitLimitDown
+                    }
+                }
+            }
+
             // Preserve oracle metadata and only refresh the latest data payload.
             const oracleKey = `oracle-${oracleId}`;
             const existingMeta = instance.oracles.get(oracleKey) ||

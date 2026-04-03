@@ -45,34 +45,36 @@ class ProceduralRegistry {
   }
 
   static async ensureIssuanceContext(templateId, contractId, settlementState = '', dlcHash = '') {
-    if (!templateId || !contractId) {
-      return { valid: false, reason: 'Missing dlcTemplateId/dlcContractId for procedural token' };
+    if (!templateId) {
+      return { valid: false, reason: 'Missing dlcTemplateId for procedural token' };
     }
     if (!dlcHash) {
       return { valid: false, reason: 'Missing dlcHash for procedural token issuance' };
     }
     const template = await this.getTemplate(templateId);
-    if (!template) {
-      return { valid: false, reason: 'Unknown DLC template id for procedural token' };
+    if (template) {
+      const expectedHash = this._normalizeHash(template.templateHash || template.dlcHash || template.hash);
+      if (!expectedHash) {
+        return { valid: false, reason: 'DLC template missing published hash reference' };
+      }
+      if (this._normalizeHash(dlcHash) !== expectedHash) {
+        return { valid: false, reason: 'DLC template hash mismatch' };
+      }
     }
-    const expectedHash = this._normalizeHash(template.templateHash || template.dlcHash || template.hash);
-    if (!expectedHash) {
-      return { valid: false, reason: 'DLC template missing published hash reference' };
-    }
-    if (this._normalizeHash(dlcHash) !== expectedHash) {
-      return { valid: false, reason: 'DLC template hash mismatch' };
-    }
-    const contract = await this.getContract(contractId);
-    if (!contract) return { valid: false, reason: 'Unknown DLC contract id for procedural token' };
-    if (String(contract.templateId) !== String(templateId)) {
-      return { valid: false, reason: 'DLC template/contract mismatch' };
-    }
-    const currentState = String(contract.state || '').toUpperCase();
-    if (!['FUNDED', 'OPEN'].includes(currentState)) {
-      return { valid: false, reason: `DLC contract state ${currentState} not mintable` };
-    }
-    if (settlementState && String(settlementState).toUpperCase() !== currentState) {
-      return { valid: false, reason: 'Provided settlementState does not match DLC contract state' };
+    let contract = null;
+    if (contractId) {
+      contract = await this.getContract(contractId);
+      if (!contract) return { valid: false, reason: 'Unknown DLC contract id for procedural token' };
+      if (String(contract.templateId) !== String(templateId)) {
+        return { valid: false, reason: 'DLC template/contract mismatch' };
+      }
+      const currentState = String(contract.state || '').toUpperCase();
+      if (!['FUNDED', 'OPEN'].includes(currentState)) {
+        return { valid: false, reason: `DLC contract state ${currentState} not mintable` };
+      }
+      if (settlementState && String(settlementState).toUpperCase() !== currentState) {
+        return { valid: false, reason: 'Provided settlementState does not match DLC contract state' };
+      }
     }
     return { valid: true, contract, template };
   }
@@ -89,6 +91,25 @@ class ProceduralRegistry {
     const currentState = String(contract.state || '').toUpperCase();
     if (!['SETTLED', 'CLOSED'].includes(currentState)) {
       return { valid: false, reason: `DLC contract state ${currentState} not redeemable` };
+    }
+    if (settlementState && String(settlementState).toUpperCase() !== currentState) {
+      return { valid: false, reason: 'Provided settlementState does not match DLC contract state' };
+    }
+    return { valid: true, contract };
+  }
+
+  static async ensureRedemptionRequestContext(templateId, contractId, settlementState = '') {
+    if (!templateId || !contractId) {
+      return { valid: false, reason: 'Missing dlcTemplateId/dlcContractId for procedural redemption' };
+    }
+    const contract = await this.getContract(contractId);
+    if (!contract) return { valid: false, reason: 'Unknown DLC contract id for procedural redemption' };
+    if (String(contract.templateId) !== String(templateId)) {
+      return { valid: false, reason: 'DLC template/contract mismatch' };
+    }
+    const currentState = String(contract.state || '').toUpperCase();
+    if (!['FUNDED', 'OPEN', 'SETTLED'].includes(currentState)) {
+      return { valid: false, reason: `DLC contract state ${currentState} not redeem-requestable` };
     }
     if (settlementState && String(settlementState).toUpperCase() !== currentState) {
       return { valid: false, reason: 'Provided settlementState does not match DLC contract state' };

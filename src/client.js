@@ -60,7 +60,7 @@ class ClientWrapper {
     clientInstance = this;  // Assign the instance to the singleton variable
   }
 
-   async init() {
+  async init() {
 
      // If already initializing, wait for the process to finish
     if (this.isInitializing) {
@@ -91,17 +91,26 @@ class ClientWrapper {
 	  return this.chain;
 	}
 
-      // Wait for the blockchain to finish initial block download and indexing
-      let isTest = true
-       try {
-          const blockchainInfo = await this.getBlockchainInfo();
-           isTest = blockchainInfo.chain === 'test';
-           console.log('is test '+isTest)
-        }catch (error) {
-            if (error.code === -28) {
-              console.log('Getting the err on the second call.');
-            }
+      // Wait for the blockchain to finish initial block download and indexing.
+      // `-28 Loading block index...` is a transient startup state, not a fatal error.
+      let blockchainInfo = null;
+      for (let attempt = 0; attempt < 180; attempt++) {
+        try {
+          blockchainInfo = await this.getBlockchainInfo();
+          if (blockchainInfo) break;
+        } catch (error) {
+          const transient = error?.code === -28 || error?.code === 'ECONNREFUSED' || error?.code === 'ETIMEDOUT';
+          if (!transient) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      }
+
+      if (!blockchainInfo) {
+        throw new Error('Timed out waiting for Litecoin RPC to finish loading the block index.');
+      }
+
+      const isTest = blockchainInfo.chain === 'test';
+      console.log('is test '+isTest)
 
       const networkInfo = await this.getNetworkInfo();
       console.log('determining chain in init '+JSON.stringify(networkInfo))

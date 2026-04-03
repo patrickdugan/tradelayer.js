@@ -523,8 +523,10 @@ class Clearing {
                 if(!(propertyId === 2 || propertyId === 3 || propertyId === 4 || propertyData.type === 2)){
                     const difference = fromSats(differenceSats).toFixed(8)
                     if(differenceSats.gt(1)||differenceSats.lt(-1)){
-                        // Legacy replay reconciliation for historical imbalance in Property 5.
-                        if (Number(propertyId) === 5) {
+                        // Legacy replay reconciliation for historical imbalance in fixed-supply properties.
+                        // These historical drifts are backfilled into the IOU bucket so replay can
+                        // finish reconstructing the current chain state.
+                        if (Number(propertyId) === 5 || Number(propertyId) === 1) {
                             const reconcileAbs = fromSats(differenceSats.abs()).toNumber();
                             if (differenceSats.lt(0)) {
                                 await PnlIou.addLoss(0, Number(propertyId), reconcileAbs, block);
@@ -2530,7 +2532,7 @@ class Clearing {
         //------------------------------------------------------------
         // 2. Compute bankruptcy / liquidation price
         //------------------------------------------------------------
-        markShortfall ??= 0;
+        if (markShortfall == null) markShortfall = 0;
 
         let lossBudget = new Big(markShortfall);
         if (lossBudget.lte(0)) {

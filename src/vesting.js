@@ -167,7 +167,7 @@ class TradeLayerManager {
             console.log('verifying that propertyid numbering is consistent with native contract id '+TLTokenId,TLVESTTokenId,NativeHedgeId)
             var insuranceFund = new InsuranceFund(1,0,0.5,false)
             // Distribute initial amount to insurance fund
-            insuranceFund.deposit(TLTokenId,amountToInsuranceFund,false)
+            await insuranceFund.deposit(TLTokenId, amountToInsuranceFund, false)
             
             await TallyMap.updateBalance(this.adminAddress, TLTokenId, TLInitialLiquidity, 0, 0, 0);
             await TallyMap.updateBalance(this.adminAddress, TLVESTTokenId, TLVESTTotalAmount, 0, 0, TLVESTTotalAmount);

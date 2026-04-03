@@ -5,6 +5,8 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     const ledger = new Map();
     const updates = [];
     const proceduralDocs = new Map();
+    const redeemCalls = [];
+    const grantCalls = [];
     const bundleVerify = jest.fn(async (expectedBundleHash, explicitPath) => {
       const normalized = String(expectedBundleHash || '').trim().toLowerCase();
       if (!normalized) {
@@ -48,9 +50,17 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     }));
 
     jest.doMock('../src/property.js', () => ({
+      isManagedAndAdmin: jest.fn(async () => true),
+      getPropertyData: jest.fn(async () => ({ type: 7, issuer: 'oracleAdmin' })),
+      isManagedProperty: jest.fn(async () => true),
+      isAdmin: jest.fn(async () => true),
       getInstance: () => ({
-        redeemTokens: jest.fn(async () => {}),
-        grantTokens: jest.fn(async () => {})
+        redeemTokens: jest.fn(async (...args) => {
+          redeemCalls.push(args);
+        }),
+        grantTokens: jest.fn(async (...args) => {
+          grantCalls.push(args);
+        }),
       })
     }));
 
@@ -60,6 +70,8 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
 
     jest.doMock('../src/procedural.js', () => ({
       ProceduralRegistry: {
+        ensureIssuanceContext: jest.fn(async () => ({ valid: true })),
+        ensureRedemptionContext: jest.fn(async () => ({ valid: true })),
         transitionContract: jest.fn(async () => ({}))
       }
     }));
@@ -90,7 +102,7 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
     const Logic = require('../src/logic.js');
     const bitvmDocById = (cacheId) => proceduralDocs.get(`bitvm-cache-${cacheId}`);
     const firstBitvmDoc = () => [...proceduralDocs.values()].find((d) => d && d.type === 'bitvmCache');
-    return { Logic, ledger, updates, setBal, getBal, bitvmDocById, firstBitvmDoc, bundleVerify };
+    return { Logic, ledger, updates, setBal, getBal, bitvmDocById, firstBitvmDoc, bundleVerify, redeemCalls, grantCalls };
   }
 
   function relayBlob(settlement) {
@@ -362,6 +374,69 @@ describe('tx30 Plan A BitVM cache + adversarial payout stress', () => {
 
     expect(bitvmDocById(cache.cacheId).status).toBe('CHALLENGED');
     expect(getBal('BITVM_CACHE::ct-3', 5)).toBe(15);
+    expect(getBal('winner', 5)).toBe(0);
+  });
+
+  test('partial redemption then BitVM cache sweep blocks payout after challenge', async () => {
+    const { Logic, setBal, getBal, firstBitvmDoc, redeemCalls } = loadHarness();
+    setBal('pool', 5, 100);
+
+    await Logic.redeemManagedToken(77, 4.25, 'holderA', 900, 'tpl-partial', 'ct-partial', 'SETTLED');
+
+    expect(redeemCalls).toEqual([[77, 'holderA', 4.25, 900]]);
+
+    await Logic.processStakeFraudProof('oracleAdmin', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      dlcRef: 'ct-partial-sweep',
+      stateHash: 'state-partial-sweep',
+      relayBlob: relayBlob({
+        mode: 'bitvm_cache',
+        propertyId: 5,
+        amount: 9,
+        fromAddress: 'pool',
+        toAddress: 'winner',
+        cacheId: 'sweep-1',
+        cacheAddress: 'BITVM_CACHE::sweep-1',
+        challengeBlocks: 2
+      })
+    }, 901);
+
+    const cache = firstBitvmDoc();
+    expect(cache.status).toBe('PENDING');
+    expect(getBal('pool', 5)).toBe(91);
+    expect(getBal('BITVM_CACHE::sweep-1', 5)).toBe(9);
+
+    await Logic.processStakeFraudProof('challenger', {
+      action: 2,
+      oracleId: 1,
+      relayType: 1,
+      stateHash: 'state-partial-sweep',
+      relayBlob: relayBlob({
+        mode: 'bitvm_challenge',
+        cacheId: cache.cacheId,
+        challengerAddress: 'challenger',
+        evidenceHash: 'profit-sweep-probe'
+      })
+    }, 902);
+
+    await expect(
+      Logic.processStakeFraudProof('oracleAdmin', {
+        action: 2,
+        oracleId: 1,
+        relayType: 1,
+        stateHash: 'state-partial-sweep',
+        relayBlob: relayBlob({
+          mode: 'bitvm_payout',
+          cacheId: cache.cacheId,
+          propertyId: 5,
+          amount: 9,
+          toAddress: 'winner'
+        })
+      }, 905)
+    ).rejects.toThrow(/challenged; payout blocked/i);
+
     expect(getBal('winner', 5)).toBe(0);
   });
 

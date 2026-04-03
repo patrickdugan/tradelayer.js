@@ -48,15 +48,13 @@ async function waitForClientWrapper(maxRetries = 10, interval = 500) {
     throw new Error('ClientWrapper failed to initialize after max retries.');
 }
 
-let lastInitCall = Date.now();
+let lastInitCall = 0;
 
 // Initialize Main once ClientWrapper is ready
 app.post('/tl_initmain', async (req, res) => {
-const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1,'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t');
-    console.log('trade history '+JSON.stringify(tradeHistory))
     try {
 
-        if(req.wallet){
+        if (req.body && req.body.wallet) {
             const now = Date.now();
             if (now - lastInitCall < 30000) {  // Only allow one call per second, adjust timing as needed
                 return res.status(429).send('Too many requests');  // Or simply ignore this call
@@ -73,6 +71,9 @@ const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1,'tlt
             res.status(200).send(isInitialized ? 'Main process initialized successfully' : 'Main process initialization failed');
             return;
         }
+
+        const tradeHistory = await TradeHistory.getTokenTradeHistoryForAddress(0, 1, 'tltc1q89kkgaslk0lt8l90jkl3cgwg7dkkszn73u4d2t');
+        console.log('trade history ' + JSON.stringify(tradeHistory))
 
         console.log('Waiting for ClientWrapper initialization...');
         const client = await waitForClientWrapper();  // Ensure ClientWrapper is initialized

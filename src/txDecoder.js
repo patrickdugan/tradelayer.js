@@ -281,6 +281,9 @@ const Decode = {
         const parts = payload.split(',');
         const trailingHash = parts[7] || '';
         const legacyHash = parts[3] || '';
+        const commitClearlistId = parts[8] !== undefined && parts[8] !== ''
+            ? parseInt(parts[8], 36)
+            : undefined;
         return {
             propertyId: Decode.decodePropertyId(parts[0] || ''),
             amountGranted: new BigNumber(parts[1] || '0', 36).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN).toNumber(),
@@ -288,7 +291,8 @@ const Decode = {
             dlcHash: trailingHash || legacyHash,
             dlcTemplateId: parts[4] || '',
             dlcContractId: parts[5] || '',
-            settlementState: parts[6] || ''
+            settlementState: parts[6] || '',
+            commitClearlistId
         };
     },
 
@@ -319,9 +323,43 @@ const Decode = {
     // Decode Publish Oracle Data Transaction
     decodePublishOracleData: (payload) => {
         const parts = payload.split(',');
+        const oracleId = parseInt(parts[0] || '0', 36);
+        const mode = String(parts[1] || '').toLowerCase();
+        if (mode === 'd' || mode === 'delta') {
+            return {
+                oracleId,
+                kind: 'delta',
+                propertyId: parts[2] ? parseInt(parts[2], 36) : 0,
+                op: parts[3] || '',
+                payloadHash: parts[4] || '',
+                deltaRef: parts[5] || '',
+            };
+        }
+        if (mode === 'b' || mode === 'blob' || mode === 'daily' || mode === 'state') {
+            return {
+                oracleId,
+                kind: 'daily',
+                propertyId: parts[2] ? parseInt(parts[2], 36) : 0,
+                windowStartBlock: parts[3] ? parseInt(parts[3], 36) : 0,
+                windowEndBlock: parts[4] ? parseInt(parts[4], 36) : 0,
+                payloadHash: parts[5] || '',
+                blobRef: parts[6] || '',
+            };
+        }
+        if (mode === 'r' || mode === 'roll') {
+            return {
+                oracleId,
+                kind: 'roll',
+                propertyId: parts[2] ? parseInt(parts[2], 36) : 0,
+                rollHeight: parts[3] ? parseInt(parts[3], 36) : 0,
+                payloadHash: parts[4] || '',
+                rollRef: parts[5] || '',
+            };
+        }
         let data = {
-            oracleId: parseInt(parts[0] || '0', 36), // Decode oracleId as the first part
-            price: parseInt(parts[1] || '0', 36)     // Adjust indices for other parts
+            oracleId,
+            kind: 'price',
+            price: parseInt(parts[1] || '0', 36)
         };
         data.price = new BigNumber(data.price).div(1e4).decimalPlaces(4).toNumber()
         if (parts[2]) {

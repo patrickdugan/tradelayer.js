@@ -87,14 +87,14 @@ class Main {
     static isInitializing = false;  // Add a flag to track initialization
 
 
-    constructor() {
+    constructor(clientArg) {
         console.log('inside main constructor '+Boolean(Main.instance))
         if (Main.instance) {
             console.log('main already initialized')
             return Main.instance;
         }
 
-        this.client=client// Use the already initialized clientInstance  // Initialize the client with the specified chain     
+        this.client = clientArg || client// Use the already initialized clientInstance  // Initialize the client with the specified chain     
  
         console.log('client in main ' +this.client)
         //this.tradeLayerManager = new TradeLayerManager();
@@ -107,13 +107,17 @@ class Main {
         Main.instance = this;
     }
 
-    static async getInstance() {
+    static async getInstance(clientArg) {
         if (!Main.instance && !Main.isInitializing) {
             Main.isInitializing = true;
             console.log('Initializing Main instance...');
 
             // 1. Construct Main first
-            Main.instance = new Main();
+            Main.instance = new Main(clientArg);
+
+            if (!Main.instance.client) {
+                throw new Error('Main client wrapper is not initialized.');
+            }
 
             // 2. Detect network from the initialized client instance
             const net = await Main.instance.client.getChain();
@@ -253,8 +257,10 @@ class Main {
         let consensusState;
 
         try {
-            //const lastSavedHeight = await persistenceDB.get('lastSavedHeight');
-            const startHeight = /*lastSavedHeight ||*/ this.genesisBlock;
+            const lastSavedHeight = await this.loadMaxProcessedHeight();
+            const startHeight = Number.isFinite(Number(lastSavedHeight)) && Number(lastSavedHeight) >= this.genesisBlock
+                ? Number(lastSavedHeight) + 1
+                : this.genesisBlock;
             return this.constructConsensusFromIndex(startHeight, false);
         } catch (error) {
             if (error.type === 'NotFoundError') {
@@ -685,10 +691,10 @@ class Main {
                 return { status: true, connections: connections };
 
             } catch (error) {
-                // Handle errors such as ECONNREFUSED (cannot connect to the node)
-                if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+                // Handle startup/indexing states and transport errors as transient.
+                if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === -28) {
                     console.error(`Network error: ${error.message}. Could not reach the Bitcoin node.`);
-                    return { status: false, reason: 'Connection refused or timeout' };
+                    return { status: false, reason: 'Connection refused, timeout, or loading block index' };
                 } else {
                     console.error('An unexpected error occurred:', error);
                     throw error; // Rethrow if it's an unexpected error

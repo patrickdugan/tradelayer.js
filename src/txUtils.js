@@ -837,15 +837,15 @@ async addInputs(utxos, rawTx) {
 
    async createContractSeriesTransaction(thisAddress, contractParams) {
         try {
-            var txNumber = 16;
-            var payload = 'tl' + txNumber.toString(36);
-            payload += Encode.encodeCreateFutureContractSeries(contractParams);
+            const payload = Encode.encodeCreateFutureContractSeries(contractParams);
 
-            const utxos = await this.client.listUnspent(1, 9999999, [thisAddress]);
+            const minConfEnv = Number(process.env.TL_UTXO_MINCONF || 0);
+            const minConf = Number.isFinite(minConfEnv) && minConfEnv >= 0 ? minConfEnv : 0;
+            const utxos = await this.client.listUnspent(minConf, 9999999, [thisAddress]);
             console.log(utxos);
             if (utxos.length === 0) throw new Error('No UTXOs available for the address');
 
-            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+            const utxo = contractParams.fundingUtxo || await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
@@ -994,7 +994,7 @@ async addInputs(utxos, rawTx) {
         try {
             const payload = Encode.encodePublishOracleData(contractParams);
 
-            const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+            const utxo = contractParams.fundingUtxo || await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
             const rawTx = new litecore.Transaction()
                 .from(utxo)
                 .addData(payload)
@@ -1064,14 +1064,17 @@ async addInputs(utxos, rawTx) {
         return txid;
     },
 
-    async createGrantManagedTokenTransaction(thisAddress, params) {
-        const payload = Encode.encodeGrantManagedToken(params);
-        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+    async createProceduralTokenTransaction(thisAddress, params, mode = 'grant') {
+        const isRedeem = String(mode).toLowerCase() === 'redeem';
+        const payload = isRedeem
+            ? Encode.encodeRedeemManagedToken(params)
+            : Encode.encodeGrantManagedToken(params);
+        const utxo = params.fundingUtxo || await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const recipientAddress = params.addressToGrantTo || params.referenceAddress || '';
-        // Maintain a concrete reference output for tx11 so serialization keeps a non-dust spendable output.
         const includeReferenceOutput =
-            String(process.env.TL_GRANT_INCLUDE_REFERENCE_OUTPUT || 'true').toLowerCase() === 'true';
-        const grantReferenceOutput = Math.max(DUST_THRESHOLD, 300000);
+            !isRedeem && String(process.env.TL_GRANT_INCLUDE_REFERENCE_OUTPUT || 'true').toLowerCase() === 'true';
+        const rawGrantSats = Math.round(Number(params.amountGranted || 0) * COIN);
+        const grantReferenceOutput = rawGrantSats > 0 ? rawGrantSats : Math.max(DUST_THRESHOLD, 300000);
         const hasReferenceOutput = includeReferenceOutput && !!recipientAddress;
         let rawTx = new litecore.Transaction()
             .from(utxo)
@@ -1082,7 +1085,6 @@ async addInputs(utxos, rawTx) {
             rawTx = rawTx.to(recipientAddress, grantReferenceOutput);
         }
 
-        // Avoid creating dust change outputs; if too small, leave remainder as additional fee.
         const spendSats = STANDARD_FEE + (hasReferenceOutput ? grantReferenceOutput : 0);
         const inputSats = Number(utxo?.satoshis || 0);
         const changeSats = inputSats - spendSats;
@@ -1095,31 +1097,21 @@ async addInputs(utxos, rawTx) {
 
         const serializedTx = rawTx.uncheckedSerialize();
         const txid = await this.client.sendrawtransaction(serializedTx);
-        console.log(`Grant managed token tx sent successfully. TXID: ${txid}`);
+        console.log(`${isRedeem ? 'Redeem' : 'Grant'} managed token tx sent successfully. TXID: ${txid}`);
         return txid;
     },
 
+    async createGrantManagedTokenTransaction(thisAddress, params) {
+        return this.createProceduralTokenTransaction(thisAddress, params, 'grant');
+    },
+
     async createRedeemManagedTokenTransaction(thisAddress, params) {
-        const payload = Encode.encodeRedeemManagedToken(params);
-        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
-        const rawTx = new litecore.Transaction()
-            .from(utxo)
-            .addData(payload)
-            .change(thisAddress)
-            .fee(STANDARD_FEE);
-
-        const privateKey = await this.client.dumpprivkey(thisAddress);
-        rawTx.sign(privateKey);
-
-        const serializedTx = rawTx.serialize();
-        const txid = await this.client.sendrawtransaction(serializedTx);
-        console.log(`Redeem managed token tx sent successfully. TXID: ${txid}`);
-        return txid;
+        return this.createProceduralTokenTransaction(thisAddress, params, 'redeem');
     },
 
     async createStakeFraudProofTransaction(thisAddress, params) {
         const payload = Encode.encodeStakeFraudProof(params);
-        const utxo = await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
+        const utxo = params.fundingUtxo || await this.findSuitableUTXO(thisAddress, STANDARD_FEE);
         const relayFee = STANDARD_FEE * 3;
         const inputSats = Math.round(Number(utxo.satoshis || 0));
         const changeSats = inputSats - relayFee;
