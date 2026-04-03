@@ -1,6 +1,7 @@
 node_modules
 logs/
 nedb-data
+ltc-other/
 *.ldb
 *.log
 .db
