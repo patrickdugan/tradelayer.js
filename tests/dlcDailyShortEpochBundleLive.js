@@ -100,7 +100,9 @@ function dailyEnvFromCli(cli, routerSummary) {
     TL_STATE_TO_BLOCK: envFromCli(cli, 'toBlock', 'TL_STATE_TO_BLOCK', ''),
     TL_STATE_INCLUDE_ZERO: envFromCli(cli, 'includeZero', 'TL_STATE_INCLUDE_ZERO', 'false'),
     TL_STATE_OMIT_NOOP: envFromCli(cli, 'omitNoOp', 'TL_STATE_OMIT_NOOP', 'true'),
-    TL_STATE_INCLUDE_OPS: envFromCli(cli, 'includeOps', 'TL_STATE_INCLUDE_OPS', 'issue,send,redeem,rpnl'),
+    TL_STATE_INCLUDE_OPS: envFromCli(cli, 'includeOps', 'TL_STATE_INCLUDE_OPS', 'issue,redeem,rpnl'),
+    TL_STATE_KIND: envFromCli(cli, 'stateKind', 'TL_STATE_KIND', 'daily'),
+    TL_STATE_ROLL_HEIGHT: envFromCli(cli, 'rollHeight', 'TL_STATE_ROLL_HEIGHT', ''),
     TL_DRY_RUN: envFromCli(cli, 'dailyDryRun', 'TL_DRY_RUN', 'false'),
     TL_APPLY_IMMEDIATE: envFromCli(cli, 'dailyApplyImmediate', 'TL_APPLY_IMMEDIATE', 'true')
   };
@@ -127,8 +129,11 @@ async function main() {
     contractId: routerSummary.contractId,
     payloadHash: dailySummary.payloadHash,
     blobRef: dailySummary.blobRef,
+    kind: dailySummary.kind,
     windowStartBlock: dailySummary.windowStartBlock,
     windowEndBlock: dailySummary.windowEndBlock,
+    rollHeight: dailySummary.rollHeight,
+    snapshotBlock: dailySummary.snapshotBlock,
     rowCount: dailySummary.rowCount
   }));
 }

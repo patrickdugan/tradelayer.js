@@ -140,7 +140,7 @@ async function issueManagedProperty(admin, ticker, applyImmediate, proceduralTyp
       throw err;
     }
 
-    const fallbackTicker = `DBS${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`.slice(0, 12);
+    const fallbackTicker = `DBS${Date.now().toString().slice(-5)}`.slice(0, 8);
     const fallbackIssueTx = await broadcastPayload(admin, Encode.encodeTokenIssue({
       initialAmount: 1,
       ticker: fallbackTicker,
@@ -457,7 +457,7 @@ async function main() {
 
   const signer = createOracleSigner();
   const block = await TxUtils.getBlockCount();
-  const effectivePayoutBlock = block + Math.max(0, cacheDelayBlocks);
+  const effectivePayoutBlock = block + Math.max(1, cacheDelayBlocks);
 
   let bucketSweepTx = null;
   if (routerPlan.bucketLossAmount > 0) {

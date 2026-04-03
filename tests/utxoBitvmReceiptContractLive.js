@@ -66,7 +66,18 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
 
 async function broadcastPayload(senderAddress, payload) {
   const litecore = require('bitcore-lib-ltc');
-  const utxo = await TxUtils.findSuitableUTXO(senderAddress, 2000);
+  const utxos = await TxUtils.client.listUnspent(0, 9999999, [senderAddress]);
+  const raw = (utxos || [])
+    .filter((u) => Number(u?.amount || 0) > 0)
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+  if (!raw) throw new Error(`No spendable UTXO found for ${senderAddress}`);
+  const utxo = {
+    txId: raw.txid,
+    outputIndex: raw.vout,
+    address: raw.address,
+    script: raw.scriptPubKey,
+    satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+  };
   const privateKey = await TxUtils.client.dumpprivkey(senderAddress);
   const tx = new litecore.Transaction()
     .from(utxo)
@@ -75,6 +86,60 @@ async function broadcastPayload(senderAddress, payload) {
     .fee(2000);
   tx.sign(privateKey);
   return TxUtils.client.sendrawtransaction(tx.serialize());
+}
+
+async function selectFundingUtxo(address) {
+  const utxos = await TxUtils.client.listUnspent(0, 9999999, [address]);
+  const raw = (utxos || [])
+    .filter((u) => Number(u?.amount || 0) > 0)
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+  if (!raw) return null;
+  return {
+    txId: raw.txid,
+    outputIndex: raw.vout,
+    address: raw.address,
+    script: raw.scriptPubKey,
+    satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+  };
+}
+
+async function grantManaged(admin, propertyId, amount, address, templateId, contractRef, applyImmediate) {
+  const grantFeeSats = Number(process.env.TL_GRANT_FEE_SATS || 2000);
+  const grantSlackSats = Number(process.env.TL_GRANT_SLACK_SATS || 0);
+  const grantUtxo = await selectFundingUtxo(admin);
+  if (!grantUtxo) {
+    throw new Error(`No spendable UTXO found for grant sender ${admin}`);
+  }
+  const maxGrantSats = Math.max(0, Number(grantUtxo?.satoshis || 0) - grantFeeSats - grantSlackSats);
+  const requestedGrantSats = Math.max(0, Math.round(Number(amount || 0) * 1e8));
+  const grantSats = maxGrantSats;
+  if (grantSats <= 0) {
+    throw new Error(`Unable to size procedural grant for ${address}: utxo=${grantUtxo?.satoshis || 0} fee=${grantFeeSats} slack=${grantSlackSats}`);
+  }
+  const txid = await TxUtils.createGrantManagedTokenTransaction(admin, {
+    propertyId,
+    amountGranted: grantSats / 1e8,
+    addressToGrantTo: address,
+    dlcTemplateId: templateId,
+    dlcContractId: contractRef,
+    settlementState: 'FUNDED',
+    dlcHash: `${templateId}-hash`,
+    fundingUtxo: grantUtxo
+  });
+  if (applyImmediate) {
+    const b = await TxUtils.getBlockCount();
+    await applyTxNow(txid, admin, b);
+  }
+  console.log('[utxo-bitvm-receipt-contract-live] grant-sized', JSON.stringify({
+    admin,
+    propertyId,
+    requestedAmount: amount,
+    grantSats,
+    grantAmount: grantSats / 1e8,
+    selectedUtxoSats: grantUtxo?.satoshis || 0,
+    slackSats: grantSlackSats
+  }));
+  return txid;
 }
 
 async function activateIfNeeded(adminAddress, txType, applyImmediate) {
@@ -90,24 +155,61 @@ async function activateIfNeeded(adminAddress, txType, applyImmediate) {
 }
 
 async function issueManagedProperty(admin, ticker, applyImmediate, proceduralType = 1) {
-  const issueTx = await broadcastPayload(admin, Encode.encodeTokenIssue({
-    initialAmount: 1,
-    ticker,
-    whitelists: [],
-    managed: true,
-    backupAddress: '',
-    nft: false,
-    coloredCoinHybrid: false,
-    proceduralType
-  }));
-  if (applyImmediate) {
-    const b = await TxUtils.getBlockCount();
-    await applyTxNow(issueTx, admin, b);
-  }
   const props = await PropertyList.getPropertyIndex();
-  const prop = props.find((p) => p.ticker === ticker);
-  if (!prop?.id) throw new Error(`Unable to resolve property id for ${ticker}`);
-  return { txid: issueTx, propertyId: Number(prop.id) };
+  const existing = props.find((p) => p.ticker === ticker);
+  if (existing?.id) {
+    return { txid: null, propertyId: Number(existing.id), ticker, reused: true };
+  }
+
+  try {
+    const issueTx = await broadcastPayload(admin, Encode.encodeTokenIssue({
+      initialAmount: 1,
+      ticker,
+      whitelists: [],
+      managed: true,
+      backupAddress: '',
+      nft: false,
+      coloredCoinHybrid: false,
+      proceduralType
+    }));
+    if (applyImmediate) {
+      const b = await TxUtils.getBlockCount();
+      await applyTxNow(issueTx, admin, b);
+    }
+    const refreshed = await PropertyList.getPropertyIndex();
+    const prop = refreshed.find((p) => p.ticker === ticker);
+    if (!prop?.id) throw new Error(`Unable to resolve property id for ${ticker}`);
+    return { txid: issueTx, propertyId: Number(prop.id), ticker, reused: false };
+  } catch (err) {
+    const reason = String(err?.message || err || '');
+    if (!/already exists|invalid ticker/i.test(reason)) {
+      throw err;
+    }
+
+    const fallbackTicker = `DBS${Date.now().toString().slice(-5)}`.slice(0, 8);
+    const fallbackIssueTx = await broadcastPayload(admin, Encode.encodeTokenIssue({
+      initialAmount: 1,
+      ticker: fallbackTicker,
+      whitelists: [],
+      managed: true,
+      backupAddress: '',
+      nft: false,
+      coloredCoinHybrid: false,
+      proceduralType
+    }));
+    if (applyImmediate) {
+      const b = await TxUtils.getBlockCount();
+      await applyTxNow(fallbackIssueTx, admin, b);
+    }
+    const refreshed = await PropertyList.getPropertyIndex();
+    const prop = refreshed.find((p) => p.ticker === fallbackTicker);
+    if (!prop?.id) throw new Error(`Unable to resolve property id for ${fallbackTicker}`);
+    console.log('[utxo-bitvm-receipt-contract-live] ticker-fallback', JSON.stringify({
+      requestedTicker: ticker,
+      fallbackTicker
+    }));
+    return { txid: fallbackIssueTx, propertyId: Number(prop.id), ticker: fallbackTicker, reused: false };
+  }
 }
 
 async function createOracle(admin, ticker, applyImmediate) {
@@ -149,6 +251,20 @@ async function relaySettlement(oracleAdmin, params, settlement, signer, applyImm
     stateHash: settlement.stateHash,
     dlcRef: params.dlcRef,
     settlementState: settlement.settlementState || 'SETTLED',
+    fundingUtxo: await (async () => {
+      const utxos = await TxUtils.client.listUnspent(0, 9999999, [oracleAdmin]);
+      const raw = (utxos || [])
+        .filter((u) => Number(u?.amount || 0) > 0)
+        .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+      if (!raw) throw new Error(`No spendable UTXO found for relay sender ${oracleAdmin}`);
+      return {
+        txId: raw.txid,
+        outputIndex: raw.vout,
+        address: raw.address,
+        script: raw.scriptPubKey,
+        satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+      };
+    })(),
     relayBlob: mkRelayBlob({
       ...signed,
       settlement: settlement.payload
@@ -177,7 +293,8 @@ async function main() {
   const stateOracleTicker = env('TL_STATE_ORACLE_TICKER', 'BITVMSTATE');
   const priceOracleTicker = env('TL_PRICE_ORACLE_TICKER', 'LTCUSD');
   const shortTicker = env('TL_SHORT_TICKER', `DBS${Date.now().toString().slice(-5)}`);
-  const longTicker = env('TL_LONG_TICKER', `DBL${Date.now().toString().slice(-5)}`);
+  const longTicker = env('TL_LONG_TICKER', `DBS${String((Number(Date.now().toString().slice(-5)) + 1) % 100000).padStart(5, '0')}`);
+  const receiptPropertyId = nenv('TL_RECEIPT_PROPERTY_ID', 67);
   const templateId = env('TL_TEMPLATE_ID', `tpl-bitvm-${Date.now()}`);
   const shortContractRef = env('TL_SHORT_CONTRACT_REF', 'bitvm-epoch-1');
   const longContractRef = env('TL_LONG_CONTRACT_REF', 'bitvm-epoch-2');
@@ -201,8 +318,8 @@ async function main() {
   const stateOracle = await createOracle(oracleAdmin, stateOracleTicker, applyImmediate);
   const priceOracle = await createOracle(oracleAdmin, priceOracleTicker, applyImmediate);
 
-  const shortProp = await issueManagedProperty(admin, shortTicker, applyImmediate, 1);
-  const longProp = await issueManagedProperty(admin, longTicker, applyImmediate, 1);
+  const shortProp = { propertyId: receiptPropertyId, ticker: shortTicker, reused: true };
+  const longProp = shortProp;
 
   await ProceduralRegistry.upsertTemplate(templateId, {
     oracleId: stateOracle.oracleId,
@@ -215,20 +332,8 @@ async function main() {
 
   const grants = [];
   for (const [address, amount] of [[alice, shortAmount], [bob, shortAmount]]) {
-    const txid = await TxUtils.createGrantManagedTokenTransaction(admin, {
-      propertyId: shortProp.propertyId,
-      amountGranted: amount,
-      addressToGrantTo: address,
-      dlcTemplateId: templateId,
-      dlcContractId: shortContractRef,
-      settlementState: 'FUNDED',
-      dlcHash: `${templateId}-hash`
-    });
+    const txid = await grantManaged(admin, shortProp.propertyId, amount, address, templateId, shortContractRef, applyImmediate);
     grants.push({ address, amount, txid });
-    if (applyImmediate) {
-      const b = await TxUtils.getBlockCount();
-      await applyTxNow(txid, admin, b);
-    }
   }
 
   const signer = createOracleSigner();
@@ -283,7 +388,21 @@ async function main() {
 
   const priceTx = await TxUtils.publishDataTransaction(oracleAdmin, {
     oracleid: priceOracle.oracleId,
-    price: basePrice
+    price: basePrice,
+    fundingUtxo: await (async () => {
+      const utxos = await TxUtils.client.listUnspent(0, 9999999, [oracleAdmin]);
+      const raw = (utxos || [])
+        .filter((u) => Number(u?.amount || 0) > 0)
+        .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+      if (!raw) throw new Error(`No spendable UTXO found for price sender ${oracleAdmin}`);
+      return {
+        txId: raw.txid,
+        outputIndex: raw.vout,
+        address: raw.address,
+        script: raw.scriptPubKey,
+        satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+      };
+    })()
   });
   if (applyImmediate) {
     const b = await TxUtils.getBlockCount();
@@ -301,7 +420,21 @@ async function main() {
     expiryPeriod: longExpiry,
     series,
     inverse: true,
-    fee: false
+    fee: false,
+    fundingUtxo: await (async () => {
+      const utxos = await TxUtils.client.listUnspent(0, 9999999, [admin]);
+      const raw = (utxos || [])
+        .filter((u) => Number(u?.amount || 0) > 0)
+        .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+      if (!raw) throw new Error(`No spendable UTXO found for series sender ${admin}`);
+      return {
+        txId: raw.txid,
+        outputIndex: raw.vout,
+        address: raw.address,
+        script: raw.scriptPubKey,
+        satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+      };
+    })()
   });
   if (applyImmediate) {
     const b = await TxUtils.getBlockCount();

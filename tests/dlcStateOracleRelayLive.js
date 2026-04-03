@@ -9,12 +9,14 @@
  * - TL_STATE_ADDRESSES (csv)
  *
  * Optional env:
+ * - TL_STATE_KIND=daily|roll (default daily)
  * - TL_STATE_BUCKET_SIZE (default 1)
  * - TL_STATE_FROM_BLOCK (default current block - 1)
  * - TL_STATE_TO_BLOCK (default current block)
+ * - TL_STATE_ROLL_HEIGHT (default current block + 1 when kind=roll)
  * - TL_STATE_INCLUDE_ZERO=true|false (default false)
  * - TL_STATE_OMIT_NOOP=true|false (default true)
- * - TL_STATE_INCLUDE_OPS=issue,send,redeem,rpnl
+ * - TL_STATE_INCLUDE_OPS=issue,redeem,rpnl
  * - TL_DRY_RUN=true|false (default true)
  * - TL_APPLY_IMMEDIATE=true|false (default true)
  */
@@ -22,7 +24,7 @@
 const TxUtils = require('../src/txUtils');
 const Types = require('../src/types');
 const Logic = require('../src/logic');
-const { buildAddressDailyPayload, encodeBalancePayload, payloadHashFromB64 } = require('../src/stateOracle');
+const { buildAddressDailyPayload, buildAddressRollPayload, encodeBalancePayload, payloadHashFromB64 } = require('../src/stateOracle');
 const { createOracleSigner } = require('./makeshiftOracle');
 
 function env(name, fallback = '') {
@@ -43,6 +45,21 @@ function benv(name, fallback) {
 }
 function csv(raw) {
   return String(raw || '').split(',').map((x) => x.trim()).filter(Boolean);
+}
+
+async function selectFundingUtxo(address) {
+  const utxos = await TxUtils.client.listUnspent(0, 9999999, [address]);
+  const raw = (utxos || [])
+    .filter((u) => Number(u?.amount || 0) > 0)
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+  if (!raw) return null;
+  return {
+    txId: raw.txid,
+    outputIndex: raw.vout,
+    address: raw.address,
+    script: raw.scriptPubKey,
+    satoshis: Math.round(Number(raw.amount || 0) * 1e8)
+  };
 }
 
 function parseTL(scriptHex) {
@@ -80,6 +97,7 @@ async function applyTxNow(txid, senderAddress, blockHeight) {
 async function main() {
   const dryRun = benv('TL_DRY_RUN', true);
   const applyImmediate = benv('TL_APPLY_IMMEDIATE', true);
+  const stateKind = String(env('TL_STATE_KIND', 'daily')).toLowerCase();
   const oracleId = nenv('TL_ORACLE_ID', 0);
   const oracleAdmin = env('TL_ORACLE_ADMIN_ADDRESS');
   const dlcRef = env('TL_DLC_CONTRACT_ID');
@@ -88,7 +106,7 @@ async function main() {
   const bucketSize = nenv('TL_STATE_BUCKET_SIZE', 1);
   const includeZero = benv('TL_STATE_INCLUDE_ZERO', false);
   const omitNoOpAddresses = benv('TL_STATE_OMIT_NOOP', true);
-  const includeOps = csv(env('TL_STATE_INCLUDE_OPS', 'issue,send,redeem,rpnl'));
+  const includeOps = csv(env('TL_STATE_INCLUDE_OPS', 'issue,redeem,rpnl'));
 
   if (!oracleId || !oracleAdmin || !dlcRef || !propertyId || addresses.length === 0) {
     throw new Error('Missing required env for state-oracle relay');
@@ -98,18 +116,29 @@ async function main() {
   const currentBlock = await TxUtils.getBlockCount();
   const fromBlock = nenv('TL_STATE_FROM_BLOCK', Math.max(0, currentBlock - 1));
   const toBlock = nenv('TL_STATE_TO_BLOCK', currentBlock);
-  const payload = await buildAddressDailyPayload({
-    propertyId,
-    addresses,
-    fromBlock,
-    toBlock,
-    bucketSize,
-    includeZero,
-    omitNoOpAddresses,
-    includeOps
-  });
-  const balancePayloadB64 = encodeBalancePayload(payload);
-  const payloadHash = payloadHashFromB64(balancePayloadB64);
+  const rollHeight = nenv('TL_STATE_ROLL_HEIGHT', toBlock + 1);
+  const payload = stateKind === 'roll'
+    ? await buildAddressRollPayload({
+      propertyId,
+      addresses,
+      rollHeight,
+      fromBlock,
+      bucketSize,
+      includeZero,
+      includeOps
+    })
+    : await buildAddressDailyPayload({
+      propertyId,
+      addresses,
+      fromBlock,
+      toBlock,
+      bucketSize,
+      includeZero,
+      omitNoOpAddresses,
+      includeOps
+    });
+  const payloadB64 = encodeBalancePayload(payload);
+  const payloadHash = payloadHashFromB64(payloadB64);
   const stateHash = payloadHash;
 
   const signer = createOracleSigner();
@@ -123,12 +152,22 @@ async function main() {
   });
   const relayBlobDoc = {
     ...signedBundle,
-    kind: 'daily',
+    kind: stateKind,
     propertyId,
-    windowStartBlock: payload.windowStartBlock,
-    windowEndBlock: payload.windowEndBlock,
-    blobRef: `${dlcRef}-daily-${payload.windowEndBlock}`,
-    balancePayloadB64
+    ...(stateKind === 'roll'
+      ? {
+        rollHeight: payload.rollHeight,
+        snapshotBlock: payload.snapshotBlock,
+        deltaWindowRowCount: payload?.deltaWindow?.rowCount || 0,
+        blobRef: `${dlcRef}-roll-${payload.rollHeight}`,
+        statePayloadB64: payloadB64
+      }
+      : {
+        windowStartBlock: payload.windowStartBlock,
+        windowEndBlock: payload.windowEndBlock,
+        blobRef: `${dlcRef}-daily-${payload.windowEndBlock}`,
+        balancePayloadB64: payloadB64
+      })
   };
   const relayBlob = 'b64:' + Buffer.from(JSON.stringify(relayBlobDoc), 'utf8').toString('base64');
 
@@ -136,6 +175,7 @@ async function main() {
     oracleId,
     dlcRef,
     propertyId,
+    stateKind,
     bucketSize,
     fromBlock,
     toBlock,
@@ -146,6 +186,7 @@ async function main() {
     oracleId,
     dlcRef,
     propertyId,
+    stateKind,
     bucketSize,
     fromBlock,
     toBlock,
@@ -154,11 +195,17 @@ async function main() {
     blobRef: relayBlobDoc.blobRef,
     windowStartBlock: relayBlobDoc.windowStartBlock,
     windowEndBlock: relayBlobDoc.windowEndBlock,
+    rollHeight: relayBlobDoc.rollHeight,
+    snapshotBlock: relayBlobDoc.snapshotBlock,
     kind: relayBlobDoc.kind,
     stateHash
   }));
   if (dryRun) return;
 
+  const fundingUtxo = await selectFundingUtxo(oracleAdmin);
+  if (!fundingUtxo) {
+    throw new Error(`No spendable UTXO found for oracle sender ${oracleAdmin}`);
+  }
   const txid = await TxUtils.createStakeFraudProofTransaction(oracleAdmin, {
     action: 2,
     oracleId,
@@ -168,7 +215,8 @@ async function main() {
     settlementState: 'OPEN',
     relayBlob,
     autoRoll: false,
-    nextDlcRef: ''
+    nextDlcRef: '',
+    fundingUtxo
   });
   if (applyImmediate) {
     const b = await TxUtils.getBlockCount();
