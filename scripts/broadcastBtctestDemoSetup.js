@@ -11,15 +11,13 @@ const {
   DEFAULT_BTCTEST_ADMIN_ADDRESS
 } = require('./testnetActivationProfile');
 
-const DEFAULT_BITCOIN_BIN = 'C:\\projects\\BitcoinConsensusObservatory\\jurassic-bitcoin\\tools\\bitcoin-core-30.2\\bitcoin-30.2\\bin';
-const DEFAULT_DATADIR = 'D:\\BitcoinTestnet';
 const DEFAULT_WALLET = 'utxoref-testnet';
 const OP_RETURN_LIMIT = 80;
 
 function parseArgs(argv) {
   const out = {
-    bitcoinBin: process.env.BITCOIN_BIN || DEFAULT_BITCOIN_BIN,
-    datadir: process.env.BTCTEST_DATADIR || DEFAULT_DATADIR,
+    bitcoinBin: process.env.BITCOIN_BIN || '',
+    datadir: process.env.BTCTEST_DATADIR || '',
     wallet: process.env.BTCTEST_WALLET || DEFAULT_WALLET,
     adminAddress: process.env.TL_ADMIN_ADDRESS || DEFAULT_BTCTEST_ADMIN_ADDRESS,
     artifact: process.env.TL_BTCTEST_SETUP_ARTIFACT || path.join('artifacts', 'btctest-tradelayer-demo-setup-latest.json'),
@@ -196,16 +194,18 @@ function buildDemoPayloads() {
 }
 
 function cliPath(bitcoinBin) {
-  return path.join(bitcoinBin, 'bitcoin-cli.exe');
+  if (bitcoinBin) return path.join(bitcoinBin, process.platform === 'win32' ? 'bitcoin-cli.exe' : 'bitcoin-cli');
+  return process.platform === 'win32' ? 'bitcoin-cli.exe' : 'bitcoin-cli';
 }
 
 function bitcoinCli(config, args) {
-  return execFileSync(cliPath(config.bitcoinBin), [
-    `-datadir=${config.datadir}`,
+  const baseArgs = [
     '-chain=testnet4',
     `-rpcwallet=${config.wallet}`,
     ...args
-  ], { encoding: 'utf8' }).trim();
+  ];
+  if (config.datadir) baseArgs.unshift(`-datadir=${config.datadir}`);
+  return execFileSync(cliPath(config.bitcoinBin), baseArgs, { encoding: 'utf8' }).trim();
 }
 
 function broadcastPayload(config, item) {
