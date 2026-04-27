@@ -8,7 +8,7 @@ const {
 function parseArgs(argv) {
   const out = {
     mode: 'print',
-    network: process.env.CHAIN || 'LTCTEST',
+    network: process.env.TL_ACTIVATION_NETWORK || process.env.CHAIN || 'BTCTEST',
     activationBlock: Number(process.env.TL_ACTIVATION_BLOCK || 1),
     dbRoot: process.env.TL_ACTIVATION_DB_ROOT || 'nedb-sandbox',
     admin: process.env.TL_ADMIN_ADDRESS || ''
@@ -43,6 +43,8 @@ Live listener note:
 
 function dbChainFromNetwork(network) {
   const normalized = String(network || '').toUpperCase();
+  if (normalized === 'BTC') return 'BTC';
+  if (normalized === 'LTC') return 'LTC';
   if (normalized === 'LTCTEST') return 'LTC';
   if (normalized === 'BTCTEST' || normalized === 'BTC_TESTNET' || normalized === 'BTC_TESTNET4') return 'BTC';
   if (normalized === 'DOGETEST') return 'DOGE';

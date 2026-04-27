@@ -81,7 +81,7 @@ function defaultCodeHash() {
 }
 
 function buildActivationManifest(options = {}) {
-  const network = options.network || 'LTCTEST';
+  const network = options.network || 'BTCTEST';
   const activationBlock = Number(options.activationBlock || 1);
   const codeHash = options.codeHash || defaultCodeHash();
   const txTypes = uniqueTxTypes();

@@ -1,10 +1,12 @@
 # Testnet Activation Setup
 
-This is the TradeLayer testnet activation set for the LN-BTC -> TLUSD -> tx33 colored/TAP wrapper demo.
+This is the TradeLayer Bitcoin testnet activation set for the LN-BTC -> TLUSD -> tx33 colored/TAP wrapper demo.
 
 ## Activation Profile
 
 Profile id: `bitvm-ln-tlusd-tx33`
+
+Network label: `BTCTEST`
 
 Activated tx types:
 
@@ -37,7 +39,7 @@ Write the activation registry to a sandbox NeDB root:
 node scripts/setupTestnetActivationSet.js --mode=local-db --db-root=nedb-sandbox
 ```
 
-For `LTCTEST`, the manifest stays labeled `LTCTEST`, while the NeDB folder resolves to the existing TradeLayer convention `ltc-test`.
+For `BTCTEST`, the manifest stays labeled `BTCTEST`, while the NeDB folder resolves to the existing TradeLayer convention `btc-test`.
 
 Write it to the live listener's default DB root only when you intend the listener to consume it:
 
@@ -48,8 +50,9 @@ node scripts/setupTestnetActivationSet.js --mode=local-db --db-root=nedb-data
 Broadcast activation transactions from a funded testnet admin wallet:
 
 ```powershell
-$env:CHAIN="LTCTEST"
-$env:TL_ADMIN_ADDRESS="tltc1..."
+$env:CHAIN="BTC"
+$env:TL_ACTIVATION_NETWORK="BTCTEST"
+$env:TL_ADMIN_ADDRESS="tb1q..."
 node scripts/setupTestnetActivationSet.js --mode=broadcast
 ```
 

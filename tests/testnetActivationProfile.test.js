@@ -21,7 +21,7 @@ describe('testnet activation profile', () => {
 
   test('builds an activation registry with block and code hash metadata', () => {
     const manifest = buildActivationManifest({
-      network: 'LTCTEST',
+      network: 'BTCTEST',
       activationBlock: 123
     });
     const registry = registryFromManifest(manifest);
@@ -30,14 +30,16 @@ describe('testnet activation profile', () => {
       expect(registry[txType].active).toBe(true);
       expect(registry[txType].activationBlock).toBe(123);
       expect(registry[txType].codeHash).toBe(manifest.codeHash);
-      expect(registry[txType].network).toBe('LTCTEST');
+      expect(registry[txType].network).toBe('BTCTEST');
     }
 
     expect(registry[33].name).toBe('Colored Coin');
     expect(manifest.setupPlan.some((step) => step.includes('tx33'))).toBe(true);
   });
 
-  test('maps testnet manifest network to existing ltc-test DB convention', () => {
+  test('defaults to BTCTEST and maps testnet labels to existing DB conventions', () => {
+    expect(buildActivationManifest().network).toBe('BTCTEST');
+    expect(dbChainFromNetwork('BTCTEST')).toBe('BTC');
     expect(dbChainFromNetwork('LTCTEST')).toBe('LTC');
     expect(dbChainFromNetwork('BTC_TESTNET4')).toBe('BTC');
   });
