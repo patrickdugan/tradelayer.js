@@ -149,7 +149,7 @@ async function main() {
   }
 
   if (args.mode === 'broadcast') {
-    const result = await broadcastActivations(manifest, args.admin);
+    const result = await broadcastActivations(manifest, args.admin || manifest.adminAddress);
     console.log(JSON.stringify({ ok: true, manifest, result }, null, 2));
     return;
   }

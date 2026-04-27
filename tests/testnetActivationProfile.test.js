@@ -1,4 +1,5 @@
 const {
+  DEFAULT_BTCTEST_ADMIN_ADDRESS,
   buildActivationManifest,
   registryFromManifest,
   uniqueTxTypes
@@ -26,6 +27,7 @@ describe('testnet activation profile', () => {
     });
     const registry = registryFromManifest(manifest);
 
+    expect(manifest.adminAddress).toBe(DEFAULT_BTCTEST_ADMIN_ADDRESS);
     for (const txType of manifest.txTypes) {
       expect(registry[txType].active).toBe(true);
       expect(registry[txType].activationBlock).toBe(123);

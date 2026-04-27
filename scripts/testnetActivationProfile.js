@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const ACTIVATION_PROFILE_ID = 'bitvm-ln-tlusd-tx33';
+const DEFAULT_BTCTEST_ADMIN_ADDRESS = 'tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu';
 
 const activationGroups = [
   {
@@ -84,11 +85,15 @@ function buildActivationManifest(options = {}) {
   const network = options.network || 'BTCTEST';
   const activationBlock = Number(options.activationBlock || 1);
   const codeHash = options.codeHash || defaultCodeHash();
+  const adminAddress = options.adminAddress || process.env.TL_ADMIN_ADDRESS || (
+    String(network).toUpperCase() === 'BTCTEST' ? DEFAULT_BTCTEST_ADMIN_ADDRESS : ''
+  );
   const txTypes = uniqueTxTypes();
   return {
     kind: 'tradelayer_testnet_activation_manifest',
     profileId: ACTIVATION_PROFILE_ID,
     network,
+    adminAddress,
     activationBlock,
     codeHash,
     txTypes,
@@ -131,6 +136,7 @@ function registryFromManifest(manifest) {
 
 module.exports = {
   ACTIVATION_PROFILE_ID,
+  DEFAULT_BTCTEST_ADMIN_ADDRESS,
   activationGroups,
   txNames,
   uniqueTxTypes,

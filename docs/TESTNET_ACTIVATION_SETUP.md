@@ -8,6 +8,12 @@ Profile id: `bitvm-ln-tlusd-tx33`
 
 Network label: `BTCTEST`
 
+Default admin address:
+
+```text
+tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu
+```
+
 Activated tx types:
 
 ```text
@@ -52,7 +58,7 @@ Broadcast activation transactions from a funded testnet admin wallet:
 ```powershell
 $env:CHAIN="BTC"
 $env:TL_ACTIVATION_NETWORK="BTCTEST"
-$env:TL_ADMIN_ADDRESS="tb1q..."
+$env:TL_ADMIN_ADDRESS="tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu"
 node scripts/setupTestnetActivationSet.js --mode=broadcast
 ```
 
