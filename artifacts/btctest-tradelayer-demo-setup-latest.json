@@ -1,0 +1,198 @@
+{
+  "kind": "tradelayer_btctest_demo_setup",
+  "network": "BTCTEST",
+  "bitcoinNetwork": "testnet4",
+  "adminAddress": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+  "startedAt": "2026-04-27T18:57:34.780Z",
+  "dryRun": false,
+  "steps": [
+    {
+      "phase": "activation",
+      "txType": 0,
+      "label": "activate-0",
+      "payload": "tl00,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 55,
+      "payloadHex": "746c30302c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "31d503bafe01f424e912caed10b408cbdad41a10805c88aa54b0159d9092326f",
+      "feeBtc": 0.00000243,
+      "explorer": "https://mempool.space/testnet4/tx/31d503bafe01f424e912caed10b408cbdad41a10805c88aa54b0159d9092326f"
+    },
+    {
+      "phase": "activation",
+      "txType": 1,
+      "label": "activate-1",
+      "payload": "tl01,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 55,
+      "payloadHex": "746c30312c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "94a6bb28c5cdc931e9649f95823af373f964f492988c733e1adb540e694adba6",
+      "feeBtc": 0.00000176,
+      "explorer": "https://mempool.space/testnet4/tx/94a6bb28c5cdc931e9649f95823af373f964f492988c733e1adb540e694adba6"
+    },
+    {
+      "phase": "activation",
+      "txType": 13,
+      "label": "activate-13",
+      "payload": "tl013,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3031332c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "49bf91a976a7790677d9e82ceb858aaa8529dfbaa3fdc729cc63a889025a4612",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/49bf91a976a7790677d9e82ceb858aaa8529dfbaa3fdc729cc63a889025a4612"
+    },
+    {
+      "phase": "activation",
+      "txType": 14,
+      "label": "activate-14",
+      "payload": "tl014,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3031342c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "52093af7169c0434f881c25ddb3a15936081b46437a9ea6c790a8f9f8acd1c2c",
+      "feeBtc": 0.00000244,
+      "explorer": "https://mempool.space/testnet4/tx/52093af7169c0434f881c25ddb3a15936081b46437a9ea6c790a8f9f8acd1c2c"
+    },
+    {
+      "phase": "activation",
+      "txType": 16,
+      "label": "activate-16",
+      "payload": "tl016,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3031362c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "caac342b860aaa6f6ed9e2a377edfed3c3c746d6707ec766c1bc89b5de4da0b3",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/caac342b860aaa6f6ed9e2a377edfed3c3c746d6707ec766c1bc89b5de4da0b3"
+    },
+    {
+      "phase": "activation",
+      "txType": 19,
+      "label": "activate-19",
+      "payload": "tl019,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3031392c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "8855609b26430dda2c7740b9082d7e01cb15f319f870651161a0999ddc40a1ae",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/8855609b26430dda2c7740b9082d7e01cb15f319f870651161a0999ddc40a1ae"
+    },
+    {
+      "phase": "activation",
+      "txType": 24,
+      "label": "activate-24",
+      "payload": "tl024,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3032342c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "fd6c16cdf33cc4f35ad0682422571479c2d561119218aa7dfc96221c7b300d54",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/fd6c16cdf33cc4f35ad0682422571479c2d561119218aa7dfc96221c7b300d54"
+    },
+    {
+      "phase": "activation",
+      "txType": 30,
+      "label": "activate-30",
+      "payload": "tl030,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3033302c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "f0c6b6bd990e2de522f2fefb715f174ef630556d1260e7ee46968103e3473fec",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/f0c6b6bd990e2de522f2fefb715f174ef630556d1260e7ee46968103e3473fec"
+    },
+    {
+      "phase": "activation",
+      "txType": 33,
+      "label": "activate-33",
+      "payload": "tl033,36qrkyt6rxmevrern286odus1hsdctl30vf3qndr6ge6b32q5u",
+      "payloadBytes": 56,
+      "payloadHex": "746c3033332c333671726b79743672786d65767265726e3238366f6475733168736463746c3330766633716e647236676536623332713575",
+      "txid": "950200d34544ccc45dea64cf270416b6bd972c9b8ffd2993d97a820ecad0dd13",
+      "feeBtc": 0.00000177,
+      "explorer": "https://mempool.space/testnet4/tx/950200d34544ccc45dea64cf270416b6bd972c9b8ffd2993d97a820ecad0dd13"
+    },
+    {
+      "phase": "asset",
+      "txType": 1,
+      "label": "issue-tlbtc",
+      "payload": "tl1ci3pc,tlBTC,,1,,0,0,0",
+      "payloadBytes": 24,
+      "payloadHex": "746c3163693370632c746c4254432c2c312c2c302c302c30",
+      "txid": "55e9da04a59c9cc4596ff6443e3bb0b24e5a6bb790b91827c902744664828ac5",
+      "feeBtc": 0.00000145,
+      "explorer": "https://mempool.space/testnet4/tx/55e9da04a59c9cc4596ff6443e3bb0b24e5a6bb790b91827c902744664828ac5"
+    },
+    {
+      "phase": "asset",
+      "txType": 1,
+      "label": "issue-tlusd",
+      "payload": "tl10,tlUSD,,1,,0,1,0",
+      "payloadBytes": 20,
+      "payloadHex": "746c31302c746c5553442c2c312c2c302c312c30",
+      "txid": "cdcb18eecae77d8362e74d626f6f090a3daca120a64b3ca8b99db20e4035f4f3",
+      "feeBtc": 0.00000141,
+      "explorer": "https://mempool.space/testnet4/tx/cdcb18eecae77d8362e74d626f6f090a3daca120a64b3ca8b99db20e4035f4f3"
+    },
+    {
+      "phase": "oracle",
+      "txType": 13,
+      "label": "create-btcusd-oracle",
+      "payload": "tldBTCUSD,btc.usd,,,1,",
+      "payloadBytes": 22,
+      "payloadHex": "746c644254435553442c6274632e7573642c2c2c312c",
+      "txid": "28f7ce73a55148c26c2774f75816bc0a5ab228670126a9989d20b1191a6aff5c",
+      "feeBtc": 0.00000143,
+      "explorer": "https://mempool.space/testnet4/tx/28f7ce73a55148c26c2774f75816bc0a5ab228670126a9989d20b1191a6aff5c"
+    },
+    {
+      "phase": "oracle",
+      "txType": 14,
+      "label": "publish-btcusd-65000",
+      "payload": "tle1,aqzr7k",
+      "payloadBytes": 11,
+      "payloadHex": "746c65312c61717a72376b",
+      "txid": "3214e86c4d2d04a56258ade5ae9d7a764ba1505d7e2ae1452e2f248240e52e71",
+      "feeBtc": 0.00000132,
+      "explorer": "https://mempool.space/testnet4/tx/3214e86c4d2d04a56258ade5ae9d7a764ba1505d7e2ae1452e2f248240e52e71"
+    },
+    {
+      "phase": "perp",
+      "txType": 16,
+      "label": "create-btcusd-perp-series",
+      "payload": "tlg0,1,,2,1,1,2,40,1,0,0",
+      "payloadBytes": 24,
+      "payloadHex": "746c67302c312c2c322c312c312c322c34302c312c302c30",
+      "txid": "692bf8b0d5c4211f41249740d0589dc8f74f1f3d76accd676aeefa976106f716",
+      "feeBtc": 0.00000145,
+      "explorer": "https://mempool.space/testnet4/tx/692bf8b0d5c4211f41249740d0589dc8f74f1f3d76accd676aeefa976106f716"
+    },
+    {
+      "phase": "synthetic",
+      "txType": 24,
+      "label": "mint-demo-tlusd",
+      "payload": "tlo1,1,2s",
+      "payloadBytes": 9,
+      "payloadHex": "746c6f312c312c3273",
+      "txid": "a0a6fe2aff079cba775975aea0d4e9c42279d1705534d5e75f23909e07088279",
+      "feeBtc": 0.0000013,
+      "explorer": "https://mempool.space/testnet4/tx/a0a6fe2aff079cba775975aea0d4e9c42279d1705534d5e75f23909e07088279"
+    },
+    {
+      "phase": "bitvm",
+      "txType": 30,
+      "label": "relay-bitvm-dlc-funded",
+      "payload": "tlu2,1,1,0,,,1,b9fff5903e1a0e27,dlcd9772d,FUNDED,,1,rollb761c3",
+      "payloadBytes": 62,
+      "payloadHex": "746c75322c312c312c302c2c2c312c623966666635393033653161306532372c646c636439373732642c46554e4445442c2c312c726f6c6c623736316333",
+      "txid": "ccf696f4588d6adccbb78669dde120a8e232d7b796956f0d024ff87f538154c0",
+      "feeBtc": 0.00000183,
+      "explorer": "https://mempool.space/testnet4/tx/ccf696f4588d6adccbb78669dde120a8e232d7b796956f0d024ff87f538154c0"
+    },
+    {
+      "phase": "externalization",
+      "txType": 33,
+      "label": "externalize-tlusd-tx33",
+      "payload": "tlx1,2,1,lnedge,15cfocg~,u1,tap1,p265f25,rfq1,b3eb65e,c4e8a98,,",
+      "payloadBytes": 63,
+      "payloadHex": "746c78312c322c312c6c6e656467652c313563666f63677e2c75312c746170312c703236356632352c726671312c623365623635652c633465386139382c2c",
+      "txid": "e793493b32ac8b6127b3100db9ea33c5a2f0d38d3fa17da5f4fec0b7064af8ee",
+      "feeBtc": 0.00000184,
+      "explorer": "https://mempool.space/testnet4/tx/e793493b32ac8b6127b3100db9ea33c5a2f0d38d3fa17da5f4fec0b7064af8ee"
+    }
+  ],
+  "finishedAt": "2026-04-27T18:57:42.646Z"
+}
