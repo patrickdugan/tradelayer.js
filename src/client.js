@@ -26,13 +26,50 @@ function getRpcBootstrapFromEnv(defaultChain = 'LTC') {
   const ENV_CHAIN  = (env.CHAIN || '').toUpperCase();
   const AUTODETECT = (env.AUTODETECT || '1') !== '0'; // AUTODETECT=0 → lock env, skip discovery
 
-  const DEFAULT_PORT = { BTC: 8332, BTCTEST: 18332, LTC: 9332, LTCTEST: 19332, DOGE: 22555, DOGETEST:44555 };
-  const chain = ['BTC', 'LTC', 'DOGE'].includes(ENV_CHAIN) ? ENV_CHAIN : defaultChain;
+  const DEFAULT_PORT = {
+    BTC: 8332,
+    BTCTEST: 48332,
+    BTC_TESTNET: 18332,
+    BTC_TESTNET4: 48332,
+    LTC: 9332,
+    LTCTEST: 19332,
+    DOGE: 22555,
+    DOGETEST: 44555
+  };
+  const CHAIN_ALIASES = {
+    BTC: 'BTC',
+    BTCTEST: 'BTC',
+    BTC_TESTNET: 'BTC',
+    BTC_TESTNET4: 'BTC',
+    LTC: 'LTC',
+    LTCTEST: 'LTC',
+    DOGE: 'DOGE',
+    DOGETEST: 'DOGE'
+  };
+  const selected = CHAIN_ALIASES[ENV_CHAIN] ? ENV_CHAIN : String(defaultChain || 'LTC').toUpperCase();
+  const chain = CHAIN_ALIASES[selected] || CHAIN_ALIASES[String(defaultChain || 'LTC').toUpperCase()] || defaultChain;
+
+  let cookieUser = '';
+  let cookiePass = '';
+  if (env.RPC_COOKIE_FILE) {
+    try {
+      const cookie = require('fs').readFileSync(env.RPC_COOKIE_FILE, 'utf8').trim();
+      const splitAt = cookie.indexOf(':');
+      if (splitAt > -1) {
+        cookieUser = cookie.slice(0, splitAt);
+        cookiePass = cookie.slice(splitAt + 1);
+      }
+    } catch (err) {
+      if (!env.RPC_USER || !env.RPC_PASS) {
+        throw new Error(`Unable to read RPC_COOKIE_FILE ${env.RPC_COOKIE_FILE}: ${err.message}`);
+      }
+    }
+  }
 
   const host = env.RPC_HOST || '127.0.0.1';
-  const user = env.RPC_USER || 'user';
-  const pass = env.RPC_PASS || 'pass';
-  const port = Number(env.RPC_PORT || DEFAULT_PORT[chain]);
+  const user = env.RPC_USER || cookieUser || 'user';
+  const pass = env.RPC_PASS || cookiePass || 'pass';
+  const port = Number(env.RPC_PORT || DEFAULT_PORT[selected] || DEFAULT_PORT[chain]);
   const timeout = Number(env.TIMEOUT_MS || 60000);
 
   // If any of CHAIN / RPC_PORT is provided OR AUTODETECT=0, we consider this a "locked" bootstrap.
@@ -40,7 +77,7 @@ function getRpcBootstrapFromEnv(defaultChain = 'LTC') {
 
   return {
     // normalized values
-    chain, host, port, user, pass, timeout,
+    chain, network: selected, host, port, user, pass, timeout,
     // whether the caller should skip autodetect and return immediately
     locked,
   };
@@ -83,6 +120,7 @@ class ClientWrapper {
 
 	// Build a client immediately using the env-chosen CHAIN (or default)
 	this.chain  = boot.chain;
+    this.network = boot.network;
 	this.client = this._createClientByChain(this.chain);
 
 	// If .env told us to lock (AUTODETECT=0 or CHAIN/RPC_PORT provided), stop here.
@@ -168,7 +206,7 @@ class ClientWrapper {
     console.log('chain subversion '+subversion+' '+flag )
     subversion = subversion.toLowerCase();
     if (subversion.includes('litecoin')) return 'LTC';
-    if (subversion.includes('bitcoin')) return 'BTC';
+    if (subversion.includes('bitcoin') || subversion.includes('satoshi')) return 'BTC';
     if (subversion.includes('dogecoin')) return 'DOGE';
     throw new Error(`Unknown chain in subversion: ${subversion}`);
   }
@@ -314,7 +352,7 @@ class ClientWrapper {
 
   async getTest(){
     const blockchainInfo = await this.getBlockchainInfo();
-    return blockchainInfo.chain === 'test';
+    return blockchainInfo.chain === 'test' || blockchainInfo.chain === 'testnet4' || blockchainInfo.chain === 'signet' || blockchainInfo.chain === 'regtest';
   }
 
   clientInstance = this;

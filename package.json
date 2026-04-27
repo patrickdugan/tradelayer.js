@@ -28,7 +28,8 @@
     "test:bitvm-watchtower-live": "node tests/bitvmWatchtowerLive.js",
     "setup:testnet-activations": "node scripts/setupTestnetActivationSet.js --mode=local-db",
     "setup:testnet-activations:print": "node scripts/setupTestnetActivationSet.js --mode=print",
-    "test:testnet-activation-profile": "jest tests/testnetActivationProfile.test.js --runInBand"
+    "test:testnet-activation-profile": "jest tests/testnetActivationProfile.test.js --runInBand",
+    "check:btctest-consensus": "node scripts/checkBtctestConsensus.js"
   },
   "jest": {
     "testPathIgnorePatterns": [
