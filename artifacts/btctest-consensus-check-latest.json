@@ -1,10 +1,10 @@
 {
   "kind": "btctest_consensus_check",
-  "generatedAt": "2026-04-27T21:49:04.970Z",
+  "generatedAt": "2026-04-27T23:16:52.652Z",
   "node": {
     "chain": "testnet4",
-    "blocks": 132704,
-    "headers": 132704,
+    "blocks": 132713,
+    "headers": 132713,
     "initialblockdownload": false,
     "verificationprogress": 1,
     "subversion": "/Satoshi:30.2.0/",
@@ -73,11 +73,11 @@
     "checks": [
       {
         "label": "subswap-dlc-funding",
-        "txid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
+        "txid": "bf3694aaf87eda0df0230e421775be6d5c0ee40b1e701aadbc7a61417682c0c0",
         "txType": null,
-        "source": "wallet-transaction",
-        "voutCount": 16,
-        "payload": "UTXORef:subswap:dlc8f1c24",
+        "source": "node-rawtransaction",
+        "voutCount": 3,
+        "payload": "UTXORef:subswap-htlc:366161841ab76122:132857",
         "payloadOk": true,
         "typeOk": true,
         "referenceOk": true,

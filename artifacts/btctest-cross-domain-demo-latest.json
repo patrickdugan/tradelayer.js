@@ -4,7 +4,8 @@
   "bitcoinNetwork": "testnet4",
   "generatedAt": "2026-04-27T20:44:07.342Z",
   "context": {
-    "dlcFundingTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
+    "dlcFundingTxid": "bf3694aaf87eda0df0230e421775be6d5c0ee40b1e701aadbc7a61417682c0c0",
+    "supersededFundingMarkerTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
     "counterpartyFundingTxid": "9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d",
     "arkVtxoCommitment": "ark-vtxo-graft:tap27cdb60a:ark-batch-root-56b9cd3d8dc8cfc6:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
     "tx33PledgeAnchorOutpoint": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b:1",
@@ -15,12 +16,20 @@
       "phase": "funding",
       "label": "subswap-dlc-funding",
       "txType": null,
-      "description": "LN submarine swap shaped funding output enters the DLC template",
-      "payload": "UTXORef:subswap:dlc8f1c24",
-      "payloadHex": "5554584f5265663a737562737761703a646c63386631633234",
-      "payloadBytes": 25,
-      "txid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
-      "explorer": "https://mempool.space/testnet4/tx/58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f"
+      "description": "Staged submarine swap HTLC output enters the DLC template with hashlock and CLTV refund branches",
+      "payload": "UTXORef:subswap-htlc:366161841ab76122:132857",
+      "payloadHex": "5554584f5265663a737562737761702d68746c633a333636313631383431616237363132323a313332383537",
+      "payloadBytes": 44,
+      "txid": "bf3694aaf87eda0df0230e421775be6d5c0ee40b1e701aadbc7a61417682c0c0",
+      "explorer": "https://mempool.space/testnet4/tx/bf3694aaf87eda0df0230e421775be6d5c0ee40b1e701aadbc7a61417682c0c0",
+      "submarineSwapHtlc": {
+        "address": "tb1q30j7htje6q2nm006y89mujlhywnp4xs3mp8g5th2yzha4k8dqm5q3plwxm",
+        "type": "witness_v0_scripthash",
+        "amountSats": 25000,
+        "paymentHash": "366161841ab76122518ed383bc37b22d61d7ca9eb3ee122fc2aacc656c8617c3",
+        "expiryHeight": 132857,
+        "supersedesMarkerTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f"
+      }
     },
     {
       "phase": "funding",
