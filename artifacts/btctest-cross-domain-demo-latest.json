@@ -1,0 +1,171 @@
+{
+  "kind": "bitcoin_testnet_cross_domain_liquidity_demo",
+  "network": "BTCTEST",
+  "bitcoinNetwork": "testnet4",
+  "generatedAt": "2026-04-27T19:33:04.433Z",
+  "context": {
+    "dlcFundingTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
+    "counterpartyFundingTxid": "9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d",
+    "finalArkGraftTxid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5"
+  },
+  "steps": [
+    {
+      "phase": "funding",
+      "label": "subswap-dlc-funding",
+      "txType": null,
+      "description": "LN submarine swap shaped funding output enters the DLC template",
+      "payload": "UTXORef:subswap:dlc8f1c24",
+      "payloadHex": "5554584f5265663a737562737761703a646c63386631633234",
+      "payloadBytes": 25,
+      "txid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
+      "explorer": "https://mempool.space/testnet4/tx/58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f"
+    },
+    {
+      "phase": "funding",
+      "label": "fund-counterparty-address",
+      "txType": null,
+      "description": "Second Bitcoin testnet address receives BTC for the opposite side",
+      "payload": "UTXORef:fund:cp46f2eb",
+      "payloadHex": "5554584f5265663a66756e643a6370343666326562",
+      "payloadBytes": 21,
+      "txid": "9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d",
+      "explorer": "https://mempool.space/testnet4/tx/9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d"
+    },
+    {
+      "phase": "oracle",
+      "label": "create-btcusd-oracle",
+      "txType": 13,
+      "description": "Create the BTC/USD oracle used by the inverse contract",
+      "payload": "tldBTCUSD,btc.usd,,,1,",
+      "payloadHex": "746c644254435553442c6274632e7573642c2c2c312c",
+      "payloadBytes": 22,
+      "txid": "96b9ecf2f2e7fada76c580963de08c3ab9f4b385f5081402f05ca58121c7e8cb",
+      "explorer": "https://mempool.space/testnet4/tx/96b9ecf2f2e7fada76c580963de08c3ab9f4b385f5081402f05ca58121c7e8cb"
+    },
+    {
+      "phase": "oracle",
+      "label": "publish-btcusd-entry",
+      "txType": 14,
+      "description": "Publish the entry price used by both sides of the DLC/perp envelope",
+      "payload": "tle1,aqzr7k",
+      "payloadHex": "746c65312c61717a72376b",
+      "payloadBytes": 11,
+      "txid": "22accff5ad661d6bc9fcf8d972ef822305965da866f597dade40ac322124fd63",
+      "explorer": "https://mempool.space/testnet4/tx/22accff5ad661d6bc9fcf8d972ef822305965da866f597dade40ac322124fd63"
+    },
+    {
+      "phase": "asset",
+      "label": "mint-tlbtc-router-dlc",
+      "txType": 11,
+      "description": "Mint tlBTC to the router side against the DLC template",
+      "payload": "tlb1,16v7k,rt80d096,,tpl258d,ct1a1a,FUNDED,99e8c92e",
+      "payloadHex": "746c62312c313676376b2c72743830643039362c2c74706c323538642c6374316131612c46554e4445442c3939653863393265",
+      "payloadBytes": 51,
+      "txid": "fa13c66f1426f387e74724b4c1d7bb4e12c515ccb06eeb26cf866aefd0d94ef2",
+      "explorer": "https://mempool.space/testnet4/tx/fa13c66f1426f387e74724b4c1d7bb4e12c515ccb06eeb26cf866aefd0d94ef2"
+    },
+    {
+      "phase": "asset",
+      "label": "mint-tlbtc-counterparty-dlc",
+      "txType": 11,
+      "description": "Mint tlBTC to the funded second address against the same DLC template",
+      "payload": "tlb1,16v7k,cp46f2eb,,tpl258d,ct1a1a,FUNDED,b5d2bea7",
+      "payloadHex": "746c62312c313676376b2c63703436663265622c2c74706c323538642c6374316131612c46554e4445442c6235643262656137",
+      "payloadBytes": 51,
+      "txid": "c0ce832ac49ee232a6a6aa5ca35a29383cf5642cf8496b482aa84ff83b7df67b",
+      "explorer": "https://mempool.space/testnet4/tx/c0ce832ac49ee232a6a6aa5ca35a29383cf5642cf8496b482aa84ff83b7df67b"
+    },
+    {
+      "phase": "perp",
+      "label": "create-inverse-btcusd-contract",
+      "txType": 16,
+      "description": "Create the inverse BTC/USD contract wrapping the DLC status",
+      "payload": "tlg0,1,,2,1,1,2,40,2,1,0",
+      "payloadHex": "746c67302c312c2c322c312c312c322c34302c322c312c30",
+      "payloadBytes": 24,
+      "txid": "973fdeffab1d9af86e0386d131ada9c276e7b0926c63dd3933c4f38fa45d06f9",
+      "explorer": "https://mempool.space/testnet4/tx/973fdeffab1d9af86e0386d131ada9c276e7b0926c63dd3933c4f38fa45d06f9"
+    },
+    {
+      "phase": "trade",
+      "label": "router-long-inverse-trade",
+      "txType": 18,
+      "description": "Router side posts the long leg of the inverse contract trade",
+      "payload": "tli1,2ay246ark,1,0,0,0,1,0",
+      "payloadHex": "746c69312c32617932343661726b2c312c302c302c302c312c30",
+      "payloadBytes": 26,
+      "txid": "17c9696dac26db5a792cb29535021bed4819e2311e72eba17a2c5add6998ff6a",
+      "explorer": "https://mempool.space/testnet4/tx/17c9696dac26db5a792cb29535021bed4819e2311e72eba17a2c5add6998ff6a"
+    },
+    {
+      "phase": "trade",
+      "label": "counterparty-short-inverse-trade",
+      "txType": 18,
+      "description": "Funded second address posts the short leg of the inverse contract trade",
+      "payload": "tli1,2ay246ark,1,1,0,0,1,0",
+      "payloadHex": "746c69312c32617932343661726b2c312c312c302c302c312c30",
+      "payloadBytes": 26,
+      "txid": "c2ad12b66809703c4a1585f1cdae8e9064ab800655de6e82393c820b89ce13fb",
+      "explorer": "https://mempool.space/testnet4/tx/c2ad12b66809703c4a1585f1cdae8e9064ab800655de6e82393c820b89ce13fb"
+    },
+    {
+      "phase": "synthetic",
+      "label": "short-mints-tlusd",
+      "txType": 24,
+      "description": "Short side mints tlUSD from the inverse BTC/USD contract envelope",
+      "payload": "tlo1,1,1d",
+      "payloadHex": "746c6f312c312c3164",
+      "payloadBytes": 9,
+      "txid": "afeb8b6add09477531c4a9dbc295d623f157448cc8ee38506ddd0029c47902cb",
+      "explorer": "https://mempool.space/testnet4/tx/afeb8b6add09477531c4a9dbc295d623f157448cc8ee38506ddd0029c47902cb"
+    },
+    {
+      "phase": "externalization",
+      "label": "pledge-tlusd-hybrid-colored",
+      "txType": 33,
+      "description": "Pledge tlUSD into hybrid colored coin form",
+      "payload": "tlx1,2,1,ln,15cfocg~,u2,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
+      "payloadHex": "746c78312c322c312c6c6e2c313563666f63677e2c75322c74617032376364623630612c703331643461322c726671322c623431616363392c636338643064343230622c2c",
+      "payloadBytes": 69,
+      "txid": "360b635dc0b4758ccff2f2cc905b9f7a4dae07c70365af5251c8f4dfbe2e066b",
+      "explorer": "https://mempool.space/testnet4/tx/360b635dc0b4758ccff2f2cc905b9f7a4dae07c70365af5251c8f4dfbe2e066b"
+    },
+    {
+      "phase": "tap",
+      "label": "make-tap-asset-tlusd",
+      "txType": 33,
+      "description": "Create a TAP asset proof root for the pledged tlUSD",
+      "payload": "tlx2,2,1,tap,15cfocg~,u2,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,u2,tap2",
+      "payloadHex": "746c78322c322c312c7461702c313563666f63677e2c75322c74617032376364623630612c706434623235392c726671322c623431616363392c636338643064343230622c75322c74617032",
+      "payloadBytes": 76,
+      "txid": "a68a8c4da83ba82f5c898d1dd79b2fc64bffba01074242f6e2fbb58bf465fbb0",
+      "explorer": "https://mempool.space/testnet4/tx/a68a8c4da83ba82f5c898d1dd79b2fc64bffba01074242f6e2fbb58bf465fbb0"
+    },
+    {
+      "phase": "liquidity",
+      "label": "plain-liquidity-graft",
+      "txType": 30,
+      "description": "Plain Lightning liquidity graft pledges the tlUSD/TAP reference",
+      "payload": "tlu0,1,2,15cfocg,,,2,4e77a50175113f46,dlc8f1c24,PLEDGED,,0,",
+      "payloadHex": "746c75302c312c322c313563666f63672c2c2c322c346537376135303137353131336634362c646c633866316332342c504c45444745442c2c302c",
+      "payloadBytes": 59,
+      "txid": "bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f",
+      "explorer": "https://mempool.space/testnet4/tx/bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f"
+    },
+    {
+      "phase": "liquidity",
+      "label": "ark-liquidity-graft",
+      "txType": 30,
+      "description": "Ark batched liquidity graft compresses the same pledged route capital",
+      "payload": "tlu2,1,2,15cfocg,,,3,56b9cd3d8dc8cfc6,dlc8f1c24,ARKED,,1,ark40a674",
+      "payloadHex": "746c75322c312c322c313563666f63672c2c2c332c353662396364336438646338636663362c646c633866316332342c41524b45442c2c312c61726b343061363734",
+      "payloadBytes": 66,
+      "txid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
+      "explorer": "https://mempool.space/testnet4/tx/b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5"
+    }
+  ],
+  "verification": {
+    "ok": true,
+    "rule": "reviewer-facing chain excludes activation txs and links each cross-domain Bitcoin testnet transaction"
+  }
+}
