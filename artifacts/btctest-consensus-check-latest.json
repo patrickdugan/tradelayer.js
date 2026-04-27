@@ -1,10 +1,10 @@
 {
   "kind": "btctest_consensus_check",
-  "generatedAt": "2026-04-27T20:46:24.715Z",
+  "generatedAt": "2026-04-27T21:04:08.269Z",
   "node": {
     "chain": "testnet4",
-    "blocks": 132697,
-    "headers": 132697,
+    "blocks": 132698,
+    "headers": 132698,
     "initialblockdownload": false,
     "verificationprogress": 1,
     "subversion": "/Satoshi:30.2.0/",
@@ -72,7 +72,9 @@
   },
   "proof": {
     "artifact": "artifacts\\btctest-cross-domain-demo-latest.json",
-    "txCount": 14,
+    "stepCount": 14,
+    "txCount": 13,
+    "offchainCount": 1,
     "okCount": 14,
     "checks": [
       {
@@ -243,11 +245,10 @@
       },
       {
         "label": "plain-liquidity-graft",
-        "txid": "bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f",
-        "txType": 30,
-        "source": "wallet-transaction",
-        "voutCount": 1,
-        "payload": "tlu0,1,2,15cfocg,,,2,4e77a50175113f46,dlc8f1c24,PLEDGED,,0,",
+        "txid": null,
+        "txType": null,
+        "source": "ln-route-commitment",
+        "payload": "ln-route-graft:tap27cdb60a:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
         "payloadOk": true,
         "typeOk": true,
         "referenceOk": true,

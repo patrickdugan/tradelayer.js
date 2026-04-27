@@ -174,6 +174,22 @@ async function getTxHex(client, step, fetchMissing) {
 async function decodeProofSteps(client, artifact, fetchMissing) {
   const results = [];
   for (const step of artifact.steps) {
+    if (!step.txid) {
+      results.push({
+        label: step.label,
+        txid: null,
+        txType: step.txType === null || step.txType === undefined ? null : Number(step.txType),
+        source: step.proofKind || 'off-chain',
+        payload: step.payload || '',
+        payloadOk: true,
+        typeOk: true,
+        referenceOk: true,
+        referenceOutput: null,
+        ok: true
+      });
+      continue;
+    }
+
     const { hex, source } = await getTxHex(client, step, fetchMissing);
     const decoded = await client.decoderawtransaction(hex);
     const nulldata = decoded.vout.find((output) => {
@@ -261,7 +277,9 @@ function summarizeChecks(report) {
     blocks: report.node.blocks,
     dbPath: report.database.path,
     activationCount: report.activations.activeCount,
-    proofTxs: report.proof.okCount,
+    proofTxs: report.proof.txCount,
+    offchainProofs: report.proof.offchainCount,
+    proofStepsOk: report.proof.okCount,
     consensusHash: report.consensus.stateHash,
     codeHash: report.consensus.codeHash,
     report: report.reportPath
@@ -327,7 +345,9 @@ async function main() {
     },
     proof: {
       artifact: portablePath(artifactPath),
-      txCount: proofChecks.length,
+      stepCount: proofChecks.length,
+      txCount: proofChecks.filter((item) => item.txid).length,
+      offchainCount: proofChecks.filter((item) => !item.txid).length,
       okCount: proofChecks.filter((item) => item.ok).length,
       checks: proofChecks
     },

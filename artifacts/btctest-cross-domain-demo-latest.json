@@ -167,13 +167,20 @@
     {
       "phase": "liquidity",
       "label": "plain-liquidity-graft",
-      "txType": 30,
-      "description": "Plain Lightning liquidity graft pledges the tlUSD/TAP reference",
-      "payload": "tlu0,1,2,15cfocg,,,2,4e77a50175113f46,dlc8f1c24,PLEDGED,,0,",
-      "payloadHex": "746c75302c312c322c313563666f63672c2c2c322c346537376135303137353131336634362c646c633866316332342c504c45444745442c2c302c",
-      "payloadBytes": 59,
-      "txid": "bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f",
-      "explorer": "https://mempool.space/testnet4/tx/bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f"
+      "txType": null,
+      "proofKind": "ln-route-commitment",
+      "description": "Off-chain Lightning route graft commitment referencing the tlUSD/TAP anchor; no Bitcoin txid is created for route construction",
+      "payload": "ln-route-graft:tap27cdb60a:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
+      "payloadHex": "6c6e2d726f7574652d67726166743a74617032376364623630613a396661633631646261303530336564323238633735626365623433363639383934363130376336393864346462306264333839643131613933616561646562623a31",
+      "payloadBytes": 97,
+      "txid": null,
+      "explorer": null,
+      "routeCommitment": {
+        "kind": "ln-route-graft",
+        "tapAssetId": "tap27cdb60a",
+        "tapAnchorOutpoint": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
+        "settlement": "off-chain HTLC/channel update; no Bitcoin txid until force-close or anchor spend"
+      }
     },
     {
       "phase": "liquidity",

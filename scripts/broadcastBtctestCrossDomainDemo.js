@@ -256,21 +256,10 @@ function buildDemoPlan(context) {
     {
       phase: 'liquidity',
       label: 'plain-liquidity-graft',
-      txType: 30,
-      description: 'Plain Lightning liquidity graft pledges the tlUSD/TAP reference',
-      payload: Encode.encodeStakeFraudProof({
-        action: 0,
-        oracleId: 1,
-        stakedPropertyId: 2,
-        amount: 25,
-        relayType: 2,
-        stateHash: compactHash('plain:graft:tlusd', 8),
-        dlcRef,
-        settlementState: 'PLEDGED',
-        relayBlob: '',
-        autoRoll: false,
-        nextDlcRef: ''
-      })
+      txType: null,
+      proofKind: 'ln-route-commitment',
+      description: 'Off-chain Lightning route graft commitment referencing the tlUSD/TAP anchor; no Bitcoin txid is created for route construction',
+      payload: `ln-route-graft:${tapAssetId}:tap-anchor-vout-1`
     },
     {
       phase: 'liquidity',
@@ -300,6 +289,7 @@ function buildDemoPlan(context) {
 function validatePlan(steps) {
   for (const step of steps) {
     const bytes = Buffer.byteLength(step.payload, 'utf8');
+    if (step.proofKind) continue;
     if (bytes > OP_RETURN_LIMIT) {
       throw new Error(`${step.label} payload is ${bytes} bytes, above ${OP_RETURN_LIMIT}: ${step.payload}`);
     }
@@ -444,10 +434,13 @@ function main() {
       ...step,
       payloadBytes: Buffer.byteLength(step.payload, 'utf8'),
       payloadHex: asciiHex(step.payload),
-      outputs: buildOutputs(step)
+      explorer: null,
+      txid: null,
+      outputs: step.proofKind ? [] : buildOutputs(step)
     }));
   } else {
-    const fanout = broadcastFundedFanout(config, steps[0], steps.length - 1);
+    const onchainTail = steps.slice(1).filter((step) => !step.proofKind);
+    const fanout = broadcastFundedFanout(config, steps[0], onchainTail.length);
     result.steps.push(fanout.sent);
     console.log(JSON.stringify({
       label: fanout.sent.label,
@@ -455,8 +448,26 @@ function main() {
       txid: fanout.sent.txid,
       explorer: fanout.sent.explorer
     }));
+    let fuelIndex = 0;
     for (let i = 1; i < steps.length; i += 1) {
-      const sent = broadcastFuelStep(config, steps[i], fanout.fuelOutpoints[i - 1]);
+      if (steps[i].proofKind) {
+        const sent = {
+          ...steps[i],
+          payloadBytes: Buffer.byteLength(steps[i].payload, 'utf8'),
+          payloadHex: asciiHex(steps[i].payload),
+          txid: null,
+          explorer: null
+        };
+        result.steps.push(sent);
+        console.log(JSON.stringify({
+          label: sent.label,
+          phase: sent.phase,
+          proofKind: sent.proofKind
+        }));
+        continue;
+      }
+      const sent = broadcastFuelStep(config, steps[i], fanout.fuelOutpoints[fuelIndex]);
+      fuelIndex += 1;
       result.steps.push(sent);
       console.log(JSON.stringify({
         label: sent.label,
