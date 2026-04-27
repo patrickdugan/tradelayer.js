@@ -186,6 +186,17 @@ async function decodeProofSteps(client, artifact, fetchMissing) {
     const expectedType = step.txType === null || step.txType === undefined ? null : Number(step.txType);
     const typeOk = expectedType === null ? tradeLayerType === null : tradeLayerType === expectedType;
     const payloadOk = step.payloadHex ? payloadHex === step.payloadHex : Boolean(payloadHex);
+    let referenceOk = true;
+    let referenceOutput = null;
+    if (expectedType === 33 && (step.label === 'pledge-tlusd-hybrid-colored' || step.label === 'make-tap-asset-tlusd')) {
+      const body = payload.slice(3);
+      const parts = body.split(',');
+      const refVout = Number(parts[12] || parts[5]);
+      referenceOutput = decoded.vout.find((output) => Number(output.n) === refVout) || null;
+      const scriptType = String(referenceOutput?.scriptPubKey?.type || '').toLowerCase();
+      const address = String(referenceOutput?.scriptPubKey?.address || '').toLowerCase();
+      referenceOk = Boolean(referenceOutput) && (scriptType === 'witness_v1_taproot' || address.startsWith('tb1p') || address.startsWith('bc1p'));
+    }
 
     results.push({
       label: step.label,
@@ -196,7 +207,16 @@ async function decodeProofSteps(client, artifact, fetchMissing) {
       payload,
       payloadOk,
       typeOk,
-      ok: Boolean(payloadHex) && payloadOk && typeOk
+      referenceOk,
+      referenceOutput: referenceOutput
+        ? {
+            vout: referenceOutput.n,
+            value: referenceOutput.value,
+            type: referenceOutput.scriptPubKey?.type,
+            address: referenceOutput.scriptPubKey?.address
+          }
+        : null,
+      ok: Boolean(payloadHex) && payloadOk && typeOk && referenceOk
     });
   }
   return results;

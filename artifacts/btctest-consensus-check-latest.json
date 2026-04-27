@@ -1,10 +1,10 @@
 {
   "kind": "btctest_consensus_check",
-  "generatedAt": "2026-04-27T20:26:17.085Z",
+  "generatedAt": "2026-04-27T20:46:24.715Z",
   "node": {
     "chain": "testnet4",
-    "blocks": 132690,
-    "headers": 132690,
+    "blocks": 132697,
+    "headers": 132697,
     "initialblockdownload": false,
     "verificationprogress": 1,
     "subversion": "/Satoshi:30.2.0/",
@@ -84,6 +84,8 @@
         "payload": "UTXORef:subswap:dlc8f1c24",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -95,6 +97,8 @@
         "payload": "UTXORef:fund:cp46f2eb",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -106,6 +110,8 @@
         "payload": "tldBTCUSD,btc.usd,,,1,",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -117,6 +123,8 @@
         "payload": "tle1,aqzr7k",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -128,6 +136,8 @@
         "payload": "tlb1,16v7k,rt80d096,,tpl258d,ct1a1a,FUNDED,99e8c92e",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -139,6 +149,8 @@
         "payload": "tlb1,16v7k,cp46f2eb,,tpl258d,ct1a1a,FUNDED,b5d2bea7",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -150,6 +162,8 @@
         "payload": "tlg0,1,,2,1,1,2,40,2,1,0",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -161,6 +175,8 @@
         "payload": "tli1,2ay246ark,1,0,0,0,1,0",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
@@ -172,68 +188,90 @@
         "payload": "tli1,2ay246ark,1,1,0,0,1,0",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
         "label": "short-mints-tlusd",
         "txid": "afeb8b6add09477531c4a9dbc295d623f157448cc8ee38506ddd0029c47902cb",
         "txType": 24,
-        "source": "public-raw-decode-only:bad-txns-inputs-missingorspent",
+        "source": "wallet-transaction",
         "voutCount": 1,
         "payload": "tlo1,1,1d",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
         "label": "pledge-tlusd-hybrid-colored",
-        "txid": "360b635dc0b4758ccff2f2cc905b9f7a4dae07c70365af5251c8f4dfbe2e066b",
+        "txid": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b",
         "txType": 33,
-        "source": "public-raw-decode-only:bad-txns-inputs-missingorspent",
-        "voutCount": 1,
-        "payload": "tlx1,2,1,ln,15cfocg~,u2,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
+        "source": "node-rawtransaction",
+        "voutCount": 3,
+        "payload": "tlx1,2,1,ln,15cfocg~,1,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": {
+          "vout": 1,
+          "value": 0.0001,
+          "type": "witness_v1_taproot",
+          "address": "tb1pdsx52ahuwrgf8gzsnlnec3gh6tuggre4rf6hnfcdffw8s4nfj39s8rlg9k"
+        },
         "ok": true
       },
       {
         "label": "make-tap-asset-tlusd",
-        "txid": "a68a8c4da83ba82f5c898d1dd79b2fc64bffba01074242f6e2fbb58bf465fbb0",
+        "txid": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb",
         "txType": 33,
-        "source": "public-raw-decode-only:bad-txns-inputs-missingorspent",
-        "voutCount": 1,
-        "payload": "tlx2,2,1,tap,15cfocg~,u2,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,u2,tap2",
+        "source": "node-rawtransaction",
+        "voutCount": 2,
+        "payload": "tlx2,2,1,tap,15cfocg~,1,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,1,1",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": {
+          "vout": 1,
+          "value": 0.00005,
+          "type": "witness_v1_taproot",
+          "address": "tb1pqzgmsz3d6lpmv0mk2wygyp8cdw2kdfzh2qf5tpgy2wk02f49f07qlzw844"
+        },
         "ok": true
       },
       {
         "label": "plain-liquidity-graft",
         "txid": "bf58a39333e554d9d0f80820f85e8b8e9ad8ba8abb11a2039971be739da25a9f",
         "txType": 30,
-        "source": "public-raw-decode-only:bad-txns-inputs-missingorspent",
+        "source": "wallet-transaction",
         "voutCount": 1,
         "payload": "tlu0,1,2,15cfocg,,,2,4e77a50175113f46,dlc8f1c24,PLEDGED,,0,",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       },
       {
         "label": "ark-liquidity-graft",
         "txid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
         "txType": 30,
-        "source": "public-raw-decode-only:bad-txns-inputs-missingorspent",
+        "source": "wallet-transaction",
         "voutCount": 1,
         "payload": "tlu2,1,2,15cfocg,,,3,56b9cd3d8dc8cfc6,dlc8f1c24,ARKED,,1,ark40a674",
         "payloadOk": true,
         "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
         "ok": true
       }
     ]
   },
   "consensus": {
     "stateHash": "1735887642f79ed4ff67aebbe0015567dc001ff23825d41f1cfcd305fc480e33",
-    "codeHash": "bddaf0de092f0aeb5ae5eb8740a449dc9061b1361648681107d537291df5b2e5"
+    "codeHash": "f41d456aa0ae98f2595835c62d3d89b333cb041782479717189ce3eb86cd4df9"
   },
   "reportPath": "artifacts\\btctest-consensus-check-latest.json",
   "ok": true

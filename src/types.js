@@ -469,7 +469,8 @@ const Types = {
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                //params = await Validity.validateColoredCoin(sender, params, block)
+                params.reference = reference || []
+                params = await Validity.validateColoredCoin(sender, params, txId)
                 break;
             case 34:
                 params = Decode.decodeCrossLayerBridge(encodedPayload.substr(index));

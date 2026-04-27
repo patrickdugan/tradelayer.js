@@ -70,6 +70,11 @@ function getNewAddress(config, label) {
   return bitcoinCli(config, ['getnewaddress', label, 'bech32']);
 }
 
+function getNewTaprootAddress(config, label) {
+  if (config.dryRun) return `tb1p${compactHash(label, 19)}`;
+  return bitcoinCli(config, ['getnewaddress', label, 'bech32m']);
+}
+
 function buildDemoPlan(context) {
   const dlcTemplateId = 'tpl' + compactHash('cross-domain-dlc-template', 2);
   const dlcContractId = 'ct' + compactHash('cross-domain-dlc-contract', 2);
@@ -215,34 +220,38 @@ function buildDemoPlan(context) {
         satsRatio: 1,
         homeAddress: 'ln',
         amount: 25,
-        coloredOutputRef: 'u2',
+        coloredOutputRef: '1',
         tapAssetId,
         proofRoot: 'p' + compactHash(coloredCommitment, 3),
         rfqId: 'rfq2',
         bitvmStatusRef: 'b' + compactHash(entryState, 3),
         commitmentId: coloredCommitment
-      }))
+      })),
+      tapAnchorAddress: context.pledgeTapAnchorAddress,
+      tapAnchorAmountBtc: 0.00010000
     },
     {
       phase: 'tap',
       label: 'make-tap-asset-tlusd',
       txType: 33,
-      description: 'Create a TAP asset proof root for the pledged tlUSD',
+      description: 'Create a P2TR TAP asset anchor output for the pledged tlUSD',
       payload: ensureTlPayload(33, Encode.encodeColoredCoin({
         encodeDecodeRecode: 2,
         propertyId: 2,
         satsRatio: 1,
         homeAddress: 'tap',
         amount: 25,
-        coloredOutputRef: 'u2',
+        coloredOutputRef: '1',
         tapAssetId,
         proofRoot: 'p' + compactHash(`tap:${coloredCommitment}`, 3),
         rfqId: 'rfq2',
         bitvmStatusRef: 'b' + compactHash(entryState, 3),
         commitmentId: coloredCommitment,
-        previousOutputRef: 'u2',
-        newColoredOutputRef: 'tap2'
-      }))
+        previousOutputRef: '1',
+        newColoredOutputRef: '1'
+      })),
+      tapAnchorAddress: context.tapAssetAnchorAddress,
+      tapAnchorAmountBtc: 0.00005000
     },
     {
       phase: 'liquidity',
@@ -298,6 +307,13 @@ function validatePlan(steps) {
 }
 
 function buildOutputs(step) {
+  if (step.tapAnchorAddress) {
+    return [
+      { data: asciiHex(step.payload) },
+      { [step.tapAnchorAddress]: Number(btcAmount(step.tapAnchorAmountBtc || DUST_BTC)) }
+    ];
+  }
+
   const outputs = [];
   for (const output of step.outputs || []) {
     outputs.push({ [output.address]: Number(btcAmount(output.amountBtc)) });
@@ -405,7 +421,9 @@ function main() {
   const context = {
     routerAddress: config.adminAddress,
     dlcAddress: getNewAddress(config, 'cross-domain-dlc-template'),
-    counterpartyAddress: getNewAddress(config, 'cross-domain-counterparty')
+    counterpartyAddress: getNewAddress(config, 'cross-domain-counterparty'),
+    pledgeTapAnchorAddress: getNewTaprootAddress(config, 'cross-domain-pledge-tap-anchor'),
+    tapAssetAnchorAddress: getNewTaprootAddress(config, 'cross-domain-tap-asset-anchor')
   };
   const steps = buildDemoPlan(context);
   validatePlan(steps);

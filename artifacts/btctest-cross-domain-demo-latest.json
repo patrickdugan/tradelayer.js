@@ -2,11 +2,13 @@
   "kind": "bitcoin_testnet_cross_domain_liquidity_demo",
   "network": "BTCTEST",
   "bitcoinNetwork": "testnet4",
-  "generatedAt": "2026-04-27T19:33:04.433Z",
+  "generatedAt": "2026-04-27T20:44:07.342Z",
   "context": {
     "dlcFundingTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
     "counterpartyFundingTxid": "9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d",
-    "finalArkGraftTxid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5"
+    "finalArkGraftTxid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
+    "tx33PledgeAnchorOutpoint": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b:1",
+    "tapAssetAnchorOutpoint": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1"
   },
   "steps": [
     {
@@ -123,23 +125,44 @@
       "phase": "externalization",
       "label": "pledge-tlusd-hybrid-colored",
       "txType": 33,
-      "description": "Pledge tlUSD into hybrid colored coin form",
-      "payload": "tlx1,2,1,ln,15cfocg~,u2,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
-      "payloadHex": "746c78312c322c312c6c6e2c313563666f63677e2c75322c74617032376364623630612c703331643461322c726671322c623431616363392c636338643064343230622c2c",
-      "payloadBytes": 69,
-      "txid": "360b635dc0b4758ccff2f2cc905b9f7a4dae07c70365af5251c8f4dfbe2e066b",
-      "explorer": "https://mempool.space/testnet4/tx/360b635dc0b4758ccff2f2cc905b9f7a4dae07c70365af5251c8f4dfbe2e066b"
+      "description": "Pledge tlUSD into hybrid colored coin form with a P2TR reference output",
+      "payload": "tlx1,2,1,ln,15cfocg~,1,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
+      "payloadHex": "746c78312c322c312c6c6e2c313563666f63677e2c312c74617032376364623630612c703331643461322c726671322c623431616363392c636338643064343230622c2c",
+      "payloadBytes": 68,
+      "txid": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b",
+      "explorer": "https://mempool.space/testnet4/tx/3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b",
+      "tapAssetId": "tap27cdb60a",
+      "coloredCommitment": "cc8d0d420b",
+      "p2trAnchor": {
+        "vout": 1,
+        "valueBtc": 0.0001,
+        "valueSats": 10000,
+        "address": "tb1pdsx52ahuwrgf8gzsnlnec3gh6tuggre4rf6hnfcdffw8s4nfj39s8rlg9k",
+        "scriptType": "witness_v1_taproot",
+        "outpoint": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b:1"
+      }
     },
     {
       "phase": "tap",
       "label": "make-tap-asset-tlusd",
       "txType": 33,
-      "description": "Create a TAP asset proof root for the pledged tlUSD",
-      "payload": "tlx2,2,1,tap,15cfocg~,u2,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,u2,tap2",
-      "payloadHex": "746c78322c322c312c7461702c313563666f63677e2c75322c74617032376364623630612c706434623235392c726671322c623431616363392c636338643064343230622c75322c74617032",
-      "payloadBytes": 76,
-      "txid": "a68a8c4da83ba82f5c898d1dd79b2fc64bffba01074242f6e2fbb58bf465fbb0",
-      "explorer": "https://mempool.space/testnet4/tx/a68a8c4da83ba82f5c898d1dd79b2fc64bffba01074242f6e2fbb58bf465fbb0"
+      "description": "Create a P2TR TAP asset anchor output for the pledged tlUSD",
+      "payload": "tlx2,2,1,tap,15cfocg~,1,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,1,1",
+      "payloadHex": "746c78322c322c312c7461702c313563666f63677e2c312c74617032376364623630612c706434623235392c726671322c623431616363392c636338643064343230622c312c31",
+      "payloadBytes": 71,
+      "txid": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb",
+      "explorer": "https://mempool.space/testnet4/tx/9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb",
+      "tapAssetId": "tap27cdb60a",
+      "coloredCommitment": "cc8d0d420b",
+      "p2trAnchor": {
+        "vout": 1,
+        "valueBtc": 0.00005,
+        "valueSats": 5000,
+        "address": "tb1pqzgmsz3d6lpmv0mk2wygyp8cdw2kdfzh2qf5tpgy2wk02f49f07qlzw844",
+        "scriptType": "witness_v1_taproot",
+        "outpoint": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
+        "previousOutpoint": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b:1"
+      }
     },
     {
       "phase": "liquidity",
@@ -167,5 +190,11 @@
   "verification": {
     "ok": true,
     "rule": "reviewer-facing chain excludes activation txs and links each cross-domain Bitcoin testnet transaction"
+  },
+  "replacement": {
+    "reason": "tx33 TAP hybrid steps require P2TR reference outputs, not OP_RETURN-only markers",
+    "replacedAt": "2026-04-27T20:44:07.342Z",
+    "pledgeTxid": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b",
+    "tapTxid": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb"
   }
 }

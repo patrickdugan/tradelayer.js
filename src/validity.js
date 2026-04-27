@@ -77,6 +77,45 @@ function belongsToXpubP2WPKH({
   return { ok: false };
 }
 
+function normalizeReferenceOutputs(params = {}) {
+    const fromDecoded = Array.isArray(params.decodedTx?.vout)
+        ? params.decodedTx.vout
+            .filter((output) => output && output.scriptPubKey && output.scriptPubKey.type !== 'nulldata' && output.scriptPubKey.type !== 'op_return')
+            .map((output) => ({
+                vout: Number(output.n),
+                satoshis: Math.round(Number(output.value || 0) * 100000000),
+                address: output.scriptPubKey.address || (Array.isArray(output.scriptPubKey.addresses) ? output.scriptPubKey.addresses[0] : ''),
+                scriptType: output.scriptPubKey.type || ''
+            }))
+        : [];
+
+    const fromReference = Array.isArray(params.reference)
+        ? params.reference.map((output) => ({
+            vout: Number(output.vout),
+            satoshis: Number(output.satoshis || output.value || 0),
+            address: output.address || '',
+            scriptType: output.scriptType || output.type || ''
+        }))
+        : [];
+
+    return fromDecoded.length > 0 ? fromDecoded : fromReference;
+}
+
+function parseOutputRef(ref, txid = '') {
+    const value = ref === undefined || ref === null ? '' : String(ref).trim();
+    if (!value) return null;
+    if (/^\d+$/.test(value)) return { txid, vout: Number(value), localVoutOnly: true };
+    const match = value.match(/^([0-9a-f]{64}):(\d+)$/i);
+    if (!match) return null;
+    return { txid: match[1].toLowerCase(), vout: Number(match[2]), localVoutOnly: false };
+}
+
+function isTaprootReference(output) {
+    const scriptType = String(output?.scriptType || '').toLowerCase();
+    const address = String(output?.address || '').toLowerCase();
+    return scriptType === 'witness_v1_taproot' || scriptType === 'v1_p2tr' || address.startsWith('bc1p') || address.startsWith('tb1p');
+}
+
 
 const Validity = {
 
@@ -3696,6 +3735,87 @@ Example integration point (around line 2900 in your file):
         const arePaymentsValid = tallyMap.arePaymentsValid(params.payments);
 
         return isZkProofValid && arePaymentsValid;
+    },
+
+    validateColoredCoin: async (sender, params, txid) => {
+        params.valid = true;
+        params.reason = params.reason || '';
+
+        const txType = 33;
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(txType);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx33 Colored Coin is not activated; ';
+            return params;
+        }
+
+        const op = Number(params.encodeDecodeRecode);
+        if (![0, 1, 2].includes(op)) {
+            params.valid = false;
+            params.reason += 'Invalid encodeDecodeRecode; ';
+            return params;
+        }
+
+        if (!Number.isInteger(Number(params.propertyId)) || Number(params.propertyId) <= 0) {
+            params.valid = false;
+            params.reason += 'Invalid propertyId; ';
+            return params;
+        }
+
+        const amountRequired = op === 1 || (op === 2 && params.amount !== undefined && params.amount !== null && params.amount !== '');
+        if (amountRequired && (!Number.isFinite(Number(params.amount)) || Number(params.amount) <= 0)) {
+            params.valid = false;
+            params.reason += 'Invalid colored amount; ';
+            return params;
+        }
+
+        if (op === 0) {
+            if (!params.commitmentId && !params.previousOutputRef && !params.coloredOutputRef && !params.coloredOutput) {
+                params.valid = false;
+                params.reason += 'Decode requires commitmentId or previous output reference; ';
+            }
+            return params;
+        }
+
+        const referenceField = op === 2
+            ? (params.newColoredOutputRef || params.coloredOutputRef || params.coloredOutput)
+            : (params.coloredOutputRef || params.coloredOutput);
+        const parsedRef = parseOutputRef(referenceField, txid || params.txid || '');
+        if (!parsedRef) {
+            params.valid = false;
+            params.reason += 'Tx33 encode/recode requires a concrete reference output, encoded as vout or txid:vout; ';
+            return params;
+        }
+
+        const references = normalizeReferenceOutputs(params);
+        const refOutput = references.find((output) => Number(output.vout) === parsedRef.vout);
+        if (!refOutput) {
+            params.valid = false;
+            params.reason += `Reference output vout ${parsedRef.vout} not found; `;
+            return params;
+        }
+
+        if (!refOutput.address || Number(refOutput.satoshis) <= 0) {
+            params.valid = false;
+            params.reason += 'Reference output must be a spendable non-OP_RETURN output; ';
+            return params;
+        }
+
+        const tapMode = Boolean(params.tapAssetId || params.proofRoot || params.homeAddress === 'tap' || op === 2);
+        if (tapMode && !isTaprootReference(refOutput)) {
+            params.valid = false;
+            params.reason += 'TAP asset hybrid reference output must be P2TR; ';
+            return params;
+        }
+
+        params.referenceOutput = {
+            txid: parsedRef.txid || txid || params.txid || '',
+            vout: parsedRef.vout,
+            address: refOutput.address,
+            satoshis: Number(refOutput.satoshis),
+            scriptType: refOutput.scriptType || ''
+        };
+        return params;
     }
 };
 
