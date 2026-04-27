@@ -264,21 +264,10 @@ function buildDemoPlan(context) {
     {
       phase: 'liquidity',
       label: 'ark-liquidity-graft',
-      txType: 30,
-      description: 'Ark batched liquidity graft compresses the same pledged route capital',
-      payload: Encode.encodeStakeFraudProof({
-        action: 2,
-        oracleId: 1,
-        stakedPropertyId: 2,
-        amount: 25,
-        relayType: 3,
-        stateHash: arkState,
-        dlcRef,
-        settlementState: 'ARKED',
-        relayBlob: '',
-        autoRoll: true,
-        nextDlcRef: 'ark' + compactHash('next-ark-batch', 3)
-      })
+      txType: null,
+      proofKind: 'ark-vtxo-commitment',
+      description: 'Off-chain Ark VTXO assignment compresses the pledged route capital; no Bitcoin txid exists until a round, exit, or forfeit transaction',
+      payload: `ark-vtxo-graft:${tapAssetId}:ark-batch-root-${arkState}:tap-anchor-vout-1`
     }
   ].map((step) => ({
     ...step,

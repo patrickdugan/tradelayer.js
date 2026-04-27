@@ -1,10 +1,10 @@
 {
   "kind": "btctest_consensus_check",
-  "generatedAt": "2026-04-27T21:04:08.269Z",
+  "generatedAt": "2026-04-27T21:49:04.970Z",
   "node": {
     "chain": "testnet4",
-    "blocks": 132698,
-    "headers": 132698,
+    "blocks": 132704,
+    "headers": 132704,
     "initialblockdownload": false,
     "verificationprogress": 1,
     "subversion": "/Satoshi:30.2.0/",
@@ -16,7 +16,7 @@
   },
   "activations": {
     "network": "BTCTEST",
-    "activeCount": 8,
+    "activeCount": 7,
     "neededTxTypes": [
       13,
       14,
@@ -24,8 +24,7 @@
       16,
       18,
       24,
-      33,
-      30
+      33
     ],
     "checks": [
       {
@@ -62,19 +61,14 @@
         "txType": 33,
         "active": true,
         "activationBlock": 1
-      },
-      {
-        "txType": 30,
-        "active": true,
-        "activationBlock": 1
       }
     ]
   },
   "proof": {
     "artifact": "artifacts\\btctest-cross-domain-demo-latest.json",
     "stepCount": 14,
-    "txCount": 13,
-    "offchainCount": 1,
+    "txCount": 12,
+    "offchainCount": 2,
     "okCount": 14,
     "checks": [
       {
@@ -211,7 +205,7 @@
         "label": "pledge-tlusd-hybrid-colored",
         "txid": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b",
         "txType": 33,
-        "source": "node-rawtransaction",
+        "source": "wallet-transaction",
         "voutCount": 3,
         "payload": "tlx1,2,1,ln,15cfocg~,1,tap27cdb60a,p31d4a2,rfq2,b41acc9,cc8d0d420b,,",
         "payloadOk": true,
@@ -229,7 +223,7 @@
         "label": "make-tap-asset-tlusd",
         "txid": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb",
         "txType": 33,
-        "source": "node-rawtransaction",
+        "source": "wallet-transaction",
         "voutCount": 2,
         "payload": "tlx2,2,1,tap,15cfocg~,1,tap27cdb60a,pd4b259,rfq2,b41acc9,cc8d0d420b,1,1",
         "payloadOk": true,
@@ -257,11 +251,10 @@
       },
       {
         "label": "ark-liquidity-graft",
-        "txid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
-        "txType": 30,
-        "source": "wallet-transaction",
-        "voutCount": 1,
-        "payload": "tlu2,1,2,15cfocg,,,3,56b9cd3d8dc8cfc6,dlc8f1c24,ARKED,,1,ark40a674",
+        "txid": null,
+        "txType": null,
+        "source": "ark-vtxo-commitment",
+        "payload": "ark-vtxo-graft:tap27cdb60a:ark-batch-root-56b9cd3d8dc8cfc6:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
         "payloadOk": true,
         "typeOk": true,
         "referenceOk": true,

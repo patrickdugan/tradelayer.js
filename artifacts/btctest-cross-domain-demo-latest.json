@@ -6,7 +6,7 @@
   "context": {
     "dlcFundingTxid": "58ff891cf904aaa6b85f8f34e20637d8b6ef7fbc7baa2cfeff41fd9bf6481d7f",
     "counterpartyFundingTxid": "9e20ab8ec2b72b5619af3f575304f33894055d2c90c3c3dc7a6ebe7fa8cea98d",
-    "finalArkGraftTxid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
+    "arkVtxoCommitment": "ark-vtxo-graft:tap27cdb60a:ark-batch-root-56b9cd3d8dc8cfc6:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
     "tx33PledgeAnchorOutpoint": "3c95934aa8d6a43524cfd2b5089f09e060d514fd6e7c4828eff9e02ccc18f07b:1",
     "tapAssetAnchorOutpoint": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1"
   },
@@ -185,18 +185,26 @@
     {
       "phase": "liquidity",
       "label": "ark-liquidity-graft",
-      "txType": 30,
-      "description": "Ark batched liquidity graft compresses the same pledged route capital",
-      "payload": "tlu2,1,2,15cfocg,,,3,56b9cd3d8dc8cfc6,dlc8f1c24,ARKED,,1,ark40a674",
-      "payloadHex": "746c75322c312c322c313563666f63672c2c2c332c353662396364336438646338636663362c646c633866316332342c41524b45442c2c312c61726b343061363734",
-      "payloadBytes": 66,
-      "txid": "b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5",
-      "explorer": "https://mempool.space/testnet4/tx/b88247df8c1b0960d9350a75e8c7e1e713bc0898e050407dd60c08f245d727a5"
+      "txType": null,
+      "proofKind": "ark-vtxo-commitment",
+      "description": "Off-chain Ark VTXO assignment compresses the pledged route capital; no Bitcoin txid exists until a round, exit, or forfeit transaction",
+      "payload": "ark-vtxo-graft:tap27cdb60a:ark-batch-root-56b9cd3d8dc8cfc6:9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
+      "payloadHex": "61726b2d7674786f2d67726166743a74617032376364623630613a61726b2d62617463682d726f6f742d353662396364336438646338636663363a396661633631646261303530336564323238633735626365623433363639383934363130376336393864346462306264333839643131613933616561646562623a31",
+      "payloadBytes": 125,
+      "txid": null,
+      "explorer": null,
+      "vtxoCommitment": {
+        "kind": "ark-vtxo-graft",
+        "tapAssetId": "tap27cdb60a",
+        "arkBatchRoot": "ark-batch-root-56b9cd3d8dc8cfc6",
+        "tapAnchorOutpoint": "9fac61dba0503ed228c75bceb436698946107c698d4db0bd389d11a93aeadebb:1",
+        "settlement": "off-chain ASP/VTXO assignment; Bitcoin txid appears only for Ark round, unilateral exit, or forfeit"
+      }
     }
   ],
   "verification": {
     "ok": true,
-    "rule": "reviewer-facing chain excludes activation txs and links each cross-domain Bitcoin testnet transaction"
+    "rule": "reviewer-facing chain excludes activation txs and distinguishes Bitcoin testnet txids from off-chain LN/Ark commitments"
   },
   "replacement": {
     "reason": "tx33 TAP hybrid steps require P2TR reference outputs, not OP_RETURN-only markers",
