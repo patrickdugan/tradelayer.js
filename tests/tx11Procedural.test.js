@@ -203,6 +203,41 @@ describe('tx11 grant managed token semantics', () => {
     expect(out.reason).toBe('');
   });
 
+  test('procedural tx11 sums indexed funding route outputs instead of wallet change', async () => {
+    const Validity = loadValidity({
+      property: { type: 7, issuer: 'admin' },
+      isManagedAndAdmin: false,
+      outputs: [
+        { address: 'tltc1qfunding', satoshis: 90024, vout: 0 },
+        { address: 'tltc1qoperator', satoshis: 9976, vout: 1 },
+        { address: 'tltc1qchange', satoshis: 2848620, vout: 2 }
+      ]
+    });
+
+    const out = await Validity.validateGrantManagedToken(
+      'holder',
+      {
+        propertyId: 380,
+        amountGranted: 0.001,
+        addressToGrantTo: 'tltc1qfunding',
+        dlcTemplateId: '1ghngr1',
+        dlcContractId: '',
+        settlementState: 'FUNDED',
+        dlcHash: '1158pqh',
+        block: 4636716
+      },
+      'tx-11-route-backed',
+      [
+        { address: 'tltc1qfunding', satoshis: 90024, vout: 0 },
+        { address: 'tltc1qoperator', satoshis: 9976, vout: 1 }
+      ]
+    );
+
+    expect(out.valid).toBe(true);
+    expect(out.referenceSatoshis).toBe(100000);
+    expect(out.referenceOutputs).toHaveLength(2);
+  });
+
   test('procedural tx11 rejects missing DLC metadata', async () => {
     const Validity = loadValidity({ property: { type: 7, issuer: 'admin' } });
     const out = await Validity.validateGrantManagedToken(
@@ -243,6 +278,6 @@ describe('tx11 grant managed token semantics', () => {
     );
 
     expect(out.valid).toBe(false);
-    expect(out.reason).toMatch(/does not match funding output/i);
+    expect(out.reason).toMatch(/does not match funding\/reference outputs/i);
   });
 });

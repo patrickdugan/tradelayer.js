@@ -1243,13 +1243,29 @@ const Validity = {
             };
 
             const toSatsInt = (value) => Math.round(Number(value || 0) * 1e8);
-            const getReferenceOutput = async () => {
+            const normalizeReferenceOutputs = (ref) => {
+                if (!ref) return [];
+                const entries = Array.isArray(ref) ? ref : [ref];
+                return entries
+                    .map((entry) => {
+                        if (!entry || typeof entry !== 'object') return null;
+                        const address = typeof entry.address === 'string' ? entry.address : '';
+                        const satoshis = Number(entry.satoshis || 0);
+                        if (!address || !Number.isFinite(satoshis) || satoshis <= 0) return null;
+                        return {
+                            address,
+                            satoshis: Math.round(satoshis),
+                            vout: Number.isInteger(entry.vout) ? entry.vout : undefined,
+                        };
+                    })
+                    .filter(Boolean);
+            };
+            const getReferenceOutputs = async () => {
                 if (typeof TxUtils.getTransactionOutputs !== 'function') {
-                    return null;
+                    return [];
                 }
                 const outputs = await TxUtils.getTransactionOutputs(txid);
-                if (!Array.isArray(outputs) || outputs.length === 0) return null;
-                return outputs[outputs.length - 1];
+                return normalizeReferenceOutputs(outputs);
             };
 
             const isAlreadyActivated = await activationInstance.isTxTypeActive(11);
@@ -1311,15 +1327,22 @@ const Validity = {
                 }
             }
             if (isProcedural) {
-                const referenceOutput = await getReferenceOutput();
-                const referenceSats = Number(referenceOutput?.satoshis || 0);
+                let referenceOutputs = normalizeReferenceOutputs(reference);
+                if (!referenceOutputs.length) {
+                    referenceOutputs = normalizeReferenceOutputs(params.referenceAddress);
+                }
+                if (!referenceOutputs.length) {
+                    referenceOutputs = await getReferenceOutputs();
+                }
+                const referenceSats = referenceOutputs.reduce((sum, output) => sum + Number(output.satoshis || 0), 0);
                 const requestedSats = toSatsInt(params.amountGranted);
-                params.referenceAddress = referenceOutput?.address || params.referenceAddress || '';
+                params.referenceAddress = referenceOutputs[0]?.address || params.referenceAddress || '';
                 params.referenceSatoshis = referenceSats;
-                if (referenceOutput) {
+                params.referenceOutputs = referenceOutputs;
+                if (referenceOutputs.length) {
                     if (requestedSats !== referenceSats) {
                         params.valid = false;
-                        params.reason += `Procedural issuance amount ${requestedSats} does not match funding output ${referenceSats}; `;
+                        params.reason += `Procedural issuance amount ${requestedSats} does not match funding/reference outputs ${referenceSats}; `;
                         return params;
                     }
                     params.amountGranted = new BigNumber(referenceSats).div(1e8).decimalPlaces(8).toNumber();
