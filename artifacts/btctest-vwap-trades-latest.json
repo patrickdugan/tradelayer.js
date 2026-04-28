@@ -1,0 +1,320 @@
+{
+  "kind": "tradelayer_btctest_vwap_trade_history",
+  "network": "BTCTEST",
+  "bitcoinNetwork": "testnet4",
+  "adminAddress": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+  "startedAt": "2026-04-28T13:46:10.624Z",
+  "dryRun": false,
+  "context": {
+    "windowStartHeight": 132813,
+    "windowEndHeight": 132825,
+    "setupArtifact": "artifacts\\btctest-tradelayer-demo-setup-latest.json",
+    "crossDomainArtifact": "artifacts\\btctest-cross-domain-demo-latest.json",
+    "sourceTokenIssueTxids": {
+      "tlbtc": "55e9da04a59c9cc4596ff6443e3bb0b24e5a6bb790b91827c902744664828ac5",
+      "tlusd": "cdcb18eecae77d8362e74d626f6f090a3daca120a64b3ca8b99db20e4035f4f3"
+    },
+    "sourceStablecoinMintTxids": [
+      "a0a6fe2aff079cba775975aea0d4e9c42279d1705534d5e75f23909e07088279",
+      "afeb8b6add09477531c4a9dbc295d623f157448cc8ee38506ddd0029c47902cb"
+    ]
+  },
+  "vwap": {
+    "pair": "BTCUSD",
+    "baseTokenId": "tlBTC",
+    "basePropertyId": 1,
+    "quoteTokenId": "tlUSD",
+    "quotePropertyId": 2,
+    "windowStartHeight": 132813,
+    "windowEndHeight": 132825,
+    "stateSnapshotRoot": "83148f5f9934fd114e2c783bca149cb58e01e3131a6b3076f29c3e4ebe20b84c",
+    "tlbtcBalanceRoot": "c0fcf5453cc0272dfd23d828f55af2dd54dc9679eb71db5759de8312eb359892",
+    "tlusdBalanceRoot": "5dabdad7911a8a79f83d91e2fe18c1279796fdab43c92d71f91a7393754717eb",
+    "validTradeSetRoot": "b79e06eb3a152010b3d614f1f0b508e3ce4e3ff9a265c825bd3dad2b03db43b3",
+    "validTradeCount": 3,
+    "totalBaseAmountSats": "10000000",
+    "totalQuoteAmountMicrousd": "6502000000",
+    "vwapPrice": "65020",
+    "vwapScaledPrice": "650200000",
+    "maxDeviationBps": 500,
+    "priceDeviationBps": 3,
+    "summaryCommitmentId": "ee65f9f1d5af162564a5822b3c6deedbda710c5b5169e2ec725022fccc7be664",
+    "payloadHash": "ee65f9f1d5af162564a5822b3c6deedb",
+    "blobRef": "vwap9424",
+    "validTrades": [
+      {
+        "txid": "87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+        "counterTxid": "ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe",
+        "baseAmountSats": "2000000",
+        "impliedPrice": "64900"
+      },
+      {
+        "txid": "858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+        "counterTxid": "5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0",
+        "baseAmountSats": "3000000",
+        "impliedPrice": "65000"
+      },
+      {
+        "txid": "728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+        "counterTxid": "e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554",
+        "baseAmountSats": "5000000",
+        "impliedPrice": "65080"
+      }
+    ],
+    "publishTxid": "2f034a7e08ad1466b787e1f78cbb3f07566b36ed0cce95e1f1a30da82330d77f",
+    "publishExplorer": "https://mempool.space/testnet4/tx/2f034a7e08ad1466b787e1f78cbb3f07566b36ed0cce95e1f1a30da82330d77f"
+  },
+  "steps": [
+    {
+      "phase": "activation",
+      "txType": 0,
+      "label": "activate-5-token-vwap-trades",
+      "description": "Activate TradeLayer tx5 for on-chain token-for-token tlBTC/tlUSD trade prints",
+      "payload": "tl05,1c24klo1mn76n2b21g3wj5tno4plpuryrfaf8z8x921a7qfw4c",
+      "payloadBytes": 55,
+      "payloadHex": "746c30352c316332346b6c6f316d6e37366e326232316733776a35746e6f34706c7075727972666166387a387839323161377166773463",
+      "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+      "feeBtc": 0.00000942,
+      "explorer": "https://mempool.space/testnet4/tx/61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+      "fuelOutpoints": [
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 1,
+          "valueBtc": 0.000025,
+          "address": "tb1qst5hfrydxyyuz43sn6fqj43guc2x3njq3xyy03"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 2,
+          "valueBtc": 0.000025,
+          "address": "tb1qff4y8th65ufrff644kfehccc92x0xp6t0yzatc"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 3,
+          "valueBtc": 0.000025,
+          "address": "tb1qmsl8vwe5yu5s8jfvet3juw2906mc9hn4nvcp0f"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 4,
+          "valueBtc": 0.000025,
+          "address": "tb1qp8x9c84mxs4pklyzkw0xjypl3kx6pm5zkcse38"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 5,
+          "valueBtc": 0.000025,
+          "address": "tb1qh7lyrx9dt8tw4tpefuqz8fh0enzfktsggrpztl"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 6,
+          "valueBtc": 0.000025,
+          "address": "tb1qc8ys8mz7rlv0d0lsptqa07p7ncwzv7qnukgaa8"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 7,
+          "valueBtc": 0.000025,
+          "address": "tb1qwwzskpd7lndc2ahml2m08v38dv0z7p2fkgaanv"
+        },
+        {
+          "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+          "vout": 8,
+          "valueBtc": 0.000025,
+          "address": "tb1qwyjyx0jg5wvlaudjshts6l49gdjv83cdnzft23"
+        }
+      ]
+    },
+    {
+      "phase": "synthetic",
+      "txType": 24,
+      "label": "mint-vwap-tlusd-liquidity",
+      "description": "Mint USD synthetic liquidity from the BTC/USD inverse envelope before printing spot VWAP trades",
+      "payload": "tlo1,1,50m",
+      "payloadBytes": 10,
+      "payloadHex": "746c6f312c312c35306d",
+      "txid": "a23928bbc316027ee5d61c24f510ff267d75c31f7c28c6225eb362d53dc85731",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/a23928bbc316027ee5d61c24f510ff267d75c31f7c28c6225eb362d53dc85731",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 1,
+        "valueBtc": 0.000025,
+        "address": "tb1qst5hfrydxyyuz43sn6fqj43guc2x3njq3xyy03"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p64900",
+      "side": "sell-tlbtc",
+      "label": "vwap-sell-tlbtc-64900",
+      "description": "0.02000000 tlBTC offered for 1298 tlUSD",
+      "payload": "tl51,2,16v7k,1nmnkgzk,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35312c322c313676376b2c316e6d6e6b677a6b2c302c31",
+      "txid": "87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 2,
+        "valueBtc": 0.000025,
+        "address": "tb1qff4y8th65ufrff644kfehccc92x0xp6t0yzatc"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p64900",
+      "side": "sell-tlusd",
+      "label": "vwap-sell-tlusd-64900",
+      "description": "1298 tlUSD offered for 0.02000000 tlBTC",
+      "payload": "tl52,1,1nmnkgzk,16v7k,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35322c312c316e6d6e6b677a6b2c313676376b2c302c31",
+      "txid": "ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 3,
+        "valueBtc": 0.000025,
+        "address": "tb1qmsl8vwe5yu5s8jfvet3juw2906mc9hn4nvcp0f"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p65000",
+      "side": "sell-tlbtc",
+      "label": "vwap-sell-tlbtc-65000",
+      "description": "0.03000000 tlBTC offered for 1950 tlUSD",
+      "payload": "tl51,2,1satc,2hkxyqyo,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35312c322c31736174632c32686b787971796f2c302c31",
+      "txid": "858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 4,
+        "valueBtc": 0.000025,
+        "address": "tb1qp8x9c84mxs4pklyzkw0xjypl3kx6pm5zkcse38"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p65000",
+      "side": "sell-tlusd",
+      "label": "vwap-sell-tlusd-65000",
+      "description": "1950 tlUSD offered for 0.03000000 tlBTC",
+      "payload": "tl52,1,2hkxyqyo,1satc,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35322c312c32686b787971796f2c31736174632c302c31",
+      "txid": "5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 5,
+        "valueBtc": 0.000025,
+        "address": "tb1qh7lyrx9dt8tw4tpefuqz8fh0enzfktsggrpztl"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p65080",
+      "side": "sell-tlbtc",
+      "label": "vwap-sell-tlbtc-65080",
+      "description": "0.05000000 tlBTC offered for 3254 tlUSD",
+      "payload": "tl51,2,2z60w,45hiraww,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35312c322c327a3630772c34356869726177772c302c31",
+      "txid": "728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 6,
+        "valueBtc": 0.000025,
+        "address": "tb1qc8ys8mz7rlv0d0lsptqa07p7ncwzv7qnukgaa8"
+      }
+    },
+    {
+      "phase": "vwap-trade",
+      "txType": 5,
+      "tradePrintId": "p65080",
+      "side": "sell-tlusd",
+      "label": "vwap-sell-tlusd-65080",
+      "description": "3254 tlUSD offered for 0.05000000 tlBTC",
+      "payload": "tl52,1,45hiraww,2z60w,0,1",
+      "payloadBytes": 25,
+      "payloadHex": "746c35322c312c34356869726177772c327a3630772c302c31",
+      "txid": "e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 7,
+        "valueBtc": 0.000025,
+        "address": "tb1qwwzskpd7lndc2ahml2m08v38dv0z7p2fkgaanv"
+      }
+    },
+    {
+      "phase": "oracle",
+      "txType": 14,
+      "label": "publish-vwap-state-oracle",
+      "description": "Publish compact VWAP state commitment over the valid tlBTC/tlUSD trade set",
+      "payload": "tle1,b,2,2uh9,2uhl,ee65f9f1d5af162564a5822b3c6deedb,vwap9424",
+      "payloadBytes": 60,
+      "payloadHex": "746c65312c622c322c327568392c3275686c2c65653635663966316435616631363235363461353832326233633664656564622c7677617039343234",
+      "txid": "2f034a7e08ad1466b787e1f78cbb3f07566b36ed0cce95e1f1a30da82330d77f",
+      "feeBtc": 0.000025,
+      "explorer": "https://mempool.space/testnet4/tx/2f034a7e08ad1466b787e1f78cbb3f07566b36ed0cce95e1f1a30da82330d77f",
+      "fuelInput": {
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "vout": 8,
+        "valueBtc": 0.000025,
+        "address": "tb1qwyjyx0jg5wvlaudjshts6l49gdjv83cdnzft23"
+      }
+    }
+  ],
+  "tradePrints": [
+    {
+      "id": "p64900",
+      "price": "64900",
+      "baseAmountSats": "2000000",
+      "quoteAmountMicrousd": "1298000000",
+      "makerTxid": "87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+      "makerExplorer": "https://mempool.space/testnet4/tx/87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+      "takerTxid": "ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe",
+      "takerExplorer": "https://mempool.space/testnet4/tx/ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe"
+    },
+    {
+      "id": "p65000",
+      "price": "65000",
+      "baseAmountSats": "3000000",
+      "quoteAmountMicrousd": "1950000000",
+      "makerTxid": "858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+      "makerExplorer": "https://mempool.space/testnet4/tx/858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+      "takerTxid": "5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0",
+      "takerExplorer": "https://mempool.space/testnet4/tx/5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0"
+    },
+    {
+      "id": "p65080",
+      "price": "65080",
+      "baseAmountSats": "5000000",
+      "quoteAmountMicrousd": "3254000000",
+      "makerTxid": "728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+      "makerExplorer": "https://mempool.space/testnet4/tx/728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+      "takerTxid": "e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554",
+      "takerExplorer": "https://mempool.space/testnet4/tx/e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554"
+    }
+  ],
+  "finishedAt": "2026-04-28T13:46:17.780Z"
+}

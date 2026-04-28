@@ -17,7 +17,7 @@ const activationGroups = [
   {
     id: 'oracle-and-perp',
     purpose: 'BTC/USD oracle, perp series, on-chain and channel contract trades.',
-    txTypes: [13, 14, 16, 18, 19, 27]
+    txTypes: [5, 13, 14, 16, 18, 19, 27]
   },
   {
     id: 'channel-routing',

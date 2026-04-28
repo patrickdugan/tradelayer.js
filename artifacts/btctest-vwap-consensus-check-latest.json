@@ -1,0 +1,181 @@
+{
+  "kind": "btctest_consensus_check",
+  "generatedAt": "2026-04-28T13:50:40.527Z",
+  "node": {
+    "chain": "testnet4",
+    "blocks": 132819,
+    "headers": 132819,
+    "initialblockdownload": false,
+    "verificationprogress": 1,
+    "subversion": "/Satoshi:30.2.0/",
+    "wallet": "utxoref-testnet"
+  },
+  "database": {
+    "root": "nedb-sandbox",
+    "path": "nedb-sandbox\\btc-test"
+  },
+  "activations": {
+    "network": "BTCTEST",
+    "activeCount": 4,
+    "neededTxTypes": [
+      0,
+      24,
+      5,
+      14
+    ],
+    "checks": [
+      {
+        "txType": 0,
+        "active": true,
+        "activationBlock": 1
+      },
+      {
+        "txType": 24,
+        "active": true,
+        "activationBlock": 1
+      },
+      {
+        "txType": 5,
+        "active": true,
+        "activationBlock": 1
+      },
+      {
+        "txType": 14,
+        "active": true,
+        "activationBlock": 1
+      }
+    ]
+  },
+  "proof": {
+    "artifact": "artifacts\\btctest-vwap-trades-latest.json",
+    "stepCount": 9,
+    "txCount": 9,
+    "offchainCount": 0,
+    "okCount": 9,
+    "checks": [
+      {
+        "label": "activate-5-token-vwap-trades",
+        "txid": "61316b0bd9be789b1c656b2357ce11438d79d374921c1f4b6fa00f0d211f6031",
+        "txType": 0,
+        "source": "node-rawtransaction",
+        "voutCount": 10,
+        "payload": "tl05,1c24klo1mn76n2b21g3wj5tno4plpuryrfaf8z8x921a7qfw4c",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "mint-vwap-tlusd-liquidity",
+        "txid": "a23928bbc316027ee5d61c24f510ff267d75c31f7c28c6225eb362d53dc85731",
+        "txType": 24,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tlo1,1,50m",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlbtc-64900",
+        "txid": "87a28c1b30624f07aeb26f8775763851ecea487e9e43362de32f16a7ec3c7295",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl51,2,16v7k,1nmnkgzk,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlusd-64900",
+        "txid": "ebf8da435cd4acdb711b5cd391645371dbb76b6ed6f79cb6e077e5fb74d76dfe",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl52,1,1nmnkgzk,16v7k,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlbtc-65000",
+        "txid": "858bb7de792a64408dd352d32832d72484ea6e3d4d29c6ec7d6515b57d4e5bca",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl51,2,1satc,2hkxyqyo,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlusd-65000",
+        "txid": "5a2b5a6c8550125accbaa5233b8b172e4bfdc65a06985782ec9b46db93466fa0",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl52,1,2hkxyqyo,1satc,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlbtc-65080",
+        "txid": "728552b548eb45c710c258ff95e8eb6e196e00bf343e5bccff0ef2e732906d9f",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl51,2,2z60w,45hiraww,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "vwap-sell-tlusd-65080",
+        "txid": "e7b93a172808d3fcaa1fd7e1735ab962f6e16ac912cc31e6bec6b75aa4dba554",
+        "txType": 5,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tl52,1,45hiraww,2z60w,0,1",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      },
+      {
+        "label": "publish-vwap-state-oracle",
+        "txid": "2f034a7e08ad1466b787e1f78cbb3f07566b36ed0cce95e1f1a30da82330d77f",
+        "txType": 14,
+        "source": "node-rawtransaction",
+        "voutCount": 1,
+        "payload": "tle1,b,2,2uh9,2uhl,ee65f9f1d5af162564a5822b3c6deedb,vwap9424",
+        "payloadOk": true,
+        "typeOk": true,
+        "referenceOk": true,
+        "referenceOutput": null,
+        "ok": true
+      }
+    ]
+  },
+  "consensus": {
+    "stateHash": "7607e5cab9096252f3ac0a3946a798d3feee2cac5d66eef153333a05192d83a6",
+    "codeHash": "f41d456aa0ae98f2595835c62d3d89b333cb041782479717189ce3eb86cd4df9"
+  },
+  "reportPath": "artifacts\\btctest-vwap-consensus-check-latest.json",
+  "ok": true
+}
