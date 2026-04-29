@@ -89,6 +89,19 @@ async function broadcastOpReturnTx(client, sender, payload, excludes = new Set()
   return { txid, hex: signed.hex, decoded, accept, fundingUtxo: utxo, payload };
 }
 
+async function loadExistingTx(client, txid) {
+  const decoded = await client.getRawTransaction(txid);
+  return {
+    txid,
+    hex: null,
+    decoded,
+    accept: null,
+    fundingUtxo: null,
+    payload: null,
+    reused: true
+  };
+}
+
 async function applyPayloadTx(tx, sender, block, extra = {}) {
   const opret = tx.decoded.vout.find((v) => v?.scriptPubKey?.type === 'nulldata');
   const parsed = parseTL(opret?.scriptPubKey?.hex || '');
@@ -154,7 +167,9 @@ async function redeemSynthetic(client, artifact, excludes, block) {
   const amount = Number(process.env.TL_SYNTH_REDEEM_AMOUNT || 1);
   await ensureTxTypeActive(25, block);
   const payload = encodeSyntheticRedeem(artifact.procedural.propertyId, artifact.perp.contractId, amount);
-  const tx = await broadcastOpReturnTx(client, artifact.secondFunder, payload, excludes);
+  const tx = process.env.TL_SYNTH_REDEEM_TXID
+    ? await loadExistingTx(client, process.env.TL_SYNTH_REDEEM_TXID)
+    : await broadcastOpReturnTx(client, artifact.secondFunder, payload, excludes);
   const applied = await applyPayloadTx(tx, artifact.secondFunder, block);
   return { amount, tx, applied };
 }

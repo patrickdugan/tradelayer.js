@@ -136,9 +136,11 @@ class SynthRegistry {
     // Check if a synthetic token exists
     static async exists(syntheticTokenId) {
         const base = await db.getDatabase('syntheticTokens')
-        const vaultsData = base.findOneAsync({ _id: syntheticTokenId });
-        //console.log('inside exists ' + syntheticTokenId + ' ' + JSON.stringify(vaultsData));
-        return vaultsData !== null;
+        const synthData = await base.findOneAsync({ _id: syntheticTokenId });
+        if (synthData) return true;
+        const vaultDB = await db.getDatabase('vaults');
+        const vaultData = await vaultDB.findOneAsync({ _id: syntheticTokenId });
+        return vaultData !== null;
     }
 
 
@@ -176,24 +178,30 @@ class SynthRegistry {
 
         // Ensure the database queries are awaited properly
         const base = await db.getDatabase('vaults')
-        const vaultsData = await base.findOneAsync({});
+        const vaultsData = await base.findAsync({});
         //console.log('Vaults Data:', Array.isArray(vaultsData) ? vaultsData.length : 0, 'items');
         
         if (Array.isArray(vaultsData) && vaultsData.length > 0) {
             vaultsData.forEach(vault => {
-                this.vaults.set(vault._id, vault.data);
+                const value = typeof vault.value === 'string'
+                    ? JSON.parse(vault.value)
+                    : (vault.value || vault.data || vault);
+                this.vaults.set(vault._id, value);
             });
         } else {
             console.log('No vaults found or vaultsData is not an array.');
         }
 
         const syntheticTokensBase = await db.getDatabase('syntheticTokens')
-        const syntheticTokensData= syntheticTokensBase.findOneAsync({});
+        const syntheticTokensData = await syntheticTokensBase.findAsync({});
         //console.log('Synthetic Tokens Data:', Array.isArray(syntheticTokensData) ? syntheticTokensData.length : 0, 'items');
         
         if (Array.isArray(syntheticTokensData) && syntheticTokensData.length > 0) {
             syntheticTokensData.forEach(synth => {
-                this.syntheticTokens.set(synth._id, synth.data);
+                const value = typeof synth.value === 'string'
+                    ? JSON.parse(synth.value)
+                    : (synth.value || synth.data || synth);
+                this.syntheticTokens.set(synth._id, value);
             });
         } else {
             console.log('No synthetic tokens found or syntheticTokensData is not an array.');
