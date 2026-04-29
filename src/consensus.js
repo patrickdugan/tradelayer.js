@@ -70,7 +70,8 @@ class ConsensusDatabase {
     static async getTxParams(txId) {
         const base = await db.getDatabase('consensus')
         const result = await base.findOneAsync({ _id: txId });
-        return result.value.processed === true ? result.value.params : null;
+        const record = result?.value || result;
+        return record?.processed === true ? record.params : null;
     }
 
     static async markTxAsProcessed(txId, params) {
@@ -85,14 +86,25 @@ class ConsensusDatabase {
 
     static async getTxParamsForAddress(address) {
         const base = await db.getDatabase('consensus')
-        const results = await base.findAsync({ "value.processed": true, "value.params.address": address });
-        return results.map(result => result.value.params);
+        const results = await base.findAsync({
+            $or: [
+                { "value.processed": true, "value.params.address": address },
+                { processed: true, "params.address": address },
+                { processed: true, "params.addressToGrantTo": address }
+            ]
+        });
+        return results.map(result => (result.value || result).params);
     }
 
     static async getTxParamsForBlock(blockHeight) {
         const base = await db.getDatabase('consensus')
-        const results = await base.findAsync({ "value.processed": true, "value.params.block": blockHeight });
-        return results.map(result => result.value.params);
+        const results = await base.findAsync({
+            $or: [
+                { "value.processed": true, "value.params.block": blockHeight },
+                { processed: true, "params.block": blockHeight }
+            ]
+        });
+        return results.map(result => (result.value || result).params);
     }
 
     static async getMaxProcessedBlock() {
