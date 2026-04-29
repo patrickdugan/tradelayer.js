@@ -142,6 +142,32 @@ describe('DLC relay signature + procedural token validity gates', () => {
     expect(out.addressToGrantTo).toBe('tk-admin');
   });
 
+  test('procedural token grant requires reference output to match DLC redeem address', async () => {
+    const Validity = loadValidity({
+      issuanceGate: {
+        valid: true,
+        contract: { redeemAddress: 'tltc1qexpectedredeem' }
+      }
+    });
+    const out = await Validity.validateGrantManagedToken(
+      'tk-admin',
+      {
+        propertyId: 9,
+        amountGranted: 1,
+        addressToGrantTo: 'tltc1qwrongredeem',
+        dlcHash: 'hash-1',
+        dlcTemplateId: 'tpl-1',
+        dlcContractId: 'ct-1',
+        settlementState: 'FUNDED',
+        block: 1
+      },
+      'tx-gm-proc-wrong-redeem',
+      [{ address: 'tltc1qwrongredeem', satoshis: 100000000, vout: 0 }]
+    );
+    expect(out.valid).toBe(false);
+    expect(out.reason).toMatch(/redeemAddress/i);
+  });
+
   test('procedural token grant requires dlcHash', async () => {
     const Validity = loadValidity({ issuanceGate: { valid: true } });
     const out = await Validity.validateGrantManagedToken(

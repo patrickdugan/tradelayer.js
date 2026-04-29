@@ -1377,6 +1377,17 @@ const Validity = {
                 if (!gate.valid) {
                     params.valid = false;
                     params.reason += gate.reason + '; ';
+                } else if (gate.contract?.redeemAddress) {
+                    const expectedRedeem = String(gate.contract.redeemAddress || '').trim();
+                    const receiptAddress = String(params.redeemAddress || params.referenceAddress || '').trim();
+                    const hasRedeemOutput = referenceOutputs.some((output) => String(output.address || '').trim() === expectedRedeem);
+                    if (receiptAddress && receiptAddress !== expectedRedeem) {
+                        params.valid = false;
+                        params.reason += 'DLC receipt address does not match contract redeemAddress; ';
+                    } else if (!hasRedeemOutput) {
+                        params.valid = false;
+                        params.reason += 'Funding/reference outputs missing DLC contract redeemAddress; ';
+                    }
                 }
             }
 
