@@ -408,7 +408,7 @@ const Validity = {
         },
        
         // 3: Trade Token for UTXO
-        validateTradeTokenForUTXO: async (sender, params, txid,outputs) => {
+        validateTradeTokenForUTXO: async (sender, params, txid, outputs = []) => {
             params.reason = '';
             params.valid = true;
             console.log('inside validate UTXO outputs '+JSON.stringify(outputs))
@@ -458,50 +458,60 @@ const Validity = {
             }
 
             if (!(Number.isInteger(params.satsExpected) && params.satsExpected >= 0)) {
-                params.valid = true; // Maintain the transaction but log the issue
+                params.valid = false;
                 params.reason += 'Invalid sats expected; ';
-            }
-
-            if (outputs.length == 0) {
-                params.valid = false
-                params.reason += 'No outputs; ';
-                return
+                return params;
             }
 
             const outs = (Array.isArray(outputs) && outputs.length) ? outputs : await TxUtils.getTransactionOutputs(txid);
 
             // Find sats paid to the intended recipient
-            let sats = 0;
-            if (Number.isInteger(params.payToAddress)) {
-              const paymentOut = outs[params.payToAddress]
-              sats += paymentOut.satoshis
-            }else{
-                params.valid = true
-                params.reason += 'missing payToAddress, defaulting to 1'
-                params.payToAddress=1
-                params.satsReceived = outs[1]
+            if (!Array.isArray(outs) || !outs.length) {
+                params.valid = false;
+                params.reason += 'No outputs; ';
+                return params;
             }
-            params.satsReceived= sats
 
-            // Validate the payToAddress corresponds to the correct vOut
-                const satsExpectedFloat = new BigNumber(params.satsExpected).dividedBy(100000000).decimalPlaces(8).toNumber()
-                params.price = new BigNumber(satsExpectedFloat).dividedBy(params.amount).decimalPlaces(8).toNumber()
-                if (params.satsReceived < satsExpectedFloat) { // convert satsExpected to LTC
-                    params.valid = true;
-                    params.reason += `Received LTC (${params.satsRecieved}) is less than expected; `;
-                    params.paymentPercent = new BigNumber(params.satsRecieved).dividedBy(params.satsRecieved).dividedBy(100000000).decimalPlaces(8).toNumber()
-                }else{
-                    params.paymentPercent=100
-                }
+            if (!Number.isInteger(params.payToAddress)) {
+                params.reason += 'missing payToAddress, defaulting to 1; ';
+                params.payToAddress = 1;
+            }
+
+            const paymentOut = outs.find((out) => Number(out?.vout) === params.payToAddress) || outs[params.payToAddress];
+            const sats = Math.round(Number(
+                paymentOut?.satoshis !== undefined
+                    ? paymentOut.satoshis
+                    : new BigNumber(paymentOut?.value || 0).times(100000000).toNumber()
+            ));
+            if (!Number.isFinite(sats) || sats <= 0) {
+                params.valid = false;
+                params.reason += 'Missing payment output amount; ';
+                return params;
+            }
+            if (sats > params.satsExpected) {
+                params.valid = false;
+                params.reason += `Payment output ${sats} exceeds UTXO trade cap ${params.satsExpected}; `;
+                return params;
+            }
+            params.satsReceived = sats
+
+            const coinReceived = new BigNumber(params.satsReceived).dividedBy(100000000).decimalPlaces(8);
+            params.price = coinReceived.dividedBy(params.amount).decimalPlaces(8).toNumber()
+            params.paymentPercent = params.satsExpected === 0
+                ? 0
+                : new BigNumber(params.satsReceived).dividedBy(params.satsExpected).times(100).decimalPlaces(8).toNumber()
+            if (params.satsReceived < params.satsExpected) {
+                params.reason += `Payment output ${params.satsReceived} below UTXO trade cap ${params.satsExpected}; `;
+            }
          
             if (!Number.isInteger(params.tokenOutput)) {
                 params.valid = true;
                 params.reason += 'tokenOutput not an integer';
                 if(params.payToAddress == 0){params.tokenOutput = 1
-                }else if(reference.length<3){params.tokenOutput=0
+                }else if(outs.length<3){params.tokenOutput=0
                 }else{params.tokenOutput=3}
 
-                params.tokenDeliveryAddress = reference.find(ref => ref.vout === params.tokenOutput);
+                params.tokenDeliveryAddress = outs.find(ref => ref.vout === params.tokenOutput)?.address || params.tokenDeliveryAddress;
             }
 
             console.log('Inside validate UTXO trade', JSON.stringify(params));

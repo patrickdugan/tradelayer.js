@@ -214,7 +214,7 @@ const Types = {
                     params.satsReceived = referenceAmount;  // Assuming the amountReceived is what you're looking for
                     console.log('Decoded and validated UTXO trade params: ' + JSON.stringify(params));
                     console.log('validating utxo trade '+JSON.stringify(params))
-                    params = await Validity.validateTradeTokenForUTXO(sender, params, txId);
+                    params = await Validity.validateTradeTokenForUTXO(sender, params, txId, reference);
                     console.log(JSON.stringify(params)+' validated '+params.valid + ' reason '+params.reason)
                 } else {
                     console.error('Invalid UTXO trade reference data');
