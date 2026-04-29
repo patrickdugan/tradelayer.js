@@ -1,0 +1,220 @@
+{
+  "run": "1777490511193-9eb16e9f",
+  "broadcast": true,
+  "applyImmediate": true,
+  "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\ltc-second-funder-dlc-perp-tlusd-latest.json",
+  "dlcContractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+  "dlcAddress": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+  "secondFunder": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+  "stateOracle": {
+    "id": 135,
+    "ticker": "BITVMSTATE",
+    "adminAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22"
+  },
+  "balancesBefore": {
+    "secondReceipt": {
+      "amount": 0.001,
+      "available": 0.0009995,
+      "reserved": 0,
+      "margin": 5e-7,
+      "vesting": 0,
+      "channel": 0
+    },
+    "secondSynth": {
+      "amount": 0,
+      "available": 0,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  },
+  "syntheticRedeem": {
+    "amount": 1,
+    "txid": "6acd30db5310c5860e09de73a05409b2a9b1dbe2b2f7fc27d11fd950b5a64a91",
+    "valid": true,
+    "params": {
+      "propertyId": "s-380-12",
+      "contractId": 12,
+      "amount": 1,
+      "senderAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "block": 4692774,
+      "txid": "6acd30db5310c5860e09de73a05409b2a9b1dbe2b2f7fc27d11fd950b5a64a91",
+      "reason": "",
+      "valid": true
+    },
+    "mempoolAccept": null
+  },
+  "oracleRelay": {
+    "txid": "59df0dd6e07dacf31bed997a8f19e4cc25779820f5c1ba0d10b298c0c2f4efae",
+    "valid": true,
+    "stateHash": "7843524021ee1b1dbefd45ef8343320b4cb7b548959d6af5193fe27a136c1387",
+    "payloadHash": "7843524021ee1b1dbefd45ef8343320b4cb7b548959d6af5193fe27a136c1387",
+    "contractBefore": {
+      "_id": "contract-ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "type": "contract",
+      "contractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "templateId": "dlc-receipt-ltc-testnet-v1",
+      "state": "FUNDED",
+      "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+      "redeemAddress": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+      "witnessScript": "522102286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6210237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba587952052ae",
+      "pubkeys": [
+        "02286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6",
+        "0237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba5879520"
+      ],
+      "live": true,
+      "source": "ltc-second-funder-dry-run",
+      "oracleId": 135,
+      "oracleAdminAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22"
+    },
+    "contractAfter": {
+      "_id": "contract-ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "type": "contract",
+      "contractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "templateId": "dlc-receipt-ltc-testnet-v1",
+      "state": "SETTLED",
+      "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+      "redeemAddress": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+      "witnessScript": "522102286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6210237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba587952052ae",
+      "pubkeys": [
+        "02286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6",
+        "0237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba5879520"
+      ],
+      "live": true,
+      "source": "ltc-second-funder-dry-run",
+      "oracleId": 135,
+      "oracleAdminAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+      "stateHash": "7843524021ee1b1dbefd45ef8343320b4cb7b548959d6af5193fe27a136c1387",
+      "blockHeight": 4692774
+    },
+    "mempoolAccept": [
+      {
+        "txid": "59df0dd6e07dacf31bed997a8f19e4cc25779820f5c1ba0d10b298c0c2f4efae",
+        "allowed": true,
+        "vsize": 4256,
+        "fees": {
+          "base": 0.00005
+        }
+      }
+    ]
+  },
+  "managedRedeem": {
+    "amount": 0.0005,
+    "txid": "706f5523d91c148d6117bd06a6b5ee2a7985b05340e296557793ed89be2e6346",
+    "valid": true,
+    "params": {
+      "propertyId": 380,
+      "amountDestroyed": 0.0005,
+      "dlcTemplateId": "dlc-receipt-ltc-testnet-v1",
+      "dlcContractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "settlementState": "",
+      "senderAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "txid": "706f5523d91c148d6117bd06a6b5ee2a7985b05340e296557793ed89be2e6346",
+      "block": 4692774,
+      "reason": "",
+      "valid": true
+    },
+    "mempoolAccept": [
+      {
+        "txid": "706f5523d91c148d6117bd06a6b5ee2a7985b05340e296557793ed89be2e6346",
+        "allowed": true,
+        "vsize": 202,
+        "fees": {
+          "base": 0.00005
+        }
+      }
+    ]
+  },
+  "dlcSpend": {
+    "destination": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+    "input": {
+      "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+      "vout": 0,
+      "amount": 0.001,
+      "address": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa"
+    },
+    "output": {
+      "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "amount": 0.00098,
+      "feeSats": 2000
+    },
+    "signed": {
+      "hex": "0200000000010110d5c5793262d8b5a79aea719f35f2cd4ae7d202a5aa16756ea770e0608522260000000000ffffffff01d07e010000000000160014fb5602448f1f61d21da016ad854cc6d09302e4b204004730440220554ac173489cdee1567adc5964fd48dba8acb4df4728589e3233c4a2625a90e702207a86b5d101f36a07c58f9209ac431391f9518d7bbe63840c774e53d3597b2fe40147304402205ed6772ff12dabc59eab4658b31c50957ca8b4a9087e02ab930c64e648b6cbb70220061c5603a77f1d7ac501fb71f4fb20231f8db865db2e82c77140f97609147fbc0147522102286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6210237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba587952052ae00000000",
+      "complete": true
+    },
+    "decoded": {
+      "txid": "682be39f75c6da358a5e12236a475e6e989aaab826dc834d6b326e9acec862df",
+      "hash": "aa97f56baa95f9669a1dca8ecd7d85bbe90e6b9711d373cef6222288156955c9",
+      "version": 2,
+      "size": 302,
+      "vsize": 137,
+      "weight": 548,
+      "locktime": 0,
+      "vin": [
+        {
+          "ismweb": false,
+          "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+          "vout": 0,
+          "scriptSig": {
+            "asm": "",
+            "hex": ""
+          },
+          "txinwitness": [
+            "",
+            "30440220554ac173489cdee1567adc5964fd48dba8acb4df4728589e3233c4a2625a90e702207a86b5d101f36a07c58f9209ac431391f9518d7bbe63840c774e53d3597b2fe401",
+            "304402205ed6772ff12dabc59eab4658b31c50957ca8b4a9087e02ab930c64e648b6cbb70220061c5603a77f1d7ac501fb71f4fb20231f8db865db2e82c77140f97609147fbc01",
+            "522102286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6210237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba587952052ae"
+          ],
+          "sequence": 4294967295
+        }
+      ],
+      "vout": [
+        {
+          "ismweb": false,
+          "value": 0.00098,
+          "n": 0,
+          "scriptPubKey": {
+            "asm": "0 fb5602448f1f61d21da016ad854cc6d09302e4b2",
+            "hex": "0014fb5602448f1f61d21da016ad854cc6d09302e4b2",
+            "reqSigs": 1,
+            "type": "witness_v0_keyhash",
+            "addresses": [
+              "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz"
+            ]
+          }
+        }
+      ]
+    },
+    "accept": [
+      {
+        "txid": "682be39f75c6da358a5e12236a475e6e989aaab826dc834d6b326e9acec862df",
+        "allowed": true,
+        "vsize": 137,
+        "fees": {
+          "base": 0.00002
+        }
+      }
+    ],
+    "txid": "682be39f75c6da358a5e12236a475e6e989aaab826dc834d6b326e9acec862df",
+    "broadcast": true
+  },
+  "balancesAfter": {
+    "secondReceipt": {
+      "amount": 0.001,
+      "available": 0.0004995,
+      "reserved": 0.0005,
+      "margin": 5e-7,
+      "vesting": 0,
+      "channel": 0
+    },
+    "secondSynth": {
+      "amount": 0,
+      "available": 0,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  }
+}
