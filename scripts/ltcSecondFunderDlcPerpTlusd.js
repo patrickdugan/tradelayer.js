@@ -83,7 +83,7 @@ async function largestUtxo(client, address, minConf = 0) {
 async function fundHotAddress(client, address) {
   let utxo = await largestUtxo(client, address, 0);
   if (utxo) return { txid: null, utxo };
-  const txid = await client.sendtoaddress(address, Number(process.env.TL_SECOND_FUNDER_LTC || 0.004));
+  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_SECOND_FUNDER_LTC || 0.004)], true);
   for (let i = 0; i < 20; i += 1) {
     utxo = await largestUtxo(client, address, 0);
     if (utxo) return { txid, utxo };
