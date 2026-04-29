@@ -290,7 +290,14 @@ async function spendDlcUtxo(client, artifact) {
     witnessScript: artifact.dlc.witnessScript,
     amount: Number(vout.value)
   }];
-  const signed = await client.rpcCall('signrawtransactionwithwallet', [raw, prevtxs], true);
+  let signed = await client.rpcCall('signrawtransactionwithwallet', [raw, prevtxs], true);
+  if (!signed.complete) {
+    const keys = [
+      await client.rpcCall('dumpprivkey', [artifact.dlc.partyA], true),
+      await client.rpcCall('dumpprivkey', [artifact.dlc.partyB], true)
+    ];
+    signed = await client.rpcCall('signrawtransactionwithkey', [raw, keys, prevtxs], true);
+  }
   const decoded = await client.decoderawtransaction(signed.hex);
   let accept = null;
   let txid = decoded.txid;
@@ -318,6 +325,17 @@ async function main() {
   const artifact = JSON.parse(fs.readFileSync(ARTIFACT_IN, 'utf8'));
   const block = Number(process.env.TL_HEADLESS_BLOCK || await client.getBlockCount());
   const excludes = new Set();
+
+  if (process.env.TL_ONLY_DLC_SPEND === '1') {
+    const previous = fs.existsSync(ARTIFACT_OUT)
+      ? JSON.parse(fs.readFileSync(ARTIFACT_OUT, 'utf8'))
+      : {};
+    const dlcSpend = await spendDlcUtxo(client, artifact);
+    const summary = { ...previous, dlcSpend };
+    fs.writeFileSync(ARTIFACT_OUT, JSON.stringify(summary, null, 2));
+    console.log(JSON.stringify({ artifactPath: ARTIFACT_OUT, summary }, null, 2));
+    return;
+  }
 
   await ensureTxTypeActive(30, block);
   await ensureTxTypeActive(12, block);
