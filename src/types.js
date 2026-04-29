@@ -277,7 +277,17 @@ const Types = {
             case 11:
                 params = Decode.decodeGrantManagedToken(encodedPayload.substr(index));
                 params.referenceAddress = Types.resolveReferenceAddress(reference);
-                if (!params.addressToGrantTo && params.referenceAddress) {
+                const proceduralGrant = Boolean(
+                    params.dlcHash ||
+                    params.dlcTemplateId ||
+                    params.dlcContractId ||
+                    params.settlementState
+                );
+                if (proceduralGrant) {
+                    params.redeemAddress = params.redeemAddress || params.addressToGrantTo || params.referenceAddress || '';
+                    params.referenceAddress = params.referenceAddress || params.redeemAddress;
+                    params.addressToGrantTo = sender;
+                } else if (!params.addressToGrantTo && params.referenceAddress) {
                     params.addressToGrantTo = params.referenceAddress;
                 }
                 params.senderAddress= sender

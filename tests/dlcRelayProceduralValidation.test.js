@@ -122,7 +122,7 @@ describe('DLC relay signature + procedural token validity gates', () => {
     expect(out.reason).toMatch(/not mintable/i);
   });
 
-  test('procedural token grant requires explicit or referenced destination', async () => {
+  test('procedural token grant defaults token ownership to the sender hot address', async () => {
     const Validity = loadValidity({ issuanceGate: { valid: true } });
     const out = await Validity.validateGrantManagedToken(
       'tk-admin',
@@ -138,8 +138,8 @@ describe('DLC relay signature + procedural token validity gates', () => {
       },
       'tx-gm-proc-no-dst'
     );
-    expect(out.valid).toBe(false);
-    expect(out.reason).toMatch(/Destination address missing for procedural issuance/i);
+    expect(out.valid).toBe(true);
+    expect(out.addressToGrantTo).toBe('tk-admin');
   });
 
   test('procedural token grant requires dlcHash', async () => {

@@ -1313,7 +1313,12 @@ const Validity = {
                 }
             }
 
-            if (!params.addressToGrantTo) {
+            if (isProcedural) {
+                const receiptAddress = params.redeemAddress || params.addressToGrantTo || resolveReferenceAddress(reference) || params.referenceAddress || '';
+                params.redeemAddress = receiptAddress;
+                params.referenceAddress = params.referenceAddress || receiptAddress;
+                params.addressToGrantTo = sender;
+            } else if (!params.addressToGrantTo) {
                 const fallbackAddress = resolveReferenceAddress(reference) || resolveReferenceAddress(params.referenceAddress);
                 if (fallbackAddress) {
                     params.addressToGrantTo = fallbackAddress;

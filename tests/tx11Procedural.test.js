@@ -127,7 +127,7 @@ describe('tx11 grant managed token semantics', () => {
     expect(out.addressToGrantTo).toBe('admin');
   });
 
-  test('procedural tx11 falls back to the reference address', async () => {
+  test('procedural tx11 credits the sender while preserving the reference address', async () => {
     const Validity = loadValidity({
       property: { type: 7, issuer: 'admin' },
       outputs: [{ address: 'tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw', satoshis: 100000000, vout: 0 }]
@@ -149,7 +149,9 @@ describe('tx11 grant managed token semantics', () => {
       { address: 'tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw' }
     );
     expect(out.valid).toBe(true);
-    expect(out.addressToGrantTo).toBe('tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw');
+    expect(out.addressToGrantTo).toBe('admin');
+    expect(out.referenceAddress).toBe('tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw');
+    expect(out.redeemAddress).toBe('tltc1q65vct5c7fp5znppasrgglj6axwqmzyppg0n0aw');
   });
 
   test('procedural tx11 allows reference-backed issuance without admin when the receipt metadata is present', async () => {
@@ -174,6 +176,9 @@ describe('tx11 grant managed token semantics', () => {
       'tx-11-proc-backed'
     );
     expect(out.valid).toBe(true);
+    expect(out.addressToGrantTo).toBe('holder');
+    expect(out.redeemAddress).toBe('tltc1qrecipient');
+    expect(out.referenceAddress).toBe('tltc1qrefholder');
     expect(out.referenceSatoshis).toBe(440780);
   });
 
@@ -278,6 +283,6 @@ describe('tx11 grant managed token semantics', () => {
     );
 
     expect(out.valid).toBe(false);
-    expect(out.reason).toMatch(/does not match funding\/reference outputs/i);
+    expect(out.reason).toMatch(/exceed procedural issuance cap/i);
   });
 });
