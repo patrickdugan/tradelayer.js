@@ -1,0 +1,155 @@
+{
+  "run": "1777489615629-fda7a8a8",
+  "broadcast": true,
+  "applyImmediate": true,
+  "firstFunder": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+  "secondFunder": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+  "fundingTxid": "135c9881fcf42bed2223ca5d2b8a69c9a194385bf23c150594568a09721d1f40",
+  "dlc": {
+    "address": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+    "type": "p2wsh-2-of-2",
+    "partyA": "tltc1qctuxyecpj3mr0pdqpwmtelra9wz46fdrzcm258",
+    "partyB": "tltc1qslsfxj0zayq7ettqq6ugfa0xr57ecqz60qcgm2",
+    "witnessScript": "522102286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6210237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba587952052ae",
+    "pubkeys": [
+      "02286fecae4a65d0aed4806bb1420ea43daa502b07fd72b12e8b56ad01bf4d80d6",
+      "0237e38a832248502e5f0ea22c2c16bc459789ac796279f394349489eba5879520"
+    ]
+  },
+  "procedural": {
+    "propertyId": 380,
+    "templateId": "dlc-receipt-ltc-testnet-v1",
+    "contractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+    "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+    "pledgeAmount": 0.001
+  },
+  "grant": {
+    "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+    "mempoolAccept": [
+      {
+        "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+        "allowed": true,
+        "vsize": 383,
+        "fees": {
+          "base": 0.00005
+        }
+      }
+    ],
+    "params": {
+      "propertyId": 380,
+      "amountGranted": 0.001,
+      "addressToGrantTo": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+      "dlcTemplateId": "dlc-receipt-ltc-testnet-v1",
+      "dlcContractId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+      "settlementState": "FUNDED",
+      "referenceAddress": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+      "redeemAddress": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+      "senderAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+      "block": 4692774,
+      "reason": "",
+      "valid": true,
+      "referenceSatoshis": 100000,
+      "referenceOutputs": [
+        {
+          "address": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+          "satoshis": 100000,
+          "vout": 0
+        }
+      ]
+    },
+    "referenceOutputs": [
+      {
+        "vout": 0,
+        "address": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+        "satoshis": 100000
+      }
+    ]
+  },
+  "activations": {
+    "syntheticMint": {
+      "txType": 24,
+      "changed": true,
+      "activationBlock": 4692773,
+      "result": {
+        "name": "Mint Synthetic",
+        "active": true,
+        "activationBlock": 4692773,
+        "codeHash": "ltc-dlc-perp-tlusd-demo-24"
+      }
+    }
+  },
+  "perp": {
+    "contractId": 12,
+    "tradeTxid": "headless-perp-1777489624374-0cb0f423",
+    "markPrice": 2000,
+    "notional": 1,
+    "leverage": 1000,
+    "amount": 1,
+    "initialMargin": 5e-7,
+    "longAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+    "shortAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+    "longPosition": {
+      "contracts": 1,
+      "margin": 5e-7,
+      "unrealizedPNL": 0,
+      "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+      "avgPrice": 2000,
+      "liqPrice": 1999.0005,
+      "bankruptcyPrice": 1998.9955
+    },
+    "shortPosition": {
+      "contracts": 0,
+      "margin": 0,
+      "unrealizedPNL": 0,
+      "avgPrice": 2000,
+      "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "liqPrice": 1999.0005,
+      "bankruptcyPrice": 1998.9955
+    }
+  },
+  "tlusd": {
+    "syntheticId": "s-380-12",
+    "amount": 1,
+    "mintParams": {
+      "propertyId": 380,
+      "contractId": 12,
+      "amount": 1,
+      "senderAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "block": 4692774,
+      "txid": "headless-mint-1777489624669-d32b9c52",
+      "reason": "",
+      "valid": true,
+      "margin": 5e-7,
+      "grossRequired": 0.0004995,
+      "contracts": 1
+    },
+    "shortBalance": {
+      "amount": 1,
+      "available": 1,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  },
+  "balances": {
+    "firstFunderProperty": {
+      "amount": 0.003,
+      "available": 0.002999,
+      "reserved": 0,
+      "margin": 0.000001,
+      "vesting": 0,
+      "channel": 0
+    },
+    "secondFunderProperty": {
+      "amount": 0.0005,
+      "available": 0.0005,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  }
+}
