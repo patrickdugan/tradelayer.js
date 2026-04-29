@@ -234,7 +234,7 @@ class PropertyManager {
         const propertyEntry = parsedData.find(entry => entry[0] === propertyId);
         if (propertyEntry) {
             propertyEntry[1] = propertyData;
-            const base = db.getDatabase('propertyList')
+            const base = await db.getDatabase('propertyList')
             await base.updateAsync({ _id: 'propertyIndex' }, { $set: { value: JSON.stringify(parsedData) } });
         } else {
             throw new Error('Failed to update totalInCirculation, property not found in index');
