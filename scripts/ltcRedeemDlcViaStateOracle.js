@@ -327,7 +327,19 @@ async function main() {
     secondReceipt: await TallyMap.getTally(artifact.secondFunder, artifact.procedural.propertyId),
     secondSynth: await TallyMap.getTally(artifact.secondFunder, artifact.tlusd.syntheticId)
   };
-  const syntheticRedeem = await redeemSynthetic(client, artifact, excludes, block);
+  const syntheticRedeem = process.env.TL_SKIP_SYNTH_REDEEM === '1'
+    ? {
+      amount: Number(process.env.TL_SYNTH_REDEEM_AMOUNT || 1),
+      tx: {
+        txid: process.env.TL_SYNTH_REDEEM_TXID || artifact?.syntheticRedeem?.txid || '',
+        accept: null,
+        reused: true
+      },
+      applied: {
+        decoded: await Consensus.getTxParams(process.env.TL_SYNTH_REDEEM_TXID || '')
+      }
+    }
+    : await redeemSynthetic(client, artifact, excludes, block);
   const oracleRelay = await relayStateOracle(client, artifact, oracle, excludes, block);
   const managedRedeem = await redeemManagedReceipt(client, artifact, excludes, block);
   const dlcSpend = await spendDlcUtxo(client, artifact);
