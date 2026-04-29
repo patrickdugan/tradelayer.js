@@ -109,7 +109,7 @@ class SynthRegistry {
             return console.log('error no vault found for '+vaultId)
         }
         console.log('checking values in vault redeem '+vault.contracts+' '+contractsAndMargin.contracts+' ')
-        vault.contracts += contractsAndMargin.contracts;
+        vault.contracts -= contractsAndMargin.contracts;
         vault.margin -= contractsAndMargin.margin
         vault.available -= contractsAndMargin.available
 
