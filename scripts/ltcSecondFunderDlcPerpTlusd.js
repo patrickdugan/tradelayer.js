@@ -15,6 +15,7 @@ const ContractRegistry = require('../src/contractRegistry.js');
 const MarginMap = require('../src/marginMap.js');
 const Orderbook = require('../src/orderbook.js');
 const VolumeIndex = require('../src/volumeIndex.js');
+const Activation = require('../src/activation.js');
 const { ProceduralRegistry, PROCEDURAL_STATES } = require('../src/procedural.js');
 
 const COIN = 100000000;
@@ -127,7 +128,7 @@ async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
   return { txid, hex: signed.hex, decoded, accept, payload };
 }
 
-async function applyGrant(grant, hotAddress) {
+async function applyGrant(grant, hotAddress, block) {
   const referenceOutputs = grant.decoded.vout
     .filter((v) => v.n === 0 || v.n === 1)
     .filter((v) => v?.scriptPubKey?.type !== 'nulldata')
@@ -147,7 +148,7 @@ async function applyGrant(grant, hotAddress) {
     referenceOutputs,
     0,
     referenceOutputs.reduce((sum, o) => sum + o.satoshis, 0),
-    Number(process.env.TL_HEADLESS_BLOCK || 4692773)
+    block
   );
   if (!params.valid) throw new Error(`grant invalid: ${params.reason}`);
   if (APPLY_IMMEDIATE) {
@@ -158,6 +159,7 @@ async function applyGrant(grant, hotAddress) {
 }
 
 async function ensurePerpContract(block) {
+  const markBlock = Math.max(1, block - 1);
   const contractId = await ContractRegistry.createContractSeries(FIRST_FUNDER, {
     native: true,
     underlyingOracleId: 0,
@@ -172,8 +174,19 @@ async function ensurePerpContract(block) {
     fee: false,
     whitelist: 0
   }, block);
-  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, MARK_PRICE, block, 'token');
+  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, MARK_PRICE, markBlock, 'token');
+  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, MARK_PRICE, markBlock, 'token');
   return contractId;
+}
+
+async function ensureTxTypeActive(txType, block) {
+  const activation = Activation.getInstance();
+  await activation.init();
+  const isActive = await activation.isTxTypeActive(txType);
+  if (isActive) return { txType, changed: false };
+  const activationBlock = Math.max(1, block - 1);
+  const result = await activation.activate(txType, activationBlock, `ltc-dlc-perp-tlusd-demo-${txType}`);
+  return { txType, changed: true, activationBlock, result };
 }
 
 async function processPerpTrade(contractId, longAddress, shortAddress, block) {
@@ -266,7 +279,8 @@ async function main() {
 
   const funding = await fundHotAddress(client, hot2);
   const grant = await buildGrantTx(client, hot2, dlc.address, contractId);
-  const grantApplied = await applyGrant(grant, hot2);
+  const grantApplied = await applyGrant(grant, hot2, block);
+  const syntheticActivation = await ensureTxTypeActive(24, block);
   const perpContractId = await ensurePerpContract(block);
   const trade = await processPerpTrade(perpContractId, FIRST_FUNDER, hot2, block);
   const mint = await mintTlusd(perpContractId, hot2, block);
@@ -302,6 +316,9 @@ async function main() {
       mempoolAccept: grant.accept,
       params: grantApplied.params,
       referenceOutputs: grantApplied.referenceOutputs
+    },
+    activations: {
+      syntheticMint: syntheticActivation
     },
     perp: {
       contractId: perpContractId,
