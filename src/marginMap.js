@@ -759,6 +759,7 @@ class MarginMap {
             
             let returnMargin = BigNumber(contractShort).times(initMargin).decimalPlaces(8).toNumber()
             let returnAvail = BigNumber(marginToReturn).minus(returnMargin).decimalPlaces(8).toNumber()
+            const notCovered = Math.max(0, BigNumber(contractShort).minus(covered).toNumber());
 
             if (notCovered > 0) {
                 returnAvail = marginToReturn - (marginToReturn * (notCovered / contractShort));
