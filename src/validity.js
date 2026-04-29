@@ -1340,11 +1340,12 @@ const Validity = {
                 params.referenceSatoshis = referenceSats;
                 params.referenceOutputs = referenceOutputs;
                 if (referenceOutputs.length) {
-                    if (requestedSats !== referenceSats) {
+                    if (referenceSats > requestedSats) {
                         params.valid = false;
-                        params.reason += `Procedural issuance amount ${requestedSats} does not match funding/reference outputs ${referenceSats}; `;
+                        params.reason += `Funding/reference outputs ${referenceSats} exceed procedural issuance cap ${requestedSats}; `;
                         return params;
                     }
+                    // The chain output is the canonical amount. The OP_RETURN amount is only a cap/commitment.
                     params.amountGranted = new BigNumber(referenceSats).div(1e8).decimalPlaces(8).toNumber();
                 }
                 if (!params.dlcHash) {
