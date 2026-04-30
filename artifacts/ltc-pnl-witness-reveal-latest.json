@@ -1,23 +1,23 @@
 {
-  "run": "1777517143258-ab8cac63",
+  "run": "1777570128527-cb873396",
   "broadcast": true,
   "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\ltc-second-funder-dlc-perp-tlusd-latest.json",
   "oracleAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
   "revealDestination": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-  "payloadHash": "db736014390df5c72d66fa365f6307b74d5fe1bfaed620bc0bfb87564117a1fd",
+  "payloadHash": "23b887544a5779f9aa6efef1e42a9066a1ee00bff774a41792b1a11f319876e7",
   "witness": {
-    "payloadBytes": 1647,
-    "scriptBytes": 1677,
+    "payloadBytes": 1660,
+    "scriptBytes": 1690,
     "limit": 9900,
-    "p2wshAddress": "tltc1qgsjphtzrz52nzus84essjg2p8tggyssxenqwe6mdvtqq72xd9ryszesvvc"
+    "p2wshAddress": "tltc1q55frxv4ltjy37xtjvjq65z5z3w4gh9x2sa3dshx028xfycvdustsfkgld0"
   },
   "commit": {
-    "txid": "8ade2c99a6420ff3dc287ab13c8334ddf920e0a9a12d71c5b63e0c5f36390477",
+    "txid": "7b04024c0ebe9a0af6ced6e9cdfaa13aad7347c09eaffb09ee94301157f9b181",
     "vout": 0,
     "amount": 0.0002,
     "mempoolAccept": [
       {
-        "txid": "8ade2c99a6420ff3dc287ab13c8334ddf920e0a9a12d71c5b63e0c5f36390477",
+        "txid": "7b04024c0ebe9a0af6ced6e9cdfaa13aad7347c09eaffb09ee94301157f9b181",
         "allowed": true,
         "vsize": 153,
         "fees": {
@@ -27,12 +27,12 @@
     ]
   },
   "reveal": {
-    "txid": "cad205c65afaf6b2dc72f3e6e47e9b7fc3d3284d7ed95c5f965bfced2a0327b1",
+    "txid": "36d9f40a5389341bc4a7696e9de224af8fefaddcaf2be39fe2322796c064e99b",
     "mempoolAccept": [
       {
-        "txid": "cad205c65afaf6b2dc72f3e6e47e9b7fc3d3284d7ed95c5f965bfced2a0327b1",
+        "txid": "36d9f40a5389341bc4a7696e9de224af8fefaddcaf2be39fe2322796c064e99b",
         "allowed": true,
-        "vsize": 503,
+        "vsize": 506,
         "fees": {
           "base": 0.00002
         }
@@ -45,41 +45,48 @@
     },
     "feeSats": 2000
   },
+  "registry": {
+    "status": "PENDING",
+    "routeHash": "dbd33964d69b43c5a08f7a95b9e1d28f85fe5d565d6c83698f3737532c37dbc1",
+    "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
+    "tokenPnlHash": "154c720dc99af54c21ad1b43ff72d954c6caa25e585892d3cf8b0b03263d7b53",
+    "challengeDeadlineBlock": 4694010
+  },
   "payload": {
     "protocol": "tl-utxoref-pnl-router",
     "version": 1,
     "chain": "litecoin-testnet",
     "source": "state-oracle-witness-reveal",
-    "block": 4692792,
-    "generatedAt": "2026-04-30T02:45:42.981Z",
-    "dlcRef": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+    "block": 4694004,
+    "generatedAt": "2026-04-30T17:28:48.077Z",
+    "dlcRef": "ltc-testnet-pnl-e2e-1777570106349-a05f7234",
     "propertyId": 380,
     "tokenPnl": [
       {
-        "fromAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-        "toAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
-        "tokenAmount": 0.0001
+        "fromAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
+        "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "tokenAmount": 0.00004545
       }
     ],
     "balances": [
       {
-        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "address": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
         "balance": {
-          "amount": 0.0028,
-          "available": 0.002799,
+          "amount": 0.00095455,
+          "available": 0.00095455,
           "reserved": 0,
-          "margin": 0.000001,
+          "margin": 0,
           "vesting": 0,
           "channel": 0
         }
       },
       {
-        "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
         "balance": {
-          "amount": 0.0012,
-          "available": 0.0006995,
-          "reserved": 0.0005,
-          "margin": 5e-7,
+          "amount": 0.0028909,
+          "available": 0.0028899,
+          "reserved": 0,
+          "margin": 0.000001,
           "vesting": 0,
           "channel": 0
         }
@@ -87,9 +94,9 @@
     ],
     "utxoPayouts": [
       {
-        "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
-        "weight": 0.0001,
-        "tokenAmount": 0.0001
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "weight": 0.00004545,
+        "tokenAmount": 0.00004545
       }
     ],
     "constraints": {

@@ -1,33 +1,33 @@
 {
-  "run": "1777561100302-6d8acf6f",
+  "run": "1777570106349-a05f7234",
   "broadcast": true,
   "applyImmediate": true,
   "firstFunder": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-  "secondFunder": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
-  "fundingTxid": "74f2bd79c6e9b1e62e01522805ce60fda940c3d305410ff4f8134a4c73701c9d",
+  "secondFunder": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
+  "fundingTxid": "775b7fb4bfeb11f89828859e576b132344bbdd446d4f3afb76f3657aa78e77ad",
   "dlc": {
-    "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+    "address": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
     "type": "p2wsh-2-of-2",
-    "partyA": "tltc1qh5t9428erqjcmrufz9mqw8zaqsvjj36lfnw7p8",
-    "partyB": "tltc1qy2t5pag3vz2x8cwy2uxzzrmfg9s08xcmnm2eu8",
-    "witnessScript": "5221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae",
+    "partyA": "tltc1qsl589ycpfvzyhfuhpfuucx65h52lyjxvs8mjgq",
+    "partyB": "tltc1q7vkrrgkgpu3e4nr373nq7e2dp32mzf3dv9y4hw",
+    "witnessScript": "5221034e9c96ba778dd88fecbd17e9a8f1e304b2f0aad156b696dfec5745e8c621c15e2103ddfe0af98f837f05faba64271e916a1ac0ab27d63138b5a6bcfeceaf9d33d36d52ae",
     "pubkeys": [
-      "023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c318",
-      "02fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a7"
+      "034e9c96ba778dd88fecbd17e9a8f1e304b2f0aad156b696dfec5745e8c621c15e",
+      "03ddfe0af98f837f05faba64271e916a1ac0ab27d63138b5a6bcfeceaf9d33d36d"
     ]
   },
   "procedural": {
     "propertyId": 380,
     "templateId": "dlc-receipt-ltc-testnet-v1",
-    "contractId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+    "contractId": "ltc-testnet-pnl-e2e-1777570106349-a05f7234",
     "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
     "pledgeAmount": 0.001
   },
   "grant": {
-    "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+    "txid": "b4cf3e3b18685b00ad9db5d0cc31a359e602031037b88464a28c5b7d81e983ba",
     "mempoolAccept": [
       {
-        "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+        "txid": "b4cf3e3b18685b00ad9db5d0cc31a359e602031037b88464a28c5b7d81e983ba",
         "allowed": true,
         "vsize": 383,
         "fees": {
@@ -38,22 +38,22 @@
     "params": {
       "propertyId": 380,
       "amountGranted": 0.001,
-      "addressToGrantTo": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+      "addressToGrantTo": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
       "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
       "dlcTemplateId": "dlc-receipt-ltc-testnet-v1",
-      "dlcContractId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "dlcContractId": "ltc-testnet-pnl-e2e-1777570106349-a05f7234",
       "settlementState": "FUNDED",
-      "referenceAddress": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
-      "redeemAddress": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
-      "senderAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
-      "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
-      "block": 4693996,
+      "referenceAddress": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
+      "redeemAddress": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
+      "senderAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
+      "txid": "b4cf3e3b18685b00ad9db5d0cc31a359e602031037b88464a28c5b7d81e983ba",
+      "block": 4694004,
       "reason": "",
       "valid": true,
       "referenceSatoshis": 100000,
       "referenceOutputs": [
         {
-          "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+          "address": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
           "satoshis": 100000,
           "vout": 0
         }
@@ -62,30 +62,96 @@
     "referenceOutputs": [
       {
         "vout": 0,
-        "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+        "address": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
         "satoshis": 100000
       }
     ]
   },
   "perp": {
-    "contractId": 13,
+    "contractId": 14,
     "entryPrice": 2000,
     "exitPrice": 2200,
     "amount": 1,
     "notional": 1,
-    "leverage": 1000,
+    "leverage": 10,
     "openTrade": {
-      "txid": "headless-open-perp-1777561103272-3f894aa6",
-      "initialMargin": 5e-7,
+      "txid": "headless-open-perp-1777570127077-e7b6e815",
+      "initialMargin": 0.00005,
       "price": 2000
     },
     "closeTrade": {
-      "txid": "headless-close-perp-1777561103390-ec760f55",
-      "initialMargin": 4.6e-7,
+      "txid": "headless-close-perp-1777570127139-25ef58a3",
+      "initialMargin": 0.00004546,
       "price": 2200
     },
+    "validation": {
+      "open": {
+        "long": {
+          "senderAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "contractId": 14,
+          "price": 2000,
+          "amount": 1,
+          "sell": false,
+          "insurance": false,
+          "reduce": false,
+          "post": false,
+          "stop": false,
+          "block": 4694004,
+          "txid": "valid-open-long-1777570106349-a05f7234",
+          "reason": "",
+          "valid": true
+        },
+        "short": {
+          "senderAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
+          "contractId": 14,
+          "price": 2000,
+          "amount": 1,
+          "sell": true,
+          "insurance": false,
+          "reduce": false,
+          "post": false,
+          "stop": false,
+          "block": 4694004,
+          "txid": "valid-open-short-1777570106349-a05f7234",
+          "reason": "",
+          "valid": true
+        }
+      },
+      "close": {
+        "long": {
+          "senderAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "contractId": 14,
+          "price": 2200,
+          "amount": 1,
+          "sell": true,
+          "insurance": false,
+          "reduce": false,
+          "post": false,
+          "stop": false,
+          "block": 4694005,
+          "txid": "valid-close-long-1777570106349-a05f7234",
+          "reason": "",
+          "valid": true
+        },
+        "short": {
+          "senderAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
+          "contractId": 14,
+          "price": 2200,
+          "amount": 1,
+          "sell": false,
+          "insurance": false,
+          "reduce": false,
+          "post": false,
+          "stop": false,
+          "block": 4694005,
+          "txid": "valid-close-short-1777570106349-a05f7234",
+          "reason": "",
+          "valid": true
+        }
+      }
+    },
     "longAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "shortAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+    "shortAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
     "longPosition": {
       "contracts": 0,
       "margin": 0,
@@ -101,7 +167,7 @@
       "margin": 0,
       "unrealizedPNL": -0.00004545,
       "avgPrice": null,
-      "address": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+      "address": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
       "liqPrice": 0,
       "bankruptcyPrice": 0,
       "realizedPNL": -0.00004545
@@ -109,14 +175,14 @@
     "computedLongPnl": 0.00004545
   },
   "pnlTransfer": {
-    "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+    "fromAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
     "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
     "tokenAmount": 0.00004545
   },
   "balancesBeforeOpen": {
     "long": {
-      "amount": 0.0028,
-      "available": 0.002799,
+      "amount": 0.00284545,
+      "available": 0.00284445,
       "reserved": 0,
       "margin": 0.000001,
       "vesting": 0,
@@ -133,8 +199,8 @@
   },
   "balancesAfterClose": {
     "long": {
-      "amount": 0.00284545,
-      "available": 0.00284445,
+      "amount": 0.0028909,
+      "available": 0.0028899,
       "reserved": 0,
       "margin": 0.000001,
       "vesting": 0,
@@ -150,25 +216,25 @@
     }
   },
   "witnessReveal": {
-    "run": "1777561105797-a2bef410",
+    "run": "1777570128527-cb873396",
     "broadcast": true,
     "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\ltc-second-funder-dlc-perp-tlusd-latest.json",
     "oracleAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
     "revealDestination": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
+    "payloadHash": "23b887544a5779f9aa6efef1e42a9066a1ee00bff774a41792b1a11f319876e7",
     "witness": {
-      "payloadBytes": 1662,
-      "scriptBytes": 1692,
+      "payloadBytes": 1660,
+      "scriptBytes": 1690,
       "limit": 9900,
-      "p2wshAddress": "tltc1qdtdgun7hc33lymyjvaghax658g8cw92cejql3ejfgqjgqknzn32shtds27"
+      "p2wshAddress": "tltc1q55frxv4ltjy37xtjvjq65z5z3w4gh9x2sa3dshx028xfycvdustsfkgld0"
     },
     "commit": {
-      "txid": "955267db249de0db947173fe782bafcd78de66f9af8c0f222b09dda9dadb0802",
+      "txid": "7b04024c0ebe9a0af6ced6e9cdfaa13aad7347c09eaffb09ee94301157f9b181",
       "vout": 0,
       "amount": 0.0002,
       "mempoolAccept": [
         {
-          "txid": "955267db249de0db947173fe782bafcd78de66f9af8c0f222b09dda9dadb0802",
+          "txid": "7b04024c0ebe9a0af6ced6e9cdfaa13aad7347c09eaffb09ee94301157f9b181",
           "allowed": true,
           "vsize": 153,
           "fees": {
@@ -178,12 +244,12 @@
       ]
     },
     "reveal": {
-      "txid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
+      "txid": "36d9f40a5389341bc4a7696e9de224af8fefaddcaf2be39fe2322796c064e99b",
       "mempoolAccept": [
         {
-          "txid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
+          "txid": "36d9f40a5389341bc4a7696e9de224af8fefaddcaf2be39fe2322796c064e99b",
           "allowed": true,
-          "vsize": 507,
+          "vsize": 506,
           "fees": {
             "base": 0.00002
           }
@@ -198,30 +264,30 @@
     },
     "registry": {
       "status": "PENDING",
-      "routeHash": "816230aae4d930a940c0c20721adba623eeabfb00de8c201e54491348dcd3e12",
+      "routeHash": "dbd33964d69b43c5a08f7a95b9e1d28f85fe5d565d6c83698f3737532c37dbc1",
       "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
-      "tokenPnlHash": "3ea31c92c95bba88cc6e61c42212048ec263fe70e7eb5f7529643ef58e1790ee",
-      "challengeDeadlineBlock": 4694002
+      "tokenPnlHash": "154c720dc99af54c21ad1b43ff72d954c6caa25e585892d3cf8b0b03263d7b53",
+      "challengeDeadlineBlock": 4694010
     },
     "payload": {
       "protocol": "tl-utxoref-pnl-router",
       "version": 1,
       "chain": "litecoin-testnet",
       "source": "state-oracle-witness-reveal",
-      "block": 4693996,
-      "generatedAt": "2026-04-30T14:58:25.355Z",
-      "dlcRef": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "block": 4694004,
+      "generatedAt": "2026-04-30T17:28:48.077Z",
+      "dlcRef": "ltc-testnet-pnl-e2e-1777570106349-a05f7234",
       "propertyId": 380,
       "tokenPnl": [
         {
-          "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "fromAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
           "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
           "tokenAmount": 0.00004545
         }
       ],
       "balances": [
         {
-          "address": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "address": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
           "balance": {
             "amount": 0.00095455,
             "available": 0.00095455,
@@ -234,8 +300,8 @@
         {
           "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
           "balance": {
-            "amount": 0.00284545,
-            "available": 0.00284445,
+            "amount": 0.0028909,
+            "available": 0.0028899,
             "reserved": 0,
             "margin": 0.000001,
             "vesting": 0,
@@ -257,14 +323,14 @@
     }
   },
   "routePlan": {
-    "run": "1777561107623-61acf892",
-    "revealTxid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
-    "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
-    "planHash": "7e56828bfc135a5ee5662b0475a650848862d02ec8004ffd9cb095cd0da8a89c",
+    "run": "1777570129422-75ec0a23",
+    "revealTxid": "36d9f40a5389341bc4a7696e9de224af8fefaddcaf2be39fe2322796c064e99b",
+    "payloadHash": "23b887544a5779f9aa6efef1e42a9066a1ee00bff774a41792b1a11f319876e7",
+    "planHash": "a54c354a091064d2ffcac9f05b3388b23d79b5cc1796eaff07c16603a28c92c1",
     "dlcInput": {
-      "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+      "txid": "b4cf3e3b18685b00ad9db5d0cc31a359e602031037b88464a28c5b7d81e983ba",
       "vout": 0,
-      "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+      "address": "tltc1qvyxev2f9taf2drmemhx0cnyvty9lpzjjrrqcet25kytzuuf5x3jq9t9zpj",
       "amount": 0.001,
       "sats": 100000
     },
@@ -280,42 +346,42 @@
       "protocol": "tl-utxoref-pnl-router",
       "version": 1,
       "source": "state-oracle-witness-reveal",
-      "dlcRef": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "dlcRef": "ltc-testnet-pnl-e2e-1777570106349-a05f7234",
       "propertyId": 380,
       "tokenPnl": [
         {
-          "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "fromAddress": "tltc1qm237ctgy2gejwlde4yxevmnrs0p30syvzem0ju",
           "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
           "tokenAmount": 0.00004545
         }
       ],
       "attestation": {
-        "eventId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f-pnl-route-0c78f213",
+        "eventId": "ltc-testnet-pnl-e2e-1777570106349-a05f7234-pnl-route-4ddea537",
         "outcome": "PNL_ROUTE",
         "outcomeIndex": 0,
-        "stateHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
-        "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
-        "timestamp": 1777561105,
-        "oraclePubkeyHex": "039afe073cf1286aab9933bc3083c1d7e177270aded7bd5fec1cfeeb9679a3e7f7",
-        "signatureHex": "e5ccf06b1bc37d54e83d15db19da47107eb935c3d24e13b2be075eecfe8767ae3e6029d2ac7c5c0ebf7c87aaa5d80f88ed911fa92a9a2ac66aefaec446fd5e85"
+        "stateHash": "23b887544a5779f9aa6efef1e42a9066a1ee00bff774a41792b1a11f319876e7",
+        "payloadHash": "23b887544a5779f9aa6efef1e42a9066a1ee00bff774a41792b1a11f319876e7",
+        "timestamp": 1777570128,
+        "oraclePubkeyHex": "03d49e7b70a57af690df45c48cc5dec2795c23b711228ab8df0f5a326d98c22f96",
+        "signatureHex": "efbba2c849f4b957ce9a8d36fcd1bab534be7ab0043af8f0f2ef6e1be1ec7df80e8a6a3103ec8a0b6929aca7429b77f4663c946c49e5441b111b9fbe8fa1c8c1"
       }
     },
     "registry": {
       "status": "PENDING",
-      "routeHash": "816230aae4d930a940c0c20721adba623eeabfb00de8c201e54491348dcd3e12",
+      "routeHash": "dbd33964d69b43c5a08f7a95b9e1d28f85fe5d565d6c83698f3737532c37dbc1",
       "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
-      "tokenPnlHash": "3ea31c92c95bba88cc6e61c42212048ec263fe70e7eb5f7529643ef58e1790ee",
-      "challengeDeadlineBlock": 4694002
+      "tokenPnlHash": "154c720dc99af54c21ad1b43ff72d954c6caa25e585892d3cf8b0b03263d7b53",
+      "challengeDeadlineBlock": 4694010
     },
     "dlcSpend": {
-      "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
+      "txid": "ec7f5a0a685bf94a8ed57c82a7f40b3bf7c314e6383d0bef2c780f484e03d8c5",
       "signed": {
-        "hex": "02000000000101b4f7889c5fed9f83dbd34e034d3e11d05893e71fe30e876ef2907e7e35c613760000000000ffffffff01d07e010000000000160014b09ec4ad49c56767f0a9356c525aabbf857c8e7d040047304402203978d51fddb218b31f240d702f4c1f380ac17371d1bb52a3c17c99d2c8c137ef0220244e1e3ff9ad7a646d64030c21ed071dd0d4567b9cd6deb496cc0dc4505fc7090147304402201b91e48305737fb92ff1123eb7d9b1cefd31c4c3880a2a25dde67ca7d599f6cb02201a0a657fa1b9299498b0a20db0786d3b700ce0746a855c42ea81a1d510c347e701475221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae00000000",
+        "hex": "02000000000101ba83e9817d5b8ca26484b837100302e659a331ccd0b59dad005b68183b3ecfb40000000000ffffffff01d07e010000000000160014b09ec4ad49c56767f0a9356c525aabbf857c8e7d04004730440220144abde40dbf5372a4e08fc87f89486cbc938b478bc06fb683475249804e6edd02205a1935641102f1f07a1e409a219d550acd73c406a73f2aa7ee429a39db4d0dc60147304402202b4c5fe47395dc14585ec586a457c3665ab18e4ea8f6a1d4c364bb73f59a6af902204129d08da83aa07dc1afb1c8a1b4aff9d6f8de34db103529b86da2a7baed2e6c01475221034e9c96ba778dd88fecbd17e9a8f1e304b2f0aad156b696dfec5745e8c621c15e2103ddfe0af98f837f05faba64271e916a1ac0ab27d63138b5a6bcfeceaf9d33d36d52ae00000000",
         "complete": true
       },
       "decoded": {
-        "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
-        "hash": "a15623de9d998ce2843cf10598964cf4b67d69bbff4e813fa4fd7062ed41ceca",
+        "txid": "ec7f5a0a685bf94a8ed57c82a7f40b3bf7c314e6383d0bef2c780f484e03d8c5",
+        "hash": "06df0cd224cfaca31850aab10c3594c2f789466eba8bf3daee8f21a19c9330b0",
         "version": 2,
         "size": 302,
         "vsize": 137,
@@ -324,7 +390,7 @@
         "vin": [
           {
             "ismweb": false,
-            "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+            "txid": "b4cf3e3b18685b00ad9db5d0cc31a359e602031037b88464a28c5b7d81e983ba",
             "vout": 0,
             "scriptSig": {
               "asm": "",
@@ -332,9 +398,9 @@
             },
             "txinwitness": [
               "",
-              "304402203978d51fddb218b31f240d702f4c1f380ac17371d1bb52a3c17c99d2c8c137ef0220244e1e3ff9ad7a646d64030c21ed071dd0d4567b9cd6deb496cc0dc4505fc70901",
-              "304402201b91e48305737fb92ff1123eb7d9b1cefd31c4c3880a2a25dde67ca7d599f6cb02201a0a657fa1b9299498b0a20db0786d3b700ce0746a855c42ea81a1d510c347e701",
-              "5221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae"
+              "30440220144abde40dbf5372a4e08fc87f89486cbc938b478bc06fb683475249804e6edd02205a1935641102f1f07a1e409a219d550acd73c406a73f2aa7ee429a39db4d0dc601",
+              "304402202b4c5fe47395dc14585ec586a457c3665ab18e4ea8f6a1d4c364bb73f59a6af902204129d08da83aa07dc1afb1c8a1b4aff9d6f8de34db103529b86da2a7baed2e6c01",
+              "5221034e9c96ba778dd88fecbd17e9a8f1e304b2f0aad156b696dfec5745e8c621c15e2103ddfe0af98f837f05faba64271e916a1ac0ab27d63138b5a6bcfeceaf9d33d36d52ae"
             ],
             "sequence": 4294967295
           }
@@ -358,7 +424,7 @@
       },
       "mempoolAccept": [
         {
-          "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
+          "txid": "ec7f5a0a685bf94a8ed57c82a7f40b3bf7c314e6383d0bef2c780f484e03d8c5",
           "allowed": true,
           "vsize": 137,
           "fees": {
@@ -371,10 +437,10 @@
   },
   "utxoRefVerification": {
     "ok": true,
-    "recomputedPlanHash": "7e56828bfc135a5ee5662b0475a650848862d02ec8004ffd9cb095cd0da8a89c",
-    "withdrawalRootHex": "d9f0e95ea9ddc27d5f7477d2352f086eb1fe30d31458ccc75e67f8280b0676d6",
-    "commitmentHashHex": "2b39f2ad5d4f921bed014eb2405fe21241d3ffac77ea883f49401608d9fa19c2",
-    "epochId": "17325538997076278436",
+    "recomputedPlanHash": "a54c354a091064d2ffcac9f05b3388b23d79b5cc1796eaff07c16603a28c92c1",
+    "withdrawalRootHex": "aadc4307f743abc0391b20a6c2ea8a082fe5939fbf643f0e99466f1697ff2955",
+    "commitmentHashHex": "c70653d817f695a7026149f6abd7ff2180511b92ca820544a1a863782105736f",
+    "epochId": "8348473977411112360",
     "payoutTotalSats": "98000",
     "feeSats": "2000"
   }

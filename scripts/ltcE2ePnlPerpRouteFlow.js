@@ -13,8 +13,10 @@ const TxUtils = require('../src/txUtils.js');
 const TallyMap = require('../src/tally.js');
 const Consensus = require('../src/consensus.js');
 const ContractRegistry = require('../src/contractRegistry.js');
+const ClearList = require('../src/clearlist.js');
 const MarginMap = require('../src/marginMap.js');
 const Orderbook = require('../src/orderbook.js');
+const Validity = require('../src/validity.js');
 const VolumeIndex = require('../src/volumeIndex.js');
 const Activation = require('../src/activation.js');
 const { ProceduralRegistry, PROCEDURAL_STATES } = require('../src/procedural.js');
@@ -37,7 +39,7 @@ const PLEDGE_AMOUNT = Number(process.env.TL_PLEDGE_AMOUNT || 0.001);
 const ENTRY_PRICE = Number(process.env.TL_PERP_ENTRY || 2000);
 const EXIT_PRICE = Number(process.env.TL_PERP_EXIT || 2200);
 const CONTRACT_NOTIONAL = Number(process.env.TL_PERP_NOTIONAL || 1);
-const CONTRACT_LEVERAGE = Number(process.env.TL_PERP_LEVERAGE || 1000);
+const CONTRACT_LEVERAGE = Number(process.env.TL_PERP_LEVERAGE || 10);
 const PERP_AMOUNT = Number(process.env.TL_PERP_AMOUNT || 1);
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
@@ -226,6 +228,27 @@ async function processPerpMatch(contractId, longAddress, shortAddress, price, bl
   return { txid, initialMargin, price };
 }
 
+async function validatePerpLeg(sender, contractId, price, amount, sell, block, txid) {
+  const params = {
+    senderAddress: sender,
+    contractId,
+    price,
+    amount,
+    sell,
+    insurance: false,
+    reduce: false,
+    post: false,
+    stop: false,
+    block,
+    txid
+  };
+  const result = await Validity.validateTradeContractOnchain(sender, params, txid);
+  if (!result.valid) {
+    throw new Error(`tx18 validation failed for ${txid}: ${result.reason}`);
+  }
+  return result;
+}
+
 function inverseLongPnl(entryPrice, exitPrice, contracts, notional) {
   return Number(((1 / entryPrice - 1 / exitPrice) * contracts * notional).toFixed(8));
 }
@@ -247,6 +270,7 @@ async function main() {
   const closeBlock = block + 1;
 
   await ensureTxTypeActive(11, block);
+  await ensureTxTypeActive(18, block);
   await ensureTxTypeActive(24, block);
 
   const secondFunder = process.env.TL_SECOND_FUNDER || await newAddress(client, `tl-e2e-pnl-funder-${run}`);
@@ -271,6 +295,8 @@ async function main() {
   });
 
   const funding = await fundHotAddress(client, secondFunder);
+  await ClearList.addAttestation(0, secondFunder, 'CA', block);
+  await ClearList.addAttestation(0, FIRST_FUNDER, 'CA', block);
   const grant = await buildGrantTx(client, secondFunder, dlc.address, dlcContractId);
   const grantApplied = await applyGrant(grant, secondFunder, block, dlc.address);
   const contractId = await ensurePerpContract(block);
@@ -279,10 +305,18 @@ async function main() {
     long: await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID),
     short: await TallyMap.getTally(secondFunder, PROPERTY_ID)
   };
+  const openValidation = {
+    long: await validatePerpLeg(FIRST_FUNDER, contractId, ENTRY_PRICE, PERP_AMOUNT, false, block, `valid-open-long-${run}`),
+    short: await validatePerpLeg(secondFunder, contractId, ENTRY_PRICE, PERP_AMOUNT, true, block, `valid-open-short-${run}`)
+  };
   const openTrade = await processPerpMatch(contractId, FIRST_FUNDER, secondFunder, ENTRY_PRICE, block, 'headless-open-perp');
 
   await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
   await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
+  const closeValidation = {
+    long: await validatePerpLeg(FIRST_FUNDER, contractId, EXIT_PRICE, PERP_AMOUNT, true, closeBlock, `valid-close-long-${run}`),
+    short: await validatePerpLeg(secondFunder, contractId, EXIT_PRICE, PERP_AMOUNT, false, closeBlock, `valid-close-short-${run}`)
+  };
   const closeTrade = await processPerpMatch(contractId, secondFunder, FIRST_FUNDER, EXIT_PRICE, closeBlock, 'headless-close-perp');
 
   const marginMap = await MarginMap.getInstance(contractId);
@@ -332,6 +366,10 @@ async function main() {
       leverage: CONTRACT_LEVERAGE,
       openTrade,
       closeTrade,
+      validation: {
+        open: openValidation,
+        close: closeValidation
+      },
       longAddress: FIRST_FUNDER,
       shortAddress: secondFunder,
       longPosition: await marginMap.getPositionForAddress(FIRST_FUNDER, contractId),

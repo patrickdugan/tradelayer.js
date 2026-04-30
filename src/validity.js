@@ -2280,7 +2280,11 @@ const Validity = {
 
           // 2) Index / VWAP-backed
           if (contract.onChainData.length>0) {
-            const price = await VolumeIndex.getLastPrice(contract.indexPair, blockHeight);
+            const pair = contract.indexPair
+              || (Array.isArray(contract.onChainData?.[0])
+                ? `${contract.onChainData[0][0]}-${contract.onChainData[0][1]}`
+                : null);
+            const price = pair ? await VolumeIndex.getLastPrice(pair, blockHeight) : null;
             if (price != null && price > 0) return price;
           }
 
