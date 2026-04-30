@@ -1714,19 +1714,18 @@ const Validity = {
           tradePrice,
           markPrice,
           leverage,
-          bufferBps = 65
+          bufferBps = 65,
+          maxDeviationBps = 500
         }) {
           const BigNumber = require('bignumber.js');
           console.log('trade price, mark, lev '+tradePrice+' '+markPrice+' '+leverage)
           if (
             tradePrice == null ||
-            markPrice == null ||
-            !leverage ||
-            leverage <= 0
+            markPrice == null
           ) {
             return {
               valid: false,
-              reason: 'Missing tradePrice, markPrice, or leverage'
+              reason: 'Missing tradePrice or markPrice'
             };
           }
 
@@ -1742,23 +1741,9 @@ const Validity = {
 
           // |P - M| / M
           const deviation = priceBN.minus(markBN).abs().div(markBN);
+          const allowed = new BigNumber(maxDeviationBps).div(10_000);
 
-          // 1 / leverage
-          const maxMove = new BigNumber(1).div(leverage).div(2);
-
-          // buffer in decimal (65 bps = 0.0065)
-          const buffer = new BigNumber(bufferBps).div(10_000);
-
-          const allowed = maxMove.minus(buffer);
-
-          if (allowed.lte(0)) {
-            return {
-              valid: false,
-              reason: 'Leverage buffer exceeds allowable price movement'
-            };
-          }
-
-          if (deviation.gte(allowed)) {
+          if (deviation.gt(allowed)) {
             return {
               valid: false,
               reason:

@@ -229,6 +229,7 @@ async function processPerpMatch(contractId, longAddress, shortAddress, price, bl
 }
 
 async function validatePerpLeg(sender, contractId, price, amount, sell, block, txid) {
+  const referenceMark = await Validity.hasReferencePrice(contractId, block);
   const params = {
     senderAddress: sender,
     contractId,
@@ -246,7 +247,15 @@ async function validatePerpLeg(sender, contractId, price, amount, sell, block, t
   if (!result.valid) {
     throw new Error(`tx18 validation failed for ${txid}: ${result.reason}`);
   }
-  return result;
+  const deviationBps = referenceMark
+    ? Number((Math.abs(price - Number(referenceMark)) / Number(referenceMark) * 10000).toFixed(2))
+    : null;
+  return {
+    ...result,
+    referenceMark,
+    deviationBps,
+    maxDeviationBps: 500
+  };
 }
 
 function inverseLongPnl(entryPrice, exitPrice, contracts, notional) {
