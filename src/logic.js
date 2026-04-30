@@ -2002,13 +2002,30 @@ const Logic = {
 
         if (mode === 'pnl_sweep' || mode === 'pnlsweep' || mode === 'sweep') {
             requireProperty();
-            await BitvmRisk.onSweep({ propertyId, amount, block });
-            const check = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount);
-            if (!check?.hasSufficient) {
-                throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
+            const entries = Array.isArray(settlement.pnlEntries) && settlement.pnlEntries.length > 0
+                ? settlement.pnlEntries
+                : [{ fromAddress, toAddress, amount }];
+            const totalSweepAmount = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+            await BitvmRisk.onSweep({ propertyId, amount: totalSweepAmount, block });
+            for (const entry of entries) {
+                const entryAmount = Number(entry.amount || 0);
+                const entryFrom = entry.fromAddress || entry.holderAddress || fromAddress;
+                const entryTo = entry.toAddress || entry.recipientAddress || toAddress;
+                if (!Number.isFinite(entryAmount) || entryAmount <= 0) {
+                    throw new Error('Invalid pnl sweep entry amount');
+                }
+                const check = await TallyMap.hasSufficientBalance(entryFrom, propertyId, entryAmount);
+                if (!check?.hasSufficient) {
+                    throw new Error(`Insufficient balance for pnl sweep: ${check?.reason || 'unknown'}`);
+                }
             }
-            await TallyMap.updateBalance(fromAddress, propertyId, -amount, 0, 0, 0, 'oraclePnlSweep', block);
-            await TallyMap.updateBalance(toAddress, propertyId, amount, 0, 0, 0, 'oraclePnlSweep', block);
+            for (const entry of entries) {
+                const entryAmount = Number(entry.amount || 0);
+                const entryFrom = entry.fromAddress || entry.holderAddress || fromAddress;
+                const entryTo = entry.toAddress || entry.recipientAddress || toAddress;
+                await TallyMap.updateBalance(entryFrom, propertyId, -entryAmount, 0, 0, 0, 'oraclePnlSweep', block);
+                await TallyMap.updateBalance(entryTo, propertyId, entryAmount, 0, 0, 0, 'oraclePnlSweep', block);
+            }
             return;
         }
 

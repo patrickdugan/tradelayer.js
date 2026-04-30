@@ -20,6 +20,7 @@ const { createOracleSigner } = require('../tests/makeshiftOracle.js');
 const COIN = 100000000;
 const ARTIFACT_IN = path.join(__dirname, '..', 'artifacts', 'ltc-second-funder-dlc-perp-tlusd-latest.json');
 const ARTIFACT_OUT = path.join(__dirname, '..', 'artifacts', 'ltc-dlc-redeem-state-oracle-latest.json');
+const PNL_ARTIFACT_DEFAULT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-sweep-state-oracle-latest.json');
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
 
@@ -44,6 +45,98 @@ function parseTL(scriptHex) {
   const type = parseInt(ascii.slice(2, 3), 36);
   if (!Number.isFinite(type)) return null;
   return { marker: 'tl', type, encodedPayload: ascii.slice(3), ascii };
+}
+
+function parseRelayBlobRaw(relayBlob) {
+  if (!relayBlob) return null;
+  try {
+    const raw = typeof relayBlob === 'string' && relayBlob.startsWith('b64:')
+      ? Buffer.from(relayBlob.slice(4), 'base64').toString('utf8')
+      : relayBlob;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function loadPnlSettlementArtifact() {
+  const requested = process.env.TL_DLC_PAYOUT_ARTIFACT || PNL_ARTIFACT_DEFAULT;
+  if (!requested || !fs.existsSync(requested)) return null;
+  const doc = JSON.parse(fs.readFileSync(requested, 'utf8'));
+  const relay = parseRelayBlobRaw(doc?.params?.relayBlob);
+  const settlement = relay?.settlement || doc?.pnlSweep || null;
+  return settlement ? { path: requested, doc, relay, settlement } : null;
+}
+
+function normalizePayoutPlan(rawPayouts, outputSats) {
+  const dustSats = Number(process.env.TL_DLC_DUST_SATS || 546);
+  const payouts = (rawPayouts || [])
+    .map((entry) => ({
+      address: entry.address || entry.toAddress || entry.recipientAddress,
+      sats: Number(entry.sats ?? entry.amountSats ?? entry.valueSats ?? 0),
+      weight: Number(entry.weight ?? entry.tokenAmount ?? entry.amount ?? 0)
+    }))
+    .filter((entry) => entry.address);
+  if (!payouts.length) return [];
+
+  const explicitSats = payouts.reduce((sum, entry) => sum + (Number.isFinite(entry.sats) ? entry.sats : 0), 0);
+  if (explicitSats > 0) {
+    if (explicitSats !== outputSats) {
+      throw new Error(`PNL payout satoshis ${explicitSats} do not match DLC output ${outputSats}`);
+    }
+    return payouts.map((entry) => {
+      if (entry.sats < dustSats) throw new Error(`PNL payout for ${entry.address} is below dust`);
+      return { address: entry.address, sats: entry.sats };
+    });
+  }
+
+  const totalWeight = payouts.reduce((sum, entry) => sum + entry.weight, 0);
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+    throw new Error('PNL payout vector must include positive weights or sats');
+  }
+
+  let allocated = 0;
+  return payouts.map((entry, index) => {
+    const satsOut = index === payouts.length - 1
+      ? outputSats - allocated
+      : Math.floor((outputSats * entry.weight) / totalWeight);
+    allocated += satsOut;
+    if (satsOut < dustSats) throw new Error(`PNL payout for ${entry.address} is below dust`);
+    return { address: entry.address, sats: satsOut };
+  });
+}
+
+function deriveDlcPayoutOutputs(artifact, outputSats) {
+  const pnl = loadPnlSettlementArtifact();
+  if (!pnl) {
+    const destination = process.env.TL_DLC_RELEASE_ADDRESS || artifact.secondFunder;
+    return {
+      source: 'manual-or-default',
+      settlement: null,
+      outputs: [{ address: destination, sats: outputSats }]
+    };
+  }
+
+  const settlement = pnl.settlement;
+  const rawPayouts = Array.isArray(settlement.utxoPayouts) && settlement.utxoPayouts.length > 0
+    ? settlement.utxoPayouts
+    : [{
+      address: settlement.utxoRecipient || settlement.toAddress || settlement.recipientAddress,
+      weight: settlement.amount || 1
+    }];
+  const outputs = normalizePayoutPlan(rawPayouts, outputSats);
+  if (!outputs.length) throw new Error('PNL settlement did not provide a DLC payout recipient');
+  return {
+    source: pnl.path,
+    settlement: {
+      mode: settlement.mode,
+      dlcRef: settlement.dlcRef,
+      propertyId: settlement.propertyId,
+      stateHash: settlement.stateHash,
+      transitionHash: settlement.transitionHash
+    },
+    outputs
+  };
 }
 
 async function ensureTxTypeActive(txType, block) {
@@ -277,10 +370,11 @@ async function spendDlcUtxo(client, artifact) {
   const outputSats = inputSats - feeSats;
   if (outputSats <= 0) throw new Error('DLC output too small to spend');
 
-  const destination = process.env.TL_DLC_RELEASE_ADDRESS || artifact.secondFunder;
+  const payoutPlan = deriveDlcPayoutOutputs(artifact, outputSats);
+  const outputs = payoutPlan.outputs.map((entry) => ({ [entry.address]: ltc(entry.sats) }));
   const raw = await client.rpcCall('createrawtransaction', [
     [{ txid: artifact.grant.txid, vout: voutIndex }],
-    [{ [destination]: ltc(outputSats) }]
+    outputs
   ], false);
 
   const prevtxs = [{
@@ -308,9 +402,14 @@ async function spendDlcUtxo(client, artifact) {
     }
   }
   return {
-    destination,
+    destination: payoutPlan.outputs.length === 1 ? payoutPlan.outputs[0].address : 'pnl-payout-vector',
+    payoutPlan,
     input: { txid: artifact.grant.txid, vout: voutIndex, amount: Number(vout.value), address: artifact.dlc.address },
-    output: { address: destination, amount: ltc(outputSats), feeSats },
+    output: {
+      amount: ltc(outputSats),
+      feeSats,
+      recipients: payoutPlan.outputs.map((entry) => ({ address: entry.address, sats: entry.sats, amount: ltc(entry.sats) }))
+    },
     signed,
     decoded,
     accept,

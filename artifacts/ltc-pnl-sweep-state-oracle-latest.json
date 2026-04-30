@@ -1,15 +1,15 @@
 {
-  "run": "1777515358195-7941d3f8",
+  "run": "1777516495273-3d46e351",
   "broadcast": true,
   "applyImmediate": true,
   "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\ltc-second-funder-dlc-perp-tlusd-latest.json",
-  "block": 4692791,
-  "txid": "5ddfd27c6e7ff8985fe98ff27847ebbd38da0fb855ca461895b0cf1118d3844e",
+  "block": 4692792,
+  "txid": "c0459131b7f4b0a3e4563e1275ce4b978cadfc28f8777de9749a86544ba3679f",
   "mempoolAccept": [
     {
-      "txid": "5ddfd27c6e7ff8985fe98ff27847ebbd38da0fb855ca461895b0cf1118d3844e",
+      "txid": "c0459131b7f4b0a3e4563e1275ce4b978cadfc28f8777de9749a86544ba3679f",
       "allowed": true,
-      "vsize": 1664,
+      "vsize": 2020,
       "fees": {
         "base": 0.00005
       }
@@ -18,8 +18,8 @@
   "parsed": {
     "marker": "tl",
     "type": 30,
-    "encodedPayload": "2,3r,0,0,,,2,b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75,ltc-testnet-epoch-2-1777489615629-fda7a8a8,SETTLED,b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1lMTZiMjMxMyIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJwYXlsb2FkSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJ0aW1lc3RhbXAiOjE3Nzc1MTUzNTcsIm9yYWNsZVB1YmtleUhleCI6IjAyM2FhZWIwMGEyNWYzZmFmMTk1MjJjYTQzNmU2M2NlYmRjM2ZhMDk3OWVhNTczMmNjODA4NzhkYWY4MmZkNjA3MCIsInNpZ25hdHVyZUhleCI6ImNhNGFmN2FiZWNlZjA3MGU4NzY1MTRlZTg0YzExNDdlZjMxMjY4ZGU5NTRiN2UzNGUwZDRjZWVkZDJmZjMxNGMxM2Y5MjVmNDAwMGJmZDY2NWU4N2ExMDIwODhkOGRhZDczMWIzZGQ1YjVhNjRjOTc1NzkxOGVjZTVkMTYzOTFmIiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiZGxjUmVmIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4IiwiY29udHJhY3RJZCI6MTIsIm1hcmtQcmljZSI6MjAxMCwicmVhc29uIjoib3JhY2xlLWF0dGVzdGVkIGRlcml2YXRpdmUgbmV0IGxvc3Mgc3dlZXAiLCJzdGF0ZUhhc2giOiJiNWUxOTA5NTc0OGI3MmNhNGIxYWFmY2EzODg5ZDI0NGU0MmVlYzc4NGNjMjY2YmEwOGNkODY4ZjYyNjRlZDc1IiwidHJhbnNpdGlvbkhhc2giOiI0Njc3Y2U1OWEyMTI5YWRlZTNlMDYwM2U5NmFlYTE4YjU2NzI0ODFkZDViY2U2NTE5MGM1NTI3OWU4YmM5YjBlIn19,0,",
-    "ascii": "tlu2,3r,0,0,,,2,b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75,ltc-testnet-epoch-2-1777489615629-fda7a8a8,SETTLED,b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1lMTZiMjMxMyIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJwYXlsb2FkSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJ0aW1lc3RhbXAiOjE3Nzc1MTUzNTcsIm9yYWNsZVB1YmtleUhleCI6IjAyM2FhZWIwMGEyNWYzZmFmMTk1MjJjYTQzNmU2M2NlYmRjM2ZhMDk3OWVhNTczMmNjODA4NzhkYWY4MmZkNjA3MCIsInNpZ25hdHVyZUhleCI6ImNhNGFmN2FiZWNlZjA3MGU4NzY1MTRlZTg0YzExNDdlZjMxMjY4ZGU5NTRiN2UzNGUwZDRjZWVkZDJmZjMxNGMxM2Y5MjVmNDAwMGJmZDY2NWU4N2ExMDIwODhkOGRhZDczMWIzZGQ1YjVhNjRjOTc1NzkxOGVjZTVkMTYzOTFmIiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiZGxjUmVmIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4IiwiY29udHJhY3RJZCI6MTIsIm1hcmtQcmljZSI6MjAxMCwicmVhc29uIjoib3JhY2xlLWF0dGVzdGVkIGRlcml2YXRpdmUgbmV0IGxvc3Mgc3dlZXAiLCJzdGF0ZUhhc2giOiJiNWUxOTA5NTc0OGI3MmNhNGIxYWFmY2EzODg5ZDI0NGU0MmVlYzc4NGNjMjY2YmEwOGNkODY4ZjYyNjRlZDc1IiwidHJhbnNpdGlvbkhhc2giOiI0Njc3Y2U1OWEyMTI5YWRlZTNlMDYwM2U5NmFlYTE4YjU2NzI0ODFkZDViY2U2NTE5MGM1NTI3OWU4YmM5YjBlIn19,0,"
+    "encodedPayload": "2,3r,0,0,,,2,2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea,ltc-testnet-epoch-2-1777489615629-fda7a8a8,SETTLED,b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1iZmZmY2Q0YSIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJwYXlsb2FkSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJ0aW1lc3RhbXAiOjE3Nzc1MTY0OTQsIm9yYWNsZVB1YmtleUhleCI6IjAyOTk5YzJjYmJjNDkxMjQ4ZGI4ZmRjNTI4MzMwNmRmNWQ1OGYwMWIzOWNkY2FkODRmMjNkNTZjODZjMjg4ZDQwMCIsInNpZ25hdHVyZUhleCI6ImJjZTUyYzRlYzVlNGRjYmYzNjFjYWYxM2E2NjBmNjk5MTAwZjMwMTNjOGE3NGJmYjg5OGZlOTIyMDA5YzJiNWQxNDAwNDY5MTJjOTgyMDg5YTBjMzIxODNjN2Q5OWFlYWRjMGUyNmRiNGRjZjU4NjcxYWRhMTRhMGEyNDFhOGY0Iiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwicG5sRW50cmllcyI6W3siZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiYW1vdW50IjowLjAwMDF9XSwidXR4b1BheW91dHMiOlt7ImFkZHJlc3MiOiJ0bHRjMXFsZHRxeTN5MHJhc2F5OGRxejZrYzJueHg2emZzOWU5ajR2ZXFjeiIsInRva2VuQW1vdW50IjowLjAwMDEsIndlaWdodCI6MC4wMDAxfV0sImRsY1JlZiI6Imx0Yy10ZXN0bmV0LWVwb2NoLTItMTc3NzQ4OTYxNTYyOS1mZGE3YThhOCIsImNvbnRyYWN0SWQiOjEyLCJtYXJrUHJpY2UiOjIwMTAsInJlYXNvbiI6Im9yYWNsZS1hdHRlc3RlZCBkZXJpdmF0aXZlIG5ldCBsb3NzIHN3ZWVwIiwic3RhdGVIYXNoIjoiMmVkMGUzYzAwM2M3ZGJkNTg2YTBkMDY4MjI2Mjg2NWFhNmFlNjViMmEyOWY5NjNlNDljMzE1NjJhZjE3N2RlYSIsInRyYW5zaXRpb25IYXNoIjoiNGUwMmZmMjhlOTViZTRhZjYzMzE2MzhkZTc1NzMxNGU1YmUzM2U2NGRhNGY0MTg0MjEyZmYzZGVkYTE3ZTkyYiJ9fQ==,0,",
+    "ascii": "tlu2,3r,0,0,,,2,2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea,ltc-testnet-epoch-2-1777489615629-fda7a8a8,SETTLED,b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1iZmZmY2Q0YSIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJwYXlsb2FkSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJ0aW1lc3RhbXAiOjE3Nzc1MTY0OTQsIm9yYWNsZVB1YmtleUhleCI6IjAyOTk5YzJjYmJjNDkxMjQ4ZGI4ZmRjNTI4MzMwNmRmNWQ1OGYwMWIzOWNkY2FkODRmMjNkNTZjODZjMjg4ZDQwMCIsInNpZ25hdHVyZUhleCI6ImJjZTUyYzRlYzVlNGRjYmYzNjFjYWYxM2E2NjBmNjk5MTAwZjMwMTNjOGE3NGJmYjg5OGZlOTIyMDA5YzJiNWQxNDAwNDY5MTJjOTgyMDg5YTBjMzIxODNjN2Q5OWFlYWRjMGUyNmRiNGRjZjU4NjcxYWRhMTRhMGEyNDFhOGY0Iiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwicG5sRW50cmllcyI6W3siZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiYW1vdW50IjowLjAwMDF9XSwidXR4b1BheW91dHMiOlt7ImFkZHJlc3MiOiJ0bHRjMXFsZHRxeTN5MHJhc2F5OGRxejZrYzJueHg2emZzOWU5ajR2ZXFjeiIsInRva2VuQW1vdW50IjowLjAwMDEsIndlaWdodCI6MC4wMDAxfV0sImRsY1JlZiI6Imx0Yy10ZXN0bmV0LWVwb2NoLTItMTc3NzQ4OTYxNTYyOS1mZGE3YThhOCIsImNvbnRyYWN0SWQiOjEyLCJtYXJrUHJpY2UiOjIwMTAsInJlYXNvbiI6Im9yYWNsZS1hdHRlc3RlZCBkZXJpdmF0aXZlIG5ldCBsb3NzIHN3ZWVwIiwic3RhdGVIYXNoIjoiMmVkMGUzYzAwM2M3ZGJkNTg2YTBkMDY4MjI2Mjg2NWFhNmFlNjViMmEyOWY5NjNlNDljMzE1NjJhZjE3N2RlYSIsInRyYW5zaXRpb25IYXNoIjoiNGUwMmZmMjhlOTViZTRhZjYzMzE2MzhkZTc1NzMxNGU1YmUzM2U2NGRhNGY0MTg0MjEyZmYzZGVkYTE3ZTkyYiJ9fQ==,0,"
   },
   "params": {
     "action": 2,
@@ -29,30 +29,56 @@
     "accusedAddress": "",
     "evidenceHash": "",
     "relayType": 2,
-    "stateHash": "b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75",
+    "stateHash": "2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea",
     "dlcRef": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
     "settlementState": "SETTLED",
-    "relayBlob": "b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1lMTZiMjMxMyIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJwYXlsb2FkSGFzaCI6ImI1ZTE5MDk1NzQ4YjcyY2E0YjFhYWZjYTM4ODlkMjQ0ZTQyZWVjNzg0Y2MyNjZiYTA4Y2Q4NjhmNjI2NGVkNzUiLCJ0aW1lc3RhbXAiOjE3Nzc1MTUzNTcsIm9yYWNsZVB1YmtleUhleCI6IjAyM2FhZWIwMGEyNWYzZmFmMTk1MjJjYTQzNmU2M2NlYmRjM2ZhMDk3OWVhNTczMmNjODA4NzhkYWY4MmZkNjA3MCIsInNpZ25hdHVyZUhleCI6ImNhNGFmN2FiZWNlZjA3MGU4NzY1MTRlZTg0YzExNDdlZjMxMjY4ZGU5NTRiN2UzNGUwZDRjZWVkZDJmZjMxNGMxM2Y5MjVmNDAwMGJmZDY2NWU4N2ExMDIwODhkOGRhZDczMWIzZGQ1YjVhNjRjOTc1NzkxOGVjZTVkMTYzOTFmIiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiZGxjUmVmIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4IiwiY29udHJhY3RJZCI6MTIsIm1hcmtQcmljZSI6MjAxMCwicmVhc29uIjoib3JhY2xlLWF0dGVzdGVkIGRlcml2YXRpdmUgbmV0IGxvc3Mgc3dlZXAiLCJzdGF0ZUhhc2giOiJiNWUxOTA5NTc0OGI3MmNhNGIxYWFmY2EzODg5ZDI0NGU0MmVlYzc4NGNjMjY2YmEwOGNkODY4ZjYyNjRlZDc1IiwidHJhbnNpdGlvbkhhc2giOiI0Njc3Y2U1OWEyMTI5YWRlZTNlMDYwM2U5NmFlYTE4YjU2NzI0ODFkZDViY2U2NTE5MGM1NTI3OWU4YmM5YjBlIn19",
+    "relayBlob": "b64:eyJldmVudElkIjoibHRjLXRlc3RuZXQtZXBvY2gtMi0xNzc3NDg5NjE1NjI5LWZkYTdhOGE4LXBubC1iZmZmY2Q0YSIsIm91dGNvbWUiOiJQTkxfU1dFRVAiLCJvdXRjb21lSW5kZXgiOjMsInN0YXRlSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJwYXlsb2FkSGFzaCI6IjJlZDBlM2MwMDNjN2RiZDU4NmEwZDA2ODIyNjI4NjVhYTZhZTY1YjJhMjlmOTYzZTQ5YzMxNTYyYWYxNzdkZWEiLCJ0aW1lc3RhbXAiOjE3Nzc1MTY0OTQsIm9yYWNsZVB1YmtleUhleCI6IjAyOTk5YzJjYmJjNDkxMjQ4ZGI4ZmRjNTI4MzMwNmRmNWQ1OGYwMWIzOWNkY2FkODRmMjNkNTZjODZjMjg4ZDQwMCIsInNpZ25hdHVyZUhleCI6ImJjZTUyYzRlYzVlNGRjYmYzNjFjYWYxM2E2NjBmNjk5MTAwZjMwMTNjOGE3NGJmYjg5OGZlOTIyMDA5YzJiNWQxNDAwNDY5MTJjOTgyMDg5YTBjMzIxODNjN2Q5OWFlYWRjMGUyNmRiNGRjZjU4NjcxYWRhMTRhMGEyNDFhOGY0Iiwia2luZCI6InBubF9zd2VlcCIsInByb3BlcnR5SWQiOjM4MCwic2V0dGxlbWVudCI6eyJtb2RlIjoicG5sX3N3ZWVwIiwicHJvcGVydHlJZCI6MzgwLCJhbW91bnQiOjAuMDAwMSwiZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwicG5sRW50cmllcyI6W3siZnJvbUFkZHJlc3MiOiJ0bHRjMXFrejB2ZnQyZmM0bmswdTlmeDRrOXlrNHRoN3poZXJuYTN6eGgyMiIsInRvQWRkcmVzcyI6InRsdGMxcWxkdHF5M3kwcmFzYXk4ZHF6NmtjMm54eDZ6ZnM5ZTlqNHZlcWN6IiwiYW1vdW50IjowLjAwMDF9XSwidXR4b1BheW91dHMiOlt7ImFkZHJlc3MiOiJ0bHRjMXFsZHRxeTN5MHJhc2F5OGRxejZrYzJueHg2emZzOWU5ajR2ZXFjeiIsInRva2VuQW1vdW50IjowLjAwMDEsIndlaWdodCI6MC4wMDAxfV0sImRsY1JlZiI6Imx0Yy10ZXN0bmV0LWVwb2NoLTItMTc3NzQ4OTYxNTYyOS1mZGE3YThhOCIsImNvbnRyYWN0SWQiOjEyLCJtYXJrUHJpY2UiOjIwMTAsInJlYXNvbiI6Im9yYWNsZS1hdHRlc3RlZCBkZXJpdmF0aXZlIG5ldCBsb3NzIHN3ZWVwIiwic3RhdGVIYXNoIjoiMmVkMGUzYzAwM2M3ZGJkNTg2YTBkMDY4MjI2Mjg2NWFhNmFlNjViMmEyOWY5NjNlNDljMzE1NjJhZjE3N2RlYSIsInRyYW5zaXRpb25IYXNoIjoiNGUwMmZmMjhlOTViZTRhZjYzMzE2MzhkZTc1NzMxNGU1YmUzM2U2NGRhNGY0MTg0MjEyZmYzZGVkYTE3ZTkyYiJ9fQ==",
     "autoRoll": false,
     "nextDlcRef": "",
-    "block": 4692791,
+    "block": 4692792,
     "senderAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "txid": "5ddfd27c6e7ff8985fe98ff27847ebbd38da0fb855ca461895b0cf1118d3844e",
+    "txid": "c0459131b7f4b0a3e4563e1275ce4b978cadfc28f8777de9749a86544ba3679f",
     "reason": "",
     "valid": true
   },
-  "stateHash": "b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75",
-  "payloadHash": "b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75",
+  "stateHash": "2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea",
+  "payloadHash": "2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea",
   "pnlSweep": {
     "mode": "pnl_sweep",
     "propertyId": 380,
     "amount": 0.0001,
     "fromAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
     "toAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+    "pnlEntries": [
+      {
+        "fromAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "toAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "amount": 0.0001
+      }
+    ],
+    "utxoPayouts": [
+      {
+        "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "tokenAmount": 0.0001,
+        "weight": 0.0001
+      }
+    ],
     "dlcRef": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
     "contractId": 12,
     "markPrice": 2010,
     "reason": "oracle-attested derivative net loss sweep"
+  },
+  "utxoPayouts": [
+    {
+      "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "tokenAmount": 0.0001,
+      "weight": 0.0001
+    }
+  ],
+  "payoutCommitment": {
+    "scheme": "state-oracle-committed-output-vector",
+    "hash": "586789dbaea94c7b122398f4ce60475ec5a6c2c07da1c4a988a9baf87b8c115c",
+    "note": "DLC spend helper must pay every listed address or reject the spend."
   },
   "stateOracle": {
     "id": 135,
@@ -60,24 +86,6 @@
     "adminAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22"
   },
   "balancesBefore": {
-    "from": {
-      "amount": 0.003,
-      "available": 0.002999,
-      "reserved": 0,
-      "margin": 0.000001,
-      "vesting": 0,
-      "channel": 0
-    },
-    "to": {
-      "amount": 0.001,
-      "available": 0.0004995,
-      "reserved": 0.0005,
-      "margin": 5e-7,
-      "vesting": 0,
-      "channel": 0
-    }
-  },
-  "balancesAfter": {
     "from": {
       "amount": 0.0029,
       "available": 0.002899,
@@ -93,7 +101,73 @@
       "margin": 5e-7,
       "vesting": 0,
       "channel": 0
-    }
+    },
+    "all": [
+      {
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "balance": {
+          "amount": 0.0029,
+          "available": 0.002899,
+          "reserved": 0,
+          "margin": 0.000001,
+          "vesting": 0,
+          "channel": 0
+        }
+      },
+      {
+        "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "balance": {
+          "amount": 0.0011,
+          "available": 0.0005995,
+          "reserved": 0.0005,
+          "margin": 5e-7,
+          "vesting": 0,
+          "channel": 0
+        }
+      }
+    ]
+  },
+  "balancesAfter": {
+    "from": {
+      "amount": 0.0028,
+      "available": 0.002799,
+      "reserved": 0,
+      "margin": 0.000001,
+      "vesting": 0,
+      "channel": 0
+    },
+    "to": {
+      "amount": 0.0012,
+      "available": 0.0006995,
+      "reserved": 0.0005,
+      "margin": 5e-7,
+      "vesting": 0,
+      "channel": 0
+    },
+    "all": [
+      {
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "balance": {
+          "amount": 0.0028,
+          "available": 0.002799,
+          "reserved": 0,
+          "margin": 0.000001,
+          "vesting": 0,
+          "channel": 0
+        }
+      },
+      {
+        "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "balance": {
+          "amount": 0.0012,
+          "available": 0.0006995,
+          "reserved": 0.0005,
+          "margin": 5e-7,
+          "vesting": 0,
+          "channel": 0
+        }
+      }
+    ]
   },
   "contractAfter": {
     "_id": "contract-ltc-testnet-epoch-2-1777489615629-fda7a8a8",
@@ -112,7 +186,7 @@
     "source": "ltc-second-funder-dry-run",
     "oracleId": 135,
     "oracleAdminAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "stateHash": "b5e19095748b72ca4b1aafca3889d244e42eec784cc266ba08cd868f6264ed75",
-    "blockHeight": 4692791
+    "stateHash": "2ed0e3c003c7dbd586a0d0682262865aa6ae65b2a29f963e49c31562af177dea",
+    "blockHeight": 4692792
   }
 }

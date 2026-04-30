@@ -29,6 +29,48 @@ function shortId() {
   return crypto.randomBytes(4).toString('hex');
 }
 
+function parseAddressList(value) {
+  return String(value || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function buildPnlEntries(defaultFrom, defaultTo, defaultAmount) {
+  const tos = parseAddressList(process.env.TL_PNL_TO_LIST);
+  const froms = parseAddressList(process.env.TL_PNL_FROM_LIST);
+  const amounts = parseAddressList(process.env.TL_PNL_AMOUNT_LIST).map(Number);
+  if (!tos.length) {
+    return [{
+      fromAddress: defaultFrom,
+      toAddress: defaultTo,
+      amount: Number(defaultAmount)
+    }];
+  }
+
+  return tos.map((toAddress, index) => ({
+    fromAddress: froms[index] || defaultFrom,
+    toAddress,
+    amount: Number.isFinite(amounts[index]) && amounts[index] > 0 ? amounts[index] : Number(defaultAmount)
+  }));
+}
+
+function buildUtxoPayouts(entries) {
+  return entries.map((entry) => ({
+    address: entry.toAddress,
+    tokenAmount: Number(entry.amount),
+    weight: Number(entry.amount),
+    amountSats: Number.isFinite(Number(process.env.TL_PNL_UTXO_PAYOUT_SATS))
+      ? Number(process.env.TL_PNL_UTXO_PAYOUT_SATS)
+      : undefined
+  })).map((entry) => {
+    if (entry.amountSats === undefined) {
+      delete entry.amountSats;
+    }
+    return entry;
+  });
+}
+
 function parseTL(scriptHex) {
   const markerHex = '746c';
   const pos = String(scriptHex || '').indexOf(markerHex);
@@ -142,6 +184,9 @@ async function main() {
   const amount = Number(process.env.TL_PNL_SWEEP_AMOUNT || 0.0001);
   const fromAddress = process.env.TL_PNL_FROM || artifact.firstFunder;
   const toAddress = process.env.TL_PNL_TO || artifact.secondFunder;
+  const pnlEntries = buildPnlEntries(fromAddress, toAddress, amount);
+  const totalAmount = pnlEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const utxoPayouts = buildUtxoPayouts(pnlEntries);
   const oracle = await selectPrivilegedStateOracle(artifact.firstFunder);
   const oracleAdmin = oracle.adminAddress || oracle?.name?.adminAddress || artifact.firstFunder;
   const dlcRef = process.env.TL_PNL_DLC_REF || artifact.procedural.contractId;
@@ -164,15 +209,19 @@ async function main() {
 
   const balancesBefore = {
     from: await TallyMap.getTally(fromAddress, propertyId),
-    to: await TallyMap.getTally(toAddress, propertyId)
+    to: await TallyMap.getTally(toAddress, propertyId),
+    all: await Promise.all([...new Set(pnlEntries.flatMap((entry) => [entry.fromAddress, entry.toAddress]))]
+      .map(async (address) => ({ address, balance: await TallyMap.getTally(address, propertyId) })))
   };
 
   const transition = {
     mode: 'pnl_sweep',
     propertyId,
-    amount,
+    amount: totalAmount,
     fromAddress,
     toAddress,
+    pnlEntries,
+    utxoPayouts,
     dlcRef,
     contractId: artifact.perp?.contractId,
     markPrice: Number(process.env.TL_PNL_MARK_PRICE || 2010),
@@ -205,7 +254,7 @@ async function main() {
       transitionHash: sha256Hex({
         mode: 'pnl_sweep',
         propertyId,
-        amount,
+        amount: totalAmount,
         fromAddress,
         toAddress,
         cacheId: '',
@@ -228,7 +277,9 @@ async function main() {
   const applied = await applyPayloadTx(tx, oracleAdmin, block);
   const balancesAfter = {
     from: await TallyMap.getTally(fromAddress, propertyId),
-    to: await TallyMap.getTally(toAddress, propertyId)
+    to: await TallyMap.getTally(toAddress, propertyId),
+    all: await Promise.all([...new Set(pnlEntries.flatMap((entry) => [entry.fromAddress, entry.toAddress]))]
+      .map(async (address) => ({ address, balance: await TallyMap.getTally(address, propertyId) })))
   };
   const contractAfter = await ProceduralRegistry.getContract(dlcRef);
 
@@ -245,6 +296,12 @@ async function main() {
     stateHash,
     payloadHash,
     pnlSweep: transition,
+    utxoPayouts,
+    payoutCommitment: {
+      scheme: 'state-oracle-committed-output-vector',
+      hash: sha256Hex({ dlcRef, stateHash, utxoPayouts }),
+      note: 'DLC spend helper must pay every listed address or reject the spend.'
+    },
     stateOracle: {
       id: Number(oracle.id),
       ticker: oracle.ticker || oracle.name,
