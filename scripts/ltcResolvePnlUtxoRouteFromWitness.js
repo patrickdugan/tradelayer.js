@@ -6,6 +6,7 @@ const bitcoin = require('bitcoinjs-lib');
 process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 'tl-wallet';
 
 const TxUtils = require('../src/txUtils.js');
+const { PnlRouteRegistry } = require('../src/pnlRouteRegistry.js');
 
 const COIN = 100000000;
 const NETWORK = {
@@ -135,6 +136,15 @@ async function main() {
   const witnessScriptHex = witness[witness.length - 1];
   if (!witnessScriptHex) throw new Error(`No witness script found in reveal tx ${revealTxid}`);
   const envelope = parseEnvelopeFromWitnessScript(witnessScriptHex);
+  const registeredRoute = await PnlRouteRegistry.recordEnvelope(envelope, {
+    revealTxid,
+    commitTxid: revealArtifact.commit?.txid || '',
+    block: envelope.payload?.block || 0,
+    challengeBlocks: process.env.TL_PNL_ROUTE_CHALLENGE_BLOCKS
+  });
+  if (registeredRoute.status === 'CHALLENGED') {
+    throw new Error(`PNL route is challenged: ${registeredRoute.payloadHash}`);
+  }
   const grantTx = await client.getRawTransaction(dlc.grant.txid);
   const voutIndex = Number(dlc.grant.referenceOutputs[0].vout);
   const grantVout = grantTx.vout.find((o) => Number(o.n) === voutIndex);
@@ -186,6 +196,13 @@ async function main() {
       propertyId: envelope.payload.propertyId,
       tokenPnl: envelope.payload.tokenPnl,
       attestation: envelope.attestation
+    },
+    registry: {
+      status: registeredRoute.status,
+      routeHash: registeredRoute.routeHash,
+      payoutVectorHash: registeredRoute.payoutVectorHash,
+      tokenPnlHash: registeredRoute.tokenPnlHash,
+      challengeDeadlineBlock: registeredRoute.challengeDeadlineBlock
     },
     dlcSpend
   };

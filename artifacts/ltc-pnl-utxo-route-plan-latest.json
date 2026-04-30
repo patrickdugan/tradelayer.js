@@ -1,5 +1,5 @@
 {
-  "run": "1777517148800-5e705783",
+  "run": "1777551860191-3deb11c0",
   "revealTxid": "cad205c65afaf6b2dc72f3e6e47e9b7fc3d3284d7ed95c5f965bfced2a0327b1",
   "payloadHash": "db736014390df5c72d66fa365f6307b74d5fe1bfaed620bc0bfb87564117a1fd",
   "planHash": "b55881472150bad9c821926d81cc9963c48f4f5b35583df8b88e07cb163ba895",
@@ -41,6 +41,13 @@
       "oraclePubkeyHex": "02a6824627d729bd2fe41e7e46a16d823ca2e40e3f347f0c9820602066ce9124e6",
       "signatureHex": "f28cf706e203f086c928ef8389d704d432d78e72ee3eb3c35bf87190a5c0d12664863dbe98dd1247f1f70250d2303c2aea8f743cddc2d51f074dbb5a01e7b3ba"
     }
+  },
+  "registry": {
+    "status": "PENDING",
+    "routeHash": "24ed6e910ed7687d0b56fa414ef2e88eaa1944a4e51fe05f216cb7567e08553a",
+    "payoutVectorHash": "432a070e6f6f09ff5efcbe1b8611ebb7e4f494c85faee75325a75ab72a9c754b",
+    "tokenPnlHash": "13c874d4f4fb5c5d0a59e8201d58a445d2765c9d35cf6a696e0b4de5ea00bd08",
+    "challengeDeadlineBlock": 4692798
   },
   "dlcSpend": null
 }

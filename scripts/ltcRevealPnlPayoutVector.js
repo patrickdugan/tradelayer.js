@@ -7,6 +7,7 @@ process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 't
 
 const TxUtils = require('../src/txUtils.js');
 const TallyMap = require('../src/tally.js');
+const { PnlRouteRegistry } = require('../src/pnlRouteRegistry.js');
 const { createOracleSigner } = require('../tests/makeshiftOracle.js');
 
 const COIN = 100000000;
@@ -206,6 +207,12 @@ async function main() {
     ? await client.rpcCall('testmempoolaccept', [[revealSpend.hex]], false)
     : null;
   const revealTxid = BROADCAST ? await client.sendrawtransaction(revealSpend.hex) : bitcoin.Transaction.fromHex(revealSpend.hex).getId();
+  const registry = await PnlRouteRegistry.recordEnvelope(envelope, {
+    revealTxid,
+    commitTxid: commit.txid,
+    block,
+    challengeBlocks: process.env.TL_PNL_ROUTE_CHALLENGE_BLOCKS
+  });
 
   const summary = {
     run: `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
@@ -231,6 +238,13 @@ async function main() {
       mempoolAccept: revealAccept,
       output: revealSpend.output,
       feeSats: revealSpend.feeSats
+    },
+    registry: {
+      status: registry.status,
+      routeHash: registry.routeHash,
+      payoutVectorHash: registry.payoutVectorHash,
+      tokenPnlHash: registry.tokenPnlHash,
+      challengeDeadlineBlock: registry.challengeDeadlineBlock
     },
     payload
   };
