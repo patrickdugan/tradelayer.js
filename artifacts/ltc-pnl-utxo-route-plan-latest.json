@@ -1,12 +1,12 @@
 {
-  "run": "1777572091785-2be42cf8",
-  "revealTxid": "824fd284f273559d2e90f86a5fe3763150bb89dc35d132a3888b1877bbd5b521",
-  "payloadHash": "8469f28b02a03b400c96cddd1a3dfece05569e6413058d81b7d2fe183566b372",
-  "planHash": "6cf3ec14ac6a78f92ef6be8d74d76a0d3a630a43cc3264205ce05cab1586f67c",
+  "run": "1777574863937-8a574ff9",
+  "revealTxid": "80c9199a561c5dc3f4a9de088006b019ea063493603b575000bba5d48c92730d",
+  "payloadHash": "e9f65a7f81927ae5a018b4b841c0cf2fa2503a5d059eda35c09c165a685ea890",
+  "planHash": "4b8d083aedaabc35f81a693a0efe65869b5eee0da7df2c4e6474e20d926b7285",
   "dlcInput": {
-    "txid": "93d992b3b41212760288514a281a145dbb4e0bade4c2804f430f1d16b9166094",
+    "txid": "731b113411bf51370e6c87590c68072117dc97e12abbf77b289df6061f91e63f",
     "vout": 0,
-    "address": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
+    "address": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
     "amount": 0.001,
     "sats": 100000
   },
@@ -22,42 +22,42 @@
     "protocol": "tl-utxoref-pnl-router",
     "version": 1,
     "source": "state-oracle-witness-reveal",
-    "dlcRef": "ltc-testnet-pnl-e2e-1777572065981-758ba06d",
+    "dlcRef": "ltc-testnet-pnl-e2e-1777574854232-2fce8447",
     "propertyId": 380,
     "tokenPnl": [
       {
-        "fromAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
+        "fromAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
         "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-        "tokenAmount": 0.00004545
+        "tokenAmount": 0.00000891
       }
     ],
     "attestation": {
-      "eventId": "ltc-testnet-pnl-e2e-1777572065981-758ba06d-pnl-route-9288a47f",
+      "eventId": "ltc-testnet-pnl-e2e-1777574854232-2fce8447-pnl-route-5dc12ee9",
       "outcome": "PNL_ROUTE",
       "outcomeIndex": 0,
-      "stateHash": "8469f28b02a03b400c96cddd1a3dfece05569e6413058d81b7d2fe183566b372",
-      "payloadHash": "8469f28b02a03b400c96cddd1a3dfece05569e6413058d81b7d2fe183566b372",
-      "timestamp": 1777572091,
-      "oraclePubkeyHex": "02fee6ee7d0b85e104ae537f2c3f5d06a40b89cf919ac56081b39b00fed26c3afa",
-      "signatureHex": "d4f4d2e0374ec774abfced2b8fbb5e9c5fb03c481612b6b7e9e16d1b3a3e1f96368515589d2e1978c43fb7c2073f41a5381e15347abbfa633b4c29cf6a0e6e56"
+      "stateHash": "e9f65a7f81927ae5a018b4b841c0cf2fa2503a5d059eda35c09c165a685ea890",
+      "payloadHash": "e9f65a7f81927ae5a018b4b841c0cf2fa2503a5d059eda35c09c165a685ea890",
+      "timestamp": 1777574860,
+      "oraclePubkeyHex": "02c53eec8108d5239b932378ee769ed81b49718a00c3f324a31e660d66a5e7cae1",
+      "signatureHex": "cfc503a9fabe093da458d8cd5bc5ac7de5a2f2637202f1acfbdb1dcf4668c5f940949c9df1f68dd801870b51e95aedd76edc71fa19604804549f15d31f562e00"
     }
   },
   "registry": {
     "status": "PENDING",
-    "routeHash": "4db9a5066e41d7c741d8a737f95305f62a50e977d693cdf772deca7b150825fe",
-    "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
-    "tokenPnlHash": "8b5dd1abf1a3fa758b73cf4e65df20337e0776d1c0087942cf6e14bf862b255a",
-    "challengeDeadlineBlock": 4694011
+    "routeHash": "aa670cf167cbc6c6ae599a0b92908fc801b420d3d61f78595b60c6a9925ad224",
+    "payoutVectorHash": "e3aa27bb39e8b7fb0e8f19c3bffb35555e378658fb80a02ae819a133034afb73",
+    "tokenPnlHash": "579a467067449474c08afaeb8018ef37b0df7a5d804247c8028e8c959a1564da",
+    "challengeDeadlineBlock": 4694013
   },
   "dlcSpend": {
-    "txid": "8c9ea7a88f8c961891bdb18926810b8516051a09a62f0e0f65056e638d96277b",
+    "txid": "9d96054b7f18e0ba027e66cace57fc1fdad379e3620854fd01fe81d056279e81",
     "signed": {
-      "hex": "02000000000101946016b9161d0f434f80c2e4ad0b4ebb5d141a284a518802761212b4b392d9930000000000ffffffff01d07e010000000000160014b09ec4ad49c56767f0a9356c525aabbf857c8e7d040047304402204f9fd9b8a5538de07c739d56cc9b01fb62886cb47fd7eb33040ef991b7c37308022066060751bb6575558d013f60aa8f0eb573fff90b47b218ac022379d4a2cc2c150147304402202465b249b381136956b6c0c264ac140dbfeac474b8f75a424e2352aeaa08ef9402202e47c18d431b4efe0ab649006088790f24de215c926d4e85976195059f9db8da01475221029bd1238e1501ff77be9dad4e39ab264e4df89fbce741db0e978e31f6a8dd4b312103bc7b1a90541c2b6a25ff7d840972825e224ba9b0d410ae0698338b87088ba6d952ae00000000",
+      "hex": "020000000001013fe6911f06f69d287bf7bb2ae197dc172107680c59876c0e3751bf1134111b730000000000ffffffff01d07e010000000000160014b09ec4ad49c56767f0a9356c525aabbf857c8e7d040047304402203af57aee947320cea205e2263eec0bb90f31cc28d472b64e8068400e33a45c3402203f2433e3f1fdbc00afaeeaa86082d714a33dc071f4ceedd035a714e5efaa1efa0147304402205888292d9c6ec5f0156d2fa8e02ccd01d8ff1b0d333f09104c5241c0e86c162302205030153742a7be34114464ffe733439b30d84f5435688f489223b58552b1a19b0147522102065cdcdcd0e9330d58d364c1c20e242938fd369585c6b152a3168d34955ffd7521029c63f7f26e79ffe99cabccaf8466c08e5db058e93d87ae1bf52911b0820646bd52ae00000000",
       "complete": true
     },
     "decoded": {
-      "txid": "8c9ea7a88f8c961891bdb18926810b8516051a09a62f0e0f65056e638d96277b",
-      "hash": "86b3fec76cac7d82a376d01c6cc2538b66847e118c9a78aec902935f97cbe3d4",
+      "txid": "9d96054b7f18e0ba027e66cace57fc1fdad379e3620854fd01fe81d056279e81",
+      "hash": "5def62b913a66611bc961035c5a6d79bca3025c7ece0406b29cd4a84d4fc31eb",
       "version": 2,
       "size": 302,
       "vsize": 137,
@@ -66,7 +66,7 @@
       "vin": [
         {
           "ismweb": false,
-          "txid": "93d992b3b41212760288514a281a145dbb4e0bade4c2804f430f1d16b9166094",
+          "txid": "731b113411bf51370e6c87590c68072117dc97e12abbf77b289df6061f91e63f",
           "vout": 0,
           "scriptSig": {
             "asm": "",
@@ -74,9 +74,9 @@
           },
           "txinwitness": [
             "",
-            "304402204f9fd9b8a5538de07c739d56cc9b01fb62886cb47fd7eb33040ef991b7c37308022066060751bb6575558d013f60aa8f0eb573fff90b47b218ac022379d4a2cc2c1501",
-            "304402202465b249b381136956b6c0c264ac140dbfeac474b8f75a424e2352aeaa08ef9402202e47c18d431b4efe0ab649006088790f24de215c926d4e85976195059f9db8da01",
-            "5221029bd1238e1501ff77be9dad4e39ab264e4df89fbce741db0e978e31f6a8dd4b312103bc7b1a90541c2b6a25ff7d840972825e224ba9b0d410ae0698338b87088ba6d952ae"
+            "304402203af57aee947320cea205e2263eec0bb90f31cc28d472b64e8068400e33a45c3402203f2433e3f1fdbc00afaeeaa86082d714a33dc071f4ceedd035a714e5efaa1efa01",
+            "304402205888292d9c6ec5f0156d2fa8e02ccd01d8ff1b0d333f09104c5241c0e86c162302205030153742a7be34114464ffe733439b30d84f5435688f489223b58552b1a19b01",
+            "522102065cdcdcd0e9330d58d364c1c20e242938fd369585c6b152a3168d34955ffd7521029c63f7f26e79ffe99cabccaf8466c08e5db058e93d87ae1bf52911b0820646bd52ae"
           ],
           "sequence": 4294967295
         }
@@ -100,7 +100,7 @@
     },
     "mempoolAccept": [
       {
-        "txid": "8c9ea7a88f8c961891bdb18926810b8516051a09a62f0e0f65056e638d96277b",
+        "txid": "9d96054b7f18e0ba027e66cace57fc1fdad379e3620854fd01fe81d056279e81",
         "allowed": true,
         "vsize": 137,
         "fees": {

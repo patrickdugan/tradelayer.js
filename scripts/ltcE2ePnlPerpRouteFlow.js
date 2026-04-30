@@ -38,11 +38,15 @@ const SPOT_TOKEN_AMOUNT = Number(process.env.TL_SPOT_TOKEN_AMOUNT || 0.0000001);
 const TEMPLATE_ID = process.env.TL_DLC_TEMPLATE_ID || 'dlc-receipt-ltc-testnet-v1';
 const DLC_HASH = process.env.TL_DLC_HASH || '60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499';
 const PLEDGE_AMOUNT = Number(process.env.TL_PLEDGE_AMOUNT || 0.001);
-const ENTRY_PRICE = Number(process.env.TL_PERP_ENTRY || 2000);
-const EXIT_PRICE = Number(process.env.TL_PERP_EXIT || 2200);
+const SPOT_MARK_PRICE = Number(process.env.TL_SPOT_MARK_PRICE || 2200);
+const ENTRY_PRICE = Number(process.env.TL_PERP_ENTRY || SPOT_MARK_PRICE);
+const EXIT_PRICE = Number(process.env.TL_PERP_EXIT || (SPOT_MARK_PRICE * 1.02).toFixed(2));
 const CONTRACT_NOTIONAL = Number(process.env.TL_PERP_NOTIONAL || 1);
 const CONTRACT_LEVERAGE = Number(process.env.TL_PERP_LEVERAGE || 10);
 const PERP_AMOUNT = Number(process.env.TL_PERP_AMOUNT || 1);
+const MAX_MARK_DEVIATION_BPS = Number(process.env.TL_MAX_MARK_DEVIATION_BPS || 500);
+const PUBLISH_CLOSE_SPOT_MARK = process.env.TL_CLOSE_SPOT_MARK === '1';
+const CLOSE_SPOT_MARK_PRICE = Number(process.env.TL_CLOSE_SPOT_MARK_PRICE || EXIT_PRICE);
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
 
@@ -56,6 +60,18 @@ function ltc(satoshis) {
 
 function shortId() {
   return crypto.randomBytes(4).toString('hex');
+}
+
+function markDeviationBps(price, mark) {
+  return Math.abs(Number(price) - Number(mark)) / Number(mark) * 10000;
+}
+
+function assertWithinMarkBand(price, mark, label) {
+  const deviationBps = markDeviationBps(price, mark);
+  if (!Number.isFinite(deviationBps) || deviationBps > MAX_MARK_DEVIATION_BPS) {
+    throw new Error(`${label} price ${price} is ${deviationBps.toFixed(2)} bps from mark ${mark}, max ${MAX_MARK_DEVIATION_BPS}`);
+  }
+  return Number(deviationBps.toFixed(2));
 }
 
 function outAddress(vout) {
@@ -430,6 +446,10 @@ async function main() {
   const run = `${Date.now()}-${shortId()}`;
   const block = Number(process.env.TL_HEADLESS_BLOCK || await client.getBlockCount());
   const closeBlock = block + 1;
+  const configuredDeviation = {
+    openBps: assertWithinMarkBand(ENTRY_PRICE, SPOT_MARK_PRICE, 'open'),
+    closeBps: assertWithinMarkBand(EXIT_PRICE, SPOT_MARK_PRICE, 'close')
+  };
 
   await ensureTxTypeActive(11, block);
   await ensureTxTypeActive(3, block);
@@ -467,7 +487,7 @@ async function main() {
   const grant = await buildGrantTx(client, secondFunder, dlc.address, dlcContractId);
   const grantApplied = await applyGrant(grant, secondFunder, block, dlc.address);
   const contractId = await ensurePerpContract(block);
-  const entrySpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, ENTRY_PRICE, block, 'entry');
+  const anchorSpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, SPOT_MARK_PRICE, block, 'anchor');
 
   const balancesBeforeOpen = {
     long: await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID),
@@ -479,7 +499,9 @@ async function main() {
   };
   const openTrade = await processPerpMatch(contractId, FIRST_FUNDER, secondFunder, ENTRY_PRICE, block, 'headless-open-perp');
 
-  const closeSpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, EXIT_PRICE, closeBlock, 'close');
+  const closeSpotMark = PUBLISH_CLOSE_SPOT_MARK
+    ? await createSpotMark(client, spotChannel, spotTokenDelivery, CLOSE_SPOT_MARK_PRICE, closeBlock, 'close')
+    : null;
   const closeValidation = {
     long: await validatePerpLeg(FIRST_FUNDER, contractId, EXIT_PRICE, PERP_AMOUNT, true, closeBlock, `valid-close-long-${run}`),
     short: await validatePerpLeg(secondFunder, contractId, EXIT_PRICE, PERP_AMOUNT, false, closeBlock, `valid-close-short-${run}`)
@@ -510,8 +532,13 @@ async function main() {
       tokenDeliveryAddress: spotTokenDelivery,
       fundingTxid: spotFunding.txid,
       tokenAmount: SPOT_TOKEN_AMOUNT,
-      entry: entrySpotMark,
-      close: closeSpotMark
+      currentMark: SPOT_MARK_PRICE,
+      maxDeviationBps: MAX_MARK_DEVIATION_BPS,
+      configuredDeviation,
+      anchor: anchorSpotMark,
+      entry: anchorSpotMark,
+      close: closeSpotMark,
+      closeMarkPublished: Boolean(closeSpotMark)
     },
     dlc: {
       address: dlc.address,

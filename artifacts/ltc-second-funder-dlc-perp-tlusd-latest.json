@@ -1,91 +1,36 @@
 {
-  "run": "1777572065981-758ba06d",
+  "run": "1777574854232-2fce8447",
   "broadcast": true,
   "applyImmediate": true,
   "firstFunder": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-  "secondFunder": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
-  "fundingTxid": "59b60b47554a6207df1a10dde1e3de555beff0bf4cf3162bc95741c8a2973dc1",
+  "secondFunder": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
+  "fundingTxid": "97fdccbfc46ebced67ccbff9baaca01c43d1676ccf0fe7b7103e35a98cfa71c7",
   "spotMarkSource": {
     "pair": "0-5",
     "propertyId": 5,
-    "channelAddress": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-    "tokenDeliveryAddress": "tltc1qlch95jrgh2y95uf6u8rw6c3rqnd0js5agatrye",
-    "fundingTxid": "5d0e2e8f22e7bc717e062fd704ce49be7a40911aabe9b7ddc07eaef43515923c",
+    "channelAddress": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+    "tokenDeliveryAddress": "tltc1q2uxzgjjdhyk70u7wdqu4qv762mm0e78m8m63qt",
+    "fundingTxid": "eab0d66bf107d89b4c786b9fd3e0fd2c2b7f544656a308b0bedf2b8e5e21d462",
     "tokenAmount": 1e-7,
-    "entry": {
-      "label": "entry",
-      "txid": "5bdc263b54ec690a7d84d7c49a9f99cdfe6449cbae56cddfe2227af46d1defe0",
-      "price": 2000,
-      "tokenAmount": 1e-7,
-      "propertyId": 5,
-      "coinAmount": 0.0002,
-      "paymentSats": 20000,
-      "fundingTxid": null,
-      "changeAddress": "tltc1qg49qzk8wywxvvwfxj7pzpkwyevnacnyfaqm83y",
-      "mempoolAccept": [
-        {
-          "txid": "5bdc263b54ec690a7d84d7c49a9f99cdfe6449cbae56cddfe2227af46d1defe0",
-          "allowed": true,
-          "vsize": 204,
-          "fees": {
-            "base": 0.00005
-          }
-        }
-      ],
-      "params": {
-        "propertyId": 5,
-        "amount": 1e-7,
-        "columnA": false,
-        "satsExpected": 20000,
-        "tokenOutput": 0,
-        "payToAddress": 1,
-        "isColoredOutput": false,
-        "tagWithdraw": null,
-        "senderAddress": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-        "txid": "5bdc263b54ec690a7d84d7c49a9f99cdfe6449cbae56cddfe2227af46d1defe0",
-        "block": 4694005,
-        "satsPaymentAddress": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-        "tokenDeliveryAddress": "tltc1qlch95jrgh2y95uf6u8rw6c3rqnd0js5agatrye",
-        "satsReceived": 20000,
-        "reason": "",
-        "valid": true,
-        "price": 2000,
-        "paymentPercent": 100
-      },
-      "referenceOutputs": [
-        {
-          "vout": 0,
-          "address": "tltc1qlch95jrgh2y95uf6u8rw6c3rqnd0js5agatrye",
-          "satoshis": 546,
-          "value": 0.00000546
-        },
-        {
-          "vout": 1,
-          "address": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-          "satoshis": 20000,
-          "value": 0.0002
-        },
-        {
-          "vout": 3,
-          "address": "tltc1qg49qzk8wywxvvwfxj7pzpkwyevnacnyfaqm83y",
-          "satoshis": 374454,
-          "value": 0.00374454
-        }
-      ]
+    "currentMark": 2200,
+    "maxDeviationBps": 500,
+    "configuredDeviation": {
+      "openBps": 0,
+      "closeBps": 200
     },
-    "close": {
-      "label": "close",
-      "txid": "f17ade3ac701b6c77a89dede088fcf1fdbffd5d8c4cc3d349dfcbe76fa2f1a9f",
+    "anchor": {
+      "label": "anchor",
+      "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
       "price": 2200,
       "tokenAmount": 1e-7,
       "propertyId": 5,
       "coinAmount": 0.00022,
       "paymentSats": 22000,
-      "fundingTxid": "6aa49346ad8e8a77ce87ca2aa113ce1247519499d5a676a93f83ba460d96b8fe",
-      "changeAddress": "tltc1ql9hmwgawghqznzu5962wrczr85u6a7u2zrv9mr",
+      "fundingTxid": null,
+      "changeAddress": "tltc1q3luk88us3v0fypy2ssj7e93wud82nq7pk4urxs",
       "mempoolAccept": [
         {
-          "txid": "f17ade3ac701b6c77a89dede088fcf1fdbffd5d8c4cc3d349dfcbe76fa2f1a9f",
+          "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
           "allowed": true,
           "vsize": 204,
           "fees": {
@@ -102,11 +47,11 @@
         "payToAddress": 1,
         "isColoredOutput": false,
         "tagWithdraw": null,
-        "senderAddress": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-        "txid": "f17ade3ac701b6c77a89dede088fcf1fdbffd5d8c4cc3d349dfcbe76fa2f1a9f",
-        "block": 4694006,
-        "satsPaymentAddress": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
-        "tokenDeliveryAddress": "tltc1qlch95jrgh2y95uf6u8rw6c3rqnd0js5agatrye",
+        "senderAddress": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+        "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
+        "block": 4694007,
+        "satsPaymentAddress": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+        "tokenDeliveryAddress": "tltc1q2uxzgjjdhyk70u7wdqu4qv762mm0e78m8m63qt",
         "satsReceived": 22000,
         "reason": "",
         "valid": true,
@@ -116,48 +61,111 @@
       "referenceOutputs": [
         {
           "vout": 0,
-          "address": "tltc1qlch95jrgh2y95uf6u8rw6c3rqnd0js5agatrye",
+          "address": "tltc1q2uxzgjjdhyk70u7wdqu4qv762mm0e78m8m63qt",
           "satoshis": 546,
           "value": 0.00000546
         },
         {
           "vout": 1,
-          "address": "tltc1q573xs208gwlnskv5jysuf35wjrcx2sm6z00dz3",
+          "address": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
           "satoshis": 22000,
           "value": 0.00022
         },
         {
           "vout": 3,
-          "address": "tltc1ql9hmwgawghqznzu5962wrczr85u6a7u2zrv9mr",
+          "address": "tltc1q3luk88us3v0fypy2ssj7e93wud82nq7pk4urxs",
           "satoshis": 372454,
           "value": 0.00372454
         }
       ]
-    }
+    },
+    "entry": {
+      "label": "anchor",
+      "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
+      "price": 2200,
+      "tokenAmount": 1e-7,
+      "propertyId": 5,
+      "coinAmount": 0.00022,
+      "paymentSats": 22000,
+      "fundingTxid": null,
+      "changeAddress": "tltc1q3luk88us3v0fypy2ssj7e93wud82nq7pk4urxs",
+      "mempoolAccept": [
+        {
+          "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
+          "allowed": true,
+          "vsize": 204,
+          "fees": {
+            "base": 0.00005
+          }
+        }
+      ],
+      "params": {
+        "propertyId": 5,
+        "amount": 1e-7,
+        "columnA": false,
+        "satsExpected": 22000,
+        "tokenOutput": 0,
+        "payToAddress": 1,
+        "isColoredOutput": false,
+        "tagWithdraw": null,
+        "senderAddress": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+        "txid": "a01c388279b29021f0cb833da55d7474fcd3ccabf0a5e765e5645e393b08994e",
+        "block": 4694007,
+        "satsPaymentAddress": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+        "tokenDeliveryAddress": "tltc1q2uxzgjjdhyk70u7wdqu4qv762mm0e78m8m63qt",
+        "satsReceived": 22000,
+        "reason": "",
+        "valid": true,
+        "price": 2200,
+        "paymentPercent": 100
+      },
+      "referenceOutputs": [
+        {
+          "vout": 0,
+          "address": "tltc1q2uxzgjjdhyk70u7wdqu4qv762mm0e78m8m63qt",
+          "satoshis": 546,
+          "value": 0.00000546
+        },
+        {
+          "vout": 1,
+          "address": "tltc1qad70jhacpgly9gra822d8zjhafu9970teg4avc",
+          "satoshis": 22000,
+          "value": 0.00022
+        },
+        {
+          "vout": 3,
+          "address": "tltc1q3luk88us3v0fypy2ssj7e93wud82nq7pk4urxs",
+          "satoshis": 372454,
+          "value": 0.00372454
+        }
+      ]
+    },
+    "close": null,
+    "closeMarkPublished": false
   },
   "dlc": {
-    "address": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
+    "address": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
     "type": "p2wsh-2-of-2",
-    "partyA": "tltc1qkp0a5z278gwzs8u2r4qkve83mx5uxy5yhn0pd0",
-    "partyB": "tltc1q7a4upl5um3kh4fkjyfdm2vxj4nzw3dme9wzd2d",
-    "witnessScript": "5221029bd1238e1501ff77be9dad4e39ab264e4df89fbce741db0e978e31f6a8dd4b312103bc7b1a90541c2b6a25ff7d840972825e224ba9b0d410ae0698338b87088ba6d952ae",
+    "partyA": "tltc1qctqr7wqn30r5pj2d5hu8ct4pcu3rkpp24qckku",
+    "partyB": "tltc1qrkjsf8esem8r37k30dedttkc692x2rmr46dsh9",
+    "witnessScript": "522102065cdcdcd0e9330d58d364c1c20e242938fd369585c6b152a3168d34955ffd7521029c63f7f26e79ffe99cabccaf8466c08e5db058e93d87ae1bf52911b0820646bd52ae",
     "pubkeys": [
-      "029bd1238e1501ff77be9dad4e39ab264e4df89fbce741db0e978e31f6a8dd4b31",
-      "03bc7b1a90541c2b6a25ff7d840972825e224ba9b0d410ae0698338b87088ba6d9"
+      "02065cdcdcd0e9330d58d364c1c20e242938fd369585c6b152a3168d34955ffd75",
+      "029c63f7f26e79ffe99cabccaf8466c08e5db058e93d87ae1bf52911b0820646bd"
     ]
   },
   "procedural": {
     "propertyId": 380,
     "templateId": "dlc-receipt-ltc-testnet-v1",
-    "contractId": "ltc-testnet-pnl-e2e-1777572065981-758ba06d",
+    "contractId": "ltc-testnet-pnl-e2e-1777574854232-2fce8447",
     "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
     "pledgeAmount": 0.001
   },
   "grant": {
-    "txid": "93d992b3b41212760288514a281a145dbb4e0bade4c2804f430f1d16b9166094",
+    "txid": "731b113411bf51370e6c87590c68072117dc97e12abbf77b289df6061f91e63f",
     "mempoolAccept": [
       {
-        "txid": "93d992b3b41212760288514a281a145dbb4e0bade4c2804f430f1d16b9166094",
+        "txid": "731b113411bf51370e6c87590c68072117dc97e12abbf77b289df6061f91e63f",
         "allowed": true,
         "vsize": 383,
         "fees": {
@@ -168,22 +176,22 @@
     "params": {
       "propertyId": 380,
       "amountGranted": 0.001,
-      "addressToGrantTo": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
+      "addressToGrantTo": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
       "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
       "dlcTemplateId": "dlc-receipt-ltc-testnet-v1",
-      "dlcContractId": "ltc-testnet-pnl-e2e-1777572065981-758ba06d",
+      "dlcContractId": "ltc-testnet-pnl-e2e-1777574854232-2fce8447",
       "settlementState": "FUNDED",
-      "referenceAddress": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
-      "redeemAddress": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
-      "senderAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
-      "txid": "93d992b3b41212760288514a281a145dbb4e0bade4c2804f430f1d16b9166094",
-      "block": 4694005,
+      "referenceAddress": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
+      "redeemAddress": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
+      "senderAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
+      "txid": "731b113411bf51370e6c87590c68072117dc97e12abbf77b289df6061f91e63f",
+      "block": 4694007,
       "reason": "",
       "valid": true,
       "referenceSatoshis": 100000,
       "referenceOutputs": [
         {
-          "address": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
+          "address": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
           "satoshis": 100000,
           "vout": 0
         }
@@ -192,63 +200,63 @@
     "referenceOutputs": [
       {
         "vout": 0,
-        "address": "tltc1qwfzwlkxh5g39tm34ffftg0u2l5ze6833cvfd9ksedd7mr6vq8hlsxrr9p2",
+        "address": "tltc1qdlstajd8gkyf63p659fth3ytk3pxcl8alsf0gmafhmmxuseec5rqzua5t3",
         "satoshis": 100000
       }
     ]
   },
   "perp": {
-    "contractId": 16,
-    "entryPrice": 2000,
-    "exitPrice": 2200,
+    "contractId": 17,
+    "entryPrice": 2200,
+    "exitPrice": 2244,
     "amount": 1,
     "notional": 1,
     "leverage": 10,
     "openTrade": {
-      "txid": "headless-open-perp-1777572085104-7dd31c70",
-      "initialMargin": 0.00005,
-      "price": 2000
-    },
-    "closeTrade": {
-      "txid": "headless-close-perp-1777572090302-4c6aea99",
+      "txid": "headless-open-perp-1777574858939-3f5d77fd",
       "initialMargin": 0.00004546,
       "price": 2200
+    },
+    "closeTrade": {
+      "txid": "headless-close-perp-1777574859094-4d6c5c2a",
+      "initialMargin": 0.00004457,
+      "price": 2244
     },
     "validation": {
       "open": {
         "long": {
           "senderAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-          "contractId": 16,
-          "price": 2000,
+          "contractId": 17,
+          "price": 2200,
           "amount": 1,
           "sell": false,
           "insurance": false,
           "reduce": false,
           "post": false,
           "stop": false,
-          "block": 4694005,
-          "txid": "valid-open-long-1777572065981-758ba06d",
+          "block": 4694007,
+          "txid": "valid-open-long-1777574854232-2fce8447",
           "reason": "",
           "valid": true,
-          "referenceMark": 2000,
+          "referenceMark": 2200,
           "deviationBps": 0,
           "maxDeviationBps": 500
         },
         "short": {
-          "senderAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
-          "contractId": 16,
-          "price": 2000,
+          "senderAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
+          "contractId": 17,
+          "price": 2200,
           "amount": 1,
           "sell": true,
           "insurance": false,
           "reduce": false,
           "post": false,
           "stop": false,
-          "block": 4694005,
-          "txid": "valid-open-short-1777572065981-758ba06d",
+          "block": 4694007,
+          "txid": "valid-open-short-1777574854232-2fce8447",
           "reason": "",
           "valid": true,
-          "referenceMark": 2000,
+          "referenceMark": 2200,
           "deviationBps": 0,
           "maxDeviationBps": 500
         }
@@ -256,70 +264,70 @@
       "close": {
         "long": {
           "senderAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-          "contractId": 16,
-          "price": 2200,
+          "contractId": 17,
+          "price": 2244,
           "amount": 1,
           "sell": true,
           "insurance": false,
           "reduce": false,
           "post": false,
           "stop": false,
-          "block": 4694006,
-          "txid": "valid-close-long-1777572065981-758ba06d",
+          "block": 4694008,
+          "txid": "valid-close-long-1777574854232-2fce8447",
           "reason": "",
           "valid": true,
           "referenceMark": 2200,
-          "deviationBps": 0,
+          "deviationBps": 200,
           "maxDeviationBps": 500
         },
         "short": {
-          "senderAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
-          "contractId": 16,
-          "price": 2200,
+          "senderAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
+          "contractId": 17,
+          "price": 2244,
           "amount": 1,
           "sell": false,
           "insurance": false,
           "reduce": false,
           "post": false,
           "stop": false,
-          "block": 4694006,
-          "txid": "valid-close-short-1777572065981-758ba06d",
+          "block": 4694008,
+          "txid": "valid-close-short-1777574854232-2fce8447",
           "reason": "",
           "valid": true,
           "referenceMark": 2200,
-          "deviationBps": 0,
+          "deviationBps": 200,
           "maxDeviationBps": 500
         }
       }
     },
     "longAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "shortAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
+    "shortAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
     "longPosition": {
       "contracts": 0,
       "margin": 0,
-      "unrealizedPNL": 0,
+      "unrealizedPNL": 0.00000891,
       "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
       "avgPrice": null,
       "liqPrice": 0,
       "bankruptcyPrice": 0,
-      "realizedPNL": 0.00004545
+      "realizedPNL": 0.00000891
     },
     "shortPosition": {
       "contracts": 0,
       "margin": 0,
-      "unrealizedPNL": 0,
+      "unrealizedPNL": -0.00000891,
       "avgPrice": null,
-      "address": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
+      "address": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
       "liqPrice": 0,
       "bankruptcyPrice": 0,
-      "realizedPNL": -0.00004545
+      "realizedPNL": -0.00000891
     },
-    "computedLongPnl": 0.00004545
+    "computedLongPnl": 0.00000891
   },
   "pnlTransfer": {
-    "fromAddress": "tltc1qxzn53y4qnexgn6l6czmc3gux4ug2nyhc93ap87",
+    "fromAddress": "tltc1qyzh9nsw20naeky8hx6tmr69yexcgz8ss0sk4d9",
     "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
-    "tokenAmount": 0.00004545
+    "tokenAmount": 0.00000891
   },
   "balancesBeforeOpen": {
     "long": {
@@ -341,16 +349,16 @@
   },
   "balancesAfterClose": {
     "long": {
-      "amount": 0.0028909,
-      "available": 0.0028899,
+      "amount": 0.00289981,
+      "available": 0.00289881,
       "reserved": 0,
       "margin": 0.000001,
       "vesting": 0,
       "channel": 0
     },
     "short": {
-      "amount": 0.001,
-      "available": 0.001,
+      "amount": 0.00099109,
+      "available": 0.00099109,
       "reserved": 0,
       "margin": 0,
       "vesting": 0,
