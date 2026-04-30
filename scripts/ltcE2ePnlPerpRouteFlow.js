@@ -13,11 +13,11 @@ const TxUtils = require('../src/txUtils.js');
 const TallyMap = require('../src/tally.js');
 const Consensus = require('../src/consensus.js');
 const ContractRegistry = require('../src/contractRegistry.js');
+const Channels = require('../src/channels.js');
 const ClearList = require('../src/clearlist.js');
 const MarginMap = require('../src/marginMap.js');
 const Orderbook = require('../src/orderbook.js');
 const Validity = require('../src/validity.js');
-const VolumeIndex = require('../src/volumeIndex.js');
 const Activation = require('../src/activation.js');
 const { ProceduralRegistry, PROCEDURAL_STATES } = require('../src/procedural.js');
 
@@ -33,6 +33,8 @@ const NETWORK = {
 
 const FIRST_FUNDER = process.env.TL_FIRST_FUNDER || 'tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22';
 const PROPERTY_ID = Number(process.env.TL_PROCEDURAL_PROPERTY || 380);
+const SPOT_PROPERTY_ID = Number(process.env.TL_SPOT_PROPERTY_ID || 5);
+const SPOT_TOKEN_AMOUNT = Number(process.env.TL_SPOT_TOKEN_AMOUNT || 0.0000001);
 const TEMPLATE_ID = process.env.TL_DLC_TEMPLATE_ID || 'dlc-receipt-ltc-testnet-v1';
 const DLC_HASH = process.env.TL_DLC_HASH || '60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499';
 const PLEDGE_AMOUNT = Number(process.env.TL_PLEDGE_AMOUNT || 0.001);
@@ -98,6 +100,18 @@ async function fundHotAddress(client, address) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`Funding tx ${txid} did not produce a spendable UTXO for ${address}`);
+}
+
+async function fundAddressForAmount(client, address, minAmount) {
+  let utxo = await largestUtxo(client, address, 0);
+  if (utxo && Number(utxo.amount) >= minAmount) return { txid: null, utxo };
+  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_SPOT_CHANNEL_TOPUP_LTC || 0.004)], true);
+  for (let i = 0; i < 20; i += 1) {
+    utxo = await largestUtxo(client, address, 0);
+    if (utxo && Number(utxo.amount) >= minAmount) return { txid, utxo };
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Top-up tx ${txid} did not produce a large enough UTXO for ${address}`);
 }
 
 async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
@@ -169,11 +183,152 @@ async function ensureTxTypeActive(txType, block) {
   return { txType, changed: true, activationBlock, result };
 }
 
+async function seedSpotChannel(channelAddress, propertyId, amount, block) {
+  const seededAmount = Number((amount * 4).toFixed(8));
+  await Channels.setChannel(channelAddress, {
+    channel: channelAddress,
+    participants: { A: channelAddress, B: '' },
+    A: { [propertyId]: seededAmount },
+    B: {},
+    commits: [{
+      senderAddress: channelAddress,
+      propertyId,
+      amount: seededAmount,
+      columnAssigned: 'A',
+      txid: `spot-channel-seed-${shortId()}`,
+      block
+    }],
+    lastUsedColumn: 'A',
+    lastCommitmentTime: block
+  });
+
+  const tally = await TallyMap.getTally(channelAddress, propertyId);
+  const currentChannel = Number(tally?.channel || 0);
+  if (currentChannel < seededAmount) {
+    await TallyMap.updateChannelBalance(
+      channelAddress,
+      propertyId,
+      Number((seededAmount - currentChannel).toFixed(8)),
+      'spotMarkChannelSeed',
+      block
+    );
+  }
+}
+
+async function buildSpotMarkTx(client, channelAddress, tokenDeliveryAddress, propertyId, tokenAmount, price, block) {
+  const coinAmount = Number((tokenAmount * price).toFixed(8));
+  const paymentSats = sats(coinAmount);
+  const payload = Encode.encodeTradeTokenForUTXO({
+    propertyId,
+    amount: tokenAmount,
+    columnA: true,
+    satsExpected: coinAmount,
+    tokenOutput: 0,
+    payToAddress: 1,
+    isColoredOutput: false
+  });
+
+  const utxo = await largestUtxo(client, channelAddress, 0);
+  if (!utxo) throw new Error(`No spendable UTXO for spot channel ${channelAddress}`);
+
+  const inputAmount = Number(utxo.amount);
+  const dust = Number(process.env.TL_SPOT_DUST_LTC || 0.00000546);
+  const fee = Number(process.env.TL_SPOT_FEE_LTC || 0.00005);
+  const required = Number((coinAmount + dust + fee).toFixed(8));
+  const funded = inputAmount >= required
+    ? { txid: null, utxo }
+    : await fundAddressForAmount(client, channelAddress, required);
+  const spendUtxo = funded.utxo;
+  const spendAmount = Number(spendUtxo.amount);
+  const change = Number((spendAmount - coinAmount - dust - fee).toFixed(8));
+  const changeAddress = await newAddress(client, `tl-e2e-pnl-spot-change-${shortId()}`);
+  if (change <= 0) {
+    throw new Error(`Spot mark UTXO ${spendUtxo.txid}:${spendUtxo.vout} too small for ${coinAmount} LTC mark payment`);
+  }
+
+  const raw = await client.rpcCall('createrawtransaction', [
+    [{ txid: spendUtxo.txid, vout: spendUtxo.vout }],
+    [
+      { [tokenDeliveryAddress]: dust },
+      { [channelAddress]: coinAmount },
+      { data: Buffer.from(payload, 'utf8').toString('hex') },
+      { [changeAddress]: change }
+    ]
+  ], false);
+  const signed = await client.signrawtransactionwithwallet(raw);
+  if (!signed.complete) throw new Error('wallet did not sign spot mark tx completely');
+  const decoded = await client.decoderawtransaction(signed.hex);
+  const accept = await client.rpcCall('testmempoolaccept', [[signed.hex]], false);
+  const txid = BROADCAST ? await client.sendrawtransaction(signed.hex) : decoded.txid;
+  return {
+    txid,
+    hex: signed.hex,
+    decoded,
+    accept,
+    payload,
+    coinAmount,
+    paymentSats,
+    fundingTxid: funded.txid,
+    changeAddress
+  };
+}
+
+async function applySpotMarkTx(spot, channelAddress, block) {
+  const referenceOutputs = spot.decoded.vout
+    .filter((v) => v?.scriptPubKey?.type !== 'nulldata')
+    .map((v) => ({ vout: v.n, address: outAddress(v), satoshis: sats(v.value), value: v.value }));
+
+  const params = await Types.decodePayload(
+    spot.txid,
+    3,
+    'tl',
+    spot.payload.slice(3),
+    channelAddress,
+    referenceOutputs,
+    0,
+    spot.paymentSats,
+    block
+  );
+  if (!params.valid) throw new Error(`spot tx3 invalid: ${params.reason}`);
+  if (APPLY_IMMEDIATE) {
+    await Logic.typeSwitch(3, params);
+    await Consensus.markTxAsProcessed(spot.txid, params);
+  }
+  return { params, referenceOutputs };
+}
+
+async function createSpotMark(client, channelAddress, tokenDeliveryAddress, price, block, label) {
+  const spot = await buildSpotMarkTx(
+    client,
+    channelAddress,
+    tokenDeliveryAddress,
+    SPOT_PROPERTY_ID,
+    SPOT_TOKEN_AMOUNT,
+    price,
+    block
+  );
+  const applied = await applySpotMarkTx(spot, channelAddress, block);
+  return {
+    label,
+    txid: spot.txid,
+    price,
+    tokenAmount: SPOT_TOKEN_AMOUNT,
+    propertyId: SPOT_PROPERTY_ID,
+    coinAmount: spot.coinAmount,
+    paymentSats: spot.paymentSats,
+    fundingTxid: spot.fundingTxid,
+    changeAddress: spot.changeAddress,
+    mempoolAccept: spot.accept,
+    params: applied.params,
+    referenceOutputs: applied.referenceOutputs
+  };
+}
+
 async function ensurePerpContract(block) {
   const contractId = await ContractRegistry.createContractSeries(FIRST_FUNDER, {
     native: true,
     underlyingOracleId: 0,
-    onChainData: [[PROPERTY_ID, 0]],
+    onChainData: [[0, SPOT_PROPERTY_ID]],
     notionalPropertyId: 0,
     notionalValue: CONTRACT_NOTIONAL,
     collateralPropertyId: PROPERTY_ID,
@@ -184,8 +339,6 @@ async function ensurePerpContract(block) {
     fee: false,
     whitelist: 0
   }, block);
-  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, ENTRY_PRICE, Math.max(1, block - 1), 'token');
-  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, ENTRY_PRICE, Math.max(1, block - 1), 'token');
   return contractId;
 }
 
@@ -279,6 +432,7 @@ async function main() {
   const closeBlock = block + 1;
 
   await ensureTxTypeActive(11, block);
+  await ensureTxTypeActive(3, block);
   await ensureTxTypeActive(18, block);
   await ensureTxTypeActive(24, block);
 
@@ -304,11 +458,16 @@ async function main() {
   });
 
   const funding = await fundHotAddress(client, secondFunder);
+  const spotChannel = process.env.TL_SPOT_CHANNEL || await newAddress(client, `tl-e2e-pnl-spot-channel-${run}`);
+  const spotTokenDelivery = process.env.TL_SPOT_TOKEN_DELIVERY || await newAddress(client, `tl-e2e-pnl-spot-delivery-${run}`);
+  const spotFunding = await fundHotAddress(client, spotChannel);
+  await seedSpotChannel(spotChannel, SPOT_PROPERTY_ID, SPOT_TOKEN_AMOUNT, block);
   await ClearList.addAttestation(0, secondFunder, 'CA', block);
   await ClearList.addAttestation(0, FIRST_FUNDER, 'CA', block);
   const grant = await buildGrantTx(client, secondFunder, dlc.address, dlcContractId);
   const grantApplied = await applyGrant(grant, secondFunder, block, dlc.address);
   const contractId = await ensurePerpContract(block);
+  const entrySpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, ENTRY_PRICE, block, 'entry');
 
   const balancesBeforeOpen = {
     long: await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID),
@@ -320,8 +479,7 @@ async function main() {
   };
   const openTrade = await processPerpMatch(contractId, FIRST_FUNDER, secondFunder, ENTRY_PRICE, block, 'headless-open-perp');
 
-  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
-  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
+  const closeSpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, EXIT_PRICE, closeBlock, 'close');
   const closeValidation = {
     long: await validatePerpLeg(FIRST_FUNDER, contractId, EXIT_PRICE, PERP_AMOUNT, true, closeBlock, `valid-close-long-${run}`),
     short: await validatePerpLeg(secondFunder, contractId, EXIT_PRICE, PERP_AMOUNT, false, closeBlock, `valid-close-short-${run}`)
@@ -345,6 +503,16 @@ async function main() {
     firstFunder: FIRST_FUNDER,
     secondFunder,
     fundingTxid: funding.txid,
+    spotMarkSource: {
+      pair: `0-${SPOT_PROPERTY_ID}`,
+      propertyId: SPOT_PROPERTY_ID,
+      channelAddress: spotChannel,
+      tokenDeliveryAddress: spotTokenDelivery,
+      fundingTxid: spotFunding.txid,
+      tokenAmount: SPOT_TOKEN_AMOUNT,
+      entry: entrySpotMark,
+      close: closeSpotMark
+    },
     dlc: {
       address: dlc.address,
       type: 'p2wsh-2-of-2',
