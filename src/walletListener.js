@@ -25,7 +25,7 @@ let isInitialized = false; // A flag to track the initialization status
 let isInitializing = false;
 let initPromise = null;
 const app = express();
-const port = 3000; // Choose a port that suits your setup
+const port = Number(process.env.TL_LISTENER_PORT || process.env.PORT || 3000);
 
 app.use(express.json()); // Middleware to parse JSON bodies
 
