@@ -1,0 +1,381 @@
+{
+  "run": "1777561100302-6d8acf6f",
+  "broadcast": true,
+  "applyImmediate": true,
+  "firstFunder": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+  "secondFunder": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+  "fundingTxid": "74f2bd79c6e9b1e62e01522805ce60fda940c3d305410ff4f8134a4c73701c9d",
+  "dlc": {
+    "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+    "type": "p2wsh-2-of-2",
+    "partyA": "tltc1qh5t9428erqjcmrufz9mqw8zaqsvjj36lfnw7p8",
+    "partyB": "tltc1qy2t5pag3vz2x8cwy2uxzzrmfg9s08xcmnm2eu8",
+    "witnessScript": "5221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae",
+    "pubkeys": [
+      "023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c318",
+      "02fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a7"
+    ]
+  },
+  "procedural": {
+    "propertyId": 380,
+    "templateId": "dlc-receipt-ltc-testnet-v1",
+    "contractId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+    "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+    "pledgeAmount": 0.001
+  },
+  "grant": {
+    "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+    "mempoolAccept": [
+      {
+        "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+        "allowed": true,
+        "vsize": 383,
+        "fees": {
+          "base": 0.00005
+        }
+      }
+    ],
+    "params": {
+      "propertyId": 380,
+      "amountGranted": 0.001,
+      "addressToGrantTo": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+      "dlcHash": "60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499",
+      "dlcTemplateId": "dlc-receipt-ltc-testnet-v1",
+      "dlcContractId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "settlementState": "FUNDED",
+      "referenceAddress": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+      "redeemAddress": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+      "senderAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+      "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+      "block": 4693996,
+      "reason": "",
+      "valid": true,
+      "referenceSatoshis": 100000,
+      "referenceOutputs": [
+        {
+          "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+          "satoshis": 100000,
+          "vout": 0
+        }
+      ]
+    },
+    "referenceOutputs": [
+      {
+        "vout": 0,
+        "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+        "satoshis": 100000
+      }
+    ]
+  },
+  "perp": {
+    "contractId": 13,
+    "entryPrice": 2000,
+    "exitPrice": 2200,
+    "amount": 1,
+    "notional": 1,
+    "leverage": 1000,
+    "openTrade": {
+      "txid": "headless-open-perp-1777561103272-3f894aa6",
+      "initialMargin": 5e-7,
+      "price": 2000
+    },
+    "closeTrade": {
+      "txid": "headless-close-perp-1777561103390-ec760f55",
+      "initialMargin": 4.6e-7,
+      "price": 2200
+    },
+    "longAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+    "shortAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+    "longPosition": {
+      "contracts": 0,
+      "margin": 0,
+      "unrealizedPNL": 0.00004545,
+      "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+      "avgPrice": null,
+      "liqPrice": 0,
+      "bankruptcyPrice": 0,
+      "realizedPNL": 0.00004545
+    },
+    "shortPosition": {
+      "contracts": 0,
+      "margin": 0,
+      "unrealizedPNL": -0.00004545,
+      "avgPrice": null,
+      "address": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+      "liqPrice": 0,
+      "bankruptcyPrice": 0,
+      "realizedPNL": -0.00004545
+    },
+    "computedLongPnl": 0.00004545
+  },
+  "pnlTransfer": {
+    "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+    "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+    "tokenAmount": 0.00004545
+  },
+  "balancesBeforeOpen": {
+    "long": {
+      "amount": 0.0028,
+      "available": 0.002799,
+      "reserved": 0,
+      "margin": 0.000001,
+      "vesting": 0,
+      "channel": 0
+    },
+    "short": {
+      "amount": 0.001,
+      "available": 0.001,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  },
+  "balancesAfterClose": {
+    "long": {
+      "amount": 0.00284545,
+      "available": 0.00284445,
+      "reserved": 0,
+      "margin": 0.000001,
+      "vesting": 0,
+      "channel": 0
+    },
+    "short": {
+      "amount": 0.00095455,
+      "available": 0.00095455,
+      "reserved": 0,
+      "margin": 0,
+      "vesting": 0,
+      "channel": 0
+    }
+  },
+  "witnessReveal": {
+    "run": "1777561105797-a2bef410",
+    "broadcast": true,
+    "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\ltc-second-funder-dlc-perp-tlusd-latest.json",
+    "oracleAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+    "revealDestination": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+    "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
+    "witness": {
+      "payloadBytes": 1662,
+      "scriptBytes": 1692,
+      "limit": 9900,
+      "p2wshAddress": "tltc1qdtdgun7hc33lymyjvaghax658g8cw92cejql3ejfgqjgqknzn32shtds27"
+    },
+    "commit": {
+      "txid": "955267db249de0db947173fe782bafcd78de66f9af8c0f222b09dda9dadb0802",
+      "vout": 0,
+      "amount": 0.0002,
+      "mempoolAccept": [
+        {
+          "txid": "955267db249de0db947173fe782bafcd78de66f9af8c0f222b09dda9dadb0802",
+          "allowed": true,
+          "vsize": 153,
+          "fees": {
+            "base": 0.00005
+          }
+        }
+      ]
+    },
+    "reveal": {
+      "txid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
+      "mempoolAccept": [
+        {
+          "txid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
+          "allowed": true,
+          "vsize": 507,
+          "fees": {
+            "base": 0.00002
+          }
+        }
+      ],
+      "output": {
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "sats": 18000,
+        "amount": 0.00018
+      },
+      "feeSats": 2000
+    },
+    "registry": {
+      "status": "PENDING",
+      "routeHash": "816230aae4d930a940c0c20721adba623eeabfb00de8c201e54491348dcd3e12",
+      "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
+      "tokenPnlHash": "3ea31c92c95bba88cc6e61c42212048ec263fe70e7eb5f7529643ef58e1790ee",
+      "challengeDeadlineBlock": 4694002
+    },
+    "payload": {
+      "protocol": "tl-utxoref-pnl-router",
+      "version": 1,
+      "chain": "litecoin-testnet",
+      "source": "state-oracle-witness-reveal",
+      "block": 4693996,
+      "generatedAt": "2026-04-30T14:58:25.355Z",
+      "dlcRef": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "propertyId": 380,
+      "tokenPnl": [
+        {
+          "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "tokenAmount": 0.00004545
+        }
+      ],
+      "balances": [
+        {
+          "address": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "balance": {
+            "amount": 0.00095455,
+            "available": 0.00095455,
+            "reserved": 0,
+            "margin": 0,
+            "vesting": 0,
+            "channel": 0
+          }
+        },
+        {
+          "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "balance": {
+            "amount": 0.00284545,
+            "available": 0.00284445,
+            "reserved": 0,
+            "margin": 0.000001,
+            "vesting": 0,
+            "channel": 0
+          }
+        }
+      ],
+      "utxoPayouts": [
+        {
+          "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "weight": 0.00004545,
+          "tokenAmount": 0.00004545
+        }
+      ],
+      "constraints": {
+        "dustSats": 546,
+        "note": "Resolver must route the UTXO to every address in utxoPayouts, weighted by positive token PNL."
+      }
+    }
+  },
+  "routePlan": {
+    "run": "1777561107623-61acf892",
+    "revealTxid": "4e6da5f20c5918b4bef0f851f8309b8aa25e7fd6ce48203376e8feb0f3eecb11",
+    "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
+    "planHash": "7e56828bfc135a5ee5662b0475a650848862d02ec8004ffd9cb095cd0da8a89c",
+    "dlcInput": {
+      "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+      "vout": 0,
+      "address": "tltc1q0h4udmzzd85krhtwp5wq5zzt3scs5djtywn4ctr5vmd575q77rvs52skhl",
+      "amount": 0.001,
+      "sats": 100000
+    },
+    "feeSats": 2000,
+    "outputPlan": [
+      {
+        "address": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "sats": 98000,
+        "amount": 0.00098
+      }
+    ],
+    "envelope": {
+      "protocol": "tl-utxoref-pnl-router",
+      "version": 1,
+      "source": "state-oracle-witness-reveal",
+      "dlcRef": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f",
+      "propertyId": 380,
+      "tokenPnl": [
+        {
+          "fromAddress": "tltc1qvpld8wh0sunmlml0jqx6l7t2zmza7xyur0q75k",
+          "toAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+          "tokenAmount": 0.00004545
+        }
+      ],
+      "attestation": {
+        "eventId": "ltc-testnet-pnl-e2e-1777561100302-6d8acf6f-pnl-route-0c78f213",
+        "outcome": "PNL_ROUTE",
+        "outcomeIndex": 0,
+        "stateHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
+        "payloadHash": "e092ac514889a4eff50f5da67a6fc49eb5b913bac794f0abccb665c8d4c22895",
+        "timestamp": 1777561105,
+        "oraclePubkeyHex": "039afe073cf1286aab9933bc3083c1d7e177270aded7bd5fec1cfeeb9679a3e7f7",
+        "signatureHex": "e5ccf06b1bc37d54e83d15db19da47107eb935c3d24e13b2be075eecfe8767ae3e6029d2ac7c5c0ebf7c87aaa5d80f88ed911fa92a9a2ac66aefaec446fd5e85"
+      }
+    },
+    "registry": {
+      "status": "PENDING",
+      "routeHash": "816230aae4d930a940c0c20721adba623eeabfb00de8c201e54491348dcd3e12",
+      "payoutVectorHash": "98cf46035d127ff5ba7e3cae7e2032f3f70176727c712d9484ce580242278316",
+      "tokenPnlHash": "3ea31c92c95bba88cc6e61c42212048ec263fe70e7eb5f7529643ef58e1790ee",
+      "challengeDeadlineBlock": 4694002
+    },
+    "dlcSpend": {
+      "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
+      "signed": {
+        "hex": "02000000000101b4f7889c5fed9f83dbd34e034d3e11d05893e71fe30e876ef2907e7e35c613760000000000ffffffff01d07e010000000000160014b09ec4ad49c56767f0a9356c525aabbf857c8e7d040047304402203978d51fddb218b31f240d702f4c1f380ac17371d1bb52a3c17c99d2c8c137ef0220244e1e3ff9ad7a646d64030c21ed071dd0d4567b9cd6deb496cc0dc4505fc7090147304402201b91e48305737fb92ff1123eb7d9b1cefd31c4c3880a2a25dde67ca7d599f6cb02201a0a657fa1b9299498b0a20db0786d3b700ce0746a855c42ea81a1d510c347e701475221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae00000000",
+        "complete": true
+      },
+      "decoded": {
+        "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
+        "hash": "a15623de9d998ce2843cf10598964cf4b67d69bbff4e813fa4fd7062ed41ceca",
+        "version": 2,
+        "size": 302,
+        "vsize": 137,
+        "weight": 548,
+        "locktime": 0,
+        "vin": [
+          {
+            "ismweb": false,
+            "txid": "7613c6357e7e90f26e870ee31fe79358d0113e4d034ed3db839fed5f9c88f7b4",
+            "vout": 0,
+            "scriptSig": {
+              "asm": "",
+              "hex": ""
+            },
+            "txinwitness": [
+              "",
+              "304402203978d51fddb218b31f240d702f4c1f380ac17371d1bb52a3c17c99d2c8c137ef0220244e1e3ff9ad7a646d64030c21ed071dd0d4567b9cd6deb496cc0dc4505fc70901",
+              "304402201b91e48305737fb92ff1123eb7d9b1cefd31c4c3880a2a25dde67ca7d599f6cb02201a0a657fa1b9299498b0a20db0786d3b700ce0746a855c42ea81a1d510c347e701",
+              "5221023c8a8ce051f5ac93d651448bd27e14eb7306d9fca22e171dc705e0a620e4c3182102fbf059e05cdaf2a7c47b3d440cab63d7579e5f06409538042e2b0632cdfa95a752ae"
+            ],
+            "sequence": 4294967295
+          }
+        ],
+        "vout": [
+          {
+            "ismweb": false,
+            "value": 0.00098,
+            "n": 0,
+            "scriptPubKey": {
+              "asm": "0 b09ec4ad49c56767f0a9356c525aabbf857c8e7d",
+              "hex": "0014b09ec4ad49c56767f0a9356c525aabbf857c8e7d",
+              "reqSigs": 1,
+              "type": "witness_v0_keyhash",
+              "addresses": [
+                "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22"
+              ]
+            }
+          }
+        ]
+      },
+      "mempoolAccept": [
+        {
+          "txid": "0ea92bfcceb0d9b97e16640dafb7ef2ee8c259c3159a037f7a9aded97adb8501",
+          "allowed": true,
+          "vsize": 137,
+          "fees": {
+            "base": 0.00002
+          }
+        }
+      ],
+      "broadcast": true
+    }
+  },
+  "utxoRefVerification": {
+    "ok": true,
+    "recomputedPlanHash": "7e56828bfc135a5ee5662b0475a650848862d02ec8004ffd9cb095cd0da8a89c",
+    "withdrawalRootHex": "d9f0e95ea9ddc27d5f7477d2352f086eb1fe30d31458ccc75e67f8280b0676d6",
+    "commitmentHashHex": "2b39f2ad5d4f921bed014eb2405fe21241d3ffac77ea883f49401608d9fa19c2",
+    "epochId": "17325538997076278436",
+    "payoutTotalSats": "98000",
+    "feeSats": "2000"
+  }
+}

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const bitcoin = require('bitcoinjs-lib');
 
 process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 'tl-wallet';
@@ -33,24 +34,28 @@ const PROPERTY_ID = Number(process.env.TL_PROCEDURAL_PROPERTY || 380);
 const TEMPLATE_ID = process.env.TL_DLC_TEMPLATE_ID || 'dlc-receipt-ltc-testnet-v1';
 const DLC_HASH = process.env.TL_DLC_HASH || '60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499';
 const PLEDGE_AMOUNT = Number(process.env.TL_PLEDGE_AMOUNT || 0.001);
-const MARK_PRICE = Number(process.env.TL_PERP_MARK || 2000);
+const ENTRY_PRICE = Number(process.env.TL_PERP_ENTRY || 2000);
+const EXIT_PRICE = Number(process.env.TL_PERP_EXIT || 2200);
 const CONTRACT_NOTIONAL = Number(process.env.TL_PERP_NOTIONAL || 1);
 const CONTRACT_LEVERAGE = Number(process.env.TL_PERP_LEVERAGE || 1000);
 const PERP_AMOUNT = Number(process.env.TL_PERP_AMOUNT || 1);
-const SYNTH_AMOUNT = Number(process.env.TL_SYNTH_AMOUNT || 1);
-const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
 const BROADCAST = process.env.TL_BROADCAST !== '0';
+const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
 
 function sats(ltc) {
   return Math.round(Number(ltc) * COIN);
 }
 
-function outAddress(vout) {
-  return vout?.scriptPubKey?.address || (Array.isArray(vout?.scriptPubKey?.addresses) ? vout.scriptPubKey.addresses[0] : '');
+function ltc(satoshis) {
+  return Number((Number(satoshis) / COIN).toFixed(8));
 }
 
 function shortId() {
   return crypto.randomBytes(4).toString('hex');
+}
+
+function outAddress(vout) {
+  return vout?.scriptPubKey?.address || (Array.isArray(vout?.scriptPubKey?.addresses) ? vout.scriptPubKey.addresses[0] : '');
 }
 
 async function newAddress(client, label) {
@@ -103,7 +108,6 @@ async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
     settlementState: PROCEDURAL_STATES.FUNDED,
     dlcHash: DLC_HASH
   });
-  const dataHex = Buffer.from(payload, 'utf8').toString('hex');
   const utxo = await largestUtxo(client, hotAddress, 0);
   if (!utxo) throw new Error(`No spendable UTXO for ${hotAddress}`);
 
@@ -116,7 +120,7 @@ async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
     [{ txid: utxo.txid, vout: utxo.vout }],
     [
       { [dlcAddress]: PLEDGE_AMOUNT },
-      { data: dataHex },
+      { data: Buffer.from(payload, 'utf8').toString('hex') },
       { [hotAddress]: change }
     ]
   ], false);
@@ -128,16 +132,11 @@ async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
   return { txid, hex: signed.hex, decoded, accept, payload };
 }
 
-async function applyGrant(grant, hotAddress, block) {
+async function applyGrant(grant, hotAddress, block, dlcAddress) {
   const referenceOutputs = grant.decoded.vout
-    .filter((v) => v.n === 0 || v.n === 1)
     .filter((v) => v?.scriptPubKey?.type !== 'nulldata')
-    .map((v) => ({
-      vout: v.n,
-      address: outAddress(v),
-      satoshis: sats(v.value)
-    }))
-    .filter((o) => o.address);
+    .map((v) => ({ vout: v.n, address: outAddress(v), satoshis: sats(v.value) }))
+    .filter((o) => o.address === dlcAddress);
 
   const params = await Types.decodePayload(
     grant.txid,
@@ -158,8 +157,17 @@ async function applyGrant(grant, hotAddress, block) {
   return { params, referenceOutputs };
 }
 
+async function ensureTxTypeActive(txType, block) {
+  const activation = Activation.getInstance();
+  await activation.init();
+  const isActive = await activation.isTxTypeActive(txType);
+  if (isActive) return { txType, changed: false };
+  const activationBlock = Math.max(1, block - 1);
+  const result = await activation.activate(txType, activationBlock, `ltc-e2e-pnl-flow-${txType}`);
+  return { txType, changed: true, activationBlock, result };
+}
+
 async function ensurePerpContract(block) {
-  const markBlock = Math.max(1, block - 1);
   const contractId = await ContractRegistry.createContractSeries(FIRST_FUNDER, {
     native: true,
     underlyingOracleId: 0,
@@ -174,82 +182,61 @@ async function ensurePerpContract(block) {
     fee: false,
     whitelist: 0
   }, block);
-  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, MARK_PRICE, markBlock, 'token');
-  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, MARK_PRICE, markBlock, 'token');
+  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, ENTRY_PRICE, Math.max(1, block - 1), 'token');
+  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, ENTRY_PRICE, Math.max(1, block - 1), 'token');
   return contractId;
 }
 
-async function ensureTxTypeActive(txType, block) {
-  const activation = Activation.getInstance();
-  await activation.init();
-  const isActive = await activation.isTxTypeActive(txType);
-  if (isActive) return { txType, changed: false };
-  const activationBlock = Math.max(1, block - 1);
-  const result = await activation.activate(txType, activationBlock, `ltc-dlc-perp-tlusd-demo-${txType}`);
-  return { txType, changed: true, activationBlock, result };
-}
-
-async function processPerpTrade(contractId, longAddress, shortAddress, block) {
-  const initialMargin = await ContractRegistry.getInitialMargin(contractId, MARK_PRICE);
+async function processPerpMatch(contractId, longAddress, shortAddress, price, block, txLabel) {
+  const initialMargin = await ContractRegistry.getInitialMargin(contractId, price);
   const orderbook = await Orderbook.getOrderbookInstance(String(contractId));
-  const txid = `headless-perp-${Date.now()}-${shortId()}`;
+  const txid = `${txLabel}-${Date.now()}-${shortId()}`;
   const match = {
     sellOrder: {
       contractId,
       amount: PERP_AMOUNT,
-      price: MARK_PRICE,
+      price,
       block,
       sell: true,
       sellSide: true,
       marginUsed: initialMargin * PERP_AMOUNT,
       sellerAddress: shortAddress,
       txid,
+      sellerTx: txid,
       maker: true
     },
     buyOrder: {
       contractId,
       amount: PERP_AMOUNT,
-      price: MARK_PRICE,
+      price,
       block,
       sell: false,
       buySide: true,
       marginUsed: initialMargin * PERP_AMOUNT,
       buyerAddress: longAddress,
       txid,
+      buyerTx: txid,
       maker: false
     },
-    price: MARK_PRICE,
-    tradePrice: MARK_PRICE,
+    price,
+    tradePrice: price,
     txid
   };
   await orderbook.processContractMatches([match], block, false);
-  return { txid, initialMargin };
+  return { txid, initialMargin, price };
 }
 
-async function mintTlusd(contractId, shortAddress, block) {
-  const params = {
-    propertyId: PROPERTY_ID,
-    contractId,
-    amount: SYNTH_AMOUNT,
-    senderAddress: shortAddress,
-    block,
-    txid: `headless-mint-${Date.now()}-${shortId()}`
-  };
-  const Validity = require('../src/validity.js');
-  const checked = await Validity.validateMintSynthetic(shortAddress, params, params.txid);
-  if (!checked.valid) throw new Error(`mint invalid: ${checked.reason}`);
-  await Logic.mintSynthetic(
-    shortAddress,
-    checked.propertyId,
-    checked.contractId,
-    checked.amount,
-    block,
-    checked.grossRequired,
-    checked.contracts,
-    checked.margin
-  );
-  await Consensus.markTxAsProcessed(checked.txid, checked);
-  return checked;
+function inverseLongPnl(entryPrice, exitPrice, contracts, notional) {
+  return Number(((1 / entryPrice - 1 / exitPrice) * contracts * notional).toFixed(8));
+}
+
+function runNodeScript(script, env) {
+  execFileSync(process.execPath, [script], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, ...env },
+    stdio: 'inherit',
+    timeout: Number(process.env.TL_E2E_CHILD_TIMEOUT_MS || 180000)
+  });
 }
 
 async function main() {
@@ -257,46 +244,63 @@ async function main() {
   const client = TxUtils.client;
   const run = `${Date.now()}-${shortId()}`;
   const block = Number(process.env.TL_HEADLESS_BLOCK || await client.getBlockCount());
+  const closeBlock = block + 1;
 
-  const hot2 = process.env.TL_SECOND_FUNDER || await newAddress(client, `tl-dlc-funder-${run}`);
-  const partyA = await newAddress(client, `tl-dlc-party-a-${run}`);
-  const partyB = await newAddress(client, `tl-dlc-party-b-${run}`);
+  await ensureTxTypeActive(11, block);
+  await ensureTxTypeActive(24, block);
+
+  const secondFunder = process.env.TL_SECOND_FUNDER || await newAddress(client, `tl-e2e-pnl-funder-${run}`);
+  const partyA = await newAddress(client, `tl-e2e-pnl-party-a-${run}`);
+  const partyB = await newAddress(client, `tl-e2e-pnl-party-b-${run}`);
   const dlc = makeP2wsh2of2(await getPubkey(client, partyA), await getPubkey(client, partyB));
-  const contractId = process.env.TL_DLC_CONTRACT_ID || `ltc-testnet-epoch-2-${run}`;
+  const dlcContractId = process.env.TL_DLC_CONTRACT_ID || `ltc-testnet-pnl-e2e-${run}`;
 
   await ProceduralRegistry.upsertTemplate(TEMPLATE_ID, {
     dlcHash: DLC_HASH,
     templateHash: DLC_HASH,
     state: PROCEDURAL_STATES.TEMPLATE,
-    source: 'ltc-second-funder-dry-run'
+    source: 'ltc-e2e-pnl-route-flow'
   });
-  await ProceduralRegistry.upsertContract(contractId, TEMPLATE_ID, PROCEDURAL_STATES.FUNDED, {
+  await ProceduralRegistry.upsertContract(dlcContractId, TEMPLATE_ID, PROCEDURAL_STATES.FUNDED, {
     dlcHash: DLC_HASH,
     redeemAddress: dlc.address,
     witnessScript: dlc.witnessScript,
     pubkeys: dlc.pubkeys,
     live: true,
-    source: 'ltc-second-funder-dry-run'
+    source: 'ltc-e2e-pnl-route-flow'
   });
 
-  const funding = await fundHotAddress(client, hot2);
-  const grant = await buildGrantTx(client, hot2, dlc.address, contractId);
-  const grantApplied = await applyGrant(grant, hot2, block);
-  const syntheticActivation = await ensureTxTypeActive(24, block);
-  const perpContractId = await ensurePerpContract(block);
-  const trade = await processPerpTrade(perpContractId, FIRST_FUNDER, hot2, block);
-  const mint = await mintTlusd(perpContractId, hot2, block);
+  const funding = await fundHotAddress(client, secondFunder);
+  const grant = await buildGrantTx(client, secondFunder, dlc.address, dlcContractId);
+  const grantApplied = await applyGrant(grant, secondFunder, block, dlc.address);
+  const contractId = await ensurePerpContract(block);
 
-  const marginMap = await MarginMap.getInstance(perpContractId);
-  const firstBalance = await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID);
-  const secondBalance = await TallyMap.getTally(hot2, PROPERTY_ID);
-  const secondSynth = await TallyMap.getTally(hot2, `s-${PROPERTY_ID}-${perpContractId}`);
-  const summary = {
+  const balancesBeforeOpen = {
+    long: await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID),
+    short: await TallyMap.getTally(secondFunder, PROPERTY_ID)
+  };
+  const openTrade = await processPerpMatch(contractId, FIRST_FUNDER, secondFunder, ENTRY_PRICE, block, 'headless-open-perp');
+
+  await VolumeIndex.saveVolumeDataById(`${PROPERTY_ID}-0`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
+  await VolumeIndex.saveVolumeDataById(`0-${PROPERTY_ID}`, PERP_AMOUNT, PERP_AMOUNT, EXIT_PRICE, closeBlock, 'token');
+  const closeTrade = await processPerpMatch(contractId, secondFunder, FIRST_FUNDER, EXIT_PRICE, closeBlock, 'headless-close-perp');
+
+  const marginMap = await MarginMap.getInstance(contractId);
+  const balancesAfterClose = {
+    long: await TallyMap.getTally(FIRST_FUNDER, PROPERTY_ID),
+    short: await TallyMap.getTally(secondFunder, PROPERTY_ID)
+  };
+  const longPnl = inverseLongPnl(ENTRY_PRICE, EXIT_PRICE, PERP_AMOUNT, CONTRACT_NOTIONAL);
+  const winner = longPnl >= 0 ? FIRST_FUNDER : secondFunder;
+  const loser = longPnl >= 0 ? secondFunder : FIRST_FUNDER;
+  const pnlAmount = Math.abs(longPnl);
+
+  const baseArtifact = {
     run,
     broadcast: BROADCAST,
     applyImmediate: APPLY_IMMEDIATE,
     firstFunder: FIRST_FUNDER,
-    secondFunder: hot2,
+    secondFunder,
     fundingTxid: funding.txid,
     dlc: {
       address: dlc.address,
@@ -309,7 +313,7 @@ async function main() {
     procedural: {
       propertyId: PROPERTY_ID,
       templateId: TEMPLATE_ID,
-      contractId,
+      contractId: dlcContractId,
       dlcHash: DLC_HASH,
       pledgeAmount: PLEDGE_AMOUNT
     },
@@ -319,39 +323,59 @@ async function main() {
       params: grantApplied.params,
       referenceOutputs: grantApplied.referenceOutputs
     },
-    activations: {
-      syntheticMint: syntheticActivation
-    },
     perp: {
-      contractId: perpContractId,
-      tradeTxid: trade.txid,
-      markPrice: MARK_PRICE,
+      contractId,
+      entryPrice: ENTRY_PRICE,
+      exitPrice: EXIT_PRICE,
+      amount: PERP_AMOUNT,
       notional: CONTRACT_NOTIONAL,
       leverage: CONTRACT_LEVERAGE,
-      amount: PERP_AMOUNT,
-      initialMargin: trade.initialMargin,
+      openTrade,
+      closeTrade,
       longAddress: FIRST_FUNDER,
-      shortAddress: hot2,
-      longPosition: await marginMap.getPositionForAddress(FIRST_FUNDER, perpContractId),
-      shortPosition: await marginMap.getPositionForAddress(hot2, perpContractId)
+      shortAddress: secondFunder,
+      longPosition: await marginMap.getPositionForAddress(FIRST_FUNDER, contractId),
+      shortPosition: await marginMap.getPositionForAddress(secondFunder, contractId),
+      computedLongPnl: longPnl
     },
-    tlusd: {
-      syntheticId: `s-${PROPERTY_ID}-${perpContractId}`,
-      amount: mint.amount,
-      mintParams: mint,
-      shortBalance: secondSynth
+    pnlTransfer: {
+      fromAddress: loser,
+      toAddress: winner,
+      tokenAmount: pnlAmount
     },
-    balances: {
-      firstFunderProperty: firstBalance,
-      secondFunderProperty: secondBalance
-    }
+    balancesBeforeOpen,
+    balancesAfterClose
   };
 
   const artifactDir = path.join(__dirname, '..', 'artifacts');
   fs.mkdirSync(artifactDir, { recursive: true });
-  const artifactPath = path.join(artifactDir, 'ltc-second-funder-dlc-perp-tlusd-latest.json');
-  fs.writeFileSync(artifactPath, JSON.stringify(summary, null, 2));
-  console.log(JSON.stringify({ artifactPath, summary }, null, 2));
+  const secondFunderArtifact = path.join(artifactDir, 'ltc-second-funder-dlc-perp-tlusd-latest.json');
+  fs.writeFileSync(secondFunderArtifact, JSON.stringify(baseArtifact, null, 2));
+
+  runNodeScript(path.join('scripts', 'ltcRevealPnlPayoutVector.js'), {
+    TL_PNL_FROM: loser,
+    TL_PNL_TO: winner,
+    TL_PNL_SWEEP_AMOUNT: String(pnlAmount),
+    TL_PNL_DLC_REF: dlcContractId
+  });
+
+  runNodeScript(path.join('scripts', 'ltcResolvePnlUtxoRouteFromWitness.js'), {
+    TL_BUILD_DLC_SPEND: '1',
+    TL_BROADCAST_DLC_PAYOUT: process.env.TL_BROADCAST_DLC_PAYOUT || '1'
+  });
+
+  const routePlan = JSON.parse(fs.readFileSync(path.join(artifactDir, 'ltc-pnl-utxo-route-plan-latest.json'), 'utf8'));
+  const verifyTradeLayerPnlRoutePlan = require('C:/projects/UTXORef/UTXO-Ref/bitvm3/utxo_referee/tradelayer_pnl_route_adapter').verifyTradeLayerPnlRoutePlan;
+  const utxoRefVerification = verifyTradeLayerPnlRoutePlan(routePlan);
+  const finalSummary = {
+    ...baseArtifact,
+    witnessReveal: JSON.parse(fs.readFileSync(path.join(artifactDir, 'ltc-pnl-witness-reveal-latest.json'), 'utf8')),
+    routePlan,
+    utxoRefVerification
+  };
+  const out = path.join(artifactDir, 'ltc-e2e-pnl-perp-route-flow-latest.json');
+  fs.writeFileSync(out, JSON.stringify(finalSummary, null, 2));
+  console.log(JSON.stringify({ artifactPath: out, summary: finalSummary }, null, 2));
 }
 
 main().catch((err) => {
