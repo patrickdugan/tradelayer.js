@@ -1,0 +1,46 @@
+{
+  "run": "1777517148800-5e705783",
+  "revealTxid": "cad205c65afaf6b2dc72f3e6e47e9b7fc3d3284d7ed95c5f965bfced2a0327b1",
+  "payloadHash": "db736014390df5c72d66fa365f6307b74d5fe1bfaed620bc0bfb87564117a1fd",
+  "planHash": "b55881472150bad9c821926d81cc9963c48f4f5b35583df8b88e07cb163ba895",
+  "dlcInput": {
+    "txid": "26228560e070a76e7516aaa502d2e74acdf2359f71ea9aa7b5d8623279c5d510",
+    "vout": 0,
+    "address": "tltc1qn06nctkv2sm8wdjx5fe2x0zluxlyxynq3vud87hxsfv3u8kwdcaq0xvhqa",
+    "amount": 0.001,
+    "sats": 100000
+  },
+  "feeSats": 2000,
+  "outputPlan": [
+    {
+      "address": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+      "sats": 98000,
+      "amount": 0.00098
+    }
+  ],
+  "envelope": {
+    "protocol": "tl-utxoref-pnl-router",
+    "version": 1,
+    "source": "state-oracle-witness-reveal",
+    "dlcRef": "ltc-testnet-epoch-2-1777489615629-fda7a8a8",
+    "propertyId": 380,
+    "tokenPnl": [
+      {
+        "fromAddress": "tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22",
+        "toAddress": "tltc1qldtqy3y0rasay8dqz6kc2nxx6zfs9e9j4veqcz",
+        "tokenAmount": 0.0001
+      }
+    ],
+    "attestation": {
+      "eventId": "ltc-testnet-epoch-2-1777489615629-fda7a8a8-pnl-route-4f49072c",
+      "outcome": "PNL_ROUTE",
+      "outcomeIndex": 0,
+      "stateHash": "db736014390df5c72d66fa365f6307b74d5fe1bfaed620bc0bfb87564117a1fd",
+      "payloadHash": "db736014390df5c72d66fa365f6307b74d5fe1bfaed620bc0bfb87564117a1fd",
+      "timestamp": 1777517142,
+      "oraclePubkeyHex": "02a6824627d729bd2fe41e7e46a16d823ca2e40e3f347f0c9820602066ce9124e6",
+      "signatureHex": "f28cf706e203f086c928ef8389d704d432d78e72ee3eb3c35bf87190a5c0d12664863dbe98dd1247f1f70250d2303c2aea8f743cddc2d51f074dbb5a01e7b3ba"
+    }
+  },
+  "dlcSpend": null
+}

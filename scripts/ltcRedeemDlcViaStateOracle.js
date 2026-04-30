@@ -20,7 +20,7 @@ const { createOracleSigner } = require('../tests/makeshiftOracle.js');
 const COIN = 100000000;
 const ARTIFACT_IN = path.join(__dirname, '..', 'artifacts', 'ltc-second-funder-dlc-perp-tlusd-latest.json');
 const ARTIFACT_OUT = path.join(__dirname, '..', 'artifacts', 'ltc-dlc-redeem-state-oracle-latest.json');
-const PNL_ARTIFACT_DEFAULT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-sweep-state-oracle-latest.json');
+const PNL_ARTIFACT_DEFAULT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-witness-reveal-latest.json');
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
 
@@ -64,7 +64,16 @@ function loadPnlSettlementArtifact() {
   if (!requested || !fs.existsSync(requested)) return null;
   const doc = JSON.parse(fs.readFileSync(requested, 'utf8'));
   const relay = parseRelayBlobRaw(doc?.params?.relayBlob);
-  const settlement = relay?.settlement || doc?.pnlSweep || null;
+  const settlement = doc?.payload
+    ? {
+      mode: 'pnl_witness_route',
+      dlcRef: doc.payload.dlcRef,
+      propertyId: doc.payload.propertyId,
+      stateHash: doc.payloadHash,
+      utxoPayouts: doc.payload.utxoPayouts,
+      tokenPnl: doc.payload.tokenPnl
+    }
+    : (relay?.settlement || doc?.pnlSweep || null);
   return settlement ? { path: requested, doc, relay, settlement } : null;
 }
 

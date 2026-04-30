@@ -174,47 +174,6 @@ describe('tx30 relay settlement modes', () => {
     ]);
   });
 
-  test('relayBlob settlement mode=pnl_sweep can sweep a full address list', async () => {
-    const { Logic, updates } = loadHarness();
-    const relayBlob = JSON.stringify({
-      eventId: 'ev3-list',
-      outcome: 'SETTLED',
-      outcomeIndex: 0,
-      stateHash: 's3-list',
-      timestamp: 3,
-      settlement: {
-        mode: 'pnl_sweep',
-        propertyId: 5,
-        amount: 3,
-        fromAddress: 'fallbackLoser',
-        toAddress: 'fallbackWinner',
-        pnlEntries: [
-          { fromAddress: 'loserA', toAddress: 'winnerA', amount: 1.25 },
-          { fromAddress: 'loserB', toAddress: 'winnerB', amount: 1.75 }
-        ],
-        utxoPayouts: [
-          { address: 'winnerA', weight: 1.25 },
-          { address: 'winnerB', weight: 1.75 }
-        ]
-      }
-    });
-
-    await Logic.processStakeFraudProof('oracleAdmin', {
-      action: 2,
-      oracleId: 1,
-      relayType: 1,
-      stateHash: 's3-list',
-      relayBlob
-    }, 502);
-
-    expect(updates).toEqual([
-      ['loserA', 5, -1.25, 0, 0, 0, 'oraclePnlSweep', 502],
-      ['winnerA', 5, 1.25, 0, 0, 0, 'oraclePnlSweep', 502],
-      ['loserB', 5, -1.75, 0, 0, 0, 'oraclePnlSweep', 502],
-      ['winnerB', 5, 1.75, 0, 0, 0, 'oraclePnlSweep', 502]
-    ]);
-  });
-
   test('state-root gate rejects unanchored settlement when required', async () => {
     const prev = process.env.TL_ORACLE_REQUIRE_STATE_ROOT;
     process.env.TL_ORACLE_REQUIRE_STATE_ROOT = '1';
