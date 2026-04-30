@@ -1,0 +1,117 @@
+{
+  "run": "1777576801624-174268df",
+  "broadcast": true,
+  "sourceArtifact": "C:\\projects\\tradelayer.js\\artifacts\\btctest-second-funder-dlc-perp-tlusd-latest.json",
+  "oracleAddress": "tb1qv2s706vkqs0kak6kavkjn6tmvx9y3g06pa75kp",
+  "revealDestination": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+  "payloadHash": "27e31910926704be8ab21d8da77b15e28e7dd4985e4faf5f5b3d4f3ded022430",
+  "witness": {
+    "payloadBytes": 1618,
+    "scriptBytes": 1647,
+    "limit": 9900,
+    "p2wshAddress": "tb1q5jdfld0t4sdehu80z3esjjs55q4xt7z4hcz3a9kpsxw4x973m8gsg6h6k9"
+  },
+  "commit": {
+    "txid": "b08f0d140c9e68b336cdf03a89cb130bb4062316e804cbc90ae1229b363097c9",
+    "vout": 0,
+    "amount": 0.000008,
+    "mempoolAccept": [
+      {
+        "txid": "b08f0d140c9e68b336cdf03a89cb130bb4062316e804cbc90ae1229b363097c9",
+        "wtxid": "5ad60705df4f6e4607d0b41739419af9de07063376b634aabd92d754f7f90cf5",
+        "allowed": true,
+        "vsize": 153,
+        "fees": {
+          "base": 0.000002,
+          "effective-feerate": 0.00001307,
+          "effective-includes": [
+            "5ad60705df4f6e4607d0b41739419af9de07063376b634aabd92d754f7f90cf5"
+          ]
+        }
+      }
+    ]
+  },
+  "reveal": {
+    "txid": "238bd5097480d0e97e4278882397ebd68201ff31f80036e79f882f7e2070e643",
+    "mempoolAccept": [
+      {
+        "txid": "238bd5097480d0e97e4278882397ebd68201ff31f80036e79f882f7e2070e643",
+        "wtxid": "1621361406a6c4c2f040cf39ddfed2de28916f3399682e1489f77dc3e3d7aa36",
+        "allowed": true,
+        "vsize": 496,
+        "fees": {
+          "base": 0.000002,
+          "effective-feerate": 0.00000403,
+          "effective-includes": [
+            "1621361406a6c4c2f040cf39ddfed2de28916f3399682e1489f77dc3e3d7aa36"
+          ]
+        }
+      }
+    ],
+    "output": {
+      "address": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+      "sats": 600,
+      "amount": 0.000006
+    },
+    "feeSats": 200
+  },
+  "registry": {
+    "status": "PENDING",
+    "routeHash": "ded899b1626d8cc058d182504f881b76a26ed25c9b60414cfecdb7357fca45cd",
+    "payoutVectorHash": "e7322ecfe1e2357c52b485846b864ca0fe30579270a5d19dd51c5b2129c6478f",
+    "tokenPnlHash": "c6a958c5fd63da4e374ff8032656da98a12c76e0d91aaebf8610edc62e15f5a0",
+    "challengeDeadlineBlock": 133130
+  },
+  "payload": {
+    "protocol": "tl-utxoref-pnl-router",
+    "version": 1,
+    "chain": "bitcoin-testnet4",
+    "source": "state-oracle-witness-reveal",
+    "block": 133124,
+    "generatedAt": "2026-04-30T19:19:56.875Z",
+    "dlcRef": "btctest-pnl-e2e-1777576777533-372c6e58",
+    "propertyId": 380,
+    "tokenPnl": [
+      {
+        "fromAddress": "tb1qhreqkc3097ayn76w69wu8f4p8zv78mw0az0jkl",
+        "toAddress": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+        "tokenAmount": 9e-8
+      }
+    ],
+    "balances": [
+      {
+        "address": "tb1qhreqkc3097ayn76w69wu8f4p8zv78mw0az0jkl",
+        "balance": {
+          "amount": 0.00002991,
+          "available": 0.00002991,
+          "reserved": 0,
+          "margin": 0,
+          "vesting": 0,
+          "channel": 0
+        }
+      },
+      {
+        "address": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+        "balance": {
+          "amount": 0.00010009,
+          "available": 0.00010009,
+          "reserved": 0,
+          "margin": 0,
+          "vesting": 0,
+          "channel": 0
+        }
+      }
+    ],
+    "utxoPayouts": [
+      {
+        "address": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+        "weight": 9e-8,
+        "tokenAmount": 9e-8
+      }
+    ],
+    "constraints": {
+      "dustSats": 546,
+      "note": "Resolver must route the UTXO to every address in utxoPayouts, weighted by positive token PNL."
+    }
+  }
+}

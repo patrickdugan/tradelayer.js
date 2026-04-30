@@ -3,7 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 
-process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 'tl-wallet';
+const IS_BTC = String(process.env.CHAIN || '').toUpperCase().includes('BTC');
+process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || (IS_BTC ? 'utxoref-testnet' : 'tl-wallet');
 
 const TxUtils = require('../src/txUtils.js');
 const TallyMap = require('../src/tally.js');
@@ -11,7 +12,7 @@ const { PnlRouteRegistry } = require('../src/pnlRouteRegistry.js');
 const { createOracleSigner } = require('../tests/makeshiftOracle.js');
 
 const COIN = 100000000;
-const NETWORK = {
+const NETWORK = IS_BTC ? bitcoin.networks.testnet : {
   messagePrefix: '\x19Litecoin Signed Message:\n',
   bech32: 'tltc',
   bip32: { public: 0x043587cf, private: 0x04358394 },
@@ -20,8 +21,9 @@ const NETWORK = {
   wif: 0xef
 };
 
-const SOURCE_ARTIFACT = path.join(__dirname, '..', 'artifacts', 'ltc-second-funder-dlc-perp-tlusd-latest.json');
-const OUT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-witness-reveal-latest.json');
+const ARTIFACT_PREFIX = process.env.TL_ARTIFACT_PREFIX || (IS_BTC ? 'btctest' : 'ltc');
+const SOURCE_ARTIFACT = process.env.TL_DLC_ARTIFACT || path.join(__dirname, '..', 'artifacts', `${ARTIFACT_PREFIX}-second-funder-dlc-perp-tlusd-latest.json`);
+const OUT = process.env.TL_PNL_REVEAL_OUT || path.join(__dirname, '..', 'artifacts', `${ARTIFACT_PREFIX}-pnl-witness-reveal-latest.json`);
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const WITNESS_LIMIT = Number(process.env.TL_PNL_WITNESS_LIMIT || 9900);
 
@@ -157,7 +159,7 @@ async function main() {
   const payload = {
     protocol: 'tl-utxoref-pnl-router',
     version: 1,
-    chain: 'litecoin-testnet',
+    chain: process.env.TL_CHAIN_LABEL || (IS_BTC ? 'bitcoin-testnet4' : 'litecoin-testnet'),
     source: 'state-oracle-witness-reveal',
     block,
     generatedAt: new Date().toISOString(),

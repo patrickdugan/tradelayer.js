@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const bitcoin = require('bitcoinjs-lib');
 
-process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 'tl-wallet';
+const IS_BTC = String(process.env.CHAIN || '').toUpperCase().includes('BTC');
+process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || (IS_BTC ? 'utxoref-testnet' : 'tl-wallet');
 
 const Encode = require('../src/txEncoder.js');
 const Types = require('../src/types.js');
@@ -17,12 +18,13 @@ const Channels = require('../src/channels.js');
 const ClearList = require('../src/clearlist.js');
 const MarginMap = require('../src/marginMap.js');
 const Orderbook = require('../src/orderbook.js');
+const PropertyManager = require('../src/property.js');
 const Validity = require('../src/validity.js');
 const Activation = require('../src/activation.js');
 const { ProceduralRegistry, PROCEDURAL_STATES } = require('../src/procedural.js');
 
 const COIN = 100000000;
-const NETWORK = {
+const NETWORK = IS_BTC ? bitcoin.networks.testnet : {
   messagePrefix: '\x19Litecoin Signed Message:\n',
   bech32: 'tltc',
   bip32: { public: 0x043587cf, private: 0x04358394 },
@@ -31,11 +33,13 @@ const NETWORK = {
   wif: 0xef
 };
 
-const FIRST_FUNDER = process.env.TL_FIRST_FUNDER || 'tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22';
+const ARTIFACT_PREFIX = process.env.TL_ARTIFACT_PREFIX || (IS_BTC ? 'btctest' : 'ltc');
+const CHAIN_LABEL = process.env.TL_CHAIN_LABEL || (IS_BTC ? 'bitcoin-testnet4' : 'litecoin-testnet');
+const FIRST_FUNDER = process.env.TL_FIRST_FUNDER || (IS_BTC ? 'tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu' : 'tltc1qkz0vft2fc4nk0u9fx4k9yk4th7zherna3zxh22');
 const PROPERTY_ID = Number(process.env.TL_PROCEDURAL_PROPERTY || 380);
 const SPOT_PROPERTY_ID = Number(process.env.TL_SPOT_PROPERTY_ID || 5);
 const SPOT_TOKEN_AMOUNT = Number(process.env.TL_SPOT_TOKEN_AMOUNT || 0.0000001);
-const TEMPLATE_ID = process.env.TL_DLC_TEMPLATE_ID || 'dlc-receipt-ltc-testnet-v1';
+const TEMPLATE_ID = process.env.TL_DLC_TEMPLATE_ID || `dlc-receipt-${ARTIFACT_PREFIX}-v1`;
 const DLC_HASH = process.env.TL_DLC_HASH || '60e19d0c4f34a09a690e679230bf41a63252306e0e06a09e1b090efbcbb7b499';
 const PLEDGE_AMOUNT = Number(process.env.TL_PLEDGE_AMOUNT || 0.001);
 const SPOT_MARK_PRICE = Number(process.env.TL_SPOT_MARK_PRICE || 2200);
@@ -49,6 +53,7 @@ const PUBLISH_CLOSE_SPOT_MARK = process.env.TL_CLOSE_SPOT_MARK === '1';
 const CLOSE_SPOT_MARK_PRICE = Number(process.env.TL_CLOSE_SPOT_MARK_PRICE || EXIT_PRICE);
 const BROADCAST = process.env.TL_BROADCAST !== '0';
 const APPLY_IMMEDIATE = process.env.TL_APPLY_IMMEDIATE !== '0';
+const DUST_COIN = Number(process.env.TL_DUST_COIN || 0.00000546);
 
 function sats(ltc) {
   return Math.round(Number(ltc) * COIN);
@@ -109,7 +114,7 @@ async function largestUtxo(client, address, minConf = 0) {
 async function fundHotAddress(client, address) {
   let utxo = await largestUtxo(client, address, 0);
   if (utxo) return { txid: null, utxo };
-  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_SECOND_FUNDER_LTC || 0.004)], true);
+  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_SECOND_FUNDER_COIN || process.env.TL_SECOND_FUNDER_LTC || 0.004)], true);
   for (let i = 0; i < 20; i += 1) {
     utxo = await largestUtxo(client, address, 0);
     if (utxo) return { txid, utxo };
@@ -121,7 +126,7 @@ async function fundHotAddress(client, address) {
 async function fundAddressForAmount(client, address, minAmount) {
   let utxo = await largestUtxo(client, address, 0);
   if (utxo && Number(utxo.amount) >= minAmount) return { txid: null, utxo };
-  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_SPOT_CHANNEL_TOPUP_LTC || 0.004)], true);
+  const txid = await client.rpcCall('sendtoaddress', [address, Number(process.env.TL_ADDRESS_TOPUP_COIN || process.env.TL_SPOT_CHANNEL_TOPUP_LTC || 0.004)], true);
   for (let i = 0; i < 20; i += 1) {
     utxo = await largestUtxo(client, address, 0);
     if (utxo && Number(utxo.amount) >= minAmount) return { txid, utxo };
@@ -140,28 +145,29 @@ async function buildGrantTx(client, hotAddress, dlcAddress, contractId) {
     settlementState: PROCEDURAL_STATES.FUNDED,
     dlcHash: DLC_HASH
   });
-  const utxo = await largestUtxo(client, hotAddress, 0);
-  if (!utxo) throw new Error(`No spendable UTXO for ${hotAddress}`);
-
+  const fee = Number(process.env.TL_GRANT_FEE || (IS_BTC ? 0.000015 : 0.00005));
+  const required = Number((PLEDGE_AMOUNT + fee).toFixed(8));
+  const funded = await fundAddressForAmount(client, hotAddress, required);
+  const utxo = funded.utxo;
   const inputAmount = Number(utxo.amount);
-  const fee = Number(process.env.TL_GRANT_FEE || 0.00005);
   const change = Number((inputAmount - PLEDGE_AMOUNT - fee).toFixed(8));
-  if (change <= 0) throw new Error(`UTXO ${utxo.txid}:${utxo.vout} too small for pledge`);
+  if (change < 0) throw new Error(`UTXO ${utxo.txid}:${utxo.vout} too small for pledge`);
+  const outputs = [
+    { [dlcAddress]: PLEDGE_AMOUNT },
+    { data: Buffer.from(payload, 'utf8').toString('hex') }
+  ];
+  if (change >= DUST_COIN) outputs.push({ [hotAddress]: change });
 
   const raw = await client.rpcCall('createrawtransaction', [
     [{ txid: utxo.txid, vout: utxo.vout }],
-    [
-      { [dlcAddress]: PLEDGE_AMOUNT },
-      { data: Buffer.from(payload, 'utf8').toString('hex') },
-      { [hotAddress]: change }
-    ]
+    outputs
   ], false);
   const signed = await client.signrawtransactionwithwallet(raw);
   if (!signed.complete) throw new Error('wallet did not sign grant tx completely');
   const decoded = await client.decoderawtransaction(signed.hex);
   const accept = await client.rpcCall('testmempoolaccept', [[signed.hex]], false);
   const txid = BROADCAST ? await client.sendrawtransaction(signed.hex) : decoded.txid;
-  return { txid, hex: signed.hex, decoded, accept, payload };
+  return { txid, hex: signed.hex, decoded, accept, payload, fundingTxid: funded.txid };
 }
 
 async function applyGrant(grant, hotAddress, block, dlcAddress) {
@@ -189,9 +195,29 @@ async function applyGrant(grant, hotAddress, block, dlcAddress) {
   return { params, referenceOutputs };
 }
 
+async function ensureCollateralGrant(client, hotAddress, dlcAddress, contractId, block, minAvailable) {
+  const tally = await TallyMap.getTally(hotAddress, PROPERTY_ID);
+  if (Number(tally?.available || 0) >= minAvailable) return null;
+  const grant = await buildGrantTx(client, hotAddress, dlcAddress, contractId);
+  const applied = await applyGrant(grant, hotAddress, block, dlcAddress);
+  return {
+    txid: grant.txid,
+    mempoolAccept: grant.accept,
+    params: applied.params,
+    referenceOutputs: applied.referenceOutputs
+  };
+}
+
 async function ensureTxTypeActive(txType, block) {
   const activation = Activation.getInstance();
   await activation.init();
+  if (!activation.txRegistry?.[txType]) {
+    const defaults = activation.initializeTxRegistry();
+    if (defaults[txType]) {
+      activation.txRegistry[txType] = defaults[txType];
+      await activation.saveActivationsList();
+    }
+  }
   const isActive = await activation.isTxTypeActive(txType);
   if (isActive) return { txType, changed: false };
   const activationBlock = Math.max(1, block - 1);
@@ -200,6 +226,21 @@ async function ensureTxTypeActive(txType, block) {
 }
 
 async function seedSpotChannel(channelAddress, propertyId, amount, block) {
+  await PropertyManager.load();
+  const existing = await PropertyManager.getPropertyData(propertyId);
+  if (!existing) {
+    const manager = PropertyManager.getInstance();
+    await manager.addProperty(
+      propertyId,
+      process.env.TL_SPOT_TICKER || `SPOT${propertyId}`,
+      Number(process.env.TL_SPOT_TOTAL || 1),
+      'Fixed',
+      0,
+      FIRST_FUNDER,
+      ''
+    );
+  }
+
   const seededAmount = Number((amount * 4).toFixed(8));
   await Channels.setChannel(channelAddress, {
     channel: channelAddress,
@@ -244,32 +285,31 @@ async function buildSpotMarkTx(client, channelAddress, tokenDeliveryAddress, pro
     isColoredOutput: false
   });
 
-  const utxo = await largestUtxo(client, channelAddress, 0);
-  if (!utxo) throw new Error(`No spendable UTXO for spot channel ${channelAddress}`);
-
-  const inputAmount = Number(utxo.amount);
-  const dust = Number(process.env.TL_SPOT_DUST_LTC || 0.00000546);
-  const fee = Number(process.env.TL_SPOT_FEE_LTC || 0.00005);
+  const dust = Number(process.env.TL_SPOT_DUST_LTC || DUST_COIN);
+  const fee = Number(process.env.TL_SPOT_FEE_COIN || process.env.TL_SPOT_FEE_LTC || (IS_BTC ? 0.000015 : 0.00005));
   const required = Number((coinAmount + dust + fee).toFixed(8));
+  const availableUtxo = await largestUtxo(client, channelAddress, 0);
+  const inputAmount = Number(availableUtxo?.amount || 0);
   const funded = inputAmount >= required
-    ? { txid: null, utxo }
+    ? { txid: null, utxo: availableUtxo }
     : await fundAddressForAmount(client, channelAddress, required);
   const spendUtxo = funded.utxo;
   const spendAmount = Number(spendUtxo.amount);
   const change = Number((spendAmount - coinAmount - dust - fee).toFixed(8));
   const changeAddress = await newAddress(client, `tl-e2e-pnl-spot-change-${shortId()}`);
-  if (change <= 0) {
+  if (change < 0) {
     throw new Error(`Spot mark UTXO ${spendUtxo.txid}:${spendUtxo.vout} too small for ${coinAmount} LTC mark payment`);
   }
+  const outputs = [
+    { [tokenDeliveryAddress]: dust },
+    { [channelAddress]: coinAmount },
+    { data: Buffer.from(payload, 'utf8').toString('hex') }
+  ];
+  if (change >= DUST_COIN) outputs.push({ [changeAddress]: change });
 
   const raw = await client.rpcCall('createrawtransaction', [
     [{ txid: spendUtxo.txid, vout: spendUtxo.vout }],
-    [
-      { [tokenDeliveryAddress]: dust },
-      { [channelAddress]: coinAmount },
-      { data: Buffer.from(payload, 'utf8').toString('hex') },
-      { [changeAddress]: change }
-    ]
+    outputs
   ], false);
   const signed = await client.signrawtransactionwithwallet(raw);
   if (!signed.complete) throw new Error('wallet did not sign spot mark tx completely');
@@ -460,7 +500,7 @@ async function main() {
   const partyA = await newAddress(client, `tl-e2e-pnl-party-a-${run}`);
   const partyB = await newAddress(client, `tl-e2e-pnl-party-b-${run}`);
   const dlc = makeP2wsh2of2(await getPubkey(client, partyA), await getPubkey(client, partyB));
-  const dlcContractId = process.env.TL_DLC_CONTRACT_ID || `ltc-testnet-pnl-e2e-${run}`;
+  const dlcContractId = process.env.TL_DLC_CONTRACT_ID || `${ARTIFACT_PREFIX}-pnl-e2e-${run}`;
 
   await ProceduralRegistry.upsertTemplate(TEMPLATE_ID, {
     dlcHash: DLC_HASH,
@@ -487,6 +527,14 @@ async function main() {
   const grant = await buildGrantTx(client, secondFunder, dlc.address, dlcContractId);
   const grantApplied = await applyGrant(grant, secondFunder, block, dlc.address);
   const contractId = await ensurePerpContract(block);
+  const longGrant = await ensureCollateralGrant(
+    client,
+    FIRST_FUNDER,
+    dlc.address,
+    dlcContractId,
+    block,
+    PLEDGE_AMOUNT
+  );
   const anchorSpotMark = await createSpotMark(client, spotChannel, spotTokenDelivery, SPOT_MARK_PRICE, block, 'anchor');
 
   const balancesBeforeOpen = {
@@ -520,6 +568,7 @@ async function main() {
 
   const baseArtifact = {
     run,
+    chain: CHAIN_LABEL,
     broadcast: BROADCAST,
     applyImmediate: APPLY_IMMEDIATE,
     firstFunder: FIRST_FUNDER,
@@ -561,6 +610,7 @@ async function main() {
       params: grantApplied.params,
       referenceOutputs: grantApplied.referenceOutputs
     },
+    longGrant,
     perp: {
       contractId,
       entryPrice: ENTRY_PRICE,
@@ -591,31 +641,38 @@ async function main() {
 
   const artifactDir = path.join(__dirname, '..', 'artifacts');
   fs.mkdirSync(artifactDir, { recursive: true });
-  const secondFunderArtifact = path.join(artifactDir, 'ltc-second-funder-dlc-perp-tlusd-latest.json');
+  const secondFunderArtifact = path.join(artifactDir, `${ARTIFACT_PREFIX}-second-funder-dlc-perp-tlusd-latest.json`);
   fs.writeFileSync(secondFunderArtifact, JSON.stringify(baseArtifact, null, 2));
 
   runNodeScript(path.join('scripts', 'ltcRevealPnlPayoutVector.js'), {
+    TL_ARTIFACT_PREFIX: ARTIFACT_PREFIX,
+    TL_CHAIN_LABEL: CHAIN_LABEL,
+    TL_DLC_ARTIFACT: secondFunderArtifact,
     TL_PNL_FROM: loser,
     TL_PNL_TO: winner,
     TL_PNL_SWEEP_AMOUNT: String(pnlAmount),
-    TL_PNL_DLC_REF: dlcContractId
+    TL_PNL_DLC_REF: dlcContractId,
+    TL_STATE_ORACLE_ADDRESS: process.env.TL_STATE_ORACLE_ADDRESS || secondFunder,
+    TL_REVEAL_DESTINATION: winner
   });
 
   runNodeScript(path.join('scripts', 'ltcResolvePnlUtxoRouteFromWitness.js'), {
+    TL_ARTIFACT_PREFIX: ARTIFACT_PREFIX,
+    TL_DLC_ARTIFACT: secondFunderArtifact,
     TL_BUILD_DLC_SPEND: '1',
     TL_BROADCAST_DLC_PAYOUT: process.env.TL_BROADCAST_DLC_PAYOUT || '1'
   });
 
-  const routePlan = JSON.parse(fs.readFileSync(path.join(artifactDir, 'ltc-pnl-utxo-route-plan-latest.json'), 'utf8'));
+  const routePlan = JSON.parse(fs.readFileSync(path.join(artifactDir, `${ARTIFACT_PREFIX}-pnl-utxo-route-plan-latest.json`), 'utf8'));
   const verifyTradeLayerPnlRoutePlan = require('C:/projects/UTXORef/UTXO-Ref/bitvm3/utxo_referee/tradelayer_pnl_route_adapter').verifyTradeLayerPnlRoutePlan;
   const utxoRefVerification = verifyTradeLayerPnlRoutePlan(routePlan);
   const finalSummary = {
     ...baseArtifact,
-    witnessReveal: JSON.parse(fs.readFileSync(path.join(artifactDir, 'ltc-pnl-witness-reveal-latest.json'), 'utf8')),
+    witnessReveal: JSON.parse(fs.readFileSync(path.join(artifactDir, `${ARTIFACT_PREFIX}-pnl-witness-reveal-latest.json`), 'utf8')),
     routePlan,
     utxoRefVerification
   };
-  const out = path.join(artifactDir, 'ltc-e2e-pnl-perp-route-flow-latest.json');
+  const out = path.join(artifactDir, `${ARTIFACT_PREFIX}-e2e-pnl-perp-route-flow-latest.json`);
   fs.writeFileSync(out, JSON.stringify(finalSummary, null, 2));
   console.log(JSON.stringify({ artifactPath: out, summary: finalSummary }, null, 2));
 }

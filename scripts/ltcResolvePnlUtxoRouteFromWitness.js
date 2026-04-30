@@ -2,14 +2,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
+const ecc = require('tiny-secp256k1');
+const { BIP32Factory } = require('bip32');
 
-process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || 'tl-wallet';
+const IS_BTC = String(process.env.CHAIN || '').toUpperCase().includes('BTC');
+process.env.RPC_WALLET = process.env.RPC_WALLET || process.env.WALLET_NAME || (IS_BTC ? 'utxoref-testnet' : 'tl-wallet');
 
 const TxUtils = require('../src/txUtils.js');
 const { PnlRouteRegistry } = require('../src/pnlRouteRegistry.js');
 
 const COIN = 100000000;
-const NETWORK = {
+const NETWORK = IS_BTC ? bitcoin.networks.testnet : {
   messagePrefix: '\x19Litecoin Signed Message:\n',
   bech32: 'tltc',
   bip32: { public: 0x043587cf, private: 0x04358394 },
@@ -18,10 +21,12 @@ const NETWORK = {
   wif: 0xef
 };
 
-const REVEAL_ARTIFACT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-witness-reveal-latest.json');
-const DLC_ARTIFACT = path.join(__dirname, '..', 'artifacts', 'ltc-second-funder-dlc-perp-tlusd-latest.json');
-const OUT = path.join(__dirname, '..', 'artifacts', 'ltc-pnl-utxo-route-plan-latest.json');
+const ARTIFACT_PREFIX = process.env.TL_ARTIFACT_PREFIX || (IS_BTC ? 'btctest' : 'ltc');
+const REVEAL_ARTIFACT = path.join(__dirname, '..', 'artifacts', `${ARTIFACT_PREFIX}-pnl-witness-reveal-latest.json`);
+const DLC_ARTIFACT = path.join(__dirname, '..', 'artifacts', `${ARTIFACT_PREFIX}-second-funder-dlc-perp-tlusd-latest.json`);
+const OUT = process.env.TL_PNL_ROUTE_PLAN_OUT || path.join(__dirname, '..', 'artifacts', `${ARTIFACT_PREFIX}-pnl-utxo-route-plan-latest.json`);
 const BROADCAST = process.env.TL_BROADCAST_DLC_PAYOUT === '1';
+const bip32 = BIP32Factory(ecc);
 
 function sats(coin) {
   return Math.round(Number(coin) * COIN);
@@ -113,16 +118,44 @@ async function spendDlcToPlan(client, dlc, outputPlan, input, inputValue) {
   }];
   let signed = await client.rpcCall('signrawtransactionwithwallet', [raw, prevtxs], true);
   if (!signed.complete) {
-    const keys = [
-      await client.rpcCall('dumpprivkey', [dlc.dlc.partyA], true),
-      await client.rpcCall('dumpprivkey', [dlc.dlc.partyB], true)
-    ];
-    signed = await client.rpcCall('signrawtransactionwithkey', [raw, keys, prevtxs], true);
+    let keys = [];
+    try {
+      keys = [
+        await client.rpcCall('dumpprivkey', [dlc.dlc.partyA], true),
+        await client.rpcCall('dumpprivkey', [dlc.dlc.partyB], true)
+      ];
+    } catch (err) {
+      keys = await deriveDescriptorWifs(client, [dlc.dlc.partyA, dlc.dlc.partyB]);
+    }
+    signed = await client.rpcCall('signrawtransactionwithkey', [raw, keys, prevtxs], false);
   }
   const decoded = await client.decoderawtransaction(signed.hex);
   const accept = signed.complete ? await client.rpcCall('testmempoolaccept', [[signed.hex]], false) : null;
   const txid = BROADCAST && signed.complete ? await client.sendrawtransaction(signed.hex) : decoded.txid;
   return { txid, signed, decoded, mempoolAccept: accept, broadcast: BROADCAST && signed.complete };
+}
+
+async function deriveDescriptorWifs(client, addresses) {
+  const descriptorInfo = await client.rpcCall('listdescriptors', [true], true);
+  const privateWpkh = (descriptorInfo?.descriptors || [])
+    .map((entry) => entry.desc || '')
+    .find((desc) => desc.startsWith('wpkh(tprv') && desc.includes('/84h/1h/0h/0/*)'));
+  if (!privateWpkh) {
+    throw new Error('Unable to find private BIP84 external descriptor for DLC signing');
+  }
+
+  const xprv = privateWpkh.match(/wpkh\((tprv[^/)]+)/)?.[1];
+  if (!xprv) throw new Error('Unable to parse private descriptor xprv');
+  const root = bip32.fromBase58(xprv, NETWORK);
+
+  const wifs = [];
+  for (const address of addresses) {
+    const info = await client.rpcCall('getaddressinfo', [address], true);
+    const path = String(info?.hdkeypath || '').replace(/^m\//, '').replace(/h/g, "'");
+    if (!path) throw new Error(`No hdkeypath for ${address}`);
+    wifs.push(root.derivePath(path).toWIF());
+  }
+  return wifs;
 }
 
 async function main() {
