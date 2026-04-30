@@ -7,6 +7,8 @@ describe('procedural redeem request semantics', () => {
 
     const updateBalance = jest.fn(async () => true);
     const redeemTokens = jest.fn(async () => true);
+    const getTally = jest.fn(async () => ({ available: 0, reserved: 1 }));
+    const updateTotalInCirculation = jest.fn(async () => true);
 
     jest.doMock('../src/activation.js', () => ({
       getInstance: () => ({})
@@ -14,17 +16,20 @@ describe('procedural redeem request semantics', () => {
     jest.doMock('../src/property.js', () => ({
       isManagedAndAdmin: jest.fn(async () => isManagedAndAdmin),
       getPropertyData: jest.fn(async () => property),
+      updateTotalInCirculation,
       getInstance: () => ({
         redeemTokens
       })
     }));
     jest.doMock('../src/tally.js', () => ({
-      updateBalance
+      updateBalance,
+      getTally
     }));
     jest.doMock('../src/procedural.js', () => ({
       ProceduralRegistry: {
         ensureIssuanceContext: jest.fn(async () => ({ valid: true })),
-        ensureRedemptionRequestContext: jest.fn(async () => ({ valid: true }))
+        ensureRedemptionRequestContext: jest.fn(async () => ({ valid: true })),
+        ensureRedemptionContext: jest.fn(async () => ({ valid: true }))
       }
     }));
     jest.doMock('../src/channels.js', () => ({}));
@@ -54,7 +59,7 @@ describe('procedural redeem request semantics', () => {
     jest.doMock('../src/experimental/binohash/binohashAdapter.js', () => ({}));
 
     const Logic = require('../src/logic.js');
-    return { Logic, updateBalance, redeemTokens };
+    return { Logic, updateBalance, redeemTokens, updateTotalInCirculation, getTally };
   }
 
   test('procedural tx12 moves holder balance from available to reserved', async () => {
@@ -85,5 +90,25 @@ describe('procedural redeem request semantics', () => {
 
     expect(redeemTokens).toHaveBeenCalledWith(9, 'admin', 1, 100);
     expect(updateBalance).not.toHaveBeenCalled();
+  });
+
+  test('settled procedural tx12 finalizes reserved redemption and burns supply', async () => {
+    const { Logic, updateBalance, redeemTokens, updateTotalInCirculation, getTally } = loadLogic();
+
+    await Logic.redeemManagedToken(380, 0.5, 'holder', 101, 'tpl-1', 'ct-1', 'SETTLED');
+
+    expect(getTally).toHaveBeenCalledWith('holder', 380);
+    expect(updateBalance).toHaveBeenCalledWith(
+      'holder',
+      380,
+      0,
+      -0.5,
+      0,
+      0,
+      'proceduralRedeemFinal',
+      101
+    );
+    expect(updateTotalInCirculation).toHaveBeenCalledWith(380, -0.5);
+    expect(redeemTokens).not.toHaveBeenCalled();
   });
 });

@@ -29,7 +29,7 @@ describe('tx11 grant managed token semantics', () => {
     expect(parts[2]).toBe('redeem-destination');
   });
 
-  test('encodeRedeemManagedToken emits the compact 4-field payload', () => {
+  test('encodeRedeemManagedToken carries optional settlementState', () => {
     const encoded = Encode.encodeRedeemManagedToken({
       propertyId: 5,
       amountDestroyed: 1.25,
@@ -39,13 +39,13 @@ describe('tx11 grant managed token semantics', () => {
     });
 
     const parts = encoded.slice(3).split(',');
-    expect(parts).toHaveLength(4);
+    expect(parts).toHaveLength(5);
     expect(Decode.decodeRedeemManagedToken(encoded.slice(3))).toMatchObject({
       propertyId: 5,
       amountDestroyed: 1.25,
       dlcTemplateId: 'tpl-1',
       dlcContractId: 'ct-1',
-      settlementState: ''
+      settlementState: 'SETTLED'
     });
   });
 

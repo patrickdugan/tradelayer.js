@@ -307,7 +307,8 @@ const Encode = {
             (params.propertyid ?? params.propertyId)?.toString(36) ?? '0',
             amountDestroyed?.toString(36) ?? '0',
             params?.dlcTemplateId || '',
-            params?.dlcContractId || ''
+            params?.dlcContractId || '',
+            params?.settlementState || ''
         ];
         const type = 12;
         const typeStr = type?.toString(36) ?? '0';

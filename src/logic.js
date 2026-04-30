@@ -1016,8 +1016,26 @@ const Logic = {
             || propertyData?.type === 'Procedural';
         if (!isManagedAdmin && !isProcedural) throw new Error('Sender is not admin of a managed property');
         if (isProcedural) {
-            const gate = await ProceduralRegistry.ensureRedemptionRequestContext(dlcTemplateId, dlcContractId, settlementState);
+            const normalizedState = String(settlementState || '').toUpperCase();
+            const finalRedemption = ['SETTLED', 'CLOSED'].includes(normalizedState);
+            const gate = finalRedemption
+                ? await ProceduralRegistry.ensureRedemptionContext(dlcTemplateId, dlcContractId, settlementState)
+                : await ProceduralRegistry.ensureRedemptionRequestContext(dlcTemplateId, dlcContractId, settlementState);
             if (!gate.valid) throw new Error(gate.reason);
+            if (finalRedemption) {
+                const tally = await TallyMap.getTally(senderAddress, propertyId);
+                const reservedDebit = Math.min(Number(tally?.reserved || 0), Number(amount || 0));
+                const availableDebit = Number(amount || 0) - reservedDebit;
+                if (availableDebit > Number(tally?.available || 0)) {
+                    throw new Error('Insufficient procedural token balance for final redemption');
+                }
+                const availableChange = availableDebit === 0 ? 0 : -availableDebit;
+                const reservedChange = reservedDebit === 0 ? 0 : -reservedDebit;
+                await TallyMap.updateBalance(senderAddress, propertyId, availableChange, reservedChange, 0, 0, 'proceduralRedeemFinal', block);
+                await PropertyManager.updateTotalInCirculation(propertyId, -amount);
+                console.log(`Finalized redemption of ${amount} procedural tokens of property ${propertyId} from ${senderAddress}`);
+                return;
+            }
             await TallyMap.updateBalance(senderAddress, propertyId, -amount, amount, 0, 0, 'proceduralRedeemRequest', block);
             console.log(`Reserved ${amount} procedural tokens of property ${propertyId} for redemption request from ${senderAddress}`);
             return;

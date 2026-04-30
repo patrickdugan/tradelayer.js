@@ -1431,18 +1431,27 @@ const Validity = {
                 params.reason += 'Sender is not admin of a managed property; ';
             }
 
+            const settlementState = String(params.settlementState || '').toUpperCase();
+            const finalRedemption = ['SETTLED', 'CLOSED'].includes(settlementState);
             const tally = await TallyMap.getTally(sender, params.propertyId);
-            if (Number(tally?.available || 0) < Number(params.amountDestroyed || 0)) {
+            const spendable = finalRedemption
+                ? Number(tally?.available || 0) + Number(tally?.reserved || 0)
+                : Number(tally?.available || 0);
+            if (spendable < Number(params.amountDestroyed || 0)) {
                 params.valid = false;
                 params.reason += 'Cannot redeem tokens; insufficient balance; ';
             }
 
             if (isProcedural) {
-                const gateFn = typeof ProceduralRegistry.ensureRedemptionRequestContext === 'function'
-                    ? ProceduralRegistry.ensureRedemptionRequestContext.bind(ProceduralRegistry)
-                    : (typeof ProceduralRegistry.ensureRedemptionContext === 'function'
+                const gateFn = finalRedemption
+                    ? (typeof ProceduralRegistry.ensureRedemptionContext === 'function'
                         ? ProceduralRegistry.ensureRedemptionContext.bind(ProceduralRegistry)
-                        : null);
+                        : null)
+                    : (typeof ProceduralRegistry.ensureRedemptionRequestContext === 'function'
+                        ? ProceduralRegistry.ensureRedemptionRequestContext.bind(ProceduralRegistry)
+                        : (typeof ProceduralRegistry.ensureRedemptionContext === 'function'
+                            ? ProceduralRegistry.ensureRedemptionContext.bind(ProceduralRegistry)
+                            : null));
                 const gate = gateFn
                     ? await gateFn(params.dlcTemplateId, params.dlcContractId, params.settlementState)
                     : { valid: true };
