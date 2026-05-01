@@ -179,6 +179,22 @@ class Persistence {
                 return true //{ reorg: true, depth: 1, uncertain: true };
             }
 
+            if (!localPrevHash) {
+                if (nodePrevHash === incomingPrevHash) {
+                    console.log(
+                        `[reorg false-positive resolved] No local metadata at height=${prevHeight}, ` +
+                        `but RPC chain matches incoming block. No reorg.`
+                    );
+                    return false;
+                }
+                return {
+                    reorg: true,
+                    depth: 1,
+                    expected: nodePrevHash,
+                    received: localPrevHash
+                };
+            }
+
             if (nodePrevHash !== localPrevHash) {
                 return {
                     reorg: true,

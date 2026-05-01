@@ -62,7 +62,7 @@ const Encode = require('./txEncoder.js'); // Encodes transactions
 const Types = require('./types.js'); // Defines different types used in the system
 const Logic = require('./logic.js')
 const AMM = require('./amm.js')
-const Decode = require('./txDecoder.js'); // Decodes transactionsconst db = require('./db.js'); // Adjust the path if necessary
+const Decode = require('./txDecoder.js'); // Decodes transactions
 const genesisBlock = 3082500
 const COIN = 100000000
 let pause = false
@@ -103,6 +103,21 @@ class Main {
         this.getNetworkInfoAsync = () => this.client.getNetworkInfo();        
         this.genesisBlock = 600000
         this.parseBlock = 0
+        this.realTimeLoopPromise = null
+        this.syncStatus = Main.buildSyncSnapshot({
+            initialized: false,
+            phase: 'created',
+            message: 'TradeLayer main processor created.',
+            genesisBlock: this.genesisBlock,
+            chainTip: null,
+            indexedHeight: null,
+            processedHeight: null,
+            trackHeight: null,
+            currentHeight: null,
+            targetHeight: null,
+            error: null,
+            updatedAt: Date.now(),
+        });
         console.log(this.genesisBlock)
         Main.instance = this;
     }
@@ -138,12 +153,147 @@ class Main {
         return Main.instance;
     }
 
+    static normalizeHeight(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+    }
+
+    static buildSyncSnapshot(status = {}) {
+        const currentHeight = Main.normalizeHeight(status.currentHeight);
+        const targetHeight = Main.normalizeHeight(status.targetHeight);
+        const percent = currentHeight !== null && targetHeight !== null && targetHeight > 0
+            ? Math.max(0, Math.min(100, Number(((currentHeight / targetHeight) * 100).toFixed(2))))
+            : 0;
+
+        return {
+            initialized: !!status.initialized,
+            phase: status.phase || 'idle',
+            message: status.message || '',
+            genesisBlock: Main.normalizeHeight(status.genesisBlock),
+            chainTip: Main.normalizeHeight(status.chainTip),
+            indexedHeight: Main.normalizeHeight(status.indexedHeight),
+            processedHeight: Main.normalizeHeight(status.processedHeight),
+            trackHeight: Main.normalizeHeight(status.trackHeight),
+            currentHeight,
+            targetHeight,
+            percent,
+            error: status.error || null,
+            updatedAt: Number(status.updatedAt || Date.now()),
+        };
+    }
+
+    setSyncStatus(patch = {}) {
+        this.syncStatus = Main.buildSyncSnapshot({
+            ...(this.syncStatus || {}),
+            ...patch,
+            initialized: true,
+            genesisBlock: this.genesisBlock,
+            updatedAt: Date.now(),
+        });
+        return { ...this.syncStatus };
+    }
+
+    async getSyncStatus() {
+        let chainTip = this.syncStatus?.chainTip ?? null;
+        let indexedHeight = this.syncStatus?.indexedHeight ?? null;
+        let processedHeight = this.syncStatus?.processedHeight ?? null;
+        let trackHeight = this.syncStatus?.trackHeight ?? null;
+
+        try {
+            chainTip = await this.getCurrentBlockHeight();
+        } catch (_error) {}
+
+        try {
+            indexedHeight = await TxIndex.findMaxIndexedBlock();
+        } catch (_error) {}
+
+        try {
+            const persistedProcessedHeight = await this.loadMaxProcessedHeight();
+            const existingProcessedHeight = Main.normalizeHeight(processedHeight);
+            const normalizedPersistedProcessedHeight = Main.normalizeHeight(persistedProcessedHeight);
+            processedHeight = existingProcessedHeight === null && normalizedPersistedProcessedHeight === null
+                ? null
+                : Math.max(existingProcessedHeight || 0, normalizedPersistedProcessedHeight || 0);
+        } catch (_error) {}
+
+        try {
+            const persistedTrackHeight = await this.loadTrackHeight();
+            const existingTrackHeight = Main.normalizeHeight(trackHeight);
+            const normalizedPersistedTrackHeight = Main.normalizeHeight(persistedTrackHeight);
+            trackHeight = existingTrackHeight === null && normalizedPersistedTrackHeight === null
+                ? null
+                : Math.max(existingTrackHeight || 0, normalizedPersistedTrackHeight || 0);
+        } catch (_error) {}
+
+        const phase = this.syncStatus?.phase || 'idle';
+        let currentHeight = this.syncStatus?.currentHeight ?? null;
+        let targetHeight = this.syncStatus?.targetHeight ?? null;
+
+        if (phase === 'indexing') {
+            currentHeight = indexedHeight;
+            targetHeight = chainTip;
+        } else if (phase === 'reconstructing-consensus') {
+            currentHeight = processedHeight;
+            targetHeight = indexedHeight || chainTip;
+        } else if (phase === 'realtime' || phase === 'paused') {
+            const heights = [processedHeight, trackHeight, indexedHeight]
+                .map(Main.normalizeHeight)
+                .filter((height) => height !== null);
+            currentHeight = heights.length ? Math.max(...heights) : null;
+            targetHeight = chainTip;
+        }
+
+        return Main.buildSyncSnapshot({
+            ...(this.syncStatus || {}),
+            initialized: true,
+            genesisBlock: this.genesisBlock,
+            chainTip,
+            indexedHeight,
+            processedHeight,
+            trackHeight,
+            currentHeight,
+            targetHeight,
+            updatedAt: Date.now(),
+        });
+    }
+
+    static async getSyncStatus() {
+        if (Main.instance) {
+            return Main.instance.getSyncStatus();
+        }
+
+        let indexedHeight = null;
+        let processedHeight = null;
+        try {
+            indexedHeight = await TxIndex.findMaxIndexedBlock();
+        } catch (_error) {}
+        try {
+            processedHeight = await Consensus.getMaxProcessedBlock();
+        } catch (_error) {}
+
+        return Main.buildSyncSnapshot({
+            initialized: false,
+            phase: 'idle',
+            message: 'TradeLayer main processor is not initialized.',
+            genesisBlock,
+            indexedHeight,
+            processedHeight,
+            currentHeight: processedHeight || indexedHeight,
+            targetHeight: indexedHeight,
+            updatedAt: Date.now(),
+        });
+    }
+
 
     async delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async initialize() {
+        this.setSyncStatus({
+            phase: 'initializing',
+            message: 'Initializing TradeLayer state.',
+        });
           await this.delay(1500)
         console.log('db status '+db)
         if(!db&&this.client){
@@ -182,11 +332,24 @@ class Main {
             // Proceed with further operations after successful initialization
         } catch (error) {
             console.log('boop '+error)
+            this.setSyncStatus({
+                phase: 'error',
+                message: 'Failed to initialize TradeLayer index database.',
+                error: error?.message || String(error),
+            });
         }
           console.log('about to check for Index')
         const indexExists = await TxIndex.checkForIndex();
         console.log('indexExists' + indexExists);
         if (!indexExists) {
+            this.setSyncStatus({
+                phase: 'indexing',
+                message: 'Indexing TradeLayer transactions.',
+                chainTip: await this.getCurrentBlockHeight().catch(() => null),
+                indexedHeight: await TxIndex.findMaxIndexedBlock().catch(() => this.genesisBlock),
+                currentHeight: await TxIndex.findMaxIndexedBlock().catch(() => this.genesisBlock),
+                targetHeight: await this.getCurrentBlockHeight().catch(() => null),
+            });
             console.log('building txIndex');
             await this.initOrLoadTxIndex()
             //await TxIndex.initializeIndex(this.genesisBlock);
@@ -195,6 +358,14 @@ class Main {
 
         // Construct consensus from index, or load from Persistence if available
         console.log('constructing consensus state')
+        this.setSyncStatus({
+            phase: 'reconstructing-consensus',
+            message: 'Reconstructing TradeLayer consensus.',
+            indexedHeight: await TxIndex.findMaxIndexedBlock().catch(() => null),
+            processedHeight: await this.loadMaxProcessedHeight().catch(() => null),
+            currentHeight: await this.loadMaxProcessedHeight().catch(() => null),
+            targetHeight: await TxIndex.findMaxIndexedBlock().catch(() => null),
+        });
         const consensus = await this.constructOrLoadConsensus();
 
         // Start processing incoming blocks
@@ -235,6 +406,14 @@ class Main {
             // Fetch the current chain tip (latest block number) from the blockchain
             const chainTip = await this.getBlockCountAsync()
             console.log('sync index retrieved chaintip '+chainTip)
+            this.setSyncStatus({
+                phase: 'indexing',
+                message: 'Indexing TradeLayer transactions.',
+                chainTip,
+                indexedHeight: maxIndexedBlock,
+                currentHeight: maxIndexedBlock,
+                targetHeight: chainTip,
+            });
             // If the chain tip is greater than the max indexed block, sync the index
             if (chainTip > maxIndexedBlock && maxIndexedBlock !== 0 && maxIndexedBlock !== null){
                 // Loop through each block starting from maxIndexedBlock + 1 to chainTip
@@ -250,6 +429,11 @@ class Main {
             }
         } catch (error) {
             console.error("Error during syncIndex:", error);
+            this.setSyncStatus({
+                phase: 'error',
+                message: 'TradeLayer transaction indexing failed.',
+                error: error?.message || String(error),
+            });
         }
     }
 
@@ -340,6 +524,14 @@ class Main {
 
             blockHeight = startHeight;
             console.log('construct Consensus from Index max indexed block ' + lastIndexBlock, 'start height ' + startHeight);
+            this.setSyncStatus({
+                phase: 'reconstructing-consensus',
+                message: 'Reconstructing TradeLayer consensus.',
+                indexedHeight: lastIndexBlock,
+                processedHeight: maxProcessedHeight,
+                currentHeight: maxProcessedHeight,
+                targetHeight: lastIndexBlock,
+            });
 
             for (; blockHeight <= lastIndexBlock; blockHeight++) {
                 this.parseBlock = blockHeight
@@ -393,9 +585,25 @@ class Main {
                 }
 
                 maxProcessedHeight = blockHeight;
+                this.setSyncStatus({
+                    phase: 'reconstructing-consensus',
+                    message: 'Reconstructing TradeLayer consensus.',
+                    indexedHeight: lastIndexBlock,
+                    processedHeight: maxProcessedHeight,
+                    currentHeight: maxProcessedHeight,
+                    targetHeight: lastIndexBlock,
+                });
             }
 
             await this.saveMaxProcessedHeight(maxProcessedHeight,false,null);
+            this.setSyncStatus({
+                phase: 'realtime',
+                message: 'TradeLayer consensus is caught up.',
+                indexedHeight: lastIndexBlock,
+                processedHeight: maxProcessedHeight,
+                currentHeight: maxProcessedHeight,
+                targetHeight: lastIndexBlock,
+            });
             return this.syncIfNecessary();
         }
 
@@ -586,13 +794,40 @@ class Main {
         }
         
         if(pause){
+            this.setSyncStatus({
+                phase: 'paused',
+                message: 'TradeLayer parsing is paused.',
+            });
             while(pause){
                 await this.delay(1000)
             }
             return this.syncIfNecessary()
-        }else{
-                this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip); // Start processing new blocks as they come
         }
+
+        this.setSyncStatus({
+            phase: 'realtime',
+            message: 'Watching for new TradeLayer blocks.',
+            processedHeight: blockLag.maxTrack,
+            currentHeight: blockLag.maxTrack,
+            targetHeight: blockLag.chainTip,
+            chainTip: blockLag.chainTip,
+            trackHeight: blockLag.maxTrack,
+        });
+        if (!this.realTimeLoopPromise) {
+            this.realTimeLoopPromise = this.processIncomingBlocks(blockLag.lag, blockLag.maxTrack, blockLag.chainTip)
+                .catch((error) => {
+                    console.error('TradeLayer realtime loop failed:', error);
+                    this.setSyncStatus({
+                        phase: 'error',
+                        message: 'TradeLayer realtime parser failed.',
+                        error: error?.message || String(error),
+                    });
+                })
+                .finally(() => {
+                    this.realTimeLoopPromise = null;
+                });
+        }
+        return this.realTimeLoopPromise;
     }
 
     setPause(){
@@ -600,6 +835,17 @@ class Main {
             pause=true 
        }else if(pause){
             pause=false
+            if (!this.realTimeLoopPromise) {
+                this.syncIfNecessary().catch((error) => {
+                    console.error('Failed to resume TradeLayer parsing:', error);
+                });
+            }
+       }
+       if (pause) {
+            this.setSyncStatus({
+                phase: 'paused',
+                message: 'TradeLayer parsing is paused.',
+            });
        }
        return pause
     }
@@ -607,10 +853,21 @@ class Main {
     //updates max consensus block in real-time mode
     async checkBlockLag(){
         const chaintip = await this.getBlockCountAsync()
-        let track = await this.loadTrackHeight()
-        if(track==null){
-            track = await this.loadMaxProcessedHeight()
+        let track = Main.normalizeHeight(await this.loadTrackHeight())
+        const processed = Main.normalizeHeight(await this.loadMaxProcessedHeight())
+        const indexed = Main.normalizeHeight(await TxIndex.findMaxIndexedBlock().catch(() => null))
+        const candidates = [track, processed, indexed]
+            .filter((height) => height !== null && height >= this.genesisBlock && height <= chaintip);
+        const reconciledTrack = candidates.length ? Math.max(...candidates) : null;
+
+        if (reconciledTrack !== null && reconciledTrack !== track) {
+            console.warn(
+                `[sync] correcting stale TrackHeight from ${track ?? 'null'} to ${reconciledTrack} ` +
+                `(processed=${processed ?? 'null'}, indexed=${indexed ?? 'null'}, chainTip=${chaintip})`
+            );
+            await this.saveTrackHeight(reconciledTrack);
         }
+        track = reconciledTrack ?? this.genesisBlock;
         //console.log(maxConsensusBlock)
         var lag = chaintip - track
         return {'lag':lag, 'chainTip':chaintip, 'maxTrack':track}
@@ -621,12 +878,27 @@ class Main {
         // Continuously loop through incoming blocks and process them
         let latestProcessedBlock = maxTrack
         console.log('entering real-time mode '+latestProcessedBlock)
+        this.setSyncStatus({
+            phase: 'realtime',
+            message: 'Watching for new TradeLayer blocks.',
+            processedHeight: latestProcessedBlock,
+            trackHeight: latestProcessedBlock,
+            currentHeight: latestProcessedBlock,
+            targetHeight: chainTip,
+            chainTip,
+        });
         let lagObj
         while (true) {
             /*if (shutdownRequested) {
                 break; // Break the loop if shutdown is requested
             }*/
             chainTip = await this.getBlockCountAsync()
+            this.setSyncStatus({
+                phase: pause === true ? 'paused' : 'realtime',
+                message: pause === true ? 'TradeLayer parsing is paused.' : 'Watching for new TradeLayer blocks.',
+                chainTip,
+                targetHeight: chainTip,
+            });
             //console.log('latest block '+chainTip+' max track'+latestProcessedBlock)
             let checkTrack = await this.loadTrackHeight()
             if(checkTrack>latestProcessedBlock){latestProcessedBlock=checkTrack}
@@ -649,18 +921,42 @@ class Main {
                 let trackHeight = blockNumber;
                 //console.log('updating trackHeight'+trackHeight)
                 await this.saveTrackHeight(trackHeight)
+                latestProcessedBlock = blockNumber;
+                this.setSyncStatus({
+                    phase: 'realtime',
+                    message: 'Processing live TradeLayer blocks.',
+                    chainTip,
+                    trackHeight,
+                    currentHeight: trackHeight,
+                    targetHeight: chainTip,
+                });
             }
 
             if(pause==true){
                console.log('exiting real-time mode '+latestProcessedBlock)  
+                this.setSyncStatus({
+                    phase: 'paused',
+                    message: 'TradeLayer parsing is paused.',
+                    trackHeight: latestProcessedBlock,
+                    currentHeight: latestProcessedBlock,
+                    targetHeight: chainTip,
+                });
                 break
             };
             // Wait for a short period before checking for new blocks
             await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
             //console.log('checking block lag '+maxConsensusBlock+' '+chainTip)
             await this.saveTrackHeight(chainTip)
+            this.setSyncStatus({
+                phase: 'realtime',
+                message: 'Watching for new TradeLayer blocks.',
+                chainTip,
+                trackHeight: chainTip,
+                currentHeight: chainTip,
+                targetHeight: chainTip,
+            });
         }
-        return this.syncIfNecessary()
+        return null
     }
 
         async checkNetworkStatus() {
@@ -849,7 +1145,13 @@ class Main {
                     didWork = await this.processTx(txData, blockHeight);
 
                     // Save max height regardless, to persist progress
-                    this.saveMaxProcessedHeight(blockHeight);
+                    await this.saveMaxProcessedHeight(blockHeight);
+                    this.setSyncStatus({
+                        phase: 'realtime',
+                        message: 'Processing live TradeLayer blocks.',
+                        processedHeight: blockHeight,
+                        currentHeight: blockHeight,
+                    });
                 }
 
                 console.log(`Processed block ${blockHeight} successfully...`);
@@ -908,9 +1210,18 @@ class Main {
                     { $set: { value: maxProcessedHeight } },
                     { upsert: true }
                 );
+                this.setSyncStatus({
+                    processedHeight: maxProcessedHeight,
+                    currentHeight: maxProcessedHeight,
+                });
                 //console.log('realtime mode update '+maxProcessedHeight)
         } catch (error) {
             console.error('Error updating MaxProcessedHeight:', error);
+            this.setSyncStatus({
+                phase: 'error',
+                message: 'Failed to persist TradeLayer consensus height.',
+                error: error?.message || String(error),
+            });
             throw error; // or handle the error as needed
         }
     }
@@ -922,6 +1233,10 @@ class Main {
                     { $set: { value: saveHeight } },
                     { upsert: true }
                     )
+            this.setSyncStatus({
+                trackHeight: saveHeight,
+                currentHeight: saveHeight,
+            });
     }
  
     async loadMaxProcessedHeight() {
