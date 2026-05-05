@@ -264,6 +264,16 @@ app.post('/tl_getMaxParsedHeight', async (req, res) => {
     }
 });
 
+app.post('/tl_getSyncStatus', async (_req, res) => {
+    try {
+        const status = await Main.getSyncStatus();
+        res.status(200).json(status);
+    } catch (error) {
+        console.error('Error fetching TradeLayer sync status:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 app.post('/tl_getTrackHeight', async (req, res) => {
     try {
         // TrackHeight is persisted in consensus DB; do not initialize Main for read-only status.
@@ -376,6 +386,46 @@ app.post('/tl_getProperty', async (req, res) => {
     }
 });
 
+app.post('/tl_createGrantManagedTokenTransaction', async (req, res) => {
+    try {
+        const body = req.body && req.body.params ? req.body.params : (req.body || {});
+        const fromAddress = body.fromAddress || body.adminAddress || process.env.TL_PROCEDURAL_ADMIN_ADDRESS;
+        if (!fromAddress) {
+            return res.status(400).json({ error: 'Missing fromAddress or TL_PROCEDURAL_ADMIN_ADDRESS' });
+        }
+        const params = {
+            propertyId: body.propertyId,
+            amountGranted: body.amountGranted,
+            addressToGrantTo: body.addressToGrantTo || body.recipientAddress || body.redeemAddress,
+            redeemAddress: body.redeemAddress || body.addressToGrantTo || body.recipientAddress,
+            dlcTemplateId: body.dlcTemplateId,
+            dlcContractId: body.dlcContractId || '',
+            settlementState: body.settlementState || 'FUNDED',
+            dlcHash: body.dlcHash,
+            commitClearlistId: body.commitClearlistId
+        };
+        if (!params.propertyId || !params.amountGranted || !params.addressToGrantTo || !params.dlcTemplateId || !params.dlcHash) {
+            return res.status(400).json({
+                error: 'Missing propertyId, amountGranted, addressToGrantTo, dlcTemplateId, or dlcHash',
+                params
+            });
+        }
+        const txid = await TxUtils.createGrantManagedTokenTransaction(fromAddress, params);
+        return res.status(200).json({
+            ok: true,
+            txid,
+            fromAddress,
+            params,
+            requestId: body.requestId,
+            targetBindingHash: body.targetBindingHash,
+            paymentHashHex: body.paymentHashHex
+        });
+    } catch (error) {
+        console.error('Error creating grant managed token transaction:', error);
+        return res.status(500).send('Error: ' + error.message);
+    }
+});
+
 // List properties
 app.post('/tl_listProperties', async (req, res) => {
     try {
@@ -446,13 +496,20 @@ app.post('/tl_listFeeCache', async(req,res)=>{
 app.post('/tl_propertyFeeCache', async(req,res)=>{
     try{
         console.log('Pulling fees for all properties');
-        const feeCache = await PropertyManager.loadFeeCacheForProperty(req.id);
+        const { id } = req.body || {};
+        const feeCache = await PropertyManager.loadFeeCacheForProperty(id);
         res.json(feeCache);
     } catch (error) {
         console.error('Error fetching fee cache', error);
         res.status(500).send('Error: ' + error.message);
     }
 })
+
+function normalizeSpotOrderbookKey(propertyId1, propertyId2) {
+    const first = Number.isFinite(Number(propertyId1)) ? Number(propertyId1) : propertyId1;
+    const second = Number.isFinite(Number(propertyId2)) ? Number(propertyId2) : propertyId2;
+    return `${first}-${second}`;
+}
 
 function envNum(name, fallback = 0) {
     const raw = process.env[name];
@@ -607,7 +664,7 @@ app.post('/tl_getActivations', async (req, res) => {
 app.post('/tl_getOrderbook', async (req, res) => {
     try {
         const { propertyId1, propertyId2 } = req.body;
-        const orderBookKey = `${propertyId1}-${propertyId2}`;
+        const orderBookKey = normalizeSpotOrderbookKey(propertyId1, propertyId2);
         const orderbook = new Orderbook(orderBookKey);
         const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);
@@ -621,10 +678,9 @@ app.post('/tl_getOrderbook', async (req, res) => {
 app.post('/tl_getContractOrderbook', async (req, res) => {
     try {
         const { contractId } = req.body;
-        const orderBookKey = `contract-${contractId}`;
+        const orderBookKey = Number.isFinite(Number(contractId)) ? String(contractId) : String(contractId);
         const orderbook = new Orderbook(orderBookKey);
-        await orderbook.loadOrCreateOrderBook();
-        const orderBookData = orderbook.getOrderBookData();
+        const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);
     } catch (error) {
         console.error('Error fetching contract order book:', error);
