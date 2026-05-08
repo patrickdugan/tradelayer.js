@@ -1,11 +1,15 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const secp = require('tiny-secp256k1');
 const Encode = require('../src/txEncoder.js');
 const Decode = require('../src/txDecoder.js');
 const ZkConsensus = require('../src/zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('../src/zkWasmVerifier.js');
+const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
 const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
 
 function privateKeyFromLabel(label) {
@@ -113,6 +117,34 @@ describe('tx34 ZK batch movement draft', () => {
         expect(decoded.signedL1TxHash).toBe(envelope.envelopeCore.signedL1Tx.hash);
         expect(decoded.batchL2TxHash).toBe(envelope.envelopeCore.batchL2Tx.hash);
         expect(decoded.zkEnvelope.envelopeId).toBe(envelope.envelopeId);
+    });
+
+    test('resolves a compact tx34 anchor from local DA without embedding the envelope', async () => {
+        const envelope = fixtureEnvelope();
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tlzk-da-'));
+        const previousDir = process.env.TL_ZK_ENVELOPE_DIRS;
+        process.env.TL_ZK_ENVELOPE_DIRS = tempDir;
+        try {
+            const daPath = ZkEnvelopeResolver.writeLocalEnvelopeRecord(envelope, tempDir);
+            const payload = Encode.encodeZkBatchMovement({
+                zkEnvelope: envelope,
+                minimalAnchor: true
+            });
+            expect(Buffer.byteLength(`tly${payload}`, 'utf8')).toBeLessThanOrEqual(80);
+            expect(payload.includes('b64:')).toBe(false);
+
+            const decoded = Decode.decodeZkBatchMovement(payload);
+            expect(decoded.version).toBe('z2');
+            expect(decoded.zkEnvelope).toBe(null);
+            const resolved = await ZkEnvelopeResolver.resolveEnvelopeFromParams(decoded);
+            expect(resolved.source).toBe(daPath);
+            expect(resolved.envelope.envelopeId).toBe(envelope.envelopeId);
+            expect(ZkConsensus.verifyZkConsensusEnvelope(resolved.envelope)).toEqual({ ok: true });
+        } finally {
+            if (previousDir === undefined) delete process.env.TL_ZK_ENVELOPE_DIRS;
+            else process.env.TL_ZK_ENVELOPE_DIRS = previousDir;
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
     });
 
     test('rejects tampered signed L1 transaction material', () => {

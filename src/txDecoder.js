@@ -681,7 +681,7 @@ const Decode = {
     },
 
     isZkBatchMovementPayload: (payload) => {
-        return String(payload || '').startsWith('z1|');
+        return /^z[12]\|/.test(String(payload || ''));
     },
 
     // Type 34: compact ZK batch movement anchor. The full envelope may be
@@ -692,6 +692,28 @@ const Decode = {
         }
 
         const parts = String(payload || '').split('|');
+        if (parts[0] === 'z2') {
+            const envelopeId = parts[1] || '';
+            return {
+                zkBatchMovement: true,
+                version: 'z2',
+                envelopeId,
+                movementRoot: '',
+                proofHash: '',
+                verifierId: '',
+                proofType: '',
+                programHash: '',
+                publicInputHash: '',
+                daBlobHash: '',
+                witnessBlobHash: '',
+                signedL1TxHash: '',
+                batchL2TxHash: '',
+                resultId: '',
+                envelopeRef: parts[2] || `zkda:${envelopeId}`,
+                envelopeB64: '',
+                zkEnvelope: null
+            };
+        }
         let zkEnvelope = null;
         const envelopeB64 = parts[13] || '';
         if (envelopeB64.startsWith('b64:')) {

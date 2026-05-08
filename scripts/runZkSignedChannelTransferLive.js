@@ -76,6 +76,7 @@ async function main() {
     const Logic = require('../src/logic.js');
     const ZkConsensus = require('../src/zkConsensusEnvelope.js');
     const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
+    const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
 
     await db.init('BTC');
     const activation = Activation.getInstance('BTC');
@@ -144,11 +145,10 @@ async function main() {
         batchL2TxHex: fixture.batchL2TxHex,
         movements: fixture.movements
     });
-    const envelopeB64 = Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64');
+    const envelopeDaPath = ZkEnvelopeResolver.writeLocalEnvelopeRecord(envelope);
     const compactPayload = Encode.encodeZkBatchMovement({
         zkEnvelope: envelope,
-        envelopeRef: `snacksack:${path.basename(proof.runDir)}`,
-        envelopeB64
+        minimalAnchor: true
     });
     const decoded = Decode.decodeZkBatchMovement(compactPayload);
     decoded.block = fixture.blockHeight;
@@ -173,6 +173,7 @@ async function main() {
         runId,
         proofRun: proof.runDir,
         proofSummaryPath: proof.summaryPath,
+        envelopeDaPath,
         verifierMode: applied.verifierMode,
         verifierWasmHash: envelope.envelopeCore.publicInputs.verifierWasmHash,
         envelopeId: envelope.envelopeId,
@@ -193,6 +194,7 @@ async function main() {
             conservationRoot: execution.executionCore.conservationRoot,
             maxDependencyDepth: execution.executionCore.maxDependencyDepth
         },
+        compactPayloadBytes: Buffer.byteLength(compactPayload, 'utf8'),
         compactPayload,
         applied,
         finalChannels

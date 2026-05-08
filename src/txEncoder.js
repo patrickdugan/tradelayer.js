@@ -719,6 +719,9 @@ const Encode = {
                 resultId: params.resultId
             };
 
+        if (params.minimalAnchor || params.anchorVersion === 'z2') {
+            return ['z2', fields.envelopeId || ''].join('|');
+        }
         const payload = [
             'z1',
             fields.envelopeId || '',

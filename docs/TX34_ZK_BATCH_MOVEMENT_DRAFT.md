@@ -12,6 +12,14 @@ The OP_RETURN stays compact:
 z1|envelopeId|movementRoot|proofHash|verifierId|proofType|programHash|publicInputHash|daBlobHash|signedL1TxHash|batchL2TxHash|resultId|envelopeRef
 ```
 
+For standard-policy anchoring, tx34 can use the minimal form:
+
+```text
+z2|envelopeId
+```
+
+The `z2` form fits under the 80-byte OP_RETURN policy budget with the normal `tl` marker and tx type prefix. Consensus resolves the DA envelope by `envelopeId`, fills the compact fields from the envelope, and then runs the same hash, pinned-verifier, proof, signature, dependency, and conservation checks.
+
 The full consensus object is the ZK envelope, normally supplied from witness/DA:
 
 - `signedL1Tx.hex`: signed Bitcoin transaction hex.
@@ -23,13 +31,15 @@ The full consensus object is the ZK envelope, normally supplied from witness/DA:
 - For signed channel transfers, `publicInputs` also bind `signedChannelTransferExecutionHash`, `channelInputStateRoot`, `channelOutputStateRoot`, `channelBalanceTransitionRoot`, `channelStepRoot`, `channelDescendantRoot`, `channelAuthorizationRoot`, and `channelConservationRoot`.
 - User-path demos additionally bind `channelPathIntentHash` and `channelPathSigningTranscriptHash`.
 
-Consensus validation checks the compact OP_RETURN fields against the envelope, verifies the envelope hash structure, and calls the packaged Rust/WASM verifier. The `tlzk_rust_wasm_v0` switch currently pins the approved WASM artifact to:
+Consensus validation resolves the envelope from direct witness data, embedded development data, a local DA file, or an explicitly enabled HTTP DA endpoint. It then checks the compact OP_RETURN fields against the resolved envelope, verifies the envelope hash structure, and calls the packaged Rust/WASM verifier. The `tlzk_rust_wasm_v0` switch currently pins the approved WASM artifact to:
 
 ```text
 845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9
 ```
 
 The loader hashes `tlzk_verifier_bg.wasm` before accepting it. The envelope must bind that hash in `publicInputs.verifierWasmHash`, and the verifier result must echo it in `resultCore.wasmCodeHash`. The deterministic JS verifier is now an explicit development fallback only when `TL_ZK_ALLOW_JS_VERIFIER_FALLBACK=1` is set.
+
+For local DA, the parser resolves `zkda:<envelopeId>` or a `z2` `envelopeId` by looking for `<envelopeId>.json` under `TL_ZK_ENVELOPE_DIRS` or, by default, `artifacts/zk_envelopes`, `artifacts/zk_signed_channel_transfer`, and `artifacts/zk_consensus`. HTTP DA is disabled unless `TL_ZK_DA_ALLOW_HTTP=1`; after fetch, the same envelope id, compact field, verifier hash, proof hash, and DA hash checks still run.
 
 ## Consensus Effect
 
@@ -57,8 +67,8 @@ Descendant transfers are encoded by signing `dependsOnTransferIds` inside each t
 - `npm run zk:channel-transfer:build` creates a signed tx22-style channel transfer batch.
 - `npm run zk:channel-transfer:sign` prints the user route intent, per-hop message hashes, dependency ids, and signer roles.
 - `npm run zk:channel-transfer:prove:snacksack` sends that batch to snacksack for STWO proving.
-- `npm run zk:channel-transfer:live` verifies the returned proof envelope and applies the channel balance update in an isolated local DB.
+- `npm run zk:channel-transfer:live` writes a local DA envelope record, verifies a minimal `z2|<envelopeId>` tx34 anchor against the returned proof envelope, and applies the channel balance update in an isolated local DB.
 
 Proof generation belongs on the `snacksack` host. Local wallet and consensus machines should verify envelopes and WASM artifacts, but they should not run the heavy proving path.
 
-Until the parser has witness extraction wired in, tx34 rejects ZK batch movement envelopes that are not supplied by the caller. `TL_ZK_ALLOW_ANCHOR_ONLY=1` exists only for local anchor plumbing tests and should not be used for consensus.
+Until remote witness extraction is wired in, tx34 rejects anchors whose envelope cannot be resolved from direct params, local DA, or explicitly enabled HTTP DA. `TL_ZK_ALLOW_ANCHOR_ONLY=1` exists only for local anchor plumbing tests and should not be used for consensus.

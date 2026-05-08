@@ -23,6 +23,7 @@ const OptionsEngine = require('./options.js');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
 const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
+const ZkEnvelopeResolver = require('./zkEnvelopeResolver.js');
 
 // npm i bitcoinjs-lib bip32 tiny-secp256k1
 const bitcoin = require('bitcoinjs-lib');
@@ -3817,28 +3818,19 @@ Example integration point (around line 2900 in your file):
             'batchL2TxHash',
             'resultId'
         ];
-        for (const field of requiredHashFields) {
-            if (!/^[0-9a-f]{64}$/i.test(String(params[field] || ''))) {
-                params.valid = false;
-                params.reason += `Invalid ${field}; `;
-            }
-        }
-        if (!params.verifierId || !params.proofType) {
+        if (!/^[0-9a-f]{64}$/i.test(String(params.envelopeId || ''))) {
             params.valid = false;
-            params.reason += 'Missing verifierId/proofType; ';
+            params.reason += 'Invalid envelopeId; ';
         }
         if (!params.valid) return params;
 
-        let envelope = params.zkEnvelope || params.envelope || null;
-        if (!envelope && params.envelopeB64 && params.envelopeB64.startsWith('b64:')) {
-            try {
-                envelope = JSON.parse(Buffer.from(params.envelopeB64.slice(4), 'base64').toString('utf8'));
-            } catch (err) {
-                params.valid = false;
-                params.reason += `Invalid embedded ZK envelope: ${err.message}; `;
-                return params;
-            }
+        const resolvedEnvelope = await ZkEnvelopeResolver.resolveEnvelopeFromParams(params);
+        if (resolvedEnvelope.error) {
+            params.valid = false;
+            params.reason += `${resolvedEnvelope.error}; `;
+            return params;
         }
+        let envelope = resolvedEnvelope.envelope;
 
         if (!envelope) {
             const allowAnchorOnly = String(process.env.TL_ZK_ALLOW_ANCHOR_ONLY || '').trim() === '1';
@@ -3851,10 +3843,24 @@ Example integration point (around line 2900 in your file):
 
         const compact = ZkConsensus.compactFieldsFromEnvelope(envelope);
         for (const [field, expected] of Object.entries(compact)) {
-            if (expected && String(params[field] || '').toLowerCase() !== String(expected).toLowerCase()) {
+            if (!params[field]) {
+                params[field] = expected;
+            } else if (expected && String(params[field] || '').toLowerCase() !== String(expected).toLowerCase()) {
                 params.valid = false;
                 params.reason += `ZK compact field mismatch: ${field}; `;
             }
+        }
+        if (!params.valid) return params;
+
+        for (const field of requiredHashFields) {
+            if (!/^[0-9a-f]{64}$/i.test(String(params[field] || ''))) {
+                params.valid = false;
+                params.reason += `Invalid ${field}; `;
+            }
+        }
+        if (!params.verifierId || !params.proofType) {
+            params.valid = false;
+            params.reason += 'Missing verifierId/proofType; ';
         }
         if (!params.valid) return params;
 
@@ -3897,6 +3903,7 @@ Example integration point (around line 2900 in your file):
         }
 
         params.zkEnvelope = envelope;
+        params.zkEnvelopeSource = resolvedEnvelope.source;
         params.zkVerifierResult = wasmCheck;
         params.zkMovements = envelope.envelopeCore.movements || [];
         return params;
