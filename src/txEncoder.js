@@ -1,6 +1,7 @@
 const BigNumber = require('bignumber.js');
 const base94 = require('./base94.js');
 const base256 = require('./base256.js');
+const ZkConsensus = require('./zkConsensusEnvelope.js');
 const marker = 'tl';
 
 const SettleType = {
@@ -696,6 +697,54 @@ const Encode = {
         return payload.join(',');
     },
 
+
+    // Type 34: compact anchor for a ZK-verified token batch movement.
+    // Full signed L1 hex, signed TL L2 batch hex, movements, and witness data are
+    // carried by the envelope/DA blob. The OP_RETURN only commits to their hashes.
+    encodeZkBatchMovement: (params = {}) => {
+        const envelope = params.zkEnvelope || params.envelope || null;
+        const fields = envelope
+            ? ZkConsensus.compactFieldsFromEnvelope(envelope)
+            : {
+                envelopeId: params.envelopeId,
+                movementRoot: params.movementRoot,
+                proofHash: params.proofHash,
+                verifierId: params.verifierId,
+                proofType: params.proofType,
+                programHash: params.programHash,
+                publicInputHash: params.publicInputHash,
+                daBlobHash: params.daBlobHash || params.witnessBlobHash,
+                signedL1TxHash: params.signedL1TxHash,
+                batchL2TxHash: params.batchL2TxHash,
+                resultId: params.resultId
+            };
+
+        const payload = [
+            'z1',
+            fields.envelopeId || '',
+            fields.movementRoot || '',
+            fields.proofHash || '',
+            fields.verifierId || ZkConsensus.DEFAULT_ZK_VERIFIER_ID,
+            fields.proofType || ZkConsensus.DEFAULT_ZK_PROOF_TYPE,
+            fields.programHash || '',
+            fields.publicInputHash || '',
+            fields.daBlobHash || '',
+            fields.signedL1TxHash || '',
+            fields.batchL2TxHash || '',
+            fields.resultId || '',
+            params.envelopeRef || params.daRef || ''
+        ];
+
+        if (params.envelopeB64) {
+            payload.push(params.envelopeB64.startsWith('b64:') ? params.envelopeB64 : `b64:${params.envelopeB64}`);
+        }
+
+        return payload.join('|');
+    },
+
+    encodeZkBatchMove: (params = {}) => {
+        return Encode.encodeZkBatchMovement(params);
+    },
 
     // Encode cross TL chain bridging tx
     encodeAbstractionBridge: (params) => {

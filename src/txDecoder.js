@@ -680,13 +680,61 @@ const Decode = {
         };
     },
 
+    isZkBatchMovementPayload: (payload) => {
+        return String(payload || '').startsWith('z1|');
+    },
+
+    // Type 34: compact ZK batch movement anchor. The full envelope may be
+    // supplied from witness/DA or embedded as b64 only in local/dev payloads.
+    decodeZkBatchMovement: (payload) => {
+        if (!Decode.isZkBatchMovementPayload(payload)) {
+            return { zkBatchMovement: false, legacyPayload: payload };
+        }
+
+        const parts = String(payload || '').split('|');
+        let zkEnvelope = null;
+        const envelopeB64 = parts[13] || '';
+        if (envelopeB64.startsWith('b64:')) {
+            try {
+                zkEnvelope = JSON.parse(Buffer.from(envelopeB64.slice(4), 'base64').toString('utf8'));
+            } catch (err) {
+                zkEnvelope = null;
+            }
+        }
+
+        return {
+            zkBatchMovement: true,
+            version: parts[0],
+            envelopeId: parts[1] || '',
+            movementRoot: parts[2] || '',
+            proofHash: parts[3] || '',
+            verifierId: parts[4] || '',
+            proofType: parts[5] || '',
+            programHash: parts[6] || '',
+            publicInputHash: parts[7] || '',
+            daBlobHash: parts[8] || '',
+            witnessBlobHash: parts[8] || '',
+            signedL1TxHash: parts[9] || '',
+            batchL2TxHash: parts[10] || '',
+            resultId: parts[11] || '',
+            envelopeRef: parts[12] || '',
+            envelopeB64,
+            zkEnvelope
+        };
+    },
+
     // Decode Mint Colored Coin
     decodeAbstractionBridge: (payload) => {
         const parts = payload.split(',');
         return {
             propertyId: parseInt(parts[0], 36),
-            amount: parseInt(parts[1], 36)
+            amount: parseInt(parts[1], 36),
+            destinationAddr: parts[2] || ''
         };
+    },
+
+    decodeCrossLayerBridge: (payload) => {
+        return Decode.decodeAbstractionBridge(payload);
     }
 
 }

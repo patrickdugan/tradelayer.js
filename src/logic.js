@@ -40,6 +40,8 @@ const { BitvmCacheRegistry } = require('./bitvmCache.js');
 const { verifyBundleHash } = require('./bitvmBundle.js');
 const BitvmRisk = require('./bitvmRisk.js');
 const BinohashAdapter = require('./experimental/binohash/binohashAdapter.js');
+const ZkConsensus = require('./zkConsensusEnvelope.js');
+const ZkWasmVerifier = require('./zkWasmVerifier.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -292,7 +294,11 @@ const Logic = {
                 Logic.coloredCoin(params);
                 break;
             case 34:
-                Logic.crossLayerBridge(params);
+                if (params.zkBatchMovement) {
+                    await Logic.zkBatchMove(params);
+                } else if (typeof Logic.crossLayerBridge === 'function') {
+                    await Logic.crossLayerBridge(params);
+                }
                 break;
             case 35:
                 Logic.smartContractBind(params);
@@ -2226,6 +2232,85 @@ const Logic = {
         }
     },
 
+    async zkBatchMove(params = {}) {
+        const envelope = params.zkEnvelope || params.envelope;
+        if (!envelope) {
+            throw new Error('Tx34 ZK batch movement requires a verified envelope');
+        }
+
+        const envelopeCheck = ZkConsensus.verifyZkConsensusEnvelope(envelope);
+        if (!envelopeCheck.ok) {
+            throw new Error(`Invalid Tx34 ZK envelope: ${envelopeCheck.reason}`);
+        }
+
+        const verifierResult = params.zkVerifierResult || await ZkWasmVerifier.verifyEnvelope(envelope);
+        if (!verifierResult.ok) {
+            throw new Error(`ZK verifier rejected Tx34 envelope: ${verifierResult.reason || 'unknown'}`);
+        }
+
+        const compact = ZkConsensus.compactFieldsFromEnvelope(envelope);
+        for (const [field, expected] of Object.entries(compact)) {
+            if (expected && params[field] && String(params[field]).toLowerCase() !== String(expected).toLowerCase()) {
+                throw new Error(`Tx34 compact field mismatch: ${field}`);
+            }
+        }
+
+        const block = params.block || params.blockHeight || 0;
+        const txid = params.txid || '';
+        const movements = envelope.envelopeCore.movements || [];
+        const applied = [];
+
+        for (const movement of movements) {
+            const propertyId = Number(movement.propertyId);
+            const amount = new BigNumber(String(movement.amountUnits)).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN);
+            if (!amount.isFinite() || amount.lte(0)) {
+                throw new Error(`Invalid Tx34 movement amount for property ${propertyId}`);
+            }
+
+            const fromAddress = String(movement.from || '');
+            const toAddress = String(movement.to || '');
+            const balanceCheck = await TallyMap.hasSufficientBalance(fromAddress, propertyId, amount.toNumber());
+            if (!balanceCheck?.hasSufficient) {
+                throw new Error(`Insufficient Tx34 batch movement balance: ${balanceCheck?.reason || 'unknown'}`);
+            }
+
+            await TallyMap.updateBalance(fromAddress, propertyId, amount.negated().toNumber(), 0, 0, 0, 'zkBatchMoveDebit', block, txid);
+            await TallyMap.updateBalance(toAddress, propertyId, amount.toNumber(), 0, 0, 0, 'zkBatchMoveCredit', block, txid);
+
+            applied.push({
+                from: fromAddress,
+                to: toAddress,
+                propertyId,
+                amount: amount.toString(),
+                amountUnits: String(movement.amountUnits)
+            });
+        }
+
+        const auditDb = await db.getDatabase('zkBatchMovements');
+        const summary = {
+            _id: envelope.envelopeId,
+            envelopeId: envelope.envelopeId,
+            txid,
+            block,
+            verifierId: envelope.envelopeCore.verifierId,
+            proofType: envelope.envelopeCore.proofType,
+            proofHash: envelope.envelopeCore.proofHash,
+            programHash: envelope.envelopeCore.programHash,
+            movementRoot: envelope.envelopeCore.movementRoot,
+            publicInputHash: envelope.envelopeCore.publicInputHash,
+            daBlobHash: envelope.envelopeCore.publicInputs.daBlobHash,
+            signedL1TxHash: envelope.envelopeCore.signedL1Tx.hash,
+            batchL2TxHash: envelope.envelopeCore.batchL2Tx.hash,
+            resultId: envelope.verifierResult.resultId,
+            verifierMode: verifierResult.mode || 'unknown',
+            movements: applied,
+            applied: true,
+            updatedAt: Date.now()
+        };
+        await auditDb.updateAsync({ _id: envelope.envelopeId }, summary, { upsert: true });
+
+        return summary;
+    },
 	batchMoveZkRollup(zkVerifier, rollupData, zkProof) {
 	    // Parse the Zero-Knowledge rollup data
 	    let transactions;

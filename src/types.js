@@ -132,7 +132,11 @@ const Types = {
                 payload += Encode.encodeColoredCoin(params);
                 break;
             case 34:
-                payload += Encode.encodeAbstractionBridge(params);
+                if (params.zkBatchMovement || params.zkEnvelope || params.envelope || params.envelopeId) {
+                    payload += Encode.encodeZkBatchMovement(params);
+                } else {
+                    payload += Encode.encodeAbstractionBridge(params);
+                }
                 break;
             case 35:
                 payload += Encode.encodeBindSmartContract(params);
@@ -483,11 +487,16 @@ const Types = {
                 params = await Validity.validateColoredCoin(sender, params, txId)
                 break;
             case 34:
-                params = Decode.decodeCrossLayerBridge(encodedPayload.substr(index));
+                params = Decode.decodeZkBatchMovement(encodedPayload.substr(index));
+                if (!params.zkBatchMovement) {
+                    params = Decode.decodeCrossLayerBridge(encodedPayload.substr(index));
+                }
                 params.block=block
                 params.senderAddress= sender
                 params.txid=txId
-                //params = await Validity.validateCrossLayerBridge(sender, params, block)
+                if (params.zkBatchMovement) {
+                    params = await Validity.validateZkBatchMovement(sender, params, txId)
+                }
                 break;
             case 35:
                 params = Decode.decodeSmartContractBind(encodedPayload.substr(index));

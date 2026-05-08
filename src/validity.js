@@ -20,6 +20,8 @@ const { ProceduralRegistry } = require('./procedural.js')
 //const whiteLists = require('./whitelists.js')
 const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 const OptionsEngine = require('./options.js');
+const ZkConsensus = require('./zkConsensusEnvelope.js');
+const ZkWasmVerifier = require('./zkWasmVerifier.js');
 
 // npm i bitcoinjs-lib bip32 tiny-secp256k1
 const bitcoin = require('bitcoinjs-lib');
@@ -3783,6 +3785,96 @@ Example integration point (around line 2900 in your file):
         const arePaymentsValid = tallyMap.arePaymentsValid(params.payments);
 
         return isZkProofValid && arePaymentsValid;
+    },
+
+    validateZkBatchMovement: async (sender, params, txid) => {
+        params.valid = true;
+        params.reason = params.reason || '';
+
+        const txType = 34;
+        const isAlreadyActivated = await activationInstance.isTxTypeActive(txType);
+        if (!isAlreadyActivated) {
+            params.valid = false;
+            params.reason += 'Tx34 ZK batch movement is not activated; ';
+            return params;
+        }
+
+        if (!params.zkBatchMovement) {
+            params.valid = false;
+            params.reason += 'Tx34 ZK batch movement marker missing; ';
+            return params;
+        }
+
+        const requiredHashFields = [
+            'envelopeId',
+            'movementRoot',
+            'proofHash',
+            'programHash',
+            'publicInputHash',
+            'daBlobHash',
+            'signedL1TxHash',
+            'batchL2TxHash',
+            'resultId'
+        ];
+        for (const field of requiredHashFields) {
+            if (!/^[0-9a-f]{64}$/i.test(String(params[field] || ''))) {
+                params.valid = false;
+                params.reason += `Invalid ${field}; `;
+            }
+        }
+        if (!params.verifierId || !params.proofType) {
+            params.valid = false;
+            params.reason += 'Missing verifierId/proofType; ';
+        }
+        if (!params.valid) return params;
+
+        let envelope = params.zkEnvelope || params.envelope || null;
+        if (!envelope && params.envelopeB64 && params.envelopeB64.startsWith('b64:')) {
+            try {
+                envelope = JSON.parse(Buffer.from(params.envelopeB64.slice(4), 'base64').toString('utf8'));
+            } catch (err) {
+                params.valid = false;
+                params.reason += `Invalid embedded ZK envelope: ${err.message}; `;
+                return params;
+            }
+        }
+
+        if (!envelope) {
+            const allowAnchorOnly = String(process.env.TL_ZK_ALLOW_ANCHOR_ONLY || '').trim() === '1';
+            if (!allowAnchorOnly) {
+                params.valid = false;
+                params.reason += 'Tx34 requires a ZK envelope from witness/DA unless TL_ZK_ALLOW_ANCHOR_ONLY=1; ';
+            }
+            return params;
+        }
+
+        const compact = ZkConsensus.compactFieldsFromEnvelope(envelope);
+        for (const [field, expected] of Object.entries(compact)) {
+            if (expected && String(params[field] || '').toLowerCase() !== String(expected).toLowerCase()) {
+                params.valid = false;
+                params.reason += `ZK compact field mismatch: ${field}; `;
+            }
+        }
+        if (!params.valid) return params;
+
+        const envelopeCheck = ZkConsensus.verifyZkConsensusEnvelope(envelope);
+        if (!envelopeCheck.ok) {
+            params.valid = false;
+            params.reason += `${envelopeCheck.reason}; `;
+            return params;
+        }
+
+        const wasmCheck = await ZkWasmVerifier.verifyEnvelope(envelope);
+        if (!wasmCheck.ok) {
+            params.valid = false;
+            params.reason += `ZK verifier rejected envelope: ${wasmCheck.reason || 'unknown'}; `;
+            return params;
+        }
+
+        params.zkEnvelope = envelope;
+        params.zkVerifierResult = wasmCheck;
+        params.zkMovements = envelope.envelopeCore.movements || [];
+        return params;
     },
 
     validateColoredCoin: async (sender, params, txid) => {

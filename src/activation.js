@@ -226,7 +226,7 @@ class Activation {
             31: { name: "Batch Move Zk Rollup", active: false },
             32: { name: "Publish New Tx", active: false },
             33: { name: "Colored Coin", active: false },
-            34: { name: "Cross Layer Bridge", active: false },
+            34: { name: "ZK Batch Movement / Cross Layer Bridge", active: false },
             35: { name: "Smart Contract Bind", active: false },
         }
 

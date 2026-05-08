@@ -29,7 +29,13 @@
     "setup:testnet-activations": "node scripts/setupTestnetActivationSet.js --mode=local-db",
     "setup:testnet-activations:print": "node scripts/setupTestnetActivationSet.js --mode=print",
     "test:testnet-activation-profile": "jest tests/testnetActivationProfile.test.js --runInBand",
-    "check:btctest-consensus": "node scripts/checkBtctestConsensus.js"
+    "check:btctest-consensus": "node scripts/checkBtctestConsensus.js",
+    "test:zk-batch": "jest tests/zkBatchMovementDraft.test.js --runInBand",
+    "wasm:check": "cargo check --manifest-path wasm/tlzk_verifier/Cargo.toml",
+    "wasm:build": "cargo build --release --target wasm32-unknown-unknown --manifest-path wasm/tlzk_verifier/Cargo.toml",
+    "wasm:bindgen:node": "wasm-bindgen --target nodejs --out-dir wasm/tlzk_verifier/pkg-node wasm/tlzk_verifier/target/wasm32-unknown-unknown/release/tlzk_verifier.wasm",
+    "wasm:bindgen:web": "wasm-bindgen --target web --out-dir wasm/tlzk_verifier/pkg wasm/tlzk_verifier/target/wasm32-unknown-unknown/release/tlzk_verifier.wasm",
+    "wasm:bundle": "npm run wasm:build && npm run wasm:bindgen:node && npm run wasm:bindgen:web"
   },
   "jest": {
     "testPathIgnorePatterns": [
