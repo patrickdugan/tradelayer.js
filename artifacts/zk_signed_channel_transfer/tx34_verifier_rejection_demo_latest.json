@@ -1,6 +1,6 @@
 {
   "kind": "tx34_registered_wasm_verifier_rejection_demo",
-  "createdAt": "2026-05-08T22:26:53.213Z",
+  "createdAt": "2026-05-08T23:57:26.093Z",
   "source": "artifacts\\zk_envelopes\\84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
   "sourceEnvelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
   "sourceVerifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
@@ -26,6 +26,109 @@
         "verifierId": "tlzk_rust_wasm_v0",
         "mode": "rust-wasm",
         "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9"
+      },
+      "txConsensus": {
+        "compactPayload": "z2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+        "txid": "1f463293b69fd10601ec43de5a9954565249aa4465d7dd8b0774a0906b10f9a1",
+        "daSource": "ephemeral-case-da:84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
+        "validity": {
+          "valid": true,
+          "reason": "",
+          "envelopeSource": "ephemeral-case-da:84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json"
+        },
+        "logicApplied": true,
+        "blockedBeforeLogic": false,
+        "primedChannels": {
+          "primed": true,
+          "channels": [
+            "tb1qzkchan000000000000000000000000000000",
+            "tb1qzkdest000000000000000000000000000000",
+            "tb1qzkrelay10000000000000000000000000000",
+            "tb1qzkrelay20000000000000000000000000000"
+          ]
+        },
+        "application": {
+          "_id": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+          "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+          "txid": "1f463293b69fd10601ec43de5a9954565249aa4465d7dd8b0774a0906b10f9a1",
+          "block": 777002,
+          "verifierId": "tlzk_rust_wasm_v0",
+          "proofType": "stwo-cairo-batch-binding-v1",
+          "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+          "programHash": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+          "movementRoot": "69cb71d77ab2666c42053276140221f355da4cb8b288da92026c65d938c98e9b",
+          "publicInputHash": "4240134c5efcef51f077aa925ab8cb0711601414668e3a41cca022ac20a46576",
+          "daBlobHash": "397048fb77af7cb4d0aa8359bda6aab6fed6c1ff62d5fa1fe7e712b750cbff04",
+          "signedL1TxHash": "366e0fa281e6097e7f506da43e273565bc74a30b219d567c291f5c73e7f64a9e",
+          "batchL2TxHash": "c4eaa27a2172713a0466c3669815ab2ada499180ba150193633dc72321fb1a88",
+          "resultId": "7c06adb7fc7c2f1245da17e8a6d1e1c7cfa91f06e20391612d8d58cf5c9504f2",
+          "verifierMode": "rust-wasm",
+          "movements": [
+            {
+              "from": "channel:tb1qzkchan000000000000000000000000000000:A",
+              "to": "channel:tb1qzkdest000000000000000000000000000000:A",
+              "propertyId": 1,
+              "amountUnits": "125000000",
+              "skippedTally": true,
+              "reason": "covered by signed channel transfer batch"
+            }
+          ],
+          "signedChannelTransfer": {
+            "ok": true,
+            "batchId": "226cf3b1fea317c94102c12cb053260206afad9fa8968f86a6ffa33e5c664017",
+            "transferRoot": "314aed17c4ac0f1123c19942f44569c57dfbd32e0401611e3e7d9cebaea43c5c",
+            "signatureRoot": "6efebf92c2c4d8d2c4de682ecb0dd1b2918f0708d9208fd2cd0fde441ba5a211",
+            "execution": {
+              "executionId": "0e154c7c4622930a2af3f9c6f5991eed7988da3ad664ac4d2da993cfc0f25d09",
+              "inputStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
+              "outputStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
+              "balanceTransitionRoot": "8699f7e869d020072eebd773de825eab065733992227a6231c0836b05afaae67",
+              "stepRoot": "372dfde7280c7cff7a774dba20da38a8a3cc8b9c39bccfb718bc05d0df2b11d4",
+              "descendantRoot": "6c680024a7f65f698207c83681b4b4feeea1f21ea1ea29ad66644881404f3c3b",
+              "authorizationRoot": "ea33c5c798a0fab70c5962a07996f5bebddacacfb5aa90d06d9d5890b800fe66",
+              "conservationRoot": "9ef8880d9cbf1c2b08a766d9847c10c6c1381aba0983cecf6d98fda1aa9449b2",
+              "maxDependencyDepth": 3
+            },
+            "applied": [
+              {
+                "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
+                "fromChannelAddress": "tb1qzkchan000000000000000000000000000000",
+                "toChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+                "sourceColumn": "A",
+                "destinationColumn": "A",
+                "propertyId": 1,
+                "amount": "1.25",
+                "amountUnits": "125000000"
+              },
+              {
+                "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
+                "fromChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+                "toChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+                "sourceColumn": "A",
+                "destinationColumn": "A",
+                "propertyId": 1,
+                "amount": "1.25",
+                "amountUnits": "125000000"
+              },
+              {
+                "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
+                "fromChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+                "toChannelAddress": "tb1qzkdest000000000000000000000000000000",
+                "sourceColumn": "A",
+                "destinationColumn": "A",
+                "propertyId": 1,
+                "amount": "1.25",
+                "amountUnits": "125000000"
+              }
+            ]
+          },
+          "applied": true,
+          "updatedAt": 1778284646030
+        },
+        "outputRowsMatch": {
+          "ok": true,
+          "mismatches": []
+        }
       }
     },
     {
@@ -51,6 +154,18 @@
         "mode": "rust-wasm",
         "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
         "reason": "STWO proof summary proof hash mismatch"
+      },
+      "txConsensus": {
+        "compactPayload": "z2|58a07c09bd4a36c064b727506c3c3b341161a0ab8ff6d88ef093070cf3b63e3e",
+        "txid": "b8589a3734582110372915397adcd92c5072956b3275854af54b361008a8518b",
+        "daSource": "ephemeral-case-da:58a07c09bd4a36c064b727506c3c3b341161a0ab8ff6d88ef093070cf3b63e3e.json",
+        "validity": {
+          "valid": false,
+          "reason": "STWO proof summary proof hash mismatch; ",
+          "envelopeSource": ""
+        },
+        "logicApplied": false,
+        "blockedBeforeLogic": true
       }
     },
     {
@@ -72,6 +187,18 @@
         "reason": "ZK consensus envelope id mismatch",
         "mode": "rust-wasm",
         "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9"
+      },
+      "txConsensus": {
+        "compactPayload": "z2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+        "txid": "1f463293b69fd10601ec43de5a9954565249aa4465d7dd8b0774a0906b10f9a1",
+        "daSource": "ephemeral-case-da:84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
+        "validity": {
+          "valid": false,
+          "reason": "ZK consensus envelope id mismatch; ",
+          "envelopeSource": ""
+        },
+        "logicApplied": false,
+        "blockedBeforeLogic": true
       }
     },
     {
@@ -92,6 +219,18 @@
         "ok": false,
         "mode": "approved-verifier-check",
         "reason": "verifier tlzk_rust_wasm_v0 WASM hash e024d7c8db9c715a9524286a6b342508d9d7415aaa68d3ed95aee26789eb5368 is not consensus-approved"
+      },
+      "txConsensus": {
+        "compactPayload": "z2|e61bf31ba09d6d25a9bdc521662a36a99dfa7201503fc9c3bd9c2bea1e80623f",
+        "txid": "162f070db23a8cb9600d9162b9f0624754939135490356fc341e3f01edb4a3ec",
+        "daSource": "ephemeral-case-da:e61bf31ba09d6d25a9bdc521662a36a99dfa7201503fc9c3bd9c2bea1e80623f.json",
+        "validity": {
+          "valid": false,
+          "reason": "ZK verifier WASM hash is not consensus-approved; ",
+          "envelopeSource": ""
+        },
+        "logicApplied": false,
+        "blockedBeforeLogic": true
       }
     }
   ]
