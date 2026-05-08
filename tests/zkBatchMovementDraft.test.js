@@ -11,6 +11,7 @@ const ZkConsensus = require('../src/zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('../src/zkWasmVerifier.js');
 const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
 const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
+const RejectionDemo = require('../scripts/runZkVerifierRejectionDemo.js');
 
 function privateKeyFromLabel(label) {
     for (let i = 0; i < 1000; i += 1) {
@@ -69,6 +70,42 @@ function fixtureEnvelope() {
             value: {
                 proofRef: 'witness:0',
                 txCount: 2
+            }
+        },
+        signedL1TxHex: '02000000000100',
+        batchL2TxHex: '746c7a6b6261746368',
+        movements: [
+            {
+                from: 'tb1qsource0000000000000000000000000000000',
+                to: 'tb1qdest000000000000000000000000000000000',
+                propertyId: 1,
+                amountUnits: '125000000',
+                memo: 'signed channel batch'
+            }
+        ]
+    });
+}
+
+function fixtureStwoEnvelopeWithProofSummary() {
+    const proofHash = ZkConsensus.sha256Hex('stwo-proof-bytes');
+    const programHash = ZkConsensus.sha256Hex('stwo-program');
+    return ZkConsensus.buildZkConsensusEnvelope({
+        proofHash,
+        programHash,
+        publicInputs: {
+            batchId: ZkConsensus.sha256Hex('batch-id'),
+            stwoBindingCommitment: '0x1234'
+        },
+        daBlob: {
+            carrier: 'snacksack-stwo-proof-run',
+            encoding: 'json',
+            value: {
+                proofSummary: {
+                    proofSha256: proofHash,
+                    programSha256: programHash,
+                    batchId: ZkConsensus.sha256Hex('batch-id'),
+                    bindingCommitment: '0x1234'
+                }
             }
         },
         signedL1TxHex: '02000000000100',
@@ -173,6 +210,22 @@ describe('tx34 ZK batch movement draft', () => {
         expect(result.ok).toBe(true);
         expect(result.mode).toBe('rust-wasm');
         expect(result.wasmCodeHash).toBe(ZkConsensus.TLZK_RUST_WASM_V0_CODE_HASH);
+    });
+
+    test('rejects self-consistent STWO proof-summary hash mismatches', async () => {
+        const envelope = fixtureStwoEnvelopeWithProofSummary();
+        expect(ZkConsensus.verifyZkConsensusEnvelope(envelope)).toEqual({ ok: true });
+        expect((await ZkWasmVerifier.verifyEnvelope(envelope)).ok).toBe(true);
+
+        const tampered = RejectionDemo.mutateSemanticProofSummaryHash(envelope);
+        const consensus = ZkConsensus.verifyZkConsensusEnvelope(tampered);
+        expect(consensus.ok).toBe(false);
+        expect(consensus.reason).toMatch(/proof summary proof hash mismatch/);
+
+        const wasm = await ZkWasmVerifier.verifyEnvelope(tampered);
+        expect(wasm.ok).toBe(false);
+        expect(wasm.mode).toBe('rust-wasm');
+        expect(wasm.reason).toMatch(/proof summary proof hash mismatch/);
     });
 
     test('rejects a non-approved verifier WASM hash', () => {

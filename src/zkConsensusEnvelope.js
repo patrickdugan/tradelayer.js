@@ -118,6 +118,62 @@ function buildDaBlobHash(daBlob = {}) {
     return hashCanonical(normalizeDaBlob(daBlob));
 }
 
+function proofSummaryFromEnvelope(envelope) {
+    const value = envelope?.envelopeCore?.daBlob?.value;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const summary = value.proofSummary;
+    return summary && typeof summary === 'object' && !Array.isArray(summary) ? summary : null;
+}
+
+function compareOptionalHash(observed, expected, reason, fieldName) {
+    if (observed === undefined || observed === null || observed === '') return null;
+    try {
+        if (normalizeHash(observed, fieldName) !== normalizeHash(expected, fieldName)) return reason;
+        return null;
+    } catch (err) {
+        return `${reason}: ${err.message}`;
+    }
+}
+
+function verifyProofSummaryBindings(envelope) {
+    const core = envelope?.envelopeCore || {};
+    const proofType = String(core.proofType || '');
+    if (!proofType.startsWith('stwo-')) return { ok: true };
+
+    const summary = proofSummaryFromEnvelope(envelope);
+    if (!summary) return { ok: true };
+
+    const proofHashReason = compareOptionalHash(
+        summary.proofSha256,
+        core.proofHash,
+        'STWO proof summary proof hash mismatch',
+        'proofSummary.proofSha256'
+    );
+    if (proofHashReason) return { ok: false, reason: proofHashReason };
+
+    const programHashReason = compareOptionalHash(
+        summary.programSha256,
+        core.programHash,
+        'STWO proof summary program hash mismatch',
+        'proofSummary.programSha256'
+    );
+    if (programHashReason) return { ok: false, reason: programHashReason };
+
+    if (summary.batchId && core.publicInputs?.batchId && String(summary.batchId) !== String(core.publicInputs.batchId)) {
+        return { ok: false, reason: 'STWO proof summary batch id mismatch' };
+    }
+
+    if (
+        summary.bindingCommitment &&
+        core.publicInputs?.stwoBindingCommitment &&
+        String(summary.bindingCommitment) !== String(core.publicInputs.stwoBindingCommitment)
+    ) {
+        return { ok: false, reason: 'STWO proof summary binding commitment mismatch' };
+    }
+
+    return { ok: true };
+}
+
 function assertSupportedVerifier(verifierId, proofType) {
     const verifier = ZK_VERIFIER_SWITCH[verifierId];
     if (!verifier) throw new Error(`unsupported ZK verifier ${verifierId}`);
@@ -323,6 +379,8 @@ function verifyZkConsensusEnvelope(envelope) {
         if (hashCanonical(core.publicInputs) !== core.publicInputHash) {
             return { ok: false, reason: 'public input hash mismatch' };
         }
+        const proofSummaryCheck = verifyProofSummaryBindings(envelope);
+        if (!proofSummaryCheck.ok) return proofSummaryCheck;
         const resultCheck = verifyZkVerifierResult(envelope.verifierResult, envelope);
         if (!resultCheck.ok) return resultCheck;
         return { ok: true };
@@ -366,6 +424,8 @@ module.exports = {
     buildMovementRoot,
     normalizeDaBlob,
     buildDaBlobHash,
+    proofSummaryFromEnvelope,
+    verifyProofSummaryBindings,
     assertSupportedVerifier,
     assertApprovedVerifierWasm,
     buildZkVerifierResult,

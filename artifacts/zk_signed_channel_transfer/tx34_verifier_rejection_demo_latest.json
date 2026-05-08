@@ -1,0 +1,98 @@
+{
+  "kind": "tx34_registered_wasm_verifier_rejection_demo",
+  "createdAt": "2026-05-08T22:26:53.213Z",
+  "source": "artifacts\\zk_envelopes\\84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
+  "sourceEnvelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+  "sourceVerifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+  "cases": [
+    {
+      "name": "accepted_current_envelope",
+      "note": "registered verifier approves the current DA blob/proof hash binding",
+      "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+      "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "proofSummaryProofSha256": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "programHash": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+      "daBlobHash": "397048fb77af7cb4d0aa8359bda6aab6fed6c1ff62d5fa1fe7e712b750cbff04",
+      "verifierId": "tlzk_rust_wasm_v0",
+      "verifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+      "consensus": {
+        "ok": true
+      },
+      "registeredVerifier": {
+        "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+        "ok": true,
+        "proofType": "stwo-cairo-batch-binding-v1",
+        "resultId": "7c06adb7fc7c2f1245da17e8a6d1e1c7cfa91f06e20391612d8d58cf5c9504f2",
+        "verifierId": "tlzk_rust_wasm_v0",
+        "mode": "rust-wasm",
+        "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9"
+      }
+    },
+    {
+      "name": "rejected_self_consistent_proof_summary_mismatch",
+      "note": "DA blob is rehashed into a self-consistent envelope, but proofSummary.proofSha256 no longer equals envelopeCore.proofHash",
+      "envelopeId": "58a07c09bd4a36c064b727506c3c3b341161a0ab8ff6d88ef093070cf3b63e3e",
+      "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "proofSummaryProofSha256": "db6a53af30d88ff284c370fd43c7cb818ae1dea68e1ac12e0397d60e759a10ee",
+      "programHash": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+      "daBlobHash": "218e762f68854a3abb8fb333927df70130b97ff4d9bb3dde4010cadec8723022",
+      "verifierId": "tlzk_rust_wasm_v0",
+      "verifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+      "consensus": {
+        "ok": false,
+        "reason": "STWO proof summary proof hash mismatch"
+      },
+      "registeredVerifier": {
+        "envelopeId": "58a07c09bd4a36c064b727506c3c3b341161a0ab8ff6d88ef093070cf3b63e3e",
+        "ok": false,
+        "proofType": "stwo-cairo-batch-binding-v1",
+        "resultId": "0c7eca921422e5240a1369d545b58cea9edcb63ea34f2bab8c95988a56f9fc95",
+        "verifierId": "tlzk_rust_wasm_v0",
+        "mode": "rust-wasm",
+        "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+        "reason": "STWO proof summary proof hash mismatch"
+      }
+    },
+    {
+      "name": "rejected_raw_da_blob_mutation",
+      "note": "DA blob changed without rebuilding the envelope id/public inputs",
+      "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+      "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "proofSummaryProofSha256": "06eeaad6d1cd095b878bb31058d6e1be5a2ef0ddc446e2a1035af110c021566b",
+      "programHash": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+      "daBlobHash": "397048fb77af7cb4d0aa8359bda6aab6fed6c1ff62d5fa1fe7e712b750cbff04",
+      "verifierId": "tlzk_rust_wasm_v0",
+      "verifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+      "consensus": {
+        "ok": false,
+        "reason": "ZK consensus envelope id mismatch"
+      },
+      "registeredVerifier": {
+        "ok": false,
+        "reason": "ZK consensus envelope id mismatch",
+        "mode": "rust-wasm",
+        "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9"
+      }
+    },
+    {
+      "name": "rejected_unregistered_verifier_hash",
+      "note": "envelope points at a verifier WASM hash outside the consensus registry",
+      "envelopeId": "e61bf31ba09d6d25a9bdc521662a36a99dfa7201503fc9c3bd9c2bea1e80623f",
+      "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "proofSummaryProofSha256": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "programHash": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+      "daBlobHash": "397048fb77af7cb4d0aa8359bda6aab6fed6c1ff62d5fa1fe7e712b750cbff04",
+      "verifierId": "tlzk_rust_wasm_v0",
+      "verifierWasmHash": "e024d7c8db9c715a9524286a6b342508d9d7415aaa68d3ed95aee26789eb5368",
+      "consensus": {
+        "ok": false,
+        "reason": "ZK verifier WASM hash is not consensus-approved"
+      },
+      "registeredVerifier": {
+        "ok": false,
+        "mode": "approved-verifier-check",
+        "reason": "verifier tlzk_rust_wasm_v0 WASM hash e024d7c8db9c715a9524286a6b342508d9d7415aaa68d3ed95aee26789eb5368 is not consensus-approved"
+      }
+    }
+  ]
+}

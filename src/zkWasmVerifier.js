@@ -88,11 +88,21 @@ async function verifyEnvelope(envelope) {
             };
         }
         try {
-            return {
+            const result = {
                 ...parseVerifierJson(wasm.verify_zk_consensus_envelope_json(envelopeJson)),
                 mode: 'rust-wasm',
                 wasmCodeHash: wasmPackageCodeHash
             };
+            if (!result.ok) return result;
+            const proofSummaryCheck = ZkConsensus.verifyProofSummaryBindings(envelope);
+            if (!proofSummaryCheck.ok) {
+                return {
+                    ...result,
+                    ok: false,
+                    reason: proofSummaryCheck.reason
+                };
+            }
+            return result;
         } catch (err) {
             return { ok: false, mode: 'rust-wasm', wasmCodeHash: wasmPackageCodeHash, reason: err.message };
         }
