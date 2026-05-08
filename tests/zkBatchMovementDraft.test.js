@@ -147,6 +147,17 @@ describe('tx34 ZK batch movement draft', () => {
         }
     });
 
+    test('formats hosted DA URLs for compact tx34 anchors', () => {
+        const id = 'a'.repeat(64);
+        expect(ZkEnvelopeResolver.remoteUrlForEnvelopeId(id, 'https://api.layerwallet.com/zk/envelopes')).toBe(
+            `https://api.layerwallet.com/zk/envelopes/${id}.json`
+        );
+        expect(ZkEnvelopeResolver.remoteUrlForEnvelopeId(id, 'https://api.layerwallet.com/zk/{id}')).toBe(
+            `https://api.layerwallet.com/zk/${id}`
+        );
+        expect(ZkEnvelopeResolver.remoteUrlForEnvelopeId('bad', 'https://api.layerwallet.com/zk/envelopes')).toBe('');
+    });
+
     test('rejects tampered signed L1 transaction material', () => {
         const envelope = fixtureEnvelope();
         const tampered = JSON.parse(JSON.stringify(envelope));

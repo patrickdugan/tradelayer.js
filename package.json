@@ -39,7 +39,9 @@
     "zk:channel-transfer:sign": "node scripts/signZkChannelTransferPath.js",
     "zk:channel-transfer:build": "node scripts/buildZkSignedChannelTransferDemo.js",
     "zk:channel-transfer:prove:snacksack": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\projects\\TLZK\\scripts\\prove_snacksack.ps1 -Batch artifacts\\zk_signed_channel_transfer\\signed_channel_transfer_batch_latest.json -StwoProverScript C:\\projects\\TLZK\\scripts\\tlzk_stwo_batch_prover.sh",
-    "zk:channel-transfer:live": "node scripts/runZkSignedChannelTransferLive.js"
+    "zk:channel-transfer:live": "node scripts/runZkSignedChannelTransferLive.js",
+    "zk:channel-transfer:btctest-anchor": "node scripts/broadcastBtctestTx34ZkAnchor.js",
+    "zk:da:serve": "node scripts/serveZkEnvelopeDa.js"
   },
   "jest": {
     "testPathIgnorePatterns": [

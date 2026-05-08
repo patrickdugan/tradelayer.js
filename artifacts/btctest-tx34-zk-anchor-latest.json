@@ -1,0 +1,46 @@
+{
+  "kind": "tradelayer_btctest_tx34_zk_anchor",
+  "network": "BTCTEST",
+  "bitcoinNetwork": "testnet4",
+  "txType": 34,
+  "adminAddress": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+  "wallet": "utxoref-testnet",
+  "dryRun": false,
+  "feeSats": 546,
+  "coinSelection": "admin-address-only",
+  "createdAt": "2026-05-08T21:39:40.242Z",
+  "anchor": {
+    "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+    "envelopeSource": "artifacts\\zk_envelopes\\84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
+    "verifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
+    "proofType": "stwo-cairo-batch-binding-v1",
+    "compactPayload": "z2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+    "compactPayloadBytes": 67,
+    "payload": "tlyz2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+    "payloadBytes": 70,
+    "payloadHex": "746c797a327c38346536656337396164376136383363636463353435353565383730393339393336356230643861336461396239643261366464656665383162646230363661",
+    "envelopeSha256": "46d90471fc989464813d76fb47550e2caa6b87364a877878fb3bfbf5370aca16",
+    "verifierResult": {
+      "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
+      "ok": true,
+      "proofType": "stwo-cairo-batch-binding-v1",
+      "resultId": "7c06adb7fc7c2f1245da17e8a6d1e1c7cfa91f06e20391612d8d58cf5c9504f2",
+      "verifierId": "tlzk_rust_wasm_v0",
+      "mode": "rust-wasm",
+      "wasmCodeHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9"
+    }
+  },
+  "broadcast": {
+    "txid": "508a8c9fdfa0f3c5adaf6420bb141d3cf26d43724f3799d14645b6a4bda24a89",
+    "feeBtc": 0.00000546,
+    "fundingInput": {
+      "txid": "39f9a88cd7819b5b677c22a2ea2c78c42c17f29adb3fb9d0bb27a0e3e5dea565",
+      "vout": 2,
+      "address": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+      "amountBtc": 0.00359928
+    },
+    "changeAddress": "tb1qpg5jvhd32vut07pvxg92dka7pttudjy570auuu",
+    "changeBtc": 0.00359382,
+    "explorer": "https://mempool.space/testnet4/tx/508a8c9fdfa0f3c5adaf6420bb141d3cf26d43724f3799d14645b6a4bda24a89"
+  }
+}

@@ -10,6 +10,9 @@ This is the live harness for tx34 applying a ZK-bound, user-signed descendant ch
 - Build fixture: `npm run zk:channel-transfer:build`
 - Remote proof: `npm run zk:channel-transfer:prove:snacksack`
 - Local consensus verification: `npm run zk:channel-transfer:live`
+- Serve the proof envelope DA: `npm run zk:da:serve`
+- Dry-run the Bitcoin testnet4 tx34 anchor: `node scripts\broadcastBtctestTx34ZkAnchor.js --dry-run`
+- Broadcast the Bitcoin testnet4 tx34 anchor: `node scripts\broadcastBtctestTx34ZkAnchor.js --bitcoin-bin=<bitcoin-core-bin> --datadir=<bitcoin-testnet-datadir> --wallet=utxoref-testnet`
 
 The proof was generated on snacksack:
 
@@ -25,6 +28,11 @@ C:\projects\tradelayer.js\artifacts\snacksack_proof_runs\tlzk-20260508-170058
 - Tx34 local txid: `1f463293b69fd10601ec43de5a9954565249aa4465d7dd8b0774a0906b10f9a1`
 - Minimal anchor payload: `z2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a`
 - Minimal anchor payload bytes: `67`
+- TradeLayer OP_RETURN payload: `tlyz2|84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a`
+- TradeLayer OP_RETURN payload bytes: `70`
+- Bitcoin testnet4 tx34 anchor: [`508a8c9fdfa0f3c5adaf6420bb141d3cf26d43724f3799d14645b6a4bda24a89`](https://mempool.space/testnet4/tx/508a8c9fdfa0f3c5adaf6420bb141d3cf26d43724f3799d14645b6a4bda24a89)
+- Anchor fee: `546` sats
+- Funding input: `39f9a88cd7819b5b677c22a2ea2c78c42c17f29adb3fb9d0bb27a0e3e5dea565:2`
 - STWO batch ID: `7636708b1a9a3d1a7baf14f9f60714ea06cf31b64a38096f70cdd53ff71a80a1`
 - Channel path intent hash: `9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c`
 - Channel path signing transcript hash: `05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e`
@@ -87,4 +95,5 @@ The tx34 envelope binds:
 
 The STWO proof currently proves the batch public-data binding. TradeLayer consensus then verifies the 2-of-2 secp256k1 signatures and refuses to apply the movement unless the execution witness reconstructs the exact current pre-state rows, every descendant dependency, each step root, the final post-state rows, authorization root, and value-conservation root.
 Consensus also refuses envelopes whose `publicInputs.verifierWasmHash` or `verifierResult.resultCore.wasmCodeHash` do not match the pinned `tlzk_rust_wasm_v0` WASM artifact hash above.
-The current live harness now uses a minimal tx34 anchor plus local DA: the standard-policy payload carries only `z2|<envelopeId>` rather than embedding the full envelope.
+The current live harness now uses a minimal tx34 anchor plus local DA: the standard-policy payload carries only `z2|<envelopeId>` rather than embedding the full envelope. The Bitcoin testnet4 broadcaster coin-controls from the admin funding address by default so it does not spend colored/TAP reference dust outputs as fees.
+For hosted DA, set `TL_ZK_DA_BASE_URL` to a base such as `https://api.layerwallet.com/zk/envelopes` and set `TL_ZK_DA_ALLOW_HTTP=1` before replaying tx34. The resolver will fetch `https://api.layerwallet.com/zk/envelopes/<envelopeId>.json` if the envelope is not present in the local artifact directories.

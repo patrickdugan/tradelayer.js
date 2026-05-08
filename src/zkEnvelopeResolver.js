@@ -90,6 +90,31 @@ function fetchJson(url) {
     });
 }
 
+function allowHttpDa() {
+    return String(process.env.TL_ZK_DA_ALLOW_HTTP || '').trim() === '1';
+}
+
+function remoteUrlForEnvelopeId(envelopeId, baseUrl = process.env.TL_ZK_DA_BASE_URL) {
+    const id = String(envelopeId || '').trim();
+    const base = String(baseUrl || '').trim();
+    if (!/^[0-9a-f]{64}$/i.test(id) || !base) return '';
+    if (base.includes('{id}')) return base.replace(/\{id\}/g, id);
+    return `${base.replace(/\/+$/, '')}/${id}.json`;
+}
+
+async function fetchHttpEnvelope(url) {
+    if (!allowHttpDa()) {
+        return { envelope: null, source: url, error: 'HTTP ZK envelope DA is disabled unless TL_ZK_DA_ALLOW_HTTP=1' };
+    }
+    try {
+        const envelope = parseEnvelopeRecord(await fetchJson(url));
+        if (!envelope) return { envelope: null, source: url, error: 'HTTP response did not contain a ZK envelope' };
+        return { envelope, source: url };
+    } catch (err) {
+        return { envelope: null, source: url, error: `HTTP ZK envelope fetch failed: ${err.message}` };
+    }
+}
+
 async function resolveEnvelopeFromParams(params = {}) {
     if (params.zkEnvelope || params.envelope) {
         return { envelope: params.zkEnvelope || params.envelope, source: 'direct' };
@@ -110,16 +135,7 @@ async function resolveEnvelopeFromParams(params = {}) {
     const attempts = [];
 
     if (/^https?:\/\//i.test(envelopeRef)) {
-        if (String(process.env.TL_ZK_DA_ALLOW_HTTP || '').trim() !== '1') {
-            return { envelope: null, source: envelopeRef, error: 'HTTP ZK envelope DA is disabled unless TL_ZK_DA_ALLOW_HTTP=1' };
-        }
-        try {
-            const envelope = parseEnvelopeRecord(await fetchJson(envelopeRef));
-            if (!envelope) return { envelope: null, source: envelopeRef, error: 'HTTP response did not contain a ZK envelope' };
-            return { envelope, source: envelopeRef };
-        } catch (err) {
-            return { envelope: null, source: envelopeRef, error: `HTTP ZK envelope fetch failed: ${err.message}` };
-        }
+        return fetchHttpEnvelope(envelopeRef);
     }
 
     for (const candidate of candidatePathsForRef(envelopeRef, params.envelopeId)) {
@@ -132,6 +148,12 @@ async function resolveEnvelopeFromParams(params = {}) {
         } catch (err) {
             return { envelope: null, source: candidate, attempts, error: `ZK envelope DA read failed: ${err.message}` };
         }
+    }
+
+    const remoteUrl = remoteUrlForEnvelopeId(params.envelopeId);
+    if (remoteUrl) {
+        const remote = await fetchHttpEnvelope(remoteUrl);
+        return { ...remote, attempts };
     }
 
     return { envelope: null, source: envelopeRef || 'local-da', attempts };
@@ -155,6 +177,7 @@ module.exports = {
     parseEnvelopeRecord,
     defaultEnvelopeDirs,
     candidatePathsForRef,
+    remoteUrlForEnvelopeId,
     resolveEnvelopeFromParams,
     writeLocalEnvelopeRecord
 };
