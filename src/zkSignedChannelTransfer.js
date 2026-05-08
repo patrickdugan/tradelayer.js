@@ -117,6 +117,13 @@ function inputRowsFromChannels(batch = {}, channels = {}) {
     });
 }
 
+function rowsFromBalanceMap(inputRows = [], balances = new Map()) {
+    return inputRows.map((row) => ({
+        ...row,
+        balanceUnits: (balances.get(row.key) ?? BigInt(row.balanceUnits)).toString()
+    })).sort((a, b) => a.key.localeCompare(b.key));
+}
+
 function normalizePubkeyHex(value, fieldName = 'pubkeyHex') {
     const text = String(value || '').trim().toLowerCase();
     if (!/^[0-9a-f]{66}$/.test(text) && !/^[0-9a-f]{130}$/.test(text)) {
@@ -131,6 +138,21 @@ function normalizeSignatureHex(value, fieldName = 'signatureHex') {
         throw new Error(`${fieldName} must be a 64-byte compact secp256k1 signature hex`);
     }
     return text;
+}
+
+function normalizeTransferIds(values = [], fieldName = 'dependsOnTransferIds') {
+    if (!Array.isArray(values)) throw new Error(`${fieldName} must be an array`);
+    const normalized = values.map((value, index) => {
+        const text = String(value || '').trim().toLowerCase();
+        if (!/^[0-9a-f]{64}$/.test(text)) {
+            throw new Error(`${fieldName}[${index}] must be a 32-byte transfer id`);
+        }
+        return text;
+    }).sort();
+    if (new Set(normalized).size !== normalized.length) {
+        throw new Error(`${fieldName} contains duplicate transfer ids`);
+    }
+    return normalized;
 }
 
 function normalizeTransferCore(transfer = {}, index = 0) {
@@ -148,6 +170,10 @@ function normalizeTransferCore(transfer = {}, index = 0) {
         ownerAddress: String(transfer.ownerAddress || ''),
         propertyId,
         amountUnits: normalizeAmountUnits(transfer.amountUnits, `transfer ${index} amountUnits`),
+        dependsOnTransferIds: normalizeTransferIds(
+            transfer.dependsOnTransferIds || transfer.dependsOn || [],
+            `transfer ${index} dependsOnTransferIds`
+        ),
         nonce: String(transfer.nonce || '')
     };
 
@@ -277,17 +303,28 @@ function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {
         : normalizeBalanceRows(inputRowsFromChannels(checked.batch, inputRowsOrChannels));
     const balances = new Map(inputRows.map((row) => [row.key, BigInt(row.balanceUnits)]));
     const transferExecutions = [];
+    const executionSteps = [];
+    const descendantEdges = [];
     const authorizationChecks = [];
     const totals = new Map();
+    const seenTransferIds = new Set();
+    const dependencyDepths = new Map();
 
-    for (const transfer of checked.batch.batchCore.transfers) {
+    for (const [stepIndex, transfer] of checked.batch.batchCore.transfers.entries()) {
         const core = transfer.core;
         const sourceKey = balanceKey(core.fromChannelAddress, core.sourceColumn, core.propertyId);
         const destinationKey = balanceKey(core.toChannelAddress, core.destinationColumn, core.propertyId);
         if (!balances.has(sourceKey)) throw new Error(`execution input row missing ${sourceKey}`);
         if (!balances.has(destinationKey)) throw new Error(`execution input row missing ${destinationKey}`);
+        for (const dependencyId of core.dependsOnTransferIds) {
+            if (!seenTransferIds.has(dependencyId)) {
+                throw new Error(`transfer ${transfer.transferId} depends on unknown or future transfer ${dependencyId}`);
+            }
+        }
 
         const amountUnits = BigInt(core.amountUnits);
+        const beforeRows = rowsFromBalanceMap(inputRows, balances);
+        const beforeStateRoot = ZkConsensus.hashCanonical(beforeRows);
         const sourceBefore = balances.get(sourceKey);
         const destinationBefore = balances.get(destinationKey);
         if (sourceBefore < amountUnits) {
@@ -303,9 +340,33 @@ function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {
         total.debitUnits += amountUnits;
         total.creditUnits += amountUnits;
         totals.set(core.propertyId, total);
+        const afterRows = rowsFromBalanceMap(inputRows, balances);
+        const afterStateRoot = ZkConsensus.hashCanonical(afterRows);
+        const dependencyDepth = core.dependsOnTransferIds.length === 0
+            ? 1
+            : 1 + Math.max(...core.dependsOnTransferIds.map((dependencyId) => dependencyDepths.get(dependencyId) || 0));
+        dependencyDepths.set(transfer.transferId, dependencyDepth);
+
+        const step = {
+            stepIndex,
+            transferId: transfer.transferId,
+            dependsOnTransferIds: core.dependsOnTransferIds,
+            beforeStateRoot,
+            afterStateRoot
+        };
+        executionSteps.push(step);
+        descendantEdges.push({
+            stepIndex,
+            transferId: transfer.transferId,
+            parentTransferIds: core.dependsOnTransferIds
+        });
 
         transferExecutions.push({
+            stepIndex,
             transferId: transfer.transferId,
+            dependsOnTransferIds: core.dependsOnTransferIds,
+            beforeStateRoot,
+            afterStateRoot,
             propertyId: core.propertyId,
             amountUnits: core.amountUnits,
             source: {
@@ -332,12 +393,10 @@ function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {
             signerPubkeys: transfer.signatures.map((signature) => signature.pubkeyHex).sort(),
             messageHash: transferMessageHash(core).toString('hex')
         });
+        seenTransferIds.add(transfer.transferId);
     }
 
-    const outputRows = inputRows.map((row) => ({
-        ...row,
-        balanceUnits: balances.get(row.key).toString()
-    })).sort((a, b) => a.key.localeCompare(b.key));
+    const outputRows = rowsFromBalanceMap(inputRows, balances);
     const conservationRows = [...totals.values()]
         .map((row) => ({
             propertyId: row.propertyId,
@@ -357,8 +416,11 @@ function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {
         inputStateRoot: ZkConsensus.hashCanonical(inputRows),
         outputStateRoot: ZkConsensus.hashCanonical(outputRows),
         balanceTransitionRoot: ZkConsensus.hashCanonical(transferExecutions),
+        stepRoot: ZkConsensus.hashCanonical(executionSteps),
+        descendantRoot: ZkConsensus.hashCanonical(descendantEdges),
         authorizationRoot: ZkConsensus.hashCanonical(authorizationChecks),
         conservationRoot: ZkConsensus.hashCanonical(conservationRows),
+        maxDependencyDepth: Math.max(...dependencyDepths.values()),
         transferCount: transferExecutions.length
     };
     executionCore.executionId = ZkConsensus.hashCanonical(executionCore);
@@ -368,6 +430,8 @@ function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {
         executionCore,
         inputRows,
         outputRows,
+        executionSteps,
+        descendantEdges,
         transferExecutions,
         authorizationChecks,
         conservationRows
@@ -433,6 +497,8 @@ function assertEnvelopeBindsExecution(envelope = {}, batch = {}, execution = nul
         channelInputStateRoot: core.inputStateRoot,
         channelOutputStateRoot: core.outputStateRoot,
         channelBalanceTransitionRoot: core.balanceTransitionRoot,
+        channelStepRoot: core.stepRoot,
+        channelDescendantRoot: core.descendantRoot,
         channelAuthorizationRoot: core.authorizationRoot,
         channelConservationRoot: core.conservationRoot
     };
@@ -550,8 +616,11 @@ async function applySignedChannelTransferBatch(batch = {}, { block = 0, txid = '
             inputStateRoot: normalizedExecution.executionCore.inputStateRoot,
             outputStateRoot: normalizedExecution.executionCore.outputStateRoot,
             balanceTransitionRoot: normalizedExecution.executionCore.balanceTransitionRoot,
+            stepRoot: normalizedExecution.executionCore.stepRoot,
+            descendantRoot: normalizedExecution.executionCore.descendantRoot,
             authorizationRoot: normalizedExecution.executionCore.authorizationRoot,
-            conservationRoot: normalizedExecution.executionCore.conservationRoot
+            conservationRoot: normalizedExecution.executionCore.conservationRoot,
+            maxDependencyDepth: normalizedExecution.executionCore.maxDependencyDepth
         } : null,
         applied
     };

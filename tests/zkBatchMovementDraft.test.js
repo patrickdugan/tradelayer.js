@@ -28,6 +28,29 @@ function signTransferCore(core, privkey, role) {
     };
 }
 
+function signedTransfer({ fromChannelAddress, toChannelAddress, amountUnits = '125000000', dependsOnTransferIds = [], nonce }, partyA, partyB) {
+    const authorizedPubkeys = [pubkeyHex(partyA), pubkeyHex(partyB)].sort();
+    const core = SignedChannelTransfer.normalizeTransferCore({
+        fromChannelAddress,
+        toChannelAddress,
+        sourceColumn: 'A',
+        destinationColumn: 'A',
+        ownerAddress: 'tb1qtestowner00000000000000000000000000',
+        propertyId: 1,
+        amountUnits,
+        dependsOnTransferIds,
+        nonce
+    });
+    return {
+        ...core,
+        authorizedPubkeys,
+        signatures: [
+            signTransferCore(core, partyA, 'a'),
+            signTransferCore(core, partyB, 'b')
+        ]
+    };
+}
+
 function fixtureEnvelope() {
     return ZkConsensus.buildZkConsensusEnvelope({
         proofHash: ZkConsensus.sha256Hex('proof-artifact'),
@@ -183,5 +206,48 @@ describe('tx34 ZK batch movement draft', () => {
         expect(() => SignedChannelTransfer.assertEnvelopeBindsExecution(envelope, signedBatch, tampered)).toThrow(
             /execution witness mismatch/
         );
+    });
+
+    test('rejects out-of-order descendant channel transfers', () => {
+        const partyA = privateKeyFromLabel('test-descendant-party-a');
+        const partyB = privateKeyFromLabel('test-descendant-party-b');
+        const first = signedTransfer({
+            fromChannelAddress: 'tb1qdescsource0000000000000000000000000',
+            toChannelAddress: 'tb1qdescrelay00000000000000000000000000',
+            nonce: 'descendant-first'
+        }, partyA, partyB);
+        const firstId = SignedChannelTransfer.normalizeSignedTransfer(first, 0).transferId;
+        const second = signedTransfer({
+            fromChannelAddress: 'tb1qdescrelay00000000000000000000000000',
+            toChannelAddress: 'tb1qdescdest000000000000000000000000000',
+            dependsOnTransferIds: [firstId],
+            nonce: 'descendant-second'
+        }, partyA, partyB);
+        const outOfOrderBatch = SignedChannelTransfer.normalizeSignedChannelTransferBatch({
+            kind: SignedChannelTransfer.SIGNED_CHANNEL_TRANSFER_PROTOCOL,
+            nonce: 'bad-descendant-order',
+            transfers: [second, first]
+        });
+
+        expect(() => SignedChannelTransfer.buildSignedChannelTransferExecution(outOfOrderBatch, {
+            tb1qdescsource0000000000000000000000000: {
+                channel: 'tb1qdescsource0000000000000000000000000',
+                A: { 1: 5 },
+                B: {},
+                participants: { A: 'tb1qtestowner00000000000000000000000000', B: '' }
+            },
+            tb1qdescrelay00000000000000000000000000: {
+                channel: 'tb1qdescrelay00000000000000000000000000',
+                A: { 1: 0 },
+                B: {},
+                participants: { A: 'tb1qtestowner00000000000000000000000000', B: '' }
+            },
+            tb1qdescdest000000000000000000000000000: {
+                channel: 'tb1qdescdest000000000000000000000000000',
+                A: { 1: 0 },
+                B: {},
+                participants: { A: 'tb1qtestowner00000000000000000000000000', B: '' }
+            }
+        })).toThrow(/unknown or future transfer/);
     });
 });

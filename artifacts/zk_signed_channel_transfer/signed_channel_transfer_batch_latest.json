@@ -1,32 +1,32 @@
 {
   "kind": "tlzk_aggregated_batch_checkpoint",
-  "batchId": "b156fbb0ce22d42ef10bb74868ef28ccc83e192dc5b4fd8c63b58a8289f70581",
+  "batchId": "1abb5b0503b579bb491daafcc98f603663518d647c23c13b9e1e89685e469770",
   "batchCore": {
     "protocol": "tlzk_aggregated_batch_checkpoint_v1",
     "startHeight": 777001,
     "endHeight": 777001,
-    "transitionRoot": "a85dcafc686d63defeb7fa8e2b49a2cd49d7b0f66901260b7d837f156ac236f9",
-    "finalStateRoot": "731afc9527cf7497a838a939b9303d82edda8290d1d031ba4ab3364d5680f308",
+    "transitionRoot": "be69fbe46d2348e3489ab40830e9da4b1d5b0bbda2130944be7ecef92497355c",
+    "finalStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
     "receiptCount": 1,
     "validReceiptCount": 1
   },
   "transitionReceipts": [
     {
       "kind": "tlzk_transition_receipt",
-      "receiptId": "8b7663fb0b154340dbe3b4ab7acc26fc3b4d02f18bd8ff0332a9e87e0c9875d3",
+      "receiptId": "37421477e7c8145983c4d7ac9a79eae39f03ea8a9b49010bb2d91b03d86fdab6",
       "receiptCore": {
         "protocol": "tl_zk_signed_channel_transfer_transition_receipt_v1",
-        "txid": "73e9e2705ac20f8b7b50dcf9b230b9f9598348fd13b0318b3c4494ebe0004944",
+        "txid": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
         "txType": 22,
         "blockHeight": 777001,
         "valid": true,
-        "oldStateRoot": "992dd6592ff2be3e415d4c5180cb594b31c05d92e586d1dc349a6887161ef30f",
-        "newStateRoot": "731afc9527cf7497a838a939b9303d82edda8290d1d031ba4ab3364d5680f308",
-        "payloadHash": "73e9e2705ac20f8b7b50dcf9b230b9f9598348fd13b0318b3c4494ebe0004944",
-        "witnessRoot": "d705941cf8bbcb97f8acdc3bcb2504243d148453ab33b5cba120ce8f21685e28",
-        "supportLevel": "signed-channel-transfer-execution-binding",
+        "oldStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
+        "newStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
+        "payloadHash": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
+        "witnessRoot": "cb948597db02ecc94e92384a851a32cfbd802cf0573f444643e2314e022a7390",
+        "supportLevel": "signed-channel-transfer-descendant-execution-binding",
         "economicMutation": true,
-        "signedChannelTransferBatchHash": "4002368d1be40b70cbae63b113f0e659ab512ef32bcf36fc295c06a2bbd6a71d"
+        "signedChannelTransferBatchHash": "c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90"
       }
     }
   ]

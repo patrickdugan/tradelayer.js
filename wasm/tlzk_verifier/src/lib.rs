@@ -265,6 +265,8 @@ pub fn verify_zk_consensus_envelope_json(envelope_json: &str) -> String {
                     "balanceTransitionRoot",
                     "channel balance transition root mismatch",
                 ),
+                ("channelStepRoot", "stepRoot", "channel step root mismatch"),
+                ("channelDescendantRoot", "descendantRoot", "channel descendant root mismatch"),
                 ("channelAuthorizationRoot", "authorizationRoot", "channel authorization root mismatch"),
                 ("channelConservationRoot", "conservationRoot", "channel conservation root mismatch"),
             ];

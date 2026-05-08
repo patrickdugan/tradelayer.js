@@ -19,7 +19,7 @@ The full consensus object is the ZK envelope, normally supplied from witness/DA:
 - `movements`: token debits and credits in base units.
 - `daBlob`: witness or external DA object carrying proof context.
 - `verifierResult`: bounded Rust/WASM verifier result committed by `resultId`.
-- For signed channel transfers, `publicInputs` also bind `signedChannelTransferExecutionHash`, `channelInputStateRoot`, `channelOutputStateRoot`, `channelBalanceTransitionRoot`, `channelAuthorizationRoot`, and `channelConservationRoot`.
+- For signed channel transfers, `publicInputs` also bind `signedChannelTransferExecutionHash`, `channelInputStateRoot`, `channelOutputStateRoot`, `channelBalanceTransitionRoot`, `channelStepRoot`, `channelDescendantRoot`, `channelAuthorizationRoot`, and `channelConservationRoot`.
 
 Consensus validation checks the compact OP_RETURN fields against the envelope, verifies the envelope hash structure, calls the packaged Rust/WASM verifier when built, and falls back to the deterministic JS verifier only for source checkouts. Set `TL_ZK_REQUIRE_WASM=1` to force the Rust/WASM path.
 
@@ -33,7 +33,9 @@ After verification, `Logic.zkBatchMove` applies every movement:
 
 Amounts are carried as integer `amountUnits` and converted to 8-decimal token amounts for the current tally map.
 
-For a signed channel-transfer batch, the tally movement is skipped and the channel path is used instead. The execution witness must reconstruct the pre-state rows currently in the channel DB, the post-state rows after the transfer, the 2-of-2 signer authorization root, and an equal debit/credit conservation root before any channel balance is written.
+For a signed channel-transfer batch, the tally movement is skipped and the channel path is used instead. The execution witness must reconstruct the pre-state rows currently in the channel DB, the post-state rows after the transfer chain, the per-step state roots, the descendant dependency edges, the 2-of-2 signer authorization root, and an equal debit/credit conservation root before any channel balance is written.
+
+Descendant transfers are encoded by signing `dependsOnTransferIds` inside each transfer core. During execution, a transfer can only depend on transfer ids already seen earlier in the batch, so an unpublished child cannot be applied before the unpublished parent whose output it spends.
 
 ## Dev Notes
 

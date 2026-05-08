@@ -11,7 +11,9 @@ const OUT_DIR = path.join(__dirname, '..', 'artifacts', 'zk_signed_channel_trans
 const PROPERTY_ID = 1;
 const AMOUNT_UNITS = '125000000';
 const SOURCE_CHANNEL = 'tb1qzkchan000000000000000000000000000000';
-const DEST_CHANNEL = 'tb1qzkchan2000000000000000000000000000000';
+const RELAY_CHANNEL_A = 'tb1qzkrelay10000000000000000000000000000';
+const RELAY_CHANNEL_B = 'tb1qzkrelay20000000000000000000000000000';
+const DEST_CHANNEL = 'tb1qzkdest000000000000000000000000000000';
 const OWNER_ADDRESS = 'tb1qzkowner000000000000000000000000000000';
 const BLOCK_HEIGHT = 777001;
 
@@ -55,7 +57,7 @@ function buildReceipt({ txid, oldStateRoot, newStateRoot, payloadHash, witnessRo
         newStateRoot,
         payloadHash,
         witnessRoot,
-        supportLevel: 'signed-channel-transfer-execution-binding',
+        supportLevel: 'signed-channel-transfer-descendant-execution-binding',
         economicMutation: true,
         signedChannelTransferBatchHash: signedBatchHash
     };
@@ -66,31 +68,76 @@ function buildReceipt({ txid, oldStateRoot, newStateRoot, payloadHash, witnessRo
     };
 }
 
-function main() {
-    const partyA = privateKeyFromLabel('tl-zk-channel-party-a');
-    const partyB = privateKeyFromLabel('tl-zk-channel-party-b');
-    const authorizedPubkeys = [pubkeyHex(partyA), pubkeyHex(partyB)].sort();
-    const transferCore = SignedChannelTransfer.normalizeTransferCore({
-        fromChannelAddress: SOURCE_CHANNEL,
-        toChannelAddress: DEST_CHANNEL,
+function buildSignedTransfer({ fromChannelAddress, toChannelAddress, nonce, dependsOnTransferIds }, authorizedPubkeys, partyA, partyB) {
+    const core = SignedChannelTransfer.normalizeTransferCore({
+        fromChannelAddress,
+        toChannelAddress,
         sourceColumn: 'A',
         destinationColumn: 'A',
         ownerAddress: OWNER_ADDRESS,
         propertyId: PROPERTY_ID,
         amountUnits: AMOUNT_UNITS,
-        nonce: 'signed-channel-transfer-demo-20260508'
+        dependsOnTransferIds,
+        nonce
     });
+    return {
+        ...core,
+        authorizedPubkeys,
+        signatures: [
+            signTransferCore(core, partyA, 'channel-party-a'),
+            signTransferCore(core, partyB, 'channel-party-b')
+        ]
+    };
+}
+
+function main() {
+    const partyA = privateKeyFromLabel('tl-zk-channel-party-a');
+    const partyB = privateKeyFromLabel('tl-zk-channel-party-b');
+    const authorizedPubkeys = [pubkeyHex(partyA), pubkeyHex(partyB)].sort();
+    const transfer1 = buildSignedTransfer({
+        fromChannelAddress: SOURCE_CHANNEL,
+        toChannelAddress: RELAY_CHANNEL_A,
+        dependsOnTransferIds: [],
+        nonce: 'signed-channel-transfer-demo-20260508-step-1'
+    }, authorizedPubkeys, partyA, partyB);
+    const transfer1Id = SignedChannelTransfer.normalizeSignedTransfer(transfer1, 0).transferId;
+    const transfer2 = buildSignedTransfer({
+        fromChannelAddress: RELAY_CHANNEL_A,
+        toChannelAddress: RELAY_CHANNEL_B,
+        dependsOnTransferIds: [transfer1Id],
+        nonce: 'signed-channel-transfer-demo-20260508-step-2'
+    }, authorizedPubkeys, partyA, partyB);
+    const transfer2Id = SignedChannelTransfer.normalizeSignedTransfer(transfer2, 1).transferId;
+    const transfer3 = buildSignedTransfer({
+        fromChannelAddress: RELAY_CHANNEL_B,
+        toChannelAddress: DEST_CHANNEL,
+        dependsOnTransferIds: [transfer2Id],
+        nonce: 'signed-channel-transfer-demo-20260508-step-3'
+    }, authorizedPubkeys, partyA, partyB);
+    const transfer3Id = SignedChannelTransfer.normalizeSignedTransfer(transfer3, 2).transferId;
+    const descendantChain = [{
+        stepIndex: 0,
+        transferId: transfer1Id,
+        fromChannelAddress: SOURCE_CHANNEL,
+        toChannelAddress: RELAY_CHANNEL_A,
+        dependsOnTransferIds: []
+    }, {
+        stepIndex: 1,
+        transferId: transfer2Id,
+        fromChannelAddress: RELAY_CHANNEL_A,
+        toChannelAddress: RELAY_CHANNEL_B,
+        dependsOnTransferIds: [transfer1Id]
+    }, {
+        stepIndex: 2,
+        transferId: transfer3Id,
+        fromChannelAddress: RELAY_CHANNEL_B,
+        toChannelAddress: DEST_CHANNEL,
+        dependsOnTransferIds: [transfer2Id]
+    }];
     const signedBatchRaw = {
         kind: SignedChannelTransfer.SIGNED_CHANNEL_TRANSFER_PROTOCOL,
-        nonce: 'tx22-signed-transfer-demo-20260508',
-        transfers: [{
-            ...transferCore,
-            authorizedPubkeys,
-            signatures: [
-                signTransferCore(transferCore, partyA, 'channel-party-a'),
-                signTransferCore(transferCore, partyB, 'channel-party-b')
-            ]
-        }]
+        nonce: 'tx22-signed-descendant-transfer-demo-20260508',
+        transfers: [transfer1, transfer2, transfer3]
     };
     const normalizedBatch = SignedChannelTransfer.normalizeSignedChannelTransferBatch(signedBatchRaw);
     const signedBatchHash = ZkConsensus.hashCanonical(normalizedBatch);
@@ -105,6 +152,20 @@ function main() {
         },
         [DEST_CHANNEL]: {
             channel: DEST_CHANNEL,
+            participants: { A: OWNER_ADDRESS, B: '' },
+            A: { [PROPERTY_ID]: 0 },
+            B: {},
+            commits: []
+        },
+        [RELAY_CHANNEL_A]: {
+            channel: RELAY_CHANNEL_A,
+            participants: { A: OWNER_ADDRESS, B: '' },
+            A: { [PROPERTY_ID]: 0 },
+            B: {},
+            commits: []
+        },
+        [RELAY_CHANNEL_B]: {
+            channel: RELAY_CHANNEL_B,
             participants: { A: OWNER_ADDRESS, B: '' },
             A: { [PROPERTY_ID]: 0 },
             B: {},
@@ -129,19 +190,15 @@ function main() {
         to: `channel:${DEST_CHANNEL}:A`,
         propertyId: PROPERTY_ID,
         amountUnits: AMOUNT_UNITS,
-        memo: 'signed-channel-transfer:tx22'
+        memo: 'signed-channel-transfer:descendant-net'
     };
-    const witnessRows = [{
+    const outputByKey = new Map(signedChannelTransferExecution.outputRows.map((row) => [row.key, row]));
+    const witnessRows = signedChannelTransferExecution.inputRows.map((row) => ({
         namespace: 'channels',
-        key: `${SOURCE_CHANNEL}:A:${PROPERTY_ID}`,
-        oldValue: '500000000',
-        newValue: '375000000'
-    }, {
-        namespace: 'channels',
-        key: `${DEST_CHANNEL}:A:${PROPERTY_ID}`,
-        oldValue: '0',
-        newValue: '125000000'
-    }];
+        key: row.key,
+        oldValue: row.balanceUnits,
+        newValue: outputByKey.get(row.key).balanceUnits
+    }));
     const receipt = buildReceipt({
         txid,
         oldStateRoot,
@@ -184,6 +241,7 @@ function main() {
         channelSignatureRoot: normalizedBatch.batchCore.signatureRoot,
         signedChannelTransferExecution,
         signedChannelTransferExecutionHash,
+        descendantChain,
         movements: [movement],
         batchL2TxHex,
         signedL1TxTemplateHex: hexJson({
@@ -209,6 +267,9 @@ function main() {
         signedChannelTransferExecutionHash,
         channelInputStateRoot: signedChannelTransferExecution.executionCore.inputStateRoot,
         channelOutputStateRoot: signedChannelTransferExecution.executionCore.outputStateRoot,
+        channelStepRoot: signedChannelTransferExecution.executionCore.stepRoot,
+        channelDescendantRoot: signedChannelTransferExecution.executionCore.descendantRoot,
+        maxDependencyDepth: signedChannelTransferExecution.executionCore.maxDependencyDepth,
         channelSignatureRoot: normalizedBatch.batchCore.signatureRoot
     }, null, 2));
 }

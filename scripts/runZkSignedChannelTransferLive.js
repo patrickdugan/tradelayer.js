@@ -116,6 +116,8 @@ async function main() {
             channelInputStateRoot: execution.executionCore.inputStateRoot,
             channelOutputStateRoot: execution.executionCore.outputStateRoot,
             channelBalanceTransitionRoot: execution.executionCore.balanceTransitionRoot,
+            channelStepRoot: execution.executionCore.stepRoot,
+            channelDescendantRoot: execution.executionCore.descendantRoot,
             channelAuthorizationRoot: execution.executionCore.authorizationRoot,
             channelConservationRoot: execution.executionCore.conservationRoot,
             stwoBindingCommitment: proofSummary.bindingCommitment || ''
@@ -173,8 +175,11 @@ async function main() {
             inputStateRoot: execution.executionCore.inputStateRoot,
             outputStateRoot: execution.executionCore.outputStateRoot,
             balanceTransitionRoot: execution.executionCore.balanceTransitionRoot,
+            stepRoot: execution.executionCore.stepRoot,
+            descendantRoot: execution.executionCore.descendantRoot,
             authorizationRoot: execution.executionCore.authorizationRoot,
-            conservationRoot: execution.executionCore.conservationRoot
+            conservationRoot: execution.executionCore.conservationRoot,
+            maxDependencyDepth: execution.executionCore.maxDependencyDepth
         },
         compactPayload,
         applied,
