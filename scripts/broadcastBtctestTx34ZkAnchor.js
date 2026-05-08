@@ -11,6 +11,7 @@ const Encode = require('../src/txEncoder');
 const ZkConsensus = require('../src/zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('../src/zkWasmVerifier');
 const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver');
+const ProtectedUtxos = require('../src/protectedUtxoRegistry');
 const { DEFAULT_BTCTEST_ADMIN_ADDRESS } = require('./testnetActivationProfile');
 
 const DEFAULT_WALLET = 'utxoref-testnet';
@@ -26,8 +27,10 @@ function parseArgs(argv) {
     adminAddress: process.env.TL_ADMIN_ADDRESS || DEFAULT_BTCTEST_ADMIN_ADDRESS,
     liveReceipt: process.env.TL_ZK_LIVE_RECEIPT || DEFAULT_LIVE_RECEIPT,
     artifact: process.env.TL_BTCTEST_TX34_ARTIFACT || DEFAULT_ARTIFACT,
+    protectedRegistry: ProtectedUtxos.defaultRegistryPath(),
     feeSats: Number(process.env.TL_BTCTEST_TX34_FEE_SATS || 546),
     allowWalletCoinSelection: false,
+    ignoreProtectedUtxos: false,
     dryRun: false
   };
 
@@ -38,8 +41,10 @@ function parseArgs(argv) {
     else if (arg.startsWith('--admin=')) out.adminAddress = arg.slice('--admin='.length);
     else if (arg.startsWith('--receipt=')) out.liveReceipt = arg.slice('--receipt='.length);
     else if (arg.startsWith('--artifact=')) out.artifact = arg.slice('--artifact='.length);
+    else if (arg.startsWith('--protected-registry=')) out.protectedRegistry = arg.slice('--protected-registry='.length);
     else if (arg.startsWith('--fee-sats=')) out.feeSats = Number(arg.slice('--fee-sats='.length));
     else if (arg === '--allow-wallet-coin-selection') out.allowWalletCoinSelection = true;
+    else if (arg === '--ignore-protected-utxos') out.ignoreProtectedUtxos = true;
     else if (arg === '--dry-run') out.dryRun = true;
   }
   if (!Number.isSafeInteger(out.feeSats) || out.feeSats <= 0) throw new Error(`invalid fee sats: ${out.feeSats}`);
@@ -102,6 +107,33 @@ function bitcoinCli(config, args) {
   return execFileSync(cliPath(config.bitcoinBin), baseArgs, { encoding: 'utf8' }).trim();
 }
 
+function loadProtectedRegistry(config) {
+  return ProtectedUtxos.loadRegistry(config.protectedRegistry, { network: 'BTCTEST' });
+}
+
+function coreLockProtectedUtxos(config) {
+  if (config.ignoreProtectedUtxos) return { ignored: true, locked: 0, protectedSeen: 0 };
+  const registry = loadProtectedRegistry(config);
+  const unspent = JSON.parse(bitcoinCli(config, ['listunspent', '0', '9999999']));
+  const protectedSeen = ProtectedUtxos.protectedUtxosFromList(unspent, registry);
+  if (!protectedSeen.length) {
+    return {
+      locked: 0,
+      protectedSeen: 0,
+      registry: portablePath(config.protectedRegistry)
+    };
+  }
+  const lockTargets = protectedSeen.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }));
+  const ok = JSON.parse(bitcoinCli(config, ['lockunspent', 'false', JSON.stringify(lockTargets)]));
+  return {
+    ok,
+    locked: lockTargets.length,
+    protectedSeen: protectedSeen.length,
+    registry: portablePath(config.protectedRegistry),
+    outpoints: lockTargets.map((item) => `${item.txid}:${item.vout}`)
+  };
+}
+
 function selectFundingUtxo(config) {
   const unspent = JSON.parse(bitcoinCli(config, [
     'listunspent',
@@ -109,7 +141,12 @@ function selectFundingUtxo(config) {
     '9999999',
     JSON.stringify([config.adminAddress])
   ]));
+  const registry = config.ignoreProtectedUtxos
+    ? ProtectedUtxos.emptyRegistry('BTCTEST')
+    : loadProtectedRegistry(config);
+  const protectedSkipped = ProtectedUtxos.protectedUtxosFromList(unspent, registry);
   const candidates = unspent
+    .filter((utxo) => !ProtectedUtxos.isProtected(registry, utxo.txid, utxo.vout))
     .filter((utxo) => utxo.spendable && utxo.solvable && utxo.safe !== false)
     .map((utxo) => ({ ...utxo, amountSats: btcToSats(utxo.amount) }))
     .filter((utxo) => utxo.amountSats > BigInt(config.feeSats + 546))
@@ -117,7 +154,17 @@ function selectFundingUtxo(config) {
   if (!candidates.length) {
     throw new Error(`no spendable admin-address UTXO above fee+dust threshold for ${config.adminAddress}`);
   }
-  return candidates[0];
+  return {
+    utxo: candidates[0],
+    protectedSkipped: protectedSkipped.map((utxo) => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      address: utxo.address,
+      amountBtc: utxo.amount,
+      label: utxo.label || ''
+    })),
+    registryPath: portablePath(config.protectedRegistry)
+  };
 }
 
 async function buildAnchor(config) {
@@ -181,6 +228,7 @@ async function buildAnchor(config) {
 }
 
 function broadcastWithWalletCoinSelection(config, anchor) {
+  const protectedLock = coreLockProtectedUtxos(config);
   const outputs = JSON.stringify([{ data: anchor.payloadHex }]);
   const raw = bitcoinCli(config, ['createrawtransaction', '[]', outputs]);
   const options = JSON.stringify({
@@ -195,6 +243,7 @@ function broadcastWithWalletCoinSelection(config, anchor) {
   return {
     txid,
     feeBtc: funded.fee,
+    protectedLock,
     explorer: `https://mempool.space/testnet4/tx/${txid}`
   };
 }
@@ -202,7 +251,8 @@ function broadcastWithWalletCoinSelection(config, anchor) {
 function broadcastPayload(config, anchor) {
   if (config.allowWalletCoinSelection) return broadcastWithWalletCoinSelection(config, anchor);
 
-  const utxo = selectFundingUtxo(config);
+  const selection = selectFundingUtxo(config);
+  const utxo = selection.utxo;
   const changeSats = utxo.amountSats - BigInt(config.feeSats);
   if (changeSats <= 546n) throw new Error('selected admin-address UTXO would leave dust change');
   const inputs = JSON.stringify([{
@@ -227,6 +277,11 @@ function broadcastPayload(config, anchor) {
       address: utxo.address,
       amountBtc: utxo.amount
     },
+    protectedUtxoPolicy: {
+      registry: selection.registryPath,
+      ignored: config.ignoreProtectedUtxos,
+      skipped: selection.protectedSkipped
+    },
     changeAddress: config.adminAddress,
     changeBtc: Number(satsToBtcString(changeSats)),
     explorer: `https://mempool.space/testnet4/tx/${txid}`
@@ -246,6 +301,8 @@ async function main() {
     dryRun: config.dryRun,
     feeSats: config.feeSats,
     coinSelection: config.allowWalletCoinSelection ? 'bitcoin-core-wallet' : 'admin-address-only',
+    protectedUtxoRegistry: portablePath(config.protectedRegistry),
+    protectedUtxoPolicy: config.ignoreProtectedUtxos ? 'ignored-by-operator-flag' : 'enforced',
     createdAt: new Date().toISOString(),
     anchor
   };

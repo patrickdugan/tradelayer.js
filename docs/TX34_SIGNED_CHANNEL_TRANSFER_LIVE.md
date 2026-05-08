@@ -97,3 +97,5 @@ The STWO proof currently proves the batch public-data binding. TradeLayer consen
 Consensus also refuses envelopes whose `publicInputs.verifierWasmHash` or `verifierResult.resultCore.wasmCodeHash` do not match the pinned `tlzk_rust_wasm_v0` WASM artifact hash above.
 The current live harness now uses a minimal tx34 anchor plus local DA: the standard-policy payload carries only `z2|<envelopeId>` rather than embedding the full envelope. The Bitcoin testnet4 broadcaster coin-controls from the admin funding address by default so it does not spend colored/TAP reference dust outputs as fees.
 For hosted DA, set `TL_ZK_DA_BASE_URL` to a base such as `https://api.layerwallet.com/zk/envelopes` and set `TL_ZK_DA_ALLOW_HTTP=1` before replaying tx34. The resolver will fetch `https://api.layerwallet.com/zk/envelopes/<envelopeId>.json` if the envelope is not present in the local artifact directories.
+
+Protected TAP/colored/DLC refs are tracked separately in the protected UTXO registry documented in `docs/PROTECTED_UTXO_REGISTRY.md`. The tx34 broadcaster enforces that registry by default and has an explicit `--ignore-protected-utxos` escape hatch for repair work only.
