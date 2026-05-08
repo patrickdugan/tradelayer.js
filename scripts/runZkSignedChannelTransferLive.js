@@ -96,6 +96,18 @@ async function main() {
     if (!executionCheck.ok) throw new Error(executionCheck.reason);
     const execution = executionCheck.execution;
     const executionHash = ZkConsensus.hashCanonical(execution);
+    const pathPublicInputs = {};
+    if (fixture.channelPathIntentHash) pathPublicInputs.channelPathIntentHash = fixture.channelPathIntentHash;
+    if (fixture.channelPathSigningTranscriptHash) {
+        pathPublicInputs.channelPathSigningTranscriptHash = fixture.channelPathSigningTranscriptHash;
+    }
+    const daValue = {
+        proofSummary,
+        signedChannelTransferBatch: signedBatch,
+        signedChannelTransferExecution: execution
+    };
+    if (fixture.channelPathIntent) daValue.channelPathIntent = fixture.channelPathIntent;
+    if (fixture.signingTranscript) daValue.channelPathSigningTranscript = fixture.signingTranscript;
 
     const signedL1TxHex = hexJson({
         kind: 'bitcoin-signed-tx-carrier-placeholder',
@@ -108,6 +120,7 @@ async function main() {
         proofHash: proofSummary.proofSha256,
         programHash: proofSummary.programSha256,
         publicInputs: {
+            ...pathPublicInputs,
             batchId: fixture.cairoBatch.batchId,
             proofRun: path.basename(proof.runDir),
             signedChannelTransferBatchHash: fixture.signedChannelTransferBatchHash,
@@ -125,11 +138,7 @@ async function main() {
         daBlob: {
             carrier: 'snacksack-stwo-proof-run',
             encoding: 'json',
-            value: {
-                proofSummary,
-                signedChannelTransferBatch: signedBatch,
-                signedChannelTransferExecution: execution
-            }
+            value: daValue
         },
         signedL1TxHex,
         batchL2TxHex: fixture.batchL2TxHex,
@@ -168,6 +177,8 @@ async function main() {
         envelopeId: envelope.envelopeId,
         txid: decoded.txid,
         batchId: fixture.cairoBatch.batchId,
+        channelPathIntentHash: fixture.channelPathIntentHash || '',
+        channelPathSigningTranscriptHash: fixture.channelPathSigningTranscriptHash || '',
         signedChannelTransferBatchHash: fixture.signedChannelTransferBatchHash,
         signedChannelTransferExecutionHash: executionHash,
         channelSignatureRoot: fixture.channelSignatureRoot,

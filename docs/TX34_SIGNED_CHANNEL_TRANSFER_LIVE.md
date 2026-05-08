@@ -2,10 +2,11 @@
 
 Date: 2026-05-08
 
-This is the live harness for tx34 applying a ZK-bound, signed descendant chain of channel transfers to TradeLayer channel balances. It demonstrates an L3-style shape: signed unpublished L2 channel movements, remote STWO proof receipt, and one tx34 L1 protocol movement that updates channel state.
+This is the live harness for tx34 applying a ZK-bound, user-signed descendant chain of channel transfers to TradeLayer channel balances. It demonstrates an L3-style shape: signed unpublished L2 channel movements, remote STWO proof receipt, and one tx34 L1 protocol movement that updates channel state.
 
 ## Run
 
+- Inspect signing flow: `npm run zk:channel-transfer:sign`
 - Build fixture: `npm run zk:channel-transfer:build`
 - Remote proof: `npm run zk:channel-transfer:prove:snacksack`
 - Local consensus verification: `npm run zk:channel-transfer:live`
@@ -13,29 +14,40 @@ This is the live harness for tx34 applying a ZK-bound, signed descendant chain o
 The proof was generated on snacksack:
 
 ```text
-C:\projects\tradelayer.js\artifacts\snacksack_proof_runs\tlzk-20260508-164251
+C:\projects\tradelayer.js\artifacts\snacksack_proof_runs\tlzk-20260508-170058
 ```
 
 ## Receipt
 
 - Verifier mode: `rust-wasm`
-- Envelope ID: `ac099977df36282ec3538b7c9a6152ad2c3482c660767e945a4eace28002bcc8`
-- Tx34 local txid: `93f09431328e3dbd75672c3f892dbad82bae1cec30b85caf1edfd8b0e4a585af`
-- STWO batch ID: `1abb5b0503b579bb491daafcc98f603663518d647c23c13b9e1e89685e469770`
-- Signed channel-transfer batch hash: `c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90`
-- Signed channel-transfer execution hash: `cb948597db02ecc94e92384a851a32cfbd802cf0573f444643e2314e022a7390`
-- Channel signature root: `e5472d70339600002ee12eb1df3be6d268742fe9cfb428bca3a828be67393b7d`
+- Envelope ID: `5108eb6a78648793e996d7e924e9bb3309e8ab4806cfa2f501c0d85a11d09e2f`
+- Tx34 local txid: `1bc41ef727ba54700c55b4b615236b0b62aff8c5a4ddcff6a39ddb573104131f`
+- STWO batch ID: `7636708b1a9a3d1a7baf14f9f60714ea06cf31b64a38096f70cdd53ff71a80a1`
+- Channel path intent hash: `9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c`
+- Channel path signing transcript hash: `05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e`
+- Signed channel-transfer batch hash: `ff9495ef3f456e3709268ce0061a0906b10d1bf5ea7b0477e4566fbf98f19acf`
+- Signed channel-transfer execution hash: `267837ebb9cefe104456e8f1296bbf1ab19a9374a298814e39e937181cb8a1f5`
+- Channel signature root: `6efebf92c2c4d8d2c4de682ecb0dd1b2918f0708d9208fd2cd0fde441ba5a211`
 - Max dependency depth: `3`
 
 ## Execution Roots
 
 - Input state root: `f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685`
 - Output state root: `40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b`
-- Balance transition root: `c709829c1d87cfd39054d8dea1950e58f82a45319f652fb75b39a2e7b69cb5f2`
-- Step root: `09fd8dab42e747389c451b5430c81dd5c2bdba22cc2a886e30fe1a6c209967e8`
-- Descendant root: `dbaa6b2e0080baee53246576294b65278b1eef1ad937656a4cb58297b7e7c14f`
-- Authorization root: `e864c5eed696de52b45458c5569dcbe906a34d5e68ee6311e00c9ba668ffdb55`
+- Balance transition root: `8699f7e869d020072eebd773de825eab065733992227a6231c0836b05afaae67`
+- Step root: `372dfde7280c7cff7a774dba20da38a8a3cc8b9c39bccfb718bc05d0df2b11d4`
+- Descendant root: `6c680024a7f65f698207c83681b4b4feeea1f21ea1ea29ad66644881404f3c3b`
+- Authorization root: `ea33c5c798a0fab70c5962a07996f5bebddacacfb5aa90d06d9d5890b800fe66`
 - Conservation root: `9ef8880d9cbf1c2b08a766d9847c10c6c1381aba0983cecf6d98fda1aa9449b2`
+
+## User Signing
+
+The fixture now separates the route intent from the signatures:
+
+- Intent: `artifacts/zk_signed_channel_transfer/channel_path_intent_latest.json`
+- Signing transcript: `artifacts/zk_signed_channel_transfer/user_signed_channel_path_latest.json`
+
+Each hop signs the canonical transfer core with both the user key and channel-operator key. The demo uses deterministic keys unless `TL_ZK_CHANNEL_USER_PRIVKEY_HEX` and `TL_ZK_CHANNEL_OPERATOR_PRIVKEY_HEX` are provided.
 
 ## Descendant Chain
 
@@ -65,6 +77,8 @@ The tx34 envelope binds:
 - signed TradeLayer L2 batch hex hash
 - 2-of-2 secp256k1 channel signatures
 - channel transfer movement root
+- user route intent hash
+- user/channel-operator signing transcript hash
 - channel execution witness roots for pre-state, post-state, per-step state, descendant edges, authorization, and conservation
 
 The STWO proof currently proves the batch public-data binding. TradeLayer consensus then verifies the 2-of-2 secp256k1 signatures and refuses to apply the movement unless the execution witness reconstructs the exact current pre-state rows, every descendant dependency, each step root, the final post-state rows, authorization root, and value-conservation root.

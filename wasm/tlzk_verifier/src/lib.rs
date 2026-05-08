@@ -243,6 +243,30 @@ pub fn verify_zk_consensus_envelope_json(envelope_json: &str) -> String {
             }
         }
 
+        if let Some(intent) = da_value.get("channelPathIntent") {
+            let intent_hash = hash_value(intent);
+            if let Some(reason) = require_public_input(
+                public_inputs,
+                "channelPathIntentHash",
+                &intent_hash,
+                "channel path intent hash mismatch",
+            ) {
+                return response(false, &reason);
+            }
+        }
+
+        if let Some(transcript) = da_value.get("channelPathSigningTranscript") {
+            let transcript_hash = hash_value(transcript);
+            if let Some(reason) = require_public_input(
+                public_inputs,
+                "channelPathSigningTranscriptHash",
+                &transcript_hash,
+                "channel path signing transcript hash mismatch",
+            ) {
+                return response(false, &reason);
+            }
+        }
+
         if let Some(execution) = da_value.get("signedChannelTransferExecution") {
             let execution_hash = hash_value(execution);
             if let Some(reason) = require_public_input(

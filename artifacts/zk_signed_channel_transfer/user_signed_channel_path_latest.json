@@ -1,0 +1,87 @@
+{
+  "kind": "tl_zk_channel_path_signing_transcript_v1",
+  "intentHash": "9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c",
+  "signers": [
+    {
+      "role": "user",
+      "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+      "keySource": "deterministic:tl-zk-demo-user"
+    },
+    {
+      "role": "channel-operator",
+      "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+      "keySource": "deterministic:tl-zk-demo-channel-operator"
+    }
+  ],
+  "signedMessages": [
+    {
+      "stepIndex": 0,
+      "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
+      "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+      "requiredSigners": [
+        "user",
+        "channel-operator"
+      ],
+      "signatures": [
+        {
+          "role": "user",
+          "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+          "signatureHex": "854e60f4dd8bd5bee7baa40cf0ec255453a2bcc66d01f496521ebfde6e6538f17f7e438c68f1faea23518f5e488080364690ba62b2968cc8b55f6c8b5ea1dbef"
+        },
+        {
+          "role": "channel-operator",
+          "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+          "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+          "signatureHex": "83d91abadf6de27e00646d8cd96ecd39a0dc03d969be5067006db355664b2ce16cbc32da94c162c7a3124eb3ce41bf6aa12438f156c1d10a35e70070d1c0a2bc"
+        }
+      ]
+    },
+    {
+      "stepIndex": 1,
+      "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
+      "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+      "requiredSigners": [
+        "user",
+        "channel-operator"
+      ],
+      "signatures": [
+        {
+          "role": "user",
+          "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+          "signatureHex": "3c5461a8876d43a715f8b5b78a58ea9876904d7b8015a5974fc827265bda0c9e7ce5d7e64985adc1e00cd62bd0141f11f560c2296e7fc2c6969a1a0717c2e3fe"
+        },
+        {
+          "role": "channel-operator",
+          "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+          "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+          "signatureHex": "02f4e840ce0579d4fbb99b37084db57947fe0732ede88fbeb80adc7f0409a86f5e4ee8edbeb10fbac2420787cf937713fbe8e57ea09756825e55ad24fa1803e0"
+        }
+      ]
+    },
+    {
+      "stepIndex": 2,
+      "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
+      "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+      "requiredSigners": [
+        "user",
+        "channel-operator"
+      ],
+      "signatures": [
+        {
+          "role": "user",
+          "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+          "signatureHex": "0b51f82a173a01d1b565e06f7eb5ca45ffae3fdf1d5d5c8e032078b4f567781b54876c5c9c00e63046636e5e0287f6f9783e76d8b46cf96ee51a6e342977f629"
+        },
+        {
+          "role": "channel-operator",
+          "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+          "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+          "signatureHex": "7a6cf363cd5961387884a513f7ddebb58111558d192bb15c63d2bcd002154cba497b5c75920e7797bf58d156cf2598e9869ac7ce26f64a473dd6ebcbb704f052"
+        }
+      ]
+    }
+  ]
+}

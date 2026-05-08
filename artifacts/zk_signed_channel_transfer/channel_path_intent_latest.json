@@ -1,0 +1,68 @@
+{
+  "kind": "tl_zk_channel_path_intent_v1",
+  "network": "bitcoin-testnet",
+  "propertyId": 1,
+  "amountUnits": "125000000",
+  "ownerAddress": "tb1qzkowner000000000000000000000000000000",
+  "sourceChannel": "tb1qzkchan000000000000000000000000000000",
+  "relayChannels": [
+    "tb1qzkrelay10000000000000000000000000000",
+    "tb1qzkrelay20000000000000000000000000000"
+  ],
+  "destinationChannel": "tb1qzkdest000000000000000000000000000000",
+  "route": [
+    "tb1qzkchan000000000000000000000000000000",
+    "tb1qzkrelay10000000000000000000000000000",
+    "tb1qzkrelay20000000000000000000000000000",
+    "tb1qzkdest000000000000000000000000000000"
+  ],
+  "initialSourceBalanceUnits": "500000000",
+  "hops": [
+    {
+      "stepIndex": 0,
+      "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
+      "fromChannelAddress": "tb1qzkchan000000000000000000000000000000",
+      "toChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+      "propertyId": 1,
+      "amountUnits": "125000000",
+      "dependsOnTransferIds": [],
+      "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442"
+    },
+    {
+      "stepIndex": 1,
+      "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
+      "fromChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+      "toChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+      "propertyId": 1,
+      "amountUnits": "125000000",
+      "dependsOnTransferIds": [
+        "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
+      ],
+      "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb"
+    },
+    {
+      "stepIndex": 2,
+      "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
+      "fromChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+      "toChannelAddress": "tb1qzkdest000000000000000000000000000000",
+      "propertyId": 1,
+      "amountUnits": "125000000",
+      "dependsOnTransferIds": [
+        "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
+      ],
+      "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20"
+    }
+  ],
+  "requiredSigners": [
+    {
+      "role": "user",
+      "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+      "keySource": "deterministic:tl-zk-demo-user"
+    },
+    {
+      "role": "channel-operator",
+      "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+      "keySource": "deterministic:tl-zk-demo-channel-operator"
+    }
+  ]
+}

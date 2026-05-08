@@ -20,6 +20,7 @@ The full consensus object is the ZK envelope, normally supplied from witness/DA:
 - `daBlob`: witness or external DA object carrying proof context.
 - `verifierResult`: bounded Rust/WASM verifier result committed by `resultId`.
 - For signed channel transfers, `publicInputs` also bind `signedChannelTransferExecutionHash`, `channelInputStateRoot`, `channelOutputStateRoot`, `channelBalanceTransitionRoot`, `channelStepRoot`, `channelDescendantRoot`, `channelAuthorizationRoot`, and `channelConservationRoot`.
+- User-path demos additionally bind `channelPathIntentHash` and `channelPathSigningTranscriptHash`.
 
 Consensus validation checks the compact OP_RETURN fields against the envelope, verifies the envelope hash structure, calls the packaged Rust/WASM verifier when built, and falls back to the deterministic JS verifier only for source checkouts. Set `TL_ZK_REQUIRE_WASM=1` to force the Rust/WASM path.
 
@@ -47,6 +48,7 @@ Descendant transfers are encoded by signing `dependsOnTransferIds` inside each t
 - `npm run wasm:check` checks the Rust crate.
 - `npm run wasm:bundle` builds the wasm target and runs `wasm-bindgen` into `wasm/tlzk_verifier/pkg-node` and `wasm/tlzk_verifier/pkg` when the `wasm-bindgen` CLI is installed.
 - `npm run zk:channel-transfer:build` creates a signed tx22-style channel transfer batch.
+- `npm run zk:channel-transfer:sign` prints the user route intent, per-hop message hashes, dependency ids, and signer roles.
 - `npm run zk:channel-transfer:prove:snacksack` sends that batch to snacksack for STWO proving.
 - `npm run zk:channel-transfer:live` verifies the returned proof envelope and applies the channel balance update in an isolated local DB.
 

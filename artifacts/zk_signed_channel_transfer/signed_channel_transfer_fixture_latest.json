@@ -1,15 +1,174 @@
 {
-  "kind": "tl_zk_signed_channel_transfer_demo_fixture_v1",
-  "createdAt": "2026-05-08T20:42:45.722Z",
+  "kind": "tl_zk_signed_channel_transfer_demo_fixture_v2",
+  "createdAt": "2026-05-08T21:00:50.491Z",
   "network": "bitcoin-testnet",
   "blockHeight": 777001,
   "propertyId": 1,
   "amountUnits": "125000000",
   "ownerAddress": "tb1qzkowner000000000000000000000000000000",
-  "publicKeys": {
-    "partyA": "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-    "partyB": "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+  "userSigningDemo": {
+    "userPubkey": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+    "operatorPubkey": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+    "userKeySource": "deterministic:tl-zk-demo-user",
+    "operatorKeySource": "deterministic:tl-zk-demo-channel-operator"
   },
+  "channelPathIntent": {
+    "kind": "tl_zk_channel_path_intent_v1",
+    "network": "bitcoin-testnet",
+    "propertyId": 1,
+    "amountUnits": "125000000",
+    "ownerAddress": "tb1qzkowner000000000000000000000000000000",
+    "sourceChannel": "tb1qzkchan000000000000000000000000000000",
+    "relayChannels": [
+      "tb1qzkrelay10000000000000000000000000000",
+      "tb1qzkrelay20000000000000000000000000000"
+    ],
+    "destinationChannel": "tb1qzkdest000000000000000000000000000000",
+    "route": [
+      "tb1qzkchan000000000000000000000000000000",
+      "tb1qzkrelay10000000000000000000000000000",
+      "tb1qzkrelay20000000000000000000000000000",
+      "tb1qzkdest000000000000000000000000000000"
+    ],
+    "initialSourceBalanceUnits": "500000000",
+    "hops": [
+      {
+        "stepIndex": 0,
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
+        "fromChannelAddress": "tb1qzkchan000000000000000000000000000000",
+        "toChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+        "propertyId": 1,
+        "amountUnits": "125000000",
+        "dependsOnTransferIds": [],
+        "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442"
+      },
+      {
+        "stepIndex": 1,
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
+        "fromChannelAddress": "tb1qzkrelay10000000000000000000000000000",
+        "toChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+        "propertyId": 1,
+        "amountUnits": "125000000",
+        "dependsOnTransferIds": [
+          "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
+        ],
+        "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb"
+      },
+      {
+        "stepIndex": 2,
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
+        "fromChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+        "toChannelAddress": "tb1qzkdest000000000000000000000000000000",
+        "propertyId": 1,
+        "amountUnits": "125000000",
+        "dependsOnTransferIds": [
+          "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
+        ],
+        "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20"
+      }
+    ],
+    "requiredSigners": [
+      {
+        "role": "user",
+        "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+        "keySource": "deterministic:tl-zk-demo-user"
+      },
+      {
+        "role": "channel-operator",
+        "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+        "keySource": "deterministic:tl-zk-demo-channel-operator"
+      }
+    ]
+  },
+  "channelPathIntentHash": "9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c",
+  "signingTranscript": {
+    "kind": "tl_zk_channel_path_signing_transcript_v1",
+    "intentHash": "9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c",
+    "signers": [
+      {
+        "role": "user",
+        "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+        "keySource": "deterministic:tl-zk-demo-user"
+      },
+      {
+        "role": "channel-operator",
+        "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+        "keySource": "deterministic:tl-zk-demo-channel-operator"
+      }
+    ],
+    "signedMessages": [
+      {
+        "stepIndex": 0,
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
+        "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+        "requiredSigners": [
+          "user",
+          "channel-operator"
+        ],
+        "signatures": [
+          {
+            "role": "user",
+            "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+            "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+            "signatureHex": "854e60f4dd8bd5bee7baa40cf0ec255453a2bcc66d01f496521ebfde6e6538f17f7e438c68f1faea23518f5e488080364690ba62b2968cc8b55f6c8b5ea1dbef"
+          },
+          {
+            "role": "channel-operator",
+            "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+            "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442",
+            "signatureHex": "83d91abadf6de27e00646d8cd96ecd39a0dc03d969be5067006db355664b2ce16cbc32da94c162c7a3124eb3ce41bf6aa12438f156c1d10a35e70070d1c0a2bc"
+          }
+        ]
+      },
+      {
+        "stepIndex": 1,
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
+        "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+        "requiredSigners": [
+          "user",
+          "channel-operator"
+        ],
+        "signatures": [
+          {
+            "role": "user",
+            "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+            "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+            "signatureHex": "3c5461a8876d43a715f8b5b78a58ea9876904d7b8015a5974fc827265bda0c9e7ce5d7e64985adc1e00cd62bd0141f11f560c2296e7fc2c6969a1a0717c2e3fe"
+          },
+          {
+            "role": "channel-operator",
+            "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+            "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb",
+            "signatureHex": "02f4e840ce0579d4fbb99b37084db57947fe0732ede88fbeb80adc7f0409a86f5e4ee8edbeb10fbac2420787cf937713fbe8e57ea09756825e55ad24fa1803e0"
+          }
+        ]
+      },
+      {
+        "stepIndex": 2,
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
+        "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+        "requiredSigners": [
+          "user",
+          "channel-operator"
+        ],
+        "signatures": [
+          {
+            "role": "user",
+            "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+            "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+            "signatureHex": "0b51f82a173a01d1b565e06f7eb5ca45ffae3fdf1d5d5c8e032078b4f567781b54876c5c9c00e63046636e5e0287f6f9783e76d8b46cf96ee51a6e342977f629"
+          },
+          {
+            "role": "channel-operator",
+            "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+            "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20",
+            "signatureHex": "7a6cf363cd5961387884a513f7ddebb58111558d192bb15c63d2bcd002154cba497b5c75920e7797bf58d156cf2598e9869ac7ce26f64a473dd6ebcbb704f052"
+          }
+        ]
+      }
+    ]
+  },
+  "channelPathSigningTranscriptHash": "05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e",
   "initialChannels": {
     "tb1qzkchan000000000000000000000000000000": {
       "channel": "tb1qzkchan000000000000000000000000000000",
@@ -19,18 +178,6 @@
       },
       "A": {
         "1": 5
-      },
-      "B": {},
-      "commits": []
-    },
-    "tb1qzkdest000000000000000000000000000000": {
-      "channel": "tb1qzkdest000000000000000000000000000000",
-      "participants": {
-        "A": "tb1qzkowner000000000000000000000000000000",
-        "B": ""
-      },
-      "A": {
-        "1": 0
       },
       "B": {},
       "commits": []
@@ -49,6 +196,18 @@
     },
     "tb1qzkrelay20000000000000000000000000000": {
       "channel": "tb1qzkrelay20000000000000000000000000000",
+      "participants": {
+        "A": "tb1qzkowner000000000000000000000000000000",
+        "B": ""
+      },
+      "A": {
+        "1": 0
+      },
+      "B": {},
+      "commits": []
+    },
+    "tb1qzkdest000000000000000000000000000000": {
+      "channel": "tb1qzkdest000000000000000000000000000000",
       "participants": {
         "A": "tb1qzkowner000000000000000000000000000000",
         "B": ""
@@ -73,18 +232,6 @@
       "B": {},
       "commits": []
     },
-    "tb1qzkdest000000000000000000000000000000": {
-      "channel": "tb1qzkdest000000000000000000000000000000",
-      "participants": {
-        "A": "tb1qzkowner000000000000000000000000000000",
-        "B": ""
-      },
-      "A": {
-        "1": 1.25
-      },
-      "B": {},
-      "commits": []
-    },
     "tb1qzkrelay10000000000000000000000000000": {
       "channel": "tb1qzkrelay10000000000000000000000000000",
       "participants": {
@@ -108,18 +255,30 @@
       },
       "B": {},
       "commits": []
+    },
+    "tb1qzkdest000000000000000000000000000000": {
+      "channel": "tb1qzkdest000000000000000000000000000000",
+      "participants": {
+        "A": "tb1qzkowner000000000000000000000000000000",
+        "B": ""
+      },
+      "A": {
+        "1": 1.25
+      },
+      "B": {},
+      "commits": []
     }
   },
   "signedChannelTransferBatch": {
     "kind": "tl_zk_signed_channel_transfer_batch_v1",
-    "batchId": "a341d1d17e162056640e40cfa668a8bc5543cbfeb42960f9a11e73f1eb583fc3",
+    "batchId": "226cf3b1fea317c94102c12cb053260206afad9fa8968f86a6ffa33e5c664017",
     "batchCore": {
       "protocol": "tl_zk_signed_channel_transfer_batch_v1",
-      "nonce": "tx22-signed-descendant-transfer-demo-20260508",
+      "nonce": "tx22-user-signed-channel-path-demo-20260508",
       "transfers": [
         {
           "kind": "tl_zk_signed_channel_transfer",
-          "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+          "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
           "core": {
             "protocol": "tl_zk_signed_channel_transfer_v1",
             "fromChannelAddress": "tb1qzkchan000000000000000000000000000000",
@@ -130,32 +289,32 @@
             "propertyId": 1,
             "amountUnits": "125000000",
             "dependsOnTransferIds": [],
-            "nonce": "signed-channel-transfer-demo-20260508-step-1"
+            "nonce": "user-channel-path-demo-20260508-step-1"
           },
           "authorization": {
             "scheme": "secp256k1-compact-2-of-2",
             "requiredSignatures": 2,
             "authorizedPubkeys": [
-              "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+              "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
             ]
           },
           "signatures": [
             {
-              "role": "channel-party-a",
-              "pubkeyHex": "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "signatureHex": "15a60785d9e2f1abe8e6d8cc056a8467d0b05894f3bde77eea6aee383f2b7013644ac4dbc88f10db383a090b734ed7f7e2b910c025802f2c8e4ecdbcbe6fcba0"
+              "role": "user",
+              "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "signatureHex": "854e60f4dd8bd5bee7baa40cf0ec255453a2bcc66d01f496521ebfde6e6538f17f7e438c68f1faea23518f5e488080364690ba62b2968cc8b55f6c8b5ea1dbef"
             },
             {
-              "role": "channel-party-b",
-              "pubkeyHex": "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02",
-              "signatureHex": "367421b6bf97c915ebf962be63b8383f937024ea9cf114c8ed7c20e45cff7eab6820175d605eed548f76c32478d8622bca71f0e8deae33560c5a0c65e5464a2a"
+              "role": "channel-operator",
+              "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+              "signatureHex": "83d91abadf6de27e00646d8cd96ecd39a0dc03d969be5067006db355664b2ce16cbc32da94c162c7a3124eb3ce41bf6aa12438f156c1d10a35e70070d1c0a2bc"
             }
           ]
         },
         {
           "kind": "tl_zk_signed_channel_transfer",
-          "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+          "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
           "core": {
             "protocol": "tl_zk_signed_channel_transfer_v1",
             "fromChannelAddress": "tb1qzkrelay10000000000000000000000000000",
@@ -166,34 +325,34 @@
             "propertyId": 1,
             "amountUnits": "125000000",
             "dependsOnTransferIds": [
-              "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364"
+              "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
             ],
-            "nonce": "signed-channel-transfer-demo-20260508-step-2"
+            "nonce": "user-channel-path-demo-20260508-step-2"
           },
           "authorization": {
             "scheme": "secp256k1-compact-2-of-2",
             "requiredSignatures": 2,
             "authorizedPubkeys": [
-              "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+              "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
             ]
           },
           "signatures": [
             {
-              "role": "channel-party-a",
-              "pubkeyHex": "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "signatureHex": "1f3025119ec17af7ff1e114fb609f7cece03f8c2628e405b554fd55971744ec30b0e4de50d322c7b21905b039fc25b4910a744e9303da9f36fa11a32961051a7"
+              "role": "user",
+              "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "signatureHex": "3c5461a8876d43a715f8b5b78a58ea9876904d7b8015a5974fc827265bda0c9e7ce5d7e64985adc1e00cd62bd0141f11f560c2296e7fc2c6969a1a0717c2e3fe"
             },
             {
-              "role": "channel-party-b",
-              "pubkeyHex": "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02",
-              "signatureHex": "58b448bdf812e752a24ab1aa2d2271f21ccb0c64e40bf8fb683547950c1a6aee5576b0a3c2398bcfe1a878251e1d93b35746f0c2663af4b088e0977bcdff81f2"
+              "role": "channel-operator",
+              "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+              "signatureHex": "02f4e840ce0579d4fbb99b37084db57947fe0732ede88fbeb80adc7f0409a86f5e4ee8edbeb10fbac2420787cf937713fbe8e57ea09756825e55ad24fa1803e0"
             }
           ]
         },
         {
           "kind": "tl_zk_signed_channel_transfer",
-          "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+          "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
           "core": {
             "protocol": "tl_zk_signed_channel_transfer_v1",
             "fromChannelAddress": "tb1qzkrelay20000000000000000000000000000",
@@ -204,54 +363,54 @@
             "propertyId": 1,
             "amountUnits": "125000000",
             "dependsOnTransferIds": [
-              "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6"
+              "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
             ],
-            "nonce": "signed-channel-transfer-demo-20260508-step-3"
+            "nonce": "user-channel-path-demo-20260508-step-3"
           },
           "authorization": {
             "scheme": "secp256k1-compact-2-of-2",
             "requiredSignatures": 2,
             "authorizedPubkeys": [
-              "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+              "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
             ]
           },
           "signatures": [
             {
-              "role": "channel-party-a",
-              "pubkeyHex": "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-              "signatureHex": "8ed33b0a67f88f277219bf68e1d58416eb097f90d56aab3fa7b468b9c44336881c0069bafb911a47daf115c571ff83802164177575a348b1269efaf4331d8060"
+              "role": "user",
+              "pubkeyHex": "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+              "signatureHex": "0b51f82a173a01d1b565e06f7eb5ca45ffae3fdf1d5d5c8e032078b4f567781b54876c5c9c00e63046636e5e0287f6f9783e76d8b46cf96ee51a6e342977f629"
             },
             {
-              "role": "channel-party-b",
-              "pubkeyHex": "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02",
-              "signatureHex": "f8dbc073d959f69a7c356b4ac1fc34e52c51fd6618e11e0e5c7a2e4fffd7dc195d24ce6829e72170b877baee8dc9eed2c3260a09abf4fd166972a3a2ab183bd1"
+              "role": "channel-operator",
+              "pubkeyHex": "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7",
+              "signatureHex": "7a6cf363cd5961387884a513f7ddebb58111558d192bb15c63d2bcd002154cba497b5c75920e7797bf58d156cf2598e9869ac7ce26f64a473dd6ebcbb704f052"
             }
           ]
         }
       ],
-      "transferRoot": "47e947d7f8256e31e3f892b5851e4926e3e577b3612190752c45e0bb4067f0a1",
-      "signatureRoot": "e5472d70339600002ee12eb1df3be6d268742fe9cfb428bca3a828be67393b7d"
+      "transferRoot": "314aed17c4ac0f1123c19942f44569c57dfbd32e0401611e3e7d9cebaea43c5c",
+      "signatureRoot": "6efebf92c2c4d8d2c4de682ecb0dd1b2918f0708d9208fd2cd0fde441ba5a211"
     }
   },
-  "signedChannelTransferBatchHash": "c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90",
-  "channelSignatureRoot": "e5472d70339600002ee12eb1df3be6d268742fe9cfb428bca3a828be67393b7d",
+  "signedChannelTransferBatchHash": "ff9495ef3f456e3709268ce0061a0906b10d1bf5ea7b0477e4566fbf98f19acf",
+  "channelSignatureRoot": "6efebf92c2c4d8d2c4de682ecb0dd1b2918f0708d9208fd2cd0fde441ba5a211",
   "signedChannelTransferExecution": {
     "kind": "tl_zk_signed_channel_transfer_execution_v1",
     "executionCore": {
       "protocol": "tl_zk_signed_channel_transfer_execution_v1",
-      "batchId": "a341d1d17e162056640e40cfa668a8bc5543cbfeb42960f9a11e73f1eb583fc3",
-      "batchHash": "c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90",
+      "batchId": "226cf3b1fea317c94102c12cb053260206afad9fa8968f86a6ffa33e5c664017",
+      "batchHash": "ff9495ef3f456e3709268ce0061a0906b10d1bf5ea7b0477e4566fbf98f19acf",
       "inputStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
       "outputStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
-      "balanceTransitionRoot": "c709829c1d87cfd39054d8dea1950e58f82a45319f652fb75b39a2e7b69cb5f2",
-      "stepRoot": "09fd8dab42e747389c451b5430c81dd5c2bdba22cc2a886e30fe1a6c209967e8",
-      "descendantRoot": "dbaa6b2e0080baee53246576294b65278b1eef1ad937656a4cb58297b7e7c14f",
-      "authorizationRoot": "e864c5eed696de52b45458c5569dcbe906a34d5e68ee6311e00c9ba668ffdb55",
+      "balanceTransitionRoot": "8699f7e869d020072eebd773de825eab065733992227a6231c0836b05afaae67",
+      "stepRoot": "372dfde7280c7cff7a774dba20da38a8a3cc8b9c39bccfb718bc05d0df2b11d4",
+      "descendantRoot": "6c680024a7f65f698207c83681b4b4feeea1f21ea1ea29ad66644881404f3c3b",
+      "authorizationRoot": "ea33c5c798a0fab70c5962a07996f5bebddacacfb5aa90d06d9d5890b800fe66",
       "conservationRoot": "9ef8880d9cbf1c2b08a766d9847c10c6c1381aba0983cecf6d98fda1aa9449b2",
       "maxDependencyDepth": 3,
       "transferCount": 3,
-      "executionId": "fbd01ca775626fcc53683cf19cb95064930dc3130ad6e38c050e65cc6b27271d"
+      "executionId": "0e154c7c4622930a2af3f9c6f5991eed7988da3ad664ac4d2da993cfc0f25d09"
     },
     "inputRows": [
       {
@@ -316,25 +475,25 @@
     "executionSteps": [
       {
         "stepIndex": 0,
-        "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
         "dependsOnTransferIds": [],
         "beforeStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
         "afterStateRoot": "336058bc7fd13357b2f55facca4fe8641be9c46ab91bd4d008db1d7f49c72d6d"
       },
       {
         "stepIndex": 1,
-        "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
         "dependsOnTransferIds": [
-          "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364"
+          "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
         ],
         "beforeStateRoot": "336058bc7fd13357b2f55facca4fe8641be9c46ab91bd4d008db1d7f49c72d6d",
         "afterStateRoot": "50bfa300e0f8043431e3d28104ed33a50bf62ee37ff7c3ae98dcb12cb136cb1b"
       },
       {
         "stepIndex": 2,
-        "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
         "dependsOnTransferIds": [
-          "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6"
+          "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
         ],
         "beforeStateRoot": "50bfa300e0f8043431e3d28104ed33a50bf62ee37ff7c3ae98dcb12cb136cb1b",
         "afterStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b"
@@ -343,28 +502,28 @@
     "descendantEdges": [
       {
         "stepIndex": 0,
-        "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
         "parentTransferIds": []
       },
       {
         "stepIndex": 1,
-        "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
         "parentTransferIds": [
-          "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364"
+          "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
         ]
       },
       {
         "stepIndex": 2,
-        "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
         "parentTransferIds": [
-          "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6"
+          "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
         ]
       }
     ],
     "transferExecutions": [
       {
         "stepIndex": 0,
-        "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
         "dependsOnTransferIds": [],
         "beforeStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
         "afterStateRoot": "336058bc7fd13357b2f55facca4fe8641be9c46ab91bd4d008db1d7f49c72d6d",
@@ -387,9 +546,9 @@
       },
       {
         "stepIndex": 1,
-        "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
         "dependsOnTransferIds": [
-          "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364"
+          "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
         ],
         "beforeStateRoot": "336058bc7fd13357b2f55facca4fe8641be9c46ab91bd4d008db1d7f49c72d6d",
         "afterStateRoot": "50bfa300e0f8043431e3d28104ed33a50bf62ee37ff7c3ae98dcb12cb136cb1b",
@@ -412,9 +571,9 @@
       },
       {
         "stepIndex": 2,
-        "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
         "dependsOnTransferIds": [
-          "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6"
+          "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
         ],
         "beforeStateRoot": "50bfa300e0f8043431e3d28104ed33a50bf62ee37ff7c3ae98dcb12cb136cb1b",
         "afterStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
@@ -438,46 +597,46 @@
     ],
     "authorizationChecks": [
       {
-        "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+        "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
         "scheme": "secp256k1-compact-2-of-2",
         "requiredSignatures": 2,
         "authorizedPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
         "signerPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
-        "messageHash": "8dd4bcb43cf2a41c341b30c3aebc61856cea30b7e5625648be160fb009265f6f"
+        "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442"
       },
       {
-        "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+        "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
         "scheme": "secp256k1-compact-2-of-2",
         "requiredSignatures": 2,
         "authorizedPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
         "signerPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
-        "messageHash": "9b26d3f40b99cf84593cd4ca90419be80d9620baa3cd42ea94015ccb13f280ab"
+        "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb"
       },
       {
-        "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+        "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
         "scheme": "secp256k1-compact-2-of-2",
         "requiredSignatures": 2,
         "authorizedPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
         "signerPubkeys": [
-          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
-          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+          "02ed044c227aa71cd07130e1cbee8b03878e0ffbaf8fd8667d6a089d5cc76c085f",
+          "03299894e52b5c726d8c0fe48376b9df78afa47aefa2241472a1f8e50a610c55b7"
         ],
-        "messageHash": "8a094b4552c6ee6edd98251edd4b58907482c760ce1b40e606c1fb204432be95"
+        "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20"
       }
     ],
     "conservationRows": [
@@ -489,32 +648,41 @@
       }
     ]
   },
-  "signedChannelTransferExecutionHash": "cb948597db02ecc94e92384a851a32cfbd802cf0573f444643e2314e022a7390",
+  "signedChannelTransferExecutionHash": "267837ebb9cefe104456e8f1296bbf1ab19a9374a298814e39e937181cb8a1f5",
   "descendantChain": [
     {
       "stepIndex": 0,
-      "transferId": "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364",
+      "transferId": "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b",
       "fromChannelAddress": "tb1qzkchan000000000000000000000000000000",
       "toChannelAddress": "tb1qzkrelay10000000000000000000000000000",
-      "dependsOnTransferIds": []
+      "propertyId": 1,
+      "amountUnits": "125000000",
+      "dependsOnTransferIds": [],
+      "messageHash": "50a0ec834329eb46d2aeee68588c292766b9d691990eda87b89322db94343442"
     },
     {
       "stepIndex": 1,
-      "transferId": "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6",
+      "transferId": "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88",
       "fromChannelAddress": "tb1qzkrelay10000000000000000000000000000",
       "toChannelAddress": "tb1qzkrelay20000000000000000000000000000",
+      "propertyId": 1,
+      "amountUnits": "125000000",
       "dependsOnTransferIds": [
-        "4491753fbbef8c9d3daefebc61acc7279b38851664bb224acdeb058a8ac09364"
-      ]
+        "cbbd9bbdb3e018aa1c1df9f1aca4c504e42119a93a6e52f0ec2b69ed9ce5cc9b"
+      ],
+      "messageHash": "88af5dff63d49db642f7d9d64a6a1a6d921346eb500df9028fe1757008d2f2cb"
     },
     {
       "stepIndex": 2,
-      "transferId": "1472c0d8ace44111b3b8c288ff55d8085af0cd4ae59fb33705db10e59716b80f",
+      "transferId": "fdd53c44928ccfd8fded6494c09834c00ac71c77ba4043b8c0d2bead5fbcd179",
       "fromChannelAddress": "tb1qzkrelay20000000000000000000000000000",
       "toChannelAddress": "tb1qzkdest000000000000000000000000000000",
+      "propertyId": 1,
+      "amountUnits": "125000000",
       "dependsOnTransferIds": [
-        "a274c3cdc82f6131cf62d21313d8bdeba1b0179b753a04e25b2fbd7da060e1e6"
-      ]
+        "c49455fe322ade49fbacff7279c442d6b66109bac9e3a7b14e82aa69b113fa88"
+      ],
+      "messageHash": "8260f968d4cffe7a4d78da445363fd9cdcc6b62e37309a6b76f2ea3005a1ec20"
     }
   ],
   "movements": [
@@ -523,11 +691,11 @@
       "to": "channel:tb1qzkdest000000000000000000000000000000:A",
       "propertyId": 1,
       "amountUnits": "125000000",
-      "memo": "signed-channel-transfer:descendant-net"
+      "memo": "signed-channel-transfer:user-path-net"
     }
   ],
-  "batchL2TxHex": "7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f62617463685f7631222c2262617463684964223a2261333431643164313765313632303536363430653430636661363638613862633535343363626665623432393630663961313165373366316562353833666333222c226261746368436f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f62617463685f7631222c226e6f6e6365223a22747832322d7369676e65642d64657363656e64616e742d7472616e736665722d64656d6f2d3230323630353038222c227472616e7366657273223a5b7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2234343931373533666262656638633964336461656665626336316163633732373962333838353136363462623232346163646562303538613861633039333634222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b6368616e303030303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b72656c61793130303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b5d2c226e6f6e6365223a227369676e65642d6368616e6e656c2d7472616e736665722d64656d6f2d32303236303530382d737465702d31227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032225d7d2c227369676e617475726573223a5b7b22726f6c65223a226368616e6e656c2d70617274792d61222c227075626b6579486578223a22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c227369676e6174757265486578223a223135613630373835643965326631616265386536643863633035366138343637643062303538393466336264653737656561366165653338336632623730313336343461633464626338386631306462333833613039306237333465643766376532623931306330323538303266326338653465636462636265366663626130227d2c7b22726f6c65223a226368616e6e656c2d70617274792d62222c227075626b6579486578223a22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032222c227369676e6174757265486578223a223336373432316236626639376339313565626639363262653633623833383366393337303234656139636631313463386564376332306534356366663765616236383230313735643630356565643534386637366333323437386438363232626361373166306538646561653333353630633561306336356535343634613261227d5d7d2c7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2261323734633363646338326636313331636636326432313331336438626465626131623031373962373533613034653235623266626437646130363065316536222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b72656c61793130303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b72656c61793230303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b2234343931373533666262656638633964336461656665626336316163633732373962333838353136363462623232346163646562303538613861633039333634225d2c226e6f6e6365223a227369676e65642d6368616e6e656c2d7472616e736665722d64656d6f2d32303236303530382d737465702d32227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032225d7d2c227369676e617475726573223a5b7b22726f6c65223a226368616e6e656c2d70617274792d61222c227075626b6579486578223a22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c227369676e6174757265486578223a223166333032353131396563313761663766663165313134666236303966376365636530336638633236323865343035623535346664353539373137343465633330623065346465353064333232633762323139303562303339666332356234393130613734346539333033646139663336666131316133323936313035316137227d2c7b22726f6c65223a226368616e6e656c2d70617274792d62222c227075626b6579486578223a22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032222c227369676e6174757265486578223a223538623434386264663831326537353261323461623161613264323237316632316363623063363465343062663866623638333534373935306331613661656535353736623061336332333938626366653161383738323531653164393362333537343666306332363633616634623038386530393737626364666638316632227d5d7d2c7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2231343732633064386163653434313131623362386332383866663535643830383561663063643461653539666233333730356462313065353937313662383066222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b72656c61793230303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b64657374303030303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b2261323734633363646338326636313331636636326432313331336438626465626131623031373962373533613034653235623266626437646130363065316536225d2c226e6f6e6365223a227369676e65642d6368616e6e656c2d7472616e736665722d64656d6f2d32303236303530382d737465702d33227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032225d7d2c227369676e617475726573223a5b7b22726f6c65223a226368616e6e656c2d70617274792d61222c227075626b6579486578223a22303337346262643935646234353537303232353830333762363162613465333737643036616262346230323731336330373231313436643165646538383134366339222c227369676e6174757265486578223a223865643333623061363766383866323737323139626636386531643538343136656230393766393064353661616233666137623436386239633434333336383831633030363962616662393131613437646166313135633537316666383338303231363431373735373561333438623132363965666166343333316438303630227d2c7b22726f6c65223a226368616e6e656c2d70617274792d62222c227075626b6579486578223a22303364326138316234613364373865643362373139653430653666373264376666333661313833326332343165343061323738346638626466616461303437623032222c227369676e6174757265486578223a226638646263303733643935396636396137633335366234616331666333346535326335316664363631386531316530653563376132653466666664376463313935643234636536383239653732313730623837376261656538646339656564326333323630613039616266346664313636393732613361326162313833626431227d5d7d5d2c227472616e73666572526f6f74223a2234376539343764376638323536653331653366383932623538353165343932366533653537376233363132313930373532633435653062623430363766306131222c227369676e6174757265526f6f74223a2265353437326437303333393630303030326565313265623164663362653664323638373432666539636662343238626361336138323862653637333933623764227d7d",
-  "signedL1TxTemplateHex": "7b226b696e64223a22626974636f696e2d7369676e65642d74782d636172726965722d706c616365686f6c646572222c2274786964223a2230623765643463316164333364383962356263303139613164646332666362386539383733616239386164316236663763366165343764366235376338343339222c226e6f7465223a22746573746e6574207769746e6573732f4441206361727269657220706c616365686f6c64657220666f7220747833342070726f6f662062696e64696e67227d",
+  "batchL2TxHex": "7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f62617463685f7631222c2262617463684964223a2232323663663362316665613331376339343130326331326362303533323630323036616661643966613839363866383661366666613333653563363634303137222c226261746368436f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f62617463685f7631222c226e6f6e6365223a22747832322d757365722d7369676e65642d6368616e6e656c2d706174682d64656d6f2d3230323630353038222c227472616e7366657273223a5b7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2263626264396262646233653031386161316331646639663161636134633530346534323131396139336136653532663065633262363965643963653563633962222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b6368616e303030303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b72656c61793130303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b5d2c226e6f6e6365223a22757365722d6368616e6e656c2d706174682d64656d6f2d32303236303530382d737465702d31227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237225d7d2c227369676e617475726573223a5b7b22726f6c65223a2275736572222c227075626b6579486578223a22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c227369676e6174757265486578223a223835346536306634646438626435626565376261613430636630656332353534353361326263633636643031663439363532316562666465366536353338663137663765343338633638663166616561323335313866356534383830383033363436393062613632623239363863633862353566366338623565613164626566227d2c7b22726f6c65223a226368616e6e656c2d6f70657261746f72222c227075626b6579486578223a22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237222c227369676e6174757265486578223a223833643931616261646636646532376530303634366438636439366563643339613064633033643936396265353036373030366462333535363634623263653136636263333264613934633136326337613331323465623363653431626636616131323433386631353663316431306133356537303037306431633061326263227d5d7d2c7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2263343934353566653332326164653439666261636666373237396334343264366236363130396261633965336137623134653832616136396231313366613838222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b72656c61793130303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b72656c61793230303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b2263626264396262646233653031386161316331646639663161636134633530346534323131396139336136653532663065633262363965643963653563633962225d2c226e6f6e6365223a22757365722d6368616e6e656c2d706174682d64656d6f2d32303236303530382d737465702d32227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237225d7d2c227369676e617475726573223a5b7b22726f6c65223a2275736572222c227075626b6579486578223a22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c227369676e6174757265486578223a223363353436316138383736643433613731356638623562373861353865613938373639303464376238303135613539373466633832373236356264613063396537636535643765363439383561646331653030636436326264303134316631316635363063323239366537666332633639363961316130373137633265336665227d2c7b22726f6c65223a226368616e6e656c2d6f70657261746f72222c227075626b6579486578223a22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237222c227369676e6174757265486578223a223032663465383430636530353739643466626239396233373038346462353739343766653037333265646538386662656238306164633766303430396138366635653465653865646265623130666261633234323037383763663933373731336662653865353765613039373536383235653535616432346661313830336530227d5d7d2c7b226b696e64223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e73666572222c227472616e736665724964223a2266646435336334343932386363666438666465643634393463303938333463303061633731633737626134303433623863306432626561643566626364313739222c22636f7265223a7b2270726f746f636f6c223a22746c5f7a6b5f7369676e65645f6368616e6e656c5f7472616e736665725f7631222c2266726f6d4368616e6e656c41646472657373223a22746231717a6b72656c61793230303030303030303030303030303030303030303030303030303030222c22746f4368616e6e656c41646472657373223a22746231717a6b64657374303030303030303030303030303030303030303030303030303030303030222c22736f75726365436f6c756d6e223a2241222c2264657374696e6174696f6e436f6c756d6e223a2241222c226f776e657241646472657373223a22746231717a6b6f776e6572303030303030303030303030303030303030303030303030303030303030222c2270726f70657274794964223a312c22616d6f756e74556e697473223a22313235303030303030222c22646570656e64734f6e5472616e73666572496473223a5b2263343934353566653332326164653439666261636666373237396334343264366236363130396261633965336137623134653832616136396231313366613838225d2c226e6f6e6365223a22757365722d6368616e6e656c2d706174682d64656d6f2d32303236303530382d737465702d33227d2c22617574686f72697a6174696f6e223a7b22736368656d65223a22736563703235366b312d636f6d706163742d322d6f662d32222c2272657175697265645369676e617475726573223a322c22617574686f72697a65645075626b657973223a5b22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237225d7d2c227369676e617475726573223a5b7b22726f6c65223a2275736572222c227075626b6579486578223a22303265643034346332323761613731636430373133306531636265653862303338373865306666626166386664383636376436613038396435636337366330383566222c227369676e6174757265486578223a223062353166383261313733613031643162353635653036663765623563613435666661653366646631643564356338653033323037386234663536373738316235343837366335633963303065363330343636333665356530323837663666393738336537366438623436636639366565353161366533343239373766363239227d2c7b22726f6c65223a226368616e6e656c2d6f70657261746f72222c227075626b6579486578223a22303332393938393465353262356337323664386330666534383337366239646637386166613437616566613232343134373261316638653530613631306335356237222c227369676e6174757265486578223a223761366366333633636435393631333837383834613531336637646465626235383131313535386431393262623135633633643262636430303231353463626134393762356337353932306537373937626635386431353663663235393865393836396163376365323666363461343733646436656263626237303466303532227d5d7d5d2c227472616e73666572526f6f74223a2233313461656431376334616330663131323363313939343266343435363963353764666264333265303430313631316533653764396365626165613433633563222c227369676e6174757265526f6f74223a2236656665626639326332633464386432633464653638326563623064643162323931386630373038643932303866643263643066646534343162613561323131227d7d",
+  "signedL1TxTemplateHex": "7b226b696e64223a22626974636f696e2d7369676e65642d74782d636172726965722d706c616365686f6c646572222c2274786964223a2263346561613237613231373237313361303436366333363639383135616232616461343939313830626131353031393336333364633732333231666231613838222c226e6f7465223a22746573746e6574207769746e6573732f4441206361727269657220706c616365686f6c64657220666f7220747833342070726f6f662062696e64696e67227d",
   "witnessRows": [
     {
       "namespace": "channels",
@@ -556,12 +724,12 @@
   ],
   "cairoBatch": {
     "kind": "tlzk_aggregated_batch_checkpoint",
-    "batchId": "1abb5b0503b579bb491daafcc98f603663518d647c23c13b9e1e89685e469770",
+    "batchId": "7636708b1a9a3d1a7baf14f9f60714ea06cf31b64a38096f70cdd53ff71a80a1",
     "batchCore": {
       "protocol": "tlzk_aggregated_batch_checkpoint_v1",
       "startHeight": 777001,
       "endHeight": 777001,
-      "transitionRoot": "be69fbe46d2348e3489ab40830e9da4b1d5b0bbda2130944be7ecef92497355c",
+      "transitionRoot": "2cfb60a02f26cc9cd82bc5081331c9daa6f575f11b7d0496a5f177a747ccf667",
       "finalStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
       "receiptCount": 1,
       "validReceiptCount": 1
@@ -569,20 +737,22 @@
     "transitionReceipts": [
       {
         "kind": "tlzk_transition_receipt",
-        "receiptId": "37421477e7c8145983c4d7ac9a79eae39f03ea8a9b49010bb2d91b03d86fdab6",
+        "receiptId": "c77e21feff3d0a7d6a48cfb1d2f0834f2c81adcb6f53d3faf128abca346d1f1d",
         "receiptCore": {
           "protocol": "tl_zk_signed_channel_transfer_transition_receipt_v1",
-          "txid": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
+          "txid": "c4eaa27a2172713a0466c3669815ab2ada499180ba150193633dc72321fb1a88",
           "txType": 22,
           "blockHeight": 777001,
           "valid": true,
           "oldStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
           "newStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
-          "payloadHash": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
-          "witnessRoot": "cb948597db02ecc94e92384a851a32cfbd802cf0573f444643e2314e022a7390",
-          "supportLevel": "signed-channel-transfer-descendant-execution-binding",
+          "payloadHash": "c4eaa27a2172713a0466c3669815ab2ada499180ba150193633dc72321fb1a88",
+          "witnessRoot": "267837ebb9cefe104456e8f1296bbf1ab19a9374a298814e39e937181cb8a1f5",
+          "supportLevel": "signed-channel-transfer-user-path-descendant-binding",
           "economicMutation": true,
-          "signedChannelTransferBatchHash": "c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90"
+          "signedChannelTransferBatchHash": "ff9495ef3f456e3709268ce0061a0906b10d1bf5ea7b0477e4566fbf98f19acf",
+          "channelPathIntentHash": "9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c",
+          "channelPathSigningTranscriptHash": "05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e"
         }
       }
     ]

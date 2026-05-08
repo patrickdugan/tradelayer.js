@@ -1,11 +1,11 @@
 {
   "kind": "tlzk_aggregated_batch_checkpoint",
-  "batchId": "1abb5b0503b579bb491daafcc98f603663518d647c23c13b9e1e89685e469770",
+  "batchId": "7636708b1a9a3d1a7baf14f9f60714ea06cf31b64a38096f70cdd53ff71a80a1",
   "batchCore": {
     "protocol": "tlzk_aggregated_batch_checkpoint_v1",
     "startHeight": 777001,
     "endHeight": 777001,
-    "transitionRoot": "be69fbe46d2348e3489ab40830e9da4b1d5b0bbda2130944be7ecef92497355c",
+    "transitionRoot": "2cfb60a02f26cc9cd82bc5081331c9daa6f575f11b7d0496a5f177a747ccf667",
     "finalStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
     "receiptCount": 1,
     "validReceiptCount": 1
@@ -13,20 +13,22 @@
   "transitionReceipts": [
     {
       "kind": "tlzk_transition_receipt",
-      "receiptId": "37421477e7c8145983c4d7ac9a79eae39f03ea8a9b49010bb2d91b03d86fdab6",
+      "receiptId": "c77e21feff3d0a7d6a48cfb1d2f0834f2c81adcb6f53d3faf128abca346d1f1d",
       "receiptCore": {
         "protocol": "tl_zk_signed_channel_transfer_transition_receipt_v1",
-        "txid": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
+        "txid": "c4eaa27a2172713a0466c3669815ab2ada499180ba150193633dc72321fb1a88",
         "txType": 22,
         "blockHeight": 777001,
         "valid": true,
         "oldStateRoot": "f38ffa3fbc519d1c2ff3b6007d2c103a076bd5354d538b8bae3e78acc3c77685",
         "newStateRoot": "40fea952550455aa232697df3c153233a55290313073f33a7f7380c50093d33b",
-        "payloadHash": "0b7ed4c1ad33d89b5bc019a1ddc2fcb8e9873ab98ad1b6f7c6ae47d6b57c8439",
-        "witnessRoot": "cb948597db02ecc94e92384a851a32cfbd802cf0573f444643e2314e022a7390",
-        "supportLevel": "signed-channel-transfer-descendant-execution-binding",
+        "payloadHash": "c4eaa27a2172713a0466c3669815ab2ada499180ba150193633dc72321fb1a88",
+        "witnessRoot": "267837ebb9cefe104456e8f1296bbf1ab19a9374a298814e39e937181cb8a1f5",
+        "supportLevel": "signed-channel-transfer-user-path-descendant-binding",
         "economicMutation": true,
-        "signedChannelTransferBatchHash": "c93b524ca3d23a585555027752ed5cab69a4bc767832a359ee691b4f8fd14f90"
+        "signedChannelTransferBatchHash": "ff9495ef3f456e3709268ce0061a0906b10d1bf5ea7b0477e4566fbf98f19acf",
+        "channelPathIntentHash": "9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c",
+        "channelPathSigningTranscriptHash": "05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e"
       }
     }
   ]
