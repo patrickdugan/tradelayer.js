@@ -1,0 +1,28 @@
+{
+  "kind": "tlzk_stwo_batch_binding_claim",
+  "batchId": "4e96e04e09230f124a06a21d0b151a8d0f5f4e21bbf69b3b8629702120c8bbe5",
+  "transitionRoot": "25a82aa01323903b54fad182d418e8959c1bdcc6b0fd7b7bca3800dc2bb17ac7",
+  "finalStateRoot": "6602ded6850372644745954c2aa9b1b36549aa4c4c349c31b738ad30a3754b2f",
+  "receiptCount": 1,
+  "validReceiptCount": 1,
+  "bindingCommitment": "0x8aa195e4e241eecb40173bdbaa0d5d92f5b15",
+  "field": "cairo_felt252"
+}
+   Compiling tlzk_batch_binding v0.1.0 (/home/snacksack/tlzk-proof-runs/tlzk-20260508-160150/tlzk_stwo/cairo_batch_binding/Scarb.toml)
+    Finished `dev` profile target(s) in 1 second
+{
+  "kind": "tlzk_stwo_batch_binding_claim",
+  "mode": "stwo-cairo",
+  "program": "target/dev/tlzk_batch_binding.executable.json",
+  "programSha256": "5dc1b3cad73639027e02b5da3810b0fee9215d767851d5e4065e7e103679c79e",
+  "proofPath": "/home/snacksack/tlzk-proof-runs/tlzk-20260508-160150/tlzk_stwo/proof.json",
+  "proofSha256": "dbb9061ef142c6020e467e29ed6b65f93c7a32f77f05994790990c8bcdf7121f",
+  "proofBytes": 9316244,
+  "batchId": "4e96e04e09230f124a06a21d0b151a8d0f5f4e21bbf69b3b8629702120c8bbe5",
+  "transitionRoot": "25a82aa01323903b54fad182d418e8959c1bdcc6b0fd7b7bca3800dc2bb17ac7",
+  "finalStateRoot": "6602ded6850372644745954c2aa9b1b36549aa4c4c349c31b738ad30a3754b2f",
+  "receiptCount": 1,
+  "validReceiptCount": 1,
+  "bindingCommitment": "0x8aa195e4e241eecb40173bdbaa0d5d92f5b15",
+  "field": "cairo_felt252"
+}

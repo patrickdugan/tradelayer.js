@@ -22,6 +22,7 @@ const bannedCountries = ["US", "KP", "RU", "IR", "CU"];
 const OptionsEngine = require('./options.js');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
+const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
 
 // npm i bitcoinjs-lib bip32 tiny-secp256k1
 const bitcoin = require('bitcoinjs-lib');
@@ -3862,6 +3863,19 @@ Example integration point (around line 2900 in your file):
             params.valid = false;
             params.reason += `${envelopeCheck.reason}; `;
             return params;
+        }
+
+        const signedChannelTransferBatch = ZkSignedChannelTransfer.extractSignedChannelTransferBatch(envelope);
+        if (signedChannelTransferBatch) {
+            try {
+                const binding = ZkSignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedChannelTransferBatch);
+                params.zkSignedChannelTransferBatch = binding.normalized;
+                params.zkSignedChannelTransferBatchHash = binding.batchHash;
+            } catch (err) {
+                params.valid = false;
+                params.reason += `Signed channel transfer batch rejected: ${err.message}; `;
+                return params;
+            }
         }
 
         const wasmCheck = await ZkWasmVerifier.verifyEnvelope(envelope);

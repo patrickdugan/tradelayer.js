@@ -41,6 +41,9 @@ Amounts are carried as integer `amountUnits` and converted to 8-decimal token am
 - `npm run test:zk-batch` exercises the envelope, compact tx34 payload, and verifier fallback.
 - `npm run wasm:check` checks the Rust crate.
 - `npm run wasm:bundle` builds the wasm target and runs `wasm-bindgen` into `wasm/tlzk_verifier/pkg-node` and `wasm/tlzk_verifier/pkg` when the `wasm-bindgen` CLI is installed.
+- `npm run zk:channel-transfer:build` creates a signed tx22-style channel transfer batch.
+- `npm run zk:channel-transfer:prove:snacksack` sends that batch to snacksack for STWO proving.
+- `npm run zk:channel-transfer:live` verifies the returned proof envelope and applies the channel balance update in an isolated local DB.
 
 Proof generation belongs on the `snacksack` host. Local wallet and consensus machines should verify envelopes and WASM artifacts, but they should not run the heavy proving path.
 

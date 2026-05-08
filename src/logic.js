@@ -42,6 +42,7 @@ const BitvmRisk = require('./bitvmRisk.js');
 const BinohashAdapter = require('./experimental/binohash/binohashAdapter.js');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
+const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
 
 const SettleType = {
     KEEP_ALIVE: 0,
@@ -2259,8 +2260,31 @@ const Logic = {
         const txid = params.txid || '';
         const movements = envelope.envelopeCore.movements || [];
         const applied = [];
+        let signedChannelTransferSummary = null;
+        const signedChannelTransferBatch =
+            params.zkSignedChannelTransferBatch ||
+            ZkSignedChannelTransfer.extractSignedChannelTransferBatch(envelope);
+
+        if (signedChannelTransferBatch) {
+            ZkSignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedChannelTransferBatch);
+            signedChannelTransferSummary = await ZkSignedChannelTransfer.applySignedChannelTransferBatch(
+                signedChannelTransferBatch,
+                { block, txid }
+            );
+        }
 
         for (const movement of movements) {
+            if (signedChannelTransferBatch && String(movement.memo || '').startsWith('signed-channel-transfer')) {
+                applied.push({
+                    from: String(movement.from || ''),
+                    to: String(movement.to || ''),
+                    propertyId: Number(movement.propertyId),
+                    amountUnits: String(movement.amountUnits),
+                    skippedTally: true,
+                    reason: 'covered by signed channel transfer batch'
+                });
+                continue;
+            }
             const propertyId = Number(movement.propertyId);
             const amount = new BigNumber(String(movement.amountUnits)).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN);
             if (!amount.isFinite() || amount.lte(0)) {
@@ -2304,6 +2328,7 @@ const Logic = {
             resultId: envelope.verifierResult.resultId,
             verifierMode: verifierResult.mode || 'unknown',
             movements: applied,
+            signedChannelTransfer: signedChannelTransferSummary,
             applied: true,
             updatedAt: Date.now()
         };

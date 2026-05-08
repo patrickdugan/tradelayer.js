@@ -13,6 +13,8 @@ dbPath/MANIFEST-000319
 oldTests/dbDiag.js
 *.db
 wasm/tlzk_verifier/target/
+artifacts/zk_signed_channel_transfer/nedb/
+artifacts/snacksack_proof_runs/*/extracted/
 *.db
 nedb-data/txIndex.db
 /nedb-data

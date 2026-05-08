@@ -35,7 +35,10 @@
     "wasm:build": "cargo build --release --target wasm32-unknown-unknown --manifest-path wasm/tlzk_verifier/Cargo.toml",
     "wasm:bindgen:node": "wasm-bindgen --target nodejs --out-dir wasm/tlzk_verifier/pkg-node wasm/tlzk_verifier/target/wasm32-unknown-unknown/release/tlzk_verifier.wasm",
     "wasm:bindgen:web": "wasm-bindgen --target web --out-dir wasm/tlzk_verifier/pkg wasm/tlzk_verifier/target/wasm32-unknown-unknown/release/tlzk_verifier.wasm",
-    "wasm:bundle": "npm run wasm:build && npm run wasm:bindgen:node && npm run wasm:bindgen:web"
+    "wasm:bundle": "npm run wasm:build && npm run wasm:bindgen:node && npm run wasm:bindgen:web",
+    "zk:channel-transfer:build": "node scripts/buildZkSignedChannelTransferDemo.js",
+    "zk:channel-transfer:prove:snacksack": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\projects\\TLZK\\scripts\\prove_snacksack.ps1 -Batch artifacts\\zk_signed_channel_transfer\\signed_channel_transfer_batch_latest.json -StwoProverScript C:\\projects\\TLZK\\scripts\\tlzk_stwo_batch_prover.sh",
+    "zk:channel-transfer:live": "node scripts/runZkSignedChannelTransferLive.js"
   },
   "jest": {
     "testPathIgnorePatterns": [
