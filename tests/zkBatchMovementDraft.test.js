@@ -92,6 +92,8 @@ describe('tx34 ZK batch movement draft', () => {
         expect(envelope.envelopeCore.batchL2Tx.hash).toBe(
             ZkConsensus.hashHexString(envelope.envelopeCore.batchL2Tx.hex, 'batchL2Tx.hex')
         );
+        expect(envelope.envelopeCore.publicInputs.verifierWasmHash).toBe(ZkConsensus.TLZK_RUST_WASM_V0_CODE_HASH);
+        expect(envelope.verifierResult.resultCore.wasmCodeHash).toBe(ZkConsensus.TLZK_RUST_WASM_V0_CODE_HASH);
     });
 
     test('encodes and decodes compact tx34 anchor fields', () => {
@@ -122,11 +124,32 @@ describe('tx34 ZK batch movement draft', () => {
         expect(check.ok).toBe(false);
     });
 
-    test('uses the packaged verifier interface or deterministic JS fallback', async () => {
+    test('uses the pinned packaged Rust/WASM verifier interface', async () => {
         const envelope = fixtureEnvelope();
         const result = await ZkWasmVerifier.verifyEnvelope(envelope);
         expect(result.ok).toBe(true);
-        expect(result.mode).toMatch(/rust-wasm|js-consensus-fallback/);
+        expect(result.mode).toBe('rust-wasm');
+        expect(result.wasmCodeHash).toBe(ZkConsensus.TLZK_RUST_WASM_V0_CODE_HASH);
+    });
+
+    test('rejects a non-approved verifier WASM hash', () => {
+        const envelope = fixtureEnvelope();
+        envelope.envelopeCore.publicInputs.verifierWasmHash = ZkConsensus.sha256Hex('wrong-wasm');
+        envelope.envelopeCore.publicInputHash = ZkConsensus.hashCanonical(envelope.envelopeCore.publicInputs);
+        envelope.envelopeId = ZkConsensus.hashCanonical(envelope.envelopeCore);
+        envelope.verifierResult = ZkConsensus.buildZkVerifierResult({
+            verifierId: envelope.envelopeCore.verifierId,
+            proofType: envelope.envelopeCore.proofType,
+            envelopeId: envelope.envelopeId,
+            proofHash: envelope.envelopeCore.proofHash,
+            programHash: envelope.envelopeCore.programHash,
+            publicInputHash: envelope.envelopeCore.publicInputHash,
+            daBlobHash: envelope.envelopeCore.publicInputs.daBlobHash
+        });
+
+        const check = ZkConsensus.verifyZkConsensusEnvelope(envelope);
+        expect(check.ok).toBe(false);
+        expect(check.reason).toMatch(/WASM hash/);
     });
 
     test('binds signed channel execution roots into the envelope', async () => {

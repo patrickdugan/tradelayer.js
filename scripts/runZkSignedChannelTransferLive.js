@@ -174,6 +174,7 @@ async function main() {
         proofRun: proof.runDir,
         proofSummaryPath: proof.summaryPath,
         verifierMode: applied.verifierMode,
+        verifierWasmHash: envelope.envelopeCore.publicInputs.verifierWasmHash,
         envelopeId: envelope.envelopeId,
         txid: decoded.txid,
         batchId: fixture.cairoBatch.batchId,

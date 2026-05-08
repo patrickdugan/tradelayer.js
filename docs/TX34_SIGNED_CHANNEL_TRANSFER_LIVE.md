@@ -20,8 +20,9 @@ C:\projects\tradelayer.js\artifacts\snacksack_proof_runs\tlzk-20260508-170058
 ## Receipt
 
 - Verifier mode: `rust-wasm`
-- Envelope ID: `5108eb6a78648793e996d7e924e9bb3309e8ab4806cfa2f501c0d85a11d09e2f`
-- Tx34 local txid: `1bc41ef727ba54700c55b4b615236b0b62aff8c5a4ddcff6a39ddb573104131f`
+- Approved verifier WASM hash: `845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9`
+- Envelope ID: `84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a`
+- Tx34 local txid: `18165deb45910e11a839556264161a9962a72447dc66c5d1f157335b5eae7908`
 - STWO batch ID: `7636708b1a9a3d1a7baf14f9f60714ea06cf31b64a38096f70cdd53ff71a80a1`
 - Channel path intent hash: `9727f4c91cd5da6851c6b73558231a11ef38f0848fd5574d65f1719e4cf1677c`
 - Channel path signing transcript hash: `05aa34ecdeb427b576484387c259d368cd301cdfcdc425045839d2c6b5e2559e`
@@ -73,6 +74,7 @@ tb1qzkdest000000000000000000000000000000:A:1   0.00 -> 1.25
 The tx34 envelope binds:
 
 - snacksack STWO proof summary
+- consensus-approved Rust/WASM verifier identity
 - signed L1 carrier hex hash
 - signed TradeLayer L2 batch hex hash
 - 2-of-2 secp256k1 channel signatures
@@ -82,3 +84,4 @@ The tx34 envelope binds:
 - channel execution witness roots for pre-state, post-state, per-step state, descendant edges, authorization, and conservation
 
 The STWO proof currently proves the batch public-data binding. TradeLayer consensus then verifies the 2-of-2 secp256k1 signatures and refuses to apply the movement unless the execution witness reconstructs the exact current pre-state rows, every descendant dependency, each step root, the final post-state rows, authorization root, and value-conservation root.
+Consensus also refuses envelopes whose `publicInputs.verifierWasmHash` or `verifierResult.resultCore.wasmCodeHash` do not match the pinned `tlzk_rust_wasm_v0` WASM artifact hash above.

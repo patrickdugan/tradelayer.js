@@ -19,10 +19,17 @@ The full consensus object is the ZK envelope, normally supplied from witness/DA:
 - `movements`: token debits and credits in base units.
 - `daBlob`: witness or external DA object carrying proof context.
 - `verifierResult`: bounded Rust/WASM verifier result committed by `resultId`.
+- `publicInputs.verifierWasmHash`: the consensus-approved verifier identity.
 - For signed channel transfers, `publicInputs` also bind `signedChannelTransferExecutionHash`, `channelInputStateRoot`, `channelOutputStateRoot`, `channelBalanceTransitionRoot`, `channelStepRoot`, `channelDescendantRoot`, `channelAuthorizationRoot`, and `channelConservationRoot`.
 - User-path demos additionally bind `channelPathIntentHash` and `channelPathSigningTranscriptHash`.
 
-Consensus validation checks the compact OP_RETURN fields against the envelope, verifies the envelope hash structure, calls the packaged Rust/WASM verifier when built, and falls back to the deterministic JS verifier only for source checkouts. Set `TL_ZK_REQUIRE_WASM=1` to force the Rust/WASM path.
+Consensus validation checks the compact OP_RETURN fields against the envelope, verifies the envelope hash structure, and calls the packaged Rust/WASM verifier. The `tlzk_rust_wasm_v0` switch currently pins the approved WASM artifact to:
+
+```text
+845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9
+```
+
+The loader hashes `tlzk_verifier_bg.wasm` before accepting it. The envelope must bind that hash in `publicInputs.verifierWasmHash`, and the verifier result must echo it in `resultCore.wasmCodeHash`. The deterministic JS verifier is now an explicit development fallback only when `TL_ZK_ALLOW_JS_VERIFIER_FALLBACK=1` is set.
 
 ## Consensus Effect
 

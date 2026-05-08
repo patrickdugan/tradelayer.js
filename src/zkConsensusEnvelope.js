@@ -6,11 +6,13 @@ const ZK_CONSENSUS_ENVELOPE_PROTOCOL = 'tlzk_zk_consensus_envelope_v1';
 const ZK_VERIFIER_RESULT_PROTOCOL = 'tlzk_zk_verifier_result_v1';
 const DEFAULT_ZK_VERIFIER_ID = 'tlzk_rust_wasm_v0';
 const DEFAULT_ZK_PROOF_TYPE = 'stwo-cairo-batch-binding-v1';
+const TLZK_RUST_WASM_V0_CODE_HASH = '845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9';
 
 const ZK_VERIFIER_SWITCH = {
     tlzk_rust_wasm_v0: {
         package: 'wasm/tlzk_verifier',
         wasmExport: 'verify_zk_consensus_envelope_json',
+        wasmCodeHash: TLZK_RUST_WASM_V0_CODE_HASH,
         proofTypes: [
             'stwo-cairo-batch-binding-v1',
             'stwo-cairo-transition-v1',
@@ -125,6 +127,16 @@ function assertSupportedVerifier(verifierId, proofType) {
     return verifier;
 }
 
+function assertApprovedVerifierWasm(verifierId, wasmCodeHash) {
+    const verifier = ZK_VERIFIER_SWITCH[verifierId];
+    if (!verifier) throw new Error(`unsupported ZK verifier ${verifierId}`);
+    const observed = normalizeHash(wasmCodeHash, 'verifierWasmHash');
+    if (observed !== verifier.wasmCodeHash) {
+        throw new Error(`verifier ${verifierId} WASM hash ${observed} is not consensus-approved`);
+    }
+    return verifier;
+}
+
 function buildZkVerifierResult({
     verifierId,
     proofType,
@@ -133,13 +145,18 @@ function buildZkVerifierResult({
     programHash,
     publicInputHash,
     daBlobHash,
+    verifierWasmHash,
     ok = true,
     status = 'accepted-by-wasm-verifier'
 } = {}) {
+    const verifier = assertSupportedVerifier(verifierId, proofType);
+    const wasmCodeHash = normalizeHash(verifierWasmHash || verifier.wasmCodeHash, 'verifierWasmHash');
+    assertApprovedVerifierWasm(verifierId, wasmCodeHash);
     const resultCore = {
         protocol: ZK_VERIFIER_RESULT_PROTOCOL,
         verifierId: String(verifierId || ''),
         proofType: String(proofType || ''),
+        wasmCodeHash,
         envelopeId: String(envelopeId || ''),
         proofHash: String(proofHash || '').toLowerCase(),
         programHash: String(programHash || '').toLowerCase(),
@@ -167,7 +184,7 @@ function buildZkConsensusEnvelope({
     movements,
     verifierResult = null
 } = {}) {
-    assertSupportedVerifier(verifierId, proofType);
+    const verifier = assertSupportedVerifier(verifierId, proofType);
     const normalizedMovements = normalizeMovements(movements);
     const movementRoot = buildMovementRoot(normalizedMovements);
     const signedL1TxHash = hashHexString(signedL1TxHex, 'signedL1TxHex');
@@ -176,6 +193,7 @@ function buildZkConsensusEnvelope({
     const daBlobHash = hashCanonical(normalizedDaBlob);
     const normalizedPublicInputs = {
         ...publicInputs,
+        verifierWasmHash: verifier.wasmCodeHash,
         movementRoot,
         signedL1TxHash,
         batchL2TxHash,
@@ -215,6 +233,7 @@ function buildZkConsensusEnvelope({
         programHash: envelopeCore.programHash,
         publicInputHash,
         daBlobHash,
+        verifierWasmHash: verifier.wasmCodeHash,
         ok: true
     });
     return {
@@ -234,10 +253,17 @@ function verifyZkVerifierResult(result, envelope) {
     }
     const core = result.resultCore || {};
     const envelopeCore = envelope.envelopeCore || {};
+    const verifier = ZK_VERIFIER_SWITCH[envelopeCore.verifierId];
     if (core.ok !== true) return { ok: false, reason: 'ZK verifier result is not ok' };
     if (core.envelopeId !== envelope.envelopeId) return { ok: false, reason: 'ZK verifier result envelope mismatch' };
     if (core.verifierId !== envelopeCore.verifierId) return { ok: false, reason: 'ZK verifier result verifier mismatch' };
     if (core.proofType !== envelopeCore.proofType) return { ok: false, reason: 'ZK verifier result proof type mismatch' };
+    if (!verifier || core.wasmCodeHash !== verifier.wasmCodeHash) {
+        return { ok: false, reason: 'ZK verifier result WASM hash is not consensus-approved' };
+    }
+    if (core.wasmCodeHash !== envelopeCore.publicInputs?.verifierWasmHash) {
+        return { ok: false, reason: 'ZK verifier result WASM hash mismatch' };
+    }
     if (core.proofHash !== envelopeCore.proofHash) return { ok: false, reason: 'ZK verifier result proof hash mismatch' };
     if (core.programHash !== envelopeCore.programHash) return { ok: false, reason: 'ZK verifier result program hash mismatch' };
     if (core.publicInputHash !== envelopeCore.publicInputHash) {
@@ -258,9 +284,12 @@ function verifyZkConsensusEnvelope(envelope) {
         if (core.protocol !== ZK_CONSENSUS_ENVELOPE_PROTOCOL) {
             return { ok: false, reason: 'wrong ZK consensus envelope protocol' };
         }
-        assertSupportedVerifier(core.verifierId, core.proofType);
+        const verifier = assertSupportedVerifier(core.verifierId, core.proofType);
         normalizeHash(core.proofHash, 'proofHash');
         normalizeHash(core.programHash, 'programHash');
+        if (core.publicInputs?.verifierWasmHash !== verifier.wasmCodeHash) {
+            return { ok: false, reason: 'ZK verifier WASM hash is not consensus-approved' };
+        }
         if (envelope.envelopeId !== hashCanonical(core)) {
             return { ok: false, reason: 'ZK consensus envelope id mismatch' };
         }
@@ -324,6 +353,7 @@ module.exports = {
     ZK_VERIFIER_RESULT_PROTOCOL,
     DEFAULT_ZK_VERIFIER_ID,
     DEFAULT_ZK_PROOF_TYPE,
+    TLZK_RUST_WASM_V0_CODE_HASH,
     ZK_VERIFIER_SWITCH,
     sha256Hex,
     canonicalStringify,
@@ -336,6 +366,8 @@ module.exports = {
     buildMovementRoot,
     normalizeDaBlob,
     buildDaBlobHash,
+    assertSupportedVerifier,
+    assertApprovedVerifierWasm,
     buildZkVerifierResult,
     buildZkConsensusEnvelope,
     verifyZkVerifierResult,
