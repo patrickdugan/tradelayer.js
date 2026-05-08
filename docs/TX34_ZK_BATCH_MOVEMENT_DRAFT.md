@@ -42,4 +42,6 @@ Amounts are carried as integer `amountUnits` and converted to 8-decimal token am
 - `npm run wasm:check` checks the Rust crate.
 - `npm run wasm:bundle` builds the wasm target and runs `wasm-bindgen` into `wasm/tlzk_verifier/pkg-node` and `wasm/tlzk_verifier/pkg` when the `wasm-bindgen` CLI is installed.
 
+Proof generation belongs on the `snacksack` host. Local wallet and consensus machines should verify envelopes and WASM artifacts, but they should not run the heavy proving path.
+
 Until the parser has witness extraction wired in, tx34 rejects ZK batch movement envelopes that are not supplied by the caller. `TL_ZK_ALLOW_ANCHOR_ONLY=1` exists only for local anchor plumbing tests and should not be used for consensus.
