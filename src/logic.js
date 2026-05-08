@@ -2264,12 +2264,20 @@ const Logic = {
         const signedChannelTransferBatch =
             params.zkSignedChannelTransferBatch ||
             ZkSignedChannelTransfer.extractSignedChannelTransferBatch(envelope);
+        const signedChannelTransferExecution =
+            params.zkSignedChannelTransferExecution ||
+            ZkSignedChannelTransfer.extractSignedChannelTransferExecution(envelope);
 
         if (signedChannelTransferBatch) {
             ZkSignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedChannelTransferBatch);
+            ZkSignedChannelTransfer.assertEnvelopeBindsExecution(
+                envelope,
+                signedChannelTransferBatch,
+                signedChannelTransferExecution
+            );
             signedChannelTransferSummary = await ZkSignedChannelTransfer.applySignedChannelTransferBatch(
                 signedChannelTransferBatch,
-                { block, txid }
+                { block, txid, execution: signedChannelTransferExecution }
             );
         }
 

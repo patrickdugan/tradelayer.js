@@ -89,6 +89,13 @@ async function main() {
     const signedBatch = fixture.signedChannelTransferBatch;
     const signedBatchCheck = SignedChannelTransfer.verifySignedChannelTransferBatch(signedBatch);
     if (!signedBatchCheck.ok) throw new Error(signedBatchCheck.reason);
+    const executionCheck = SignedChannelTransfer.verifySignedChannelTransferExecution(
+        signedBatchCheck.batch,
+        fixture.signedChannelTransferExecution
+    );
+    if (!executionCheck.ok) throw new Error(executionCheck.reason);
+    const execution = executionCheck.execution;
+    const executionHash = ZkConsensus.hashCanonical(execution);
 
     const signedL1TxHex = hexJson({
         kind: 'bitcoin-signed-tx-carrier-placeholder',
@@ -104,7 +111,13 @@ async function main() {
             batchId: fixture.cairoBatch.batchId,
             proofRun: path.basename(proof.runDir),
             signedChannelTransferBatchHash: fixture.signedChannelTransferBatchHash,
+            signedChannelTransferExecutionHash: executionHash,
             channelSignatureRoot: fixture.channelSignatureRoot,
+            channelInputStateRoot: execution.executionCore.inputStateRoot,
+            channelOutputStateRoot: execution.executionCore.outputStateRoot,
+            channelBalanceTransitionRoot: execution.executionCore.balanceTransitionRoot,
+            channelAuthorizationRoot: execution.executionCore.authorizationRoot,
+            channelConservationRoot: execution.executionCore.conservationRoot,
             stwoBindingCommitment: proofSummary.bindingCommitment || ''
         },
         daBlob: {
@@ -112,7 +125,8 @@ async function main() {
             encoding: 'json',
             value: {
                 proofSummary,
-                signedChannelTransferBatch: signedBatch
+                signedChannelTransferBatch: signedBatch,
+                signedChannelTransferExecution: execution
             }
         },
         signedL1TxHex,
@@ -153,7 +167,15 @@ async function main() {
         txid: decoded.txid,
         batchId: fixture.cairoBatch.batchId,
         signedChannelTransferBatchHash: fixture.signedChannelTransferBatchHash,
+        signedChannelTransferExecutionHash: executionHash,
         channelSignatureRoot: fixture.channelSignatureRoot,
+        executionRoots: {
+            inputStateRoot: execution.executionCore.inputStateRoot,
+            outputStateRoot: execution.executionCore.outputStateRoot,
+            balanceTransitionRoot: execution.executionCore.balanceTransitionRoot,
+            authorizationRoot: execution.executionCore.authorizationRoot,
+            conservationRoot: execution.executionCore.conservationRoot
+        },
         compactPayload,
         applied,
         finalChannels

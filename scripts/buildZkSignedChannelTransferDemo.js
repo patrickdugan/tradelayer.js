@@ -55,7 +55,7 @@ function buildReceipt({ txid, oldStateRoot, newStateRoot, payloadHash, witnessRo
         newStateRoot,
         payloadHash,
         witnessRoot,
-        supportLevel: 'signed-channel-transfer-proof-binding',
+        supportLevel: 'signed-channel-transfer-execution-binding',
         economicMutation: true,
         signedChannelTransferBatchHash: signedBatchHash
     };
@@ -114,9 +114,14 @@ function main() {
     const expectedChannels = JSON.parse(JSON.stringify(initialChannels));
     expectedChannels[SOURCE_CHANNEL].A[PROPERTY_ID] = 3.75;
     expectedChannels[DEST_CHANNEL].A[PROPERTY_ID] = 1.25;
+    const signedChannelTransferExecution = SignedChannelTransfer.buildSignedChannelTransferExecution(
+        normalizedBatch,
+        initialChannels
+    );
+    const signedChannelTransferExecutionHash = ZkConsensus.hashCanonical(signedChannelTransferExecution);
 
-    const oldStateRoot = ZkConsensus.hashCanonical({ channels: initialChannels });
-    const newStateRoot = ZkConsensus.hashCanonical({ channels: expectedChannels });
+    const oldStateRoot = signedChannelTransferExecution.executionCore.inputStateRoot;
+    const newStateRoot = signedChannelTransferExecution.executionCore.outputStateRoot;
     const batchL2TxHex = hexJson(normalizedBatch);
     const txid = sha256Hex(batchL2TxHex);
     const movement = {
@@ -142,7 +147,7 @@ function main() {
         oldStateRoot,
         newStateRoot,
         payloadHash: sha256Hex(batchL2TxHex),
-        witnessRoot: ZkConsensus.hashCanonical(witnessRows),
+        witnessRoot: signedChannelTransferExecutionHash,
         signedBatchHash
     });
     const batchCore = {
@@ -177,6 +182,8 @@ function main() {
         signedChannelTransferBatch: normalizedBatch,
         signedChannelTransferBatchHash: signedBatchHash,
         channelSignatureRoot: normalizedBatch.batchCore.signatureRoot,
+        signedChannelTransferExecution,
+        signedChannelTransferExecutionHash,
         movements: [movement],
         batchL2TxHex,
         signedL1TxTemplateHex: hexJson({
@@ -199,6 +206,9 @@ function main() {
         batchPath,
         batchId: cairoBatch.batchId,
         signedChannelTransferBatchHash: signedBatchHash,
+        signedChannelTransferExecutionHash,
+        channelInputStateRoot: signedChannelTransferExecution.executionCore.inputStateRoot,
+        channelOutputStateRoot: signedChannelTransferExecution.executionCore.outputStateRoot,
         channelSignatureRoot: normalizedBatch.batchCore.signatureRoot
     }, null, 2));
 }

@@ -58,6 +58,22 @@ fn get_path_string<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
     cursor.as_str()
 }
 
+fn get_path_value<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
+    let mut cursor = value;
+    for key in path {
+        cursor = cursor.get(*key)?;
+    }
+    Some(cursor)
+}
+
+fn require_public_input(public_inputs: &Value, field: &str, expected: &str, reason: &str) -> Option<String> {
+    match get_path_string(public_inputs, &[field]) {
+        Some(value) if value == expected => None,
+        Some(_) => Some(reason.to_string()),
+        None => None,
+    }
+}
+
 fn ed25519_key_from_spki_pem(pem: &str) -> Result<[u8; 32], String> {
     let body = pem
         .lines()
@@ -202,6 +218,64 @@ pub fn verify_zk_consensus_envelope_json(envelope_json: &str) -> String {
     }
     if get_path_string(result_core, &["daBlobHash"]) != get_path_string(public_inputs, &["daBlobHash"]) {
         return response(false, "ZK verifier result DA blob mismatch");
+    }
+
+    if let Some(da_value) = get_path_value(core, &["daBlob", "value"]) {
+        if let Some(batch) = da_value.get("signedChannelTransferBatch") {
+            let batch_hash = hash_value(batch);
+            if let Some(reason) = require_public_input(
+                public_inputs,
+                "signedChannelTransferBatchHash",
+                &batch_hash,
+                "signed channel transfer batch hash mismatch",
+            ) {
+                return response(false, &reason);
+            }
+            if let Some(signature_root) = get_path_string(batch, &["batchCore", "signatureRoot"]) {
+                if let Some(reason) = require_public_input(
+                    public_inputs,
+                    "channelSignatureRoot",
+                    signature_root,
+                    "signed channel transfer signature root mismatch",
+                ) {
+                    return response(false, &reason);
+                }
+            }
+        }
+
+        if let Some(execution) = da_value.get("signedChannelTransferExecution") {
+            let execution_hash = hash_value(execution);
+            if let Some(reason) = require_public_input(
+                public_inputs,
+                "signedChannelTransferExecutionHash",
+                &execution_hash,
+                "signed channel transfer execution hash mismatch",
+            ) {
+                return response(false, &reason);
+            }
+            let execution_core = match execution.get("executionCore") {
+                Some(value) => value,
+                None => return response(false, "missing signed channel transfer execution core"),
+            };
+            let execution_checks = [
+                ("channelInputStateRoot", "inputStateRoot", "channel input state root mismatch"),
+                ("channelOutputStateRoot", "outputStateRoot", "channel output state root mismatch"),
+                (
+                    "channelBalanceTransitionRoot",
+                    "balanceTransitionRoot",
+                    "channel balance transition root mismatch",
+                ),
+                ("channelAuthorizationRoot", "authorizationRoot", "channel authorization root mismatch"),
+                ("channelConservationRoot", "conservationRoot", "channel conservation root mismatch"),
+            ];
+            for (public_field, execution_field, reason) in execution_checks {
+                if let Some(expected) = get_path_string(execution_core, &[execution_field]) {
+                    if let Some(reason) = require_public_input(public_inputs, public_field, expected, reason) {
+                        return response(false, &reason);
+                    }
+                }
+            }
+        }
     }
 
     json!({

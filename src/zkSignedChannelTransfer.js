@@ -7,6 +7,7 @@ const ZkConsensus = require('./zkConsensusEnvelope.js');
 
 const SIGNED_CHANNEL_TRANSFER_PROTOCOL = 'tl_zk_signed_channel_transfer_batch_v1';
 const SIGNED_CHANNEL_TRANSFER_MESSAGE = 'tl_zk_signed_channel_transfer_v1';
+const SIGNED_CHANNEL_TRANSFER_EXECUTION_PROTOCOL = 'tl_zk_signed_channel_transfer_execution_v1';
 
 function sha256Buffer(value) {
     return crypto.createHash('sha256').update(value).digest();
@@ -26,8 +27,94 @@ function normalizeAmountUnits(value, fieldName = 'amountUnits') {
     return amount.toString();
 }
 
+function normalizeBalanceUnits(value, fieldName = 'balanceUnits') {
+    const text = String(value ?? '').trim();
+    if (!/^[0-9]+$/.test(text)) throw new Error(`${fieldName} must be a non-negative integer string`);
+    return BigInt(text).toString();
+}
+
 function tokenUnitsToAmount(amountUnits) {
     return new BigNumber(String(amountUnits)).div(1e8).decimalPlaces(8, BigNumber.ROUND_DOWN);
+}
+
+function amountValueToUnits(value, fieldName = 'balance') {
+    const amount = new BigNumber(String(value ?? 0));
+    if (!amount.isFinite() || amount.lt(0)) throw new Error(`${fieldName} must be a non-negative finite amount`);
+    return amount.times(1e8).integerValue(BigNumber.ROUND_DOWN).toFixed(0);
+}
+
+function balanceKey(channelAddress, column, propertyId) {
+    return `${channelAddress}:${column}:${propertyId}`;
+}
+
+function parseBalanceKey(key) {
+    const parts = String(key).split(':');
+    if (parts.length < 3) throw new Error(`invalid balance key ${key}`);
+    const propertyId = Number(parts.pop());
+    const column = normalizeColumn(parts.pop(), `balance key ${key} column`);
+    const channelAddress = parts.join(':');
+    if (!channelAddress || !Number.isSafeInteger(propertyId) || propertyId <= 0) {
+        throw new Error(`invalid balance key ${key}`);
+    }
+    return { channelAddress, column, propertyId };
+}
+
+function channelBalanceUnits(channel = {}, column, propertyId) {
+    return amountValueToUnits(channel?.[column]?.[propertyId] || 0, `${channel?.channel || 'channel'}:${column}:${propertyId}`);
+}
+
+function normalizeBalanceRow(row = {}, index = 0) {
+    const propertyId = Number(row.propertyId);
+    if (!Number.isSafeInteger(propertyId) || propertyId <= 0) {
+        throw new Error(`balance row ${index} has invalid propertyId`);
+    }
+    const channelAddress = String(row.channelAddress || row.channel || '');
+    if (!channelAddress) throw new Error(`balance row ${index} channelAddress is required`);
+    const column = normalizeColumn(row.column, `balance row ${index} column`);
+    const balanceUnits = normalizeBalanceUnits(row.balanceUnits, `balance row ${index} balanceUnits`);
+    return {
+        channelAddress,
+        column,
+        propertyId,
+        balanceUnits,
+        key: balanceKey(channelAddress, column, propertyId)
+    };
+}
+
+function normalizeBalanceRows(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error('execution witness requires balance rows');
+    const seen = new Set();
+    return rows.map((row, index) => normalizeBalanceRow(row, index))
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((row) => {
+            if (seen.has(row.key)) throw new Error(`duplicate balance row ${row.key}`);
+            seen.add(row.key);
+            return row;
+        });
+}
+
+function touchedBalanceKeys(transfers = []) {
+    const keys = new Set();
+    for (const transfer of transfers) {
+        const core = transfer.core;
+        keys.add(balanceKey(core.fromChannelAddress, core.sourceColumn, core.propertyId));
+        keys.add(balanceKey(core.toChannelAddress, core.destinationColumn, core.propertyId));
+    }
+    return [...keys].sort();
+}
+
+function inputRowsFromChannels(batch = {}, channels = {}) {
+    const checked = verifySignedChannelTransferBatch(batch);
+    if (!checked.ok) throw new Error(checked.reason);
+    return touchedBalanceKeys(checked.batch.batchCore.transfers).map((key) => {
+        const parsed = parseBalanceKey(key);
+        const channel = channels[parsed.channelAddress] || {};
+        return {
+            ...parsed,
+            balanceUnits: channelBalanceUnits(channel, parsed.column, parsed.propertyId),
+            key
+        };
+    });
 }
 
 function normalizePubkeyHex(value, fieldName = 'pubkeyHex') {
@@ -181,10 +268,146 @@ function verifySignedChannelTransferBatch(batch = {}) {
     }
 }
 
+function buildSignedChannelTransferExecution(batch = {}, inputRowsOrChannels = {}) {
+    const checked = verifySignedChannelTransferBatch(batch);
+    if (!checked.ok) throw new Error(checked.reason);
+
+    const inputRows = Array.isArray(inputRowsOrChannels)
+        ? normalizeBalanceRows(inputRowsOrChannels)
+        : normalizeBalanceRows(inputRowsFromChannels(checked.batch, inputRowsOrChannels));
+    const balances = new Map(inputRows.map((row) => [row.key, BigInt(row.balanceUnits)]));
+    const transferExecutions = [];
+    const authorizationChecks = [];
+    const totals = new Map();
+
+    for (const transfer of checked.batch.batchCore.transfers) {
+        const core = transfer.core;
+        const sourceKey = balanceKey(core.fromChannelAddress, core.sourceColumn, core.propertyId);
+        const destinationKey = balanceKey(core.toChannelAddress, core.destinationColumn, core.propertyId);
+        if (!balances.has(sourceKey)) throw new Error(`execution input row missing ${sourceKey}`);
+        if (!balances.has(destinationKey)) throw new Error(`execution input row missing ${destinationKey}`);
+
+        const amountUnits = BigInt(core.amountUnits);
+        const sourceBefore = balances.get(sourceKey);
+        const destinationBefore = balances.get(destinationKey);
+        if (sourceBefore < amountUnits) {
+            throw new Error(`execution source balance ${sourceKey} is insufficient`);
+        }
+
+        const sourceAfter = sourceBefore - amountUnits;
+        const destinationAfter = destinationBefore + amountUnits;
+        balances.set(sourceKey, sourceAfter);
+        balances.set(destinationKey, destinationAfter);
+
+        const total = totals.get(core.propertyId) || { propertyId: core.propertyId, debitUnits: 0n, creditUnits: 0n };
+        total.debitUnits += amountUnits;
+        total.creditUnits += amountUnits;
+        totals.set(core.propertyId, total);
+
+        transferExecutions.push({
+            transferId: transfer.transferId,
+            propertyId: core.propertyId,
+            amountUnits: core.amountUnits,
+            source: {
+                channelAddress: core.fromChannelAddress,
+                column: core.sourceColumn,
+                key: sourceKey,
+                beforeUnits: sourceBefore.toString(),
+                afterUnits: sourceAfter.toString()
+            },
+            destination: {
+                channelAddress: core.toChannelAddress,
+                column: core.destinationColumn,
+                key: destinationKey,
+                beforeUnits: destinationBefore.toString(),
+                afterUnits: destinationAfter.toString()
+            }
+        });
+
+        authorizationChecks.push({
+            transferId: transfer.transferId,
+            scheme: transfer.authorization.scheme,
+            requiredSignatures: transfer.authorization.requiredSignatures,
+            authorizedPubkeys: transfer.authorization.authorizedPubkeys,
+            signerPubkeys: transfer.signatures.map((signature) => signature.pubkeyHex).sort(),
+            messageHash: transferMessageHash(core).toString('hex')
+        });
+    }
+
+    const outputRows = inputRows.map((row) => ({
+        ...row,
+        balanceUnits: balances.get(row.key).toString()
+    })).sort((a, b) => a.key.localeCompare(b.key));
+    const conservationRows = [...totals.values()]
+        .map((row) => ({
+            propertyId: row.propertyId,
+            totalDebitUnits: row.debitUnits.toString(),
+            totalCreditUnits: row.creditUnits.toString(),
+            conserved: row.debitUnits === row.creditUnits
+        }))
+        .sort((a, b) => a.propertyId - b.propertyId);
+    if (conservationRows.some((row) => !row.conserved)) {
+        throw new Error('execution witness is not value conserving');
+    }
+
+    const executionCore = {
+        protocol: SIGNED_CHANNEL_TRANSFER_EXECUTION_PROTOCOL,
+        batchId: checked.batch.batchId,
+        batchHash: ZkConsensus.hashCanonical(checked.batch),
+        inputStateRoot: ZkConsensus.hashCanonical(inputRows),
+        outputStateRoot: ZkConsensus.hashCanonical(outputRows),
+        balanceTransitionRoot: ZkConsensus.hashCanonical(transferExecutions),
+        authorizationRoot: ZkConsensus.hashCanonical(authorizationChecks),
+        conservationRoot: ZkConsensus.hashCanonical(conservationRows),
+        transferCount: transferExecutions.length
+    };
+    executionCore.executionId = ZkConsensus.hashCanonical(executionCore);
+
+    return {
+        kind: SIGNED_CHANNEL_TRANSFER_EXECUTION_PROTOCOL,
+        executionCore,
+        inputRows,
+        outputRows,
+        transferExecutions,
+        authorizationChecks,
+        conservationRows
+    };
+}
+
+function normalizeSignedChannelTransferExecution(batch = {}, execution = {}) {
+    if (!execution || execution.kind !== SIGNED_CHANNEL_TRANSFER_EXECUTION_PROTOCOL) {
+        throw new Error('wrong signed channel transfer execution kind');
+    }
+    const rebuilt = buildSignedChannelTransferExecution(batch, execution.inputRows || []);
+    const expected = ZkConsensus.hashCanonical(rebuilt);
+    const observed = ZkConsensus.hashCanonical(execution);
+    if (observed !== expected) {
+        throw new Error('signed channel transfer execution witness mismatch');
+    }
+    if (execution.executionCore?.executionId !== rebuilt.executionCore.executionId) {
+        throw new Error('signed channel transfer execution id mismatch');
+    }
+    return rebuilt;
+}
+
+function verifySignedChannelTransferExecution(batch = {}, execution = {}) {
+    try {
+        return { ok: true, execution: normalizeSignedChannelTransferExecution(batch, execution) };
+    } catch (err) {
+        return { ok: false, reason: err.message };
+    }
+}
+
 function extractSignedChannelTransferBatch(envelope = {}) {
     const value = envelope?.envelopeCore?.daBlob?.value;
     if (!value || typeof value !== 'object') return null;
     return value.signedChannelTransferBatch || value.channelTransferBatch || null;
+}
+
+function extractSignedChannelTransferExecution(envelope = {}) {
+    const value = envelope?.envelopeCore?.daBlob?.value;
+    if (!value || typeof value !== 'object') return null;
+    return value.signedChannelTransferExecution || value.channelTransferExecution || null;
 }
 
 function assertEnvelopeBindsBatch(envelope = {}, batch = {}) {
@@ -200,10 +423,48 @@ function assertEnvelopeBindsBatch(envelope = {}, batch = {}) {
     return { normalized, batchHash };
 }
 
-async function applySignedChannelTransferBatch(batch = {}, { block = 0, txid = '' } = {}) {
+function assertEnvelopeBindsExecution(envelope = {}, batch = {}, execution = null) {
+    const normalizedExecution = normalizeSignedChannelTransferExecution(batch, execution || extractSignedChannelTransferExecution(envelope));
+    const executionHash = ZkConsensus.hashCanonical(normalizedExecution);
+    const core = normalizedExecution.executionCore;
+    const publicInputs = envelope?.envelopeCore?.publicInputs || {};
+    const expectedFields = {
+        signedChannelTransferExecutionHash: executionHash,
+        channelInputStateRoot: core.inputStateRoot,
+        channelOutputStateRoot: core.outputStateRoot,
+        channelBalanceTransitionRoot: core.balanceTransitionRoot,
+        channelAuthorizationRoot: core.authorizationRoot,
+        channelConservationRoot: core.conservationRoot
+    };
+    for (const [field, expected] of Object.entries(expectedFields)) {
+        if (publicInputs[field] && publicInputs[field] !== expected) {
+            throw new Error(`${field} mismatch`);
+        }
+    }
+    return { normalized: normalizedExecution, executionHash };
+}
+
+async function applySignedChannelTransferBatch(batch = {}, { block = 0, txid = '', execution = null } = {}) {
     const Channels = require('./channels.js');
     const checked = verifySignedChannelTransferBatch(batch);
     if (!checked.ok) throw new Error(checked.reason);
+    const executionCheck = execution ? verifySignedChannelTransferExecution(checked.batch, execution) : null;
+    if (executionCheck && !executionCheck.ok) throw new Error(executionCheck.reason);
+    const normalizedExecution = executionCheck?.execution || null;
+
+    async function assertRowsMatchChannelState(rows, label) {
+        for (const row of rows) {
+            const channel = await Channels.getChannel(row.channelAddress);
+            const observed = channelBalanceUnits(channel || {}, row.column, row.propertyId);
+            if (observed !== row.balanceUnits) {
+                throw new Error(`${label} channel row mismatch ${row.key}: expected ${row.balanceUnits}, got ${observed}`);
+            }
+        }
+    }
+
+    if (normalizedExecution) {
+        await assertRowsMatchChannelState(normalizedExecution.inputRows, 'pre-state');
+    }
 
     const applied = [];
     for (const transfer of checked.batch.batchCore.transfers) {
@@ -275,11 +536,23 @@ async function applySignedChannelTransferBatch(batch = {}, { block = 0, txid = '
         });
     }
 
+    if (normalizedExecution) {
+        await assertRowsMatchChannelState(normalizedExecution.outputRows, 'post-state');
+    }
+
     return {
         ok: true,
         batchId: checked.batch.batchId,
         transferRoot: checked.batch.batchCore.transferRoot,
         signatureRoot: checked.batch.batchCore.signatureRoot,
+        execution: normalizedExecution ? {
+            executionId: normalizedExecution.executionCore.executionId,
+            inputStateRoot: normalizedExecution.executionCore.inputStateRoot,
+            outputStateRoot: normalizedExecution.executionCore.outputStateRoot,
+            balanceTransitionRoot: normalizedExecution.executionCore.balanceTransitionRoot,
+            authorizationRoot: normalizedExecution.executionCore.authorizationRoot,
+            conservationRoot: normalizedExecution.executionCore.conservationRoot
+        } : null,
         applied
     };
 }
@@ -287,6 +560,7 @@ async function applySignedChannelTransferBatch(batch = {}, { block = 0, txid = '
 module.exports = {
     SIGNED_CHANNEL_TRANSFER_PROTOCOL,
     SIGNED_CHANNEL_TRANSFER_MESSAGE,
+    SIGNED_CHANNEL_TRANSFER_EXECUTION_PROTOCOL,
     normalizeTransferCore,
     transferMessageHash,
     transferIdForCore,
@@ -294,8 +568,15 @@ module.exports = {
     verifySignedTransfer,
     normalizeSignedChannelTransferBatch,
     verifySignedChannelTransferBatch,
+    inputRowsFromChannels,
+    buildSignedChannelTransferExecution,
+    normalizeSignedChannelTransferExecution,
+    verifySignedChannelTransferExecution,
     extractSignedChannelTransferBatch,
+    extractSignedChannelTransferExecution,
     assertEnvelopeBindsBatch,
+    assertEnvelopeBindsExecution,
     applySignedChannelTransferBatch,
+    amountValueToUnits,
     tokenUnitsToAmount
 };

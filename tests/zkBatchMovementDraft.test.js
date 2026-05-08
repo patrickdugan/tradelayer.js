@@ -1,9 +1,32 @@
 'use strict';
 
+const crypto = require('crypto');
+const secp = require('tiny-secp256k1');
 const Encode = require('../src/txEncoder.js');
 const Decode = require('../src/txDecoder.js');
 const ZkConsensus = require('../src/zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('../src/zkWasmVerifier.js');
+const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
+
+function privateKeyFromLabel(label) {
+    for (let i = 0; i < 1000; i += 1) {
+        const candidate = crypto.createHash('sha256').update(`${label}:${i}`).digest();
+        if (secp.isPrivate(candidate)) return candidate;
+    }
+    throw new Error(`could not derive private key for ${label}`);
+}
+
+function pubkeyHex(privkey) {
+    return Buffer.from(secp.pointFromScalar(privkey, true)).toString('hex');
+}
+
+function signTransferCore(core, privkey, role) {
+    return {
+        role,
+        pubkeyHex: pubkeyHex(privkey),
+        signatureHex: Buffer.from(secp.sign(SignedChannelTransfer.transferMessageHash(core), privkey)).toString('hex')
+    };
+}
 
 function fixtureEnvelope() {
     return ZkConsensus.buildZkConsensusEnvelope({
@@ -81,5 +104,84 @@ describe('tx34 ZK batch movement draft', () => {
         const result = await ZkWasmVerifier.verifyEnvelope(envelope);
         expect(result.ok).toBe(true);
         expect(result.mode).toMatch(/rust-wasm|js-consensus-fallback/);
+    });
+
+    test('binds signed channel execution roots into the envelope', async () => {
+        const partyA = privateKeyFromLabel('test-channel-party-a');
+        const partyB = privateKeyFromLabel('test-channel-party-b');
+        const authorizedPubkeys = [pubkeyHex(partyA), pubkeyHex(partyB)].sort();
+        const core = SignedChannelTransfer.normalizeTransferCore({
+            fromChannelAddress: 'tb1qtestsource00000000000000000000000000',
+            toChannelAddress: 'tb1qtestdest000000000000000000000000000',
+            sourceColumn: 'A',
+            destinationColumn: 'A',
+            ownerAddress: 'tb1qtestowner00000000000000000000000000',
+            propertyId: 1,
+            amountUnits: '125000000',
+            nonce: 'unit-test'
+        });
+        const signedBatch = SignedChannelTransfer.normalizeSignedChannelTransferBatch({
+            kind: SignedChannelTransfer.SIGNED_CHANNEL_TRANSFER_PROTOCOL,
+            nonce: 'unit-test-batch',
+            transfers: [{
+                ...core,
+                authorizedPubkeys,
+                signatures: [
+                    signTransferCore(core, partyA, 'a'),
+                    signTransferCore(core, partyB, 'b')
+                ]
+            }]
+        });
+        const execution = SignedChannelTransfer.buildSignedChannelTransferExecution(signedBatch, {
+            [core.fromChannelAddress]: { channel: core.fromChannelAddress, A: { 1: 5 }, B: {}, participants: { A: core.ownerAddress, B: '' } },
+            [core.toChannelAddress]: { channel: core.toChannelAddress, A: { 1: 0 }, B: {}, participants: { A: core.ownerAddress, B: '' } }
+        });
+        const envelope = ZkConsensus.buildZkConsensusEnvelope({
+            proofHash: ZkConsensus.sha256Hex('signed-channel-proof'),
+            programHash: ZkConsensus.sha256Hex('signed-channel-program'),
+            publicInputs: {
+                signedChannelTransferBatchHash: ZkConsensus.hashCanonical(signedBatch),
+                signedChannelTransferExecutionHash: ZkConsensus.hashCanonical(execution),
+                channelSignatureRoot: signedBatch.batchCore.signatureRoot,
+                channelInputStateRoot: execution.executionCore.inputStateRoot,
+                channelOutputStateRoot: execution.executionCore.outputStateRoot,
+                channelBalanceTransitionRoot: execution.executionCore.balanceTransitionRoot,
+                channelAuthorizationRoot: execution.executionCore.authorizationRoot,
+                channelConservationRoot: execution.executionCore.conservationRoot
+            },
+            daBlob: {
+                carrier: 'unit-test',
+                encoding: 'json',
+                value: {
+                    signedChannelTransferBatch: signedBatch,
+                    signedChannelTransferExecution: execution
+                }
+            },
+            signedL1TxHex: '02000000000100',
+            batchL2TxHex: Buffer.from(JSON.stringify(signedBatch), 'utf8').toString('hex'),
+            movements: [{
+                from: `channel:${core.fromChannelAddress}:A`,
+                to: `channel:${core.toChannelAddress}:A`,
+                propertyId: 1,
+                amountUnits: '125000000',
+                memo: 'signed-channel-transfer:test'
+            }]
+        });
+
+        expect(ZkConsensus.verifyZkConsensusEnvelope(envelope)).toEqual({ ok: true });
+        expect(SignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedBatch).batchHash).toBe(
+            envelope.envelopeCore.publicInputs.signedChannelTransferBatchHash
+        );
+        expect(SignedChannelTransfer.assertEnvelopeBindsExecution(envelope, signedBatch, execution).executionHash).toBe(
+            envelope.envelopeCore.publicInputs.signedChannelTransferExecutionHash
+        );
+        const wasmResult = await ZkWasmVerifier.verifyEnvelope(envelope);
+        expect(wasmResult.ok).toBe(true);
+
+        const tampered = JSON.parse(JSON.stringify(execution));
+        tampered.outputRows[0].balanceUnits = '1';
+        expect(() => SignedChannelTransfer.assertEnvelopeBindsExecution(envelope, signedBatch, tampered)).toThrow(
+            /execution witness mismatch/
+        );
     });
 });

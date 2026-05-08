@@ -3865,17 +3865,28 @@ Example integration point (around line 2900 in your file):
             return params;
         }
 
-        const signedChannelTransferBatch = ZkSignedChannelTransfer.extractSignedChannelTransferBatch(envelope);
-        if (signedChannelTransferBatch) {
-            try {
-                const binding = ZkSignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedChannelTransferBatch);
-                params.zkSignedChannelTransferBatch = binding.normalized;
-                params.zkSignedChannelTransferBatchHash = binding.batchHash;
-            } catch (err) {
-                params.valid = false;
-                params.reason += `Signed channel transfer batch rejected: ${err.message}; `;
-                return params;
-            }
+          const signedChannelTransferBatch = ZkSignedChannelTransfer.extractSignedChannelTransferBatch(envelope);
+          if (signedChannelTransferBatch) {
+              try {
+                  const binding = ZkSignedChannelTransfer.assertEnvelopeBindsBatch(envelope, signedChannelTransferBatch);
+                  const execution = ZkSignedChannelTransfer.extractSignedChannelTransferExecution(envelope);
+                  if (!execution) {
+                      throw new Error('missing signed channel transfer execution witness');
+                  }
+                  const executionBinding = ZkSignedChannelTransfer.assertEnvelopeBindsExecution(
+                      envelope,
+                      binding.normalized,
+                      execution
+                  );
+                  params.zkSignedChannelTransferBatch = binding.normalized;
+                  params.zkSignedChannelTransferBatchHash = binding.batchHash;
+                  params.zkSignedChannelTransferExecution = executionBinding.normalized;
+                  params.zkSignedChannelTransferExecutionHash = executionBinding.executionHash;
+              } catch (err) {
+                  params.valid = false;
+                  params.reason += `Signed channel transfer batch rejected: ${err.message}; `;
+                  return params;
+              }
         }
 
         const wasmCheck = await ZkWasmVerifier.verifyEnvelope(envelope);

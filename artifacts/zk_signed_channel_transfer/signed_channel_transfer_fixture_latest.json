@@ -1,6 +1,6 @@
 {
   "kind": "tl_zk_signed_channel_transfer_demo_fixture_v1",
-  "createdAt": "2026-05-08T20:01:35.047Z",
+  "createdAt": "2026-05-08T20:16:25.601Z",
   "network": "bitcoin-testnet",
   "blockHeight": 777001,
   "propertyId": 1,
@@ -111,6 +111,99 @@
   },
   "signedChannelTransferBatchHash": "4002368d1be40b70cbae63b113f0e659ab512ef32bcf36fc295c06a2bbd6a71d",
   "channelSignatureRoot": "ceed4b6f6ef4133f3200f909d62e660f9ad64790c66d980bb4bcd79ff340dff4",
+  "signedChannelTransferExecution": {
+    "kind": "tl_zk_signed_channel_transfer_execution_v1",
+    "executionCore": {
+      "protocol": "tl_zk_signed_channel_transfer_execution_v1",
+      "batchId": "10cd73f04f11e9c76d9a6c8a38895ea737adfdb83a5159634bb9765744e85b66",
+      "batchHash": "4002368d1be40b70cbae63b113f0e659ab512ef32bcf36fc295c06a2bbd6a71d",
+      "inputStateRoot": "992dd6592ff2be3e415d4c5180cb594b31c05d92e586d1dc349a6887161ef30f",
+      "outputStateRoot": "731afc9527cf7497a838a939b9303d82edda8290d1d031ba4ab3364d5680f308",
+      "balanceTransitionRoot": "f09fd130bad5e1458e5516d5bbc03de08781034c4de33de09d13dd256876b138",
+      "authorizationRoot": "e7b4a1d2ec1c266e177f9cc37fd1fbd46f58c0650bf9f1cce6bfc5b79fe85d9b",
+      "conservationRoot": "1bb4d46bebb2f143ff98be1f41fffafe5d33f160a9257312fe71474de9362f91",
+      "transferCount": 1,
+      "executionId": "3debedbb61d3dddc939fd34cf4cbcc9f8bda1706bf90dbde7ab029478ca7810e"
+    },
+    "inputRows": [
+      {
+        "channelAddress": "tb1qzkchan000000000000000000000000000000",
+        "column": "A",
+        "propertyId": 1,
+        "balanceUnits": "500000000",
+        "key": "tb1qzkchan000000000000000000000000000000:A:1"
+      },
+      {
+        "channelAddress": "tb1qzkchan2000000000000000000000000000000",
+        "column": "A",
+        "propertyId": 1,
+        "balanceUnits": "0",
+        "key": "tb1qzkchan2000000000000000000000000000000:A:1"
+      }
+    ],
+    "outputRows": [
+      {
+        "channelAddress": "tb1qzkchan000000000000000000000000000000",
+        "column": "A",
+        "propertyId": 1,
+        "balanceUnits": "375000000",
+        "key": "tb1qzkchan000000000000000000000000000000:A:1"
+      },
+      {
+        "channelAddress": "tb1qzkchan2000000000000000000000000000000",
+        "column": "A",
+        "propertyId": 1,
+        "balanceUnits": "125000000",
+        "key": "tb1qzkchan2000000000000000000000000000000:A:1"
+      }
+    ],
+    "transferExecutions": [
+      {
+        "transferId": "7887b5c43536d84d76a42eb871e94b32b623872110b9b7e97a006db54bd2edfc",
+        "propertyId": 1,
+        "amountUnits": "125000000",
+        "source": {
+          "channelAddress": "tb1qzkchan000000000000000000000000000000",
+          "column": "A",
+          "key": "tb1qzkchan000000000000000000000000000000:A:1",
+          "beforeUnits": "500000000",
+          "afterUnits": "375000000"
+        },
+        "destination": {
+          "channelAddress": "tb1qzkchan2000000000000000000000000000000",
+          "column": "A",
+          "key": "tb1qzkchan2000000000000000000000000000000:A:1",
+          "beforeUnits": "0",
+          "afterUnits": "125000000"
+        }
+      }
+    ],
+    "authorizationChecks": [
+      {
+        "transferId": "7887b5c43536d84d76a42eb871e94b32b623872110b9b7e97a006db54bd2edfc",
+        "scheme": "secp256k1-compact-2-of-2",
+        "requiredSignatures": 2,
+        "authorizedPubkeys": [
+          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
+          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+        ],
+        "signerPubkeys": [
+          "0374bbd95db455702258037b61ba4e377d06abb4b02713c0721146d1ede88146c9",
+          "03d2a81b4a3d78ed3b719e40e6f72d7ff36a1832c241e40a2784f8bdfada047b02"
+        ],
+        "messageHash": "cb7318bfeff37061fb4bfab20f2c43a16cb3a8631fc80b647b79af1328477a56"
+      }
+    ],
+    "conservationRows": [
+      {
+        "propertyId": 1,
+        "totalDebitUnits": "125000000",
+        "totalCreditUnits": "125000000",
+        "conserved": true
+      }
+    ]
+  },
+  "signedChannelTransferExecutionHash": "d705941cf8bbcb97f8acdc3bcb2504243d148453ab33b5cba120ce8f21685e28",
   "movements": [
     {
       "from": "channel:tb1qzkchan000000000000000000000000000000:A",
@@ -138,31 +231,31 @@
   ],
   "cairoBatch": {
     "kind": "tlzk_aggregated_batch_checkpoint",
-    "batchId": "4e96e04e09230f124a06a21d0b151a8d0f5f4e21bbf69b3b8629702120c8bbe5",
+    "batchId": "b156fbb0ce22d42ef10bb74868ef28ccc83e192dc5b4fd8c63b58a8289f70581",
     "batchCore": {
       "protocol": "tlzk_aggregated_batch_checkpoint_v1",
       "startHeight": 777001,
       "endHeight": 777001,
-      "transitionRoot": "25a82aa01323903b54fad182d418e8959c1bdcc6b0fd7b7bca3800dc2bb17ac7",
-      "finalStateRoot": "6602ded6850372644745954c2aa9b1b36549aa4c4c349c31b738ad30a3754b2f",
+      "transitionRoot": "a85dcafc686d63defeb7fa8e2b49a2cd49d7b0f66901260b7d837f156ac236f9",
+      "finalStateRoot": "731afc9527cf7497a838a939b9303d82edda8290d1d031ba4ab3364d5680f308",
       "receiptCount": 1,
       "validReceiptCount": 1
     },
     "transitionReceipts": [
       {
         "kind": "tlzk_transition_receipt",
-        "receiptId": "7405546896c5b4b7f9d76d1338c88ee450642c2e0c9747cf9fc6d3c5c523a585",
+        "receiptId": "8b7663fb0b154340dbe3b4ab7acc26fc3b4d02f18bd8ff0332a9e87e0c9875d3",
         "receiptCore": {
           "protocol": "tl_zk_signed_channel_transfer_transition_receipt_v1",
           "txid": "73e9e2705ac20f8b7b50dcf9b230b9f9598348fd13b0318b3c4494ebe0004944",
           "txType": 22,
           "blockHeight": 777001,
           "valid": true,
-          "oldStateRoot": "7ed0f40a73d1e8bdbd8359af5ef03b27e65405d1aed4b8883240f2c88bdc3635",
-          "newStateRoot": "6602ded6850372644745954c2aa9b1b36549aa4c4c349c31b738ad30a3754b2f",
+          "oldStateRoot": "992dd6592ff2be3e415d4c5180cb594b31c05d92e586d1dc349a6887161ef30f",
+          "newStateRoot": "731afc9527cf7497a838a939b9303d82edda8290d1d031ba4ab3364d5680f308",
           "payloadHash": "73e9e2705ac20f8b7b50dcf9b230b9f9598348fd13b0318b3c4494ebe0004944",
-          "witnessRoot": "c96c8f31dc1eceb39ea00009ed7e2b2f124a48a7d629eb128463889771d0c96c",
-          "supportLevel": "signed-channel-transfer-proof-binding",
+          "witnessRoot": "d705941cf8bbcb97f8acdc3bcb2504243d148453ab33b5cba120ce8f21685e28",
+          "supportLevel": "signed-channel-transfer-execution-binding",
           "economicMutation": true,
           "signedChannelTransferBatchHash": "4002368d1be40b70cbae63b113f0e659ab512ef32bcf36fc295c06a2bbd6a71d"
         }
