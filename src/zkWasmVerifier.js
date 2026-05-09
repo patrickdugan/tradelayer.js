@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkProofArtifactResolver = require('./zkProofArtifactResolver.js');
+const ZkStwoProofVerifier = require('./zkStwoProofVerifier.js');
 
 const MAX_ENVELOPE_BYTES = 2 * 1024 * 1024;
 
@@ -64,7 +65,12 @@ function requireProofArtifact(options = {}) {
         String(process.env.TL_ZK_REQUIRE_PROOF_ARTIFACT || '').trim() === '1';
 }
 
-function attachProofArtifactResult(result, envelope, options = {}) {
+function requireCryptographicProof(options = {}) {
+    return Boolean(options.requireCryptographicProof) ||
+        String(process.env.TL_ZK_REQUIRE_CRYPTO_PROOF || '').trim() === '1';
+}
+
+async function attachProofArtifactResult(result, envelope, options = {}) {
     if (!result.ok || !requireProofArtifact(options)) return result;
     const proofArtifact = ZkProofArtifactResolver.verifyProofArtifactBinding(envelope);
     if (!proofArtifact.ok) {
@@ -75,13 +81,33 @@ function attachProofArtifactResult(result, envelope, options = {}) {
             reason: proofArtifact.reason || 'proof artifact binding failed'
         };
     }
+    if (requireCryptographicProof(options)) {
+        const cryptographicProofVerification = await ZkStwoProofVerifier.verifyCryptographicProof(envelope, {
+            ...options,
+            artifactBinding: proofArtifact
+        });
+        if (!cryptographicProofVerification.ok) {
+            return {
+                ...result,
+                ok: false,
+                proofArtifact: ZkProofArtifactResolver.portableReceipt(proofArtifact),
+                cryptographicProofVerification,
+                reason: cryptographicProofVerification.reason || 'STWO cryptographic proof verification failed'
+            };
+        }
+        return {
+            ...result,
+            proofArtifact: ZkProofArtifactResolver.portableReceipt(proofArtifact),
+            cryptographicProofVerification
+        };
+    }
     return {
         ...result,
         proofArtifact: ZkProofArtifactResolver.portableReceipt(proofArtifact),
         cryptographicProofVerification: {
             ok: false,
-            status: 'not-wired',
-            reason: 'STWO cryptographic proof verification over proof bytes is not wired into this verifier yet'
+            status: 'not-required',
+            reason: 'strict STWO cryptographic proof verification was not requested'
         }
     };
 }
@@ -130,7 +156,7 @@ async function verifyEnvelope(envelope, options = {}) {
                     reason: proofSummaryCheck.reason
                 };
             }
-            return attachProofArtifactResult(result, envelope, options);
+            return await attachProofArtifactResult(result, envelope, options);
         } catch (err) {
             return { ok: false, mode: 'rust-wasm', wasmCodeHash: wasmPackageCodeHash, reason: err.message };
         }
@@ -144,7 +170,7 @@ async function verifyEnvelope(envelope, options = {}) {
         };
     }
 
-    return attachProofArtifactResult({
+    return await attachProofArtifactResult({
         ...ZkConsensus.verifyZkConsensusEnvelope(envelope),
         mode: 'js-consensus-fallback',
         wasmCodeHash: verifierWasmHash
@@ -156,6 +182,7 @@ module.exports = {
     sha256File,
     loadWasmPackage,
     requireProofArtifact,
+    requireCryptographicProof,
     attachProofArtifactResult,
     verifyEnvelope
 };

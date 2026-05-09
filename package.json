@@ -43,6 +43,8 @@
     "zk:channel-transfer:btctest-anchor": "node scripts/broadcastBtctestTx34ZkAnchor.js",
     "zk:channel-transfer:negative": "node scripts/runZkVerifierRejectionDemo.js",
     "zk:channel-transfer:proof-artifact": "node scripts/runZkFullProofArtifactDemo.js",
+    "zk:channel-transfer:crypto-proof": "node scripts/runZkFullProofArtifactDemo.js --require-crypto-proof --out=artifacts/zk_signed_channel_transfer/tx34_crypto_proof_demo_latest.json",
+    "zk:channel-transfer:crypto-proof:snacksack": "node scripts/runZkFullProofArtifactDemo.js --require-crypto-proof --remote-snacksack --out=artifacts/zk_signed_channel_transfer/tx34_crypto_proof_demo_latest.json",
     "zk:da:serve": "node scripts/serveZkEnvelopeDa.js",
     "utxo:protect:btctest": "node scripts/protectBtctestUtxos.js"
   },

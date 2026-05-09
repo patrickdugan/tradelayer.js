@@ -1,6 +1,6 @@
 {
   "kind": "tx34_full_proof_artifact_demo",
-  "createdAt": "2026-05-09T10:38:49.284Z",
+  "createdAt": "2026-05-09T10:52:01.002Z",
   "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
   "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
   "verifierId": "tlzk_rust_wasm_v0",
@@ -30,9 +30,19 @@
       "reason": ""
     },
     "cryptographicProofVerification": {
-      "ok": false,
-      "status": "not-required",
-      "reason": "strict STWO cryptographic proof verification was not requested"
+      "mode": "stwo-remote-verify",
+      "remoteHost": "snacksack@snacksack-ms-7d32",
+      "verifierCommand": "verify",
+      "proofRun": "tlzk-20260508-170058",
+      "proofPath": "proof.json",
+      "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
+      "channelHash": "blake2s",
+      "ok": true,
+      "elapsedMs": 3413,
+      "exitCode": 0,
+      "stdoutTail": "2026-05-09T10:51:59.174297Z  INFO verify: verify: enter\n2026-05-09T10:51:59.174306Z  INFO verify: verify: Verifying a \"blake2s\" proof\n2026-05-09T10:51:59.174308Z  INFO verify: verify: Proof path: /home/snacksack/tlzk-proof-runs/tlzk-20260508-170058/tlzk_stwo/proof.json\n2026-05-09T10:51:59.194732Z  INFO verify:verify_cairo: cairo_air::verifier: enter\n2026-05-09T10:51:59.194766Z  INFO verify:verify_cairo: cairo_air::verifier: All relation uses:\n{\n  \"RangeCheck_18\": 16,\n  \"RangeCheck_20_C\": 64,\n  \"RangeCheck_7_2_5\": 256,\n  \"RangeCheck_9_9_G\": 64,\n  \"RangeCheck_20_G\": 48,\n  \"MemoryIdToBig\": 736,\n  \"Opcodes\": 304,\n  \"RangeCheck_20_F\": 48,\n  \"RangeCheck_9_9_C\": 384,\n  \"RangeCheck_20_B\": 64,\n  \"RangeCheck_20\": 64,\n  \"RangeCheck_4_3\": 256,\n  \"RangeCheck_9_9\": 384,\n  \"VerifyInstruction\": 304,\n  \"RangeCheck_20_E\": 48,\n  \"RangeCheck_20_H\": 48,\n  \"RangeCheck_11\": 64,\n  \"RangeCheck_9_9_F\": 128,\n  \"RangeCheck_9_9_E\": 128,\n  \"RangeCheck_9_9_B\": 384,\n  \"RangeCheck_9_9_D\": 384,\n  \"MemoryAddressToId\": 960,\n  \"RangeCheck_20_D\": 64,\n  \"RangeCheck_9_9_H\": 64\n}\n2026-05-09T10:51:59.195613Z  INFO verify:verify_cairo: stwo::core::verifier: Split composition polynomial log degree bound: 20\n2026-05-09T10:51:59.195750Z  INFO verify:verify_cairo: stwo::core::verifier: Sampling 1237 columns.\n2026-05-09T10:51:59.195752Z  INFO verify:verify_cairo: stwo::core::verifier: Total sample points: 1257.\n2026-05-09T10:51:59.199871Z  INFO verify:verify_cairo: cairo_air::verifier: close time.busy=5.14ms time.idle=1.21us\n2026-05-09T10:51:59.200232Z  INFO verify: verify:  Proof verified successfully!\n2026-05-09T10:51:59.200235Z  INFO verify: verify: close time.busy=25.9ms time.idle=1.41us\n",
+      "stderrTail": "",
+      "reason": ""
     }
   },
   "txConsensus": {
@@ -131,12 +141,12 @@
         ]
       },
       "applied": true,
-      "updatedAt": 1778323129244
+      "updatedAt": 1778323920953
     },
     "outputRowsMatch": {
       "ok": true,
       "mismatches": []
     }
   },
-  "caveat": "This materializes and hashes the whole STWO proof artifact inside the tx34 validation path. Strict STWO cryptographic verification is available with --require-crypto-proof."
+  "caveat": "This materializes, hashes, and cryptographically verifies the whole STWO proof artifact before tx34 state application."
 }

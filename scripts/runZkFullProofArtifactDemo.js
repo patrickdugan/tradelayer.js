@@ -20,11 +20,15 @@ const defaultOut = path.join('artifacts', 'zk_signed_channel_transfer', 'tx34_fu
 function parseArgs(argv) {
     const args = {
         envelopeId: process.env.TL_ZK_DEMO_ENVELOPE_ID || defaultEnvelopeId,
-        out: process.env.TL_ZK_FULL_PROOF_ARTIFACT_OUT || defaultOut
+        out: process.env.TL_ZK_FULL_PROOF_ARTIFACT_OUT || defaultOut,
+        requireCryptoProof: false,
+        remoteSnacksack: false
     };
     for (const arg of argv) {
         if (arg.startsWith('--envelope-id=')) args.envelopeId = arg.slice('--envelope-id='.length);
         else if (arg.startsWith('--out=')) args.out = arg.slice('--out='.length);
+        else if (arg === '--require-crypto-proof') args.requireCryptoProof = true;
+        else if (arg === '--remote-snacksack') args.remoteSnacksack = true;
     }
     return args;
 }
@@ -32,6 +36,13 @@ function parseArgs(argv) {
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     process.env.TL_ZK_REQUIRE_PROOF_ARTIFACT = '1';
+    if (args.requireCryptoProof) process.env.TL_ZK_REQUIRE_CRYPTO_PROOF = '1';
+    if (args.remoteSnacksack && !process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST) {
+        process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST = 'snacksack@snacksack-ms-7d32';
+    }
+    if (args.remoteSnacksack && !process.env.TL_ZK_STWO_REMOTE_VERIFY_BIN) {
+        process.env.TL_ZK_STWO_REMOTE_VERIFY_BIN = '/home/snacksack/ark-shinigami-remote/tools/bin/verify';
+    }
 
     const resolved = await ZkEnvelopeResolver.resolveEnvelopeFromParams({
         envelopeId: args.envelopeId,
@@ -42,7 +53,10 @@ async function main() {
     }
 
     const artifactBinding = ZkProofArtifactResolver.verifyProofArtifactBinding(resolved.envelope);
-    const verifier = await ZkWasmVerifier.verifyEnvelope(resolved.envelope, { requireProofArtifact: true });
+    const verifier = await ZkWasmVerifier.verifyEnvelope(resolved.envelope, {
+        requireProofArtifact: true,
+        requireCryptographicProof: args.requireCryptoProof
+    });
     const runtime = loadRuntime();
     await bootstrapRuntime(runtime);
     const txConsensus = await evaluateTxConsensus(runtime, resolved.envelope, true);
@@ -57,7 +71,9 @@ async function main() {
         proofArtifactBinding: ZkProofArtifactResolver.portableReceipt(artifactBinding),
         registeredVerifier: verifier,
         txConsensus,
-        caveat: 'This materializes and hashes the whole STWO proof artifact inside the tx34 validation path. Cryptographic STWO verification over the proof bytes is not wired yet.'
+        caveat: args.requireCryptoProof
+            ? 'This materializes, hashes, and cryptographically verifies the whole STWO proof artifact before tx34 state application.'
+            : 'This materializes and hashes the whole STWO proof artifact inside the tx34 validation path. Strict STWO cryptographic verification is available with --require-crypto-proof.'
     };
 
     fs.mkdirSync(path.dirname(args.out), { recursive: true });
