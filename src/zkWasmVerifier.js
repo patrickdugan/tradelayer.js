@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
+const ZkProofArtifactResolver = require('./zkProofArtifactResolver.js');
 
 const MAX_ENVELOPE_BYTES = 2 * 1024 * 1024;
 
@@ -58,7 +59,34 @@ function parseVerifierJson(raw) {
     return raw;
 }
 
-async function verifyEnvelope(envelope) {
+function requireProofArtifact(options = {}) {
+    return Boolean(options.requireProofArtifact) ||
+        String(process.env.TL_ZK_REQUIRE_PROOF_ARTIFACT || '').trim() === '1';
+}
+
+function attachProofArtifactResult(result, envelope, options = {}) {
+    if (!result.ok || !requireProofArtifact(options)) return result;
+    const proofArtifact = ZkProofArtifactResolver.verifyProofArtifactBinding(envelope);
+    if (!proofArtifact.ok) {
+        return {
+            ...result,
+            ok: false,
+            proofArtifact: ZkProofArtifactResolver.portableReceipt(proofArtifact),
+            reason: proofArtifact.reason || 'proof artifact binding failed'
+        };
+    }
+    return {
+        ...result,
+        proofArtifact: ZkProofArtifactResolver.portableReceipt(proofArtifact),
+        cryptographicProofVerification: {
+            ok: false,
+            status: 'not-wired',
+            reason: 'STWO cryptographic proof verification over proof bytes is not wired into this verifier yet'
+        }
+    };
+}
+
+async function verifyEnvelope(envelope, options = {}) {
     const envelopeJson = JSON.stringify(envelope);
     if (Buffer.byteLength(envelopeJson, 'utf8') > MAX_ENVELOPE_BYTES) {
         return {
@@ -102,7 +130,7 @@ async function verifyEnvelope(envelope) {
                     reason: proofSummaryCheck.reason
                 };
             }
-            return result;
+            return attachProofArtifactResult(result, envelope, options);
         } catch (err) {
             return { ok: false, mode: 'rust-wasm', wasmCodeHash: wasmPackageCodeHash, reason: err.message };
         }
@@ -116,16 +144,18 @@ async function verifyEnvelope(envelope) {
         };
     }
 
-    return {
+    return attachProofArtifactResult({
         ...ZkConsensus.verifyZkConsensusEnvelope(envelope),
         mode: 'js-consensus-fallback',
         wasmCodeHash: verifierWasmHash
-    };
+    }, envelope, options);
 }
 
 module.exports = {
     MAX_ENVELOPE_BYTES,
     sha256File,
     loadWasmPackage,
+    requireProofArtifact,
+    attachProofArtifactResult,
     verifyEnvelope
 };

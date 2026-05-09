@@ -316,6 +316,8 @@ module.exports = {
     mutateSemanticProofSummaryHash,
     mutateRawDaBlob,
     mutateVerifierHash,
+    loadRuntime,
+    bootstrapRuntime,
     evaluateCase,
     evaluateTxConsensus
 };

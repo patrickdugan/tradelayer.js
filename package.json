@@ -42,6 +42,7 @@
     "zk:channel-transfer:live": "node scripts/runZkSignedChannelTransferLive.js",
     "zk:channel-transfer:btctest-anchor": "node scripts/broadcastBtctestTx34ZkAnchor.js",
     "zk:channel-transfer:negative": "node scripts/runZkVerifierRejectionDemo.js",
+    "zk:channel-transfer:proof-artifact": "node scripts/runZkFullProofArtifactDemo.js",
     "zk:da:serve": "node scripts/serveZkEnvelopeDa.js",
     "utxo:protect:btctest": "node scripts/protectBtctestUtxos.js"
   },

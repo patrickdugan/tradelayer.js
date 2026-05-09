@@ -10,6 +10,7 @@ const Decode = require('../src/txDecoder.js');
 const ZkConsensus = require('../src/zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('../src/zkWasmVerifier.js');
 const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
+const ZkProofArtifactResolver = require('../src/zkProofArtifactResolver.js');
 const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
 const RejectionDemo = require('../scripts/runZkVerifierRejectionDemo.js');
 
@@ -226,6 +227,54 @@ describe('tx34 ZK batch movement draft', () => {
         expect(wasm.ok).toBe(false);
         expect(wasm.mode).toBe('rust-wasm');
         expect(wasm.reason).toMatch(/proof summary proof hash mismatch/);
+    });
+
+    test('materializes and hashes proof artifact bytes when required', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tlzk-proof-'));
+        const previousProofDirs = process.env.TL_ZK_PROOF_DIRS;
+        try {
+            const proofPath = path.join(tempDir, 'proof.json');
+            fs.writeFileSync(proofPath, JSON.stringify({ proof: 'unit-test-proof' }));
+            const proofHash = ZkProofArtifactResolver.sha256File(proofPath);
+            const envelope = ZkConsensus.buildZkConsensusEnvelope({
+                proofHash,
+                programHash: ZkConsensus.sha256Hex('stwo-program'),
+                publicInputs: {
+                    batchId: ZkConsensus.sha256Hex('batch-id')
+                },
+                daBlob: {
+                    carrier: 'snacksack-stwo-proof-run',
+                    encoding: 'json',
+                    value: {
+                        proofSummary: {
+                            proofSha256: proofHash,
+                            proofPath
+                        }
+                    }
+                },
+                signedL1TxHex: '02000000000100',
+                batchL2TxHex: '746c7a6b6261746368',
+                movements: [{
+                    from: 'tb1qsource0000000000000000000000000000000',
+                    to: 'tb1qdest000000000000000000000000000000000',
+                    propertyId: 1,
+                    amountUnits: '125000000'
+                }]
+            });
+            process.env.TL_ZK_PROOF_DIRS = tempDir;
+            const binding = ZkProofArtifactResolver.verifyProofArtifactBinding(envelope);
+            expect(binding.ok).toBe(true);
+            expect(binding.observedHash).toBe(proofHash);
+
+            const wasm = await ZkWasmVerifier.verifyEnvelope(envelope, { requireProofArtifact: true });
+            expect(wasm.ok).toBe(true);
+            expect(wasm.proofArtifact.ok).toBe(true);
+            expect(wasm.proofArtifact.expectedHash).toBe(proofHash);
+        } finally {
+            if (previousProofDirs === undefined) delete process.env.TL_ZK_PROOF_DIRS;
+            else process.env.TL_ZK_PROOF_DIRS = previousProofDirs;
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
     });
 
     test('rejects a non-approved verifier WASM hash', () => {
