@@ -282,9 +282,11 @@ describe('tx34 ZK batch movement draft', () => {
         const previousProofDirs = process.env.TL_ZK_PROOF_DIRS;
         const previousRemoteHost = process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
         const previousLocalBin = process.env.TL_ZK_STWO_VERIFY_BIN;
+        const previousDisableEmbedded = process.env.TL_ZK_DISABLE_EMBEDDED_STWO;
         try {
             delete process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
             delete process.env.TL_ZK_STWO_VERIFY_BIN;
+            process.env.TL_ZK_DISABLE_EMBEDDED_STWO = '1';
             const proofPath = path.join(tempDir, 'proof.json');
             fs.writeFileSync(proofPath, JSON.stringify({ fake: 'proof' }));
             const proofHash = ZkProofArtifactResolver.sha256File(proofPath);
@@ -328,6 +330,8 @@ describe('tx34 ZK batch movement draft', () => {
             else process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST = previousRemoteHost;
             if (previousLocalBin === undefined) delete process.env.TL_ZK_STWO_VERIFY_BIN;
             else process.env.TL_ZK_STWO_VERIFY_BIN = previousLocalBin;
+            if (previousDisableEmbedded === undefined) delete process.env.TL_ZK_DISABLE_EMBEDDED_STWO;
+            else process.env.TL_ZK_DISABLE_EMBEDDED_STWO = previousDisableEmbedded;
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
     });
@@ -338,8 +342,10 @@ describe('tx34 ZK batch movement draft', () => {
         const previousLocalBin = process.env.TL_ZK_STWO_VERIFY_BIN;
         const previousExtraArgs = process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON;
         const previousRemoteHost = process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
+        const previousDisableEmbedded = process.env.TL_ZK_DISABLE_EMBEDDED_STWO;
         try {
             delete process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
+            process.env.TL_ZK_DISABLE_EMBEDDED_STWO = '1';
             const proofPath = path.join(tempDir, 'proof.json');
             const verifierScript = path.join(tempDir, 'mock_stwo_verify.js');
             fs.writeFileSync(proofPath, JSON.stringify({ fake: 'proof' }));
@@ -397,6 +403,79 @@ describe('tx34 ZK batch movement draft', () => {
             else process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON = previousExtraArgs;
             if (previousRemoteHost === undefined) delete process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
             else process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST = previousRemoteHost;
+            if (previousDisableEmbedded === undefined) delete process.env.TL_ZK_DISABLE_EMBEDDED_STWO;
+            else process.env.TL_ZK_DISABLE_EMBEDDED_STWO = previousDisableEmbedded;
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+    });
+
+    test('accepts an embedded STWO WASM verifier before external verifier commands', async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tlzk-proof-'));
+        const previousProofDirs = process.env.TL_ZK_PROOF_DIRS;
+        const previousLocalBin = process.env.TL_ZK_STWO_VERIFY_BIN;
+        const previousExtraArgs = process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON;
+        const previousRemoteHost = process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
+        const previousWasmPackage = process.env.TL_ZK_STWO_WASM_PACKAGE;
+        try {
+            delete process.env.TL_ZK_STWO_VERIFY_BIN;
+            delete process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON;
+            delete process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
+            const proofPath = path.join(tempDir, 'proof.json');
+            const verifierModule = path.join(tempDir, 'mock_embedded_stwo.js');
+            fs.writeFileSync(proofPath, JSON.stringify({ fake: 'proof' }));
+            fs.writeFileSync(verifierModule, [
+                "'use strict';",
+                "module.exports.verify_stwo_cairo_proof_json = function (_proofJson, channelHash, expectedHash) {",
+                "  return JSON.stringify({ ok: true, mode: 'rust-wasm-embedded-stwo', channelHash, proofHash: expectedHash });",
+                "};"
+            ].join('\n'));
+            const proofHash = ZkProofArtifactResolver.sha256File(proofPath);
+            const envelope = ZkConsensus.buildZkConsensusEnvelope({
+                proofHash,
+                programHash: ZkConsensus.sha256Hex('stwo-program'),
+                publicInputs: {
+                    batchId: ZkConsensus.sha256Hex('batch-id')
+                },
+                daBlob: {
+                    carrier: 'snacksack-stwo-proof-run',
+                    encoding: 'json',
+                    value: {
+                        proofSummary: {
+                            proofSha256: proofHash,
+                            proofPath
+                        }
+                    }
+                },
+                signedL1TxHex: '02000000000100',
+                batchL2TxHex: '746c7a6b6261746368',
+                movements: [{
+                    from: 'tb1qsource0000000000000000000000000000000',
+                    to: 'tb1qdest000000000000000000000000000000000',
+                    propertyId: 1,
+                    amountUnits: '125000000'
+                }]
+            });
+            process.env.TL_ZK_PROOF_DIRS = tempDir;
+            process.env.TL_ZK_STWO_WASM_PACKAGE = verifierModule;
+            const wasm = await ZkWasmVerifier.verifyEnvelope(envelope, {
+                requireProofArtifact: true,
+                requireCryptographicProof: true
+            });
+            expect(wasm.ok).toBe(true);
+            expect(wasm.cryptographicProofVerification.ok).toBe(true);
+            expect(wasm.cryptographicProofVerification.mode).toBe('rust-wasm-embedded-stwo');
+            expect(wasm.cryptographicProofVerification.proofHash).toBe(proofHash);
+        } finally {
+            if (previousProofDirs === undefined) delete process.env.TL_ZK_PROOF_DIRS;
+            else process.env.TL_ZK_PROOF_DIRS = previousProofDirs;
+            if (previousLocalBin === undefined) delete process.env.TL_ZK_STWO_VERIFY_BIN;
+            else process.env.TL_ZK_STWO_VERIFY_BIN = previousLocalBin;
+            if (previousExtraArgs === undefined) delete process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON;
+            else process.env.TL_ZK_STWO_VERIFY_EXTRA_ARGS_JSON = previousExtraArgs;
+            if (previousRemoteHost === undefined) delete process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST;
+            else process.env.TL_ZK_STWO_REMOTE_VERIFY_HOST = previousRemoteHost;
+            if (previousWasmPackage === undefined) delete process.env.TL_ZK_STWO_WASM_PACKAGE;
+            else process.env.TL_ZK_STWO_WASM_PACKAGE = previousWasmPackage;
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
     });

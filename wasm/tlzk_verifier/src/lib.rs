@@ -9,6 +9,7 @@ const ANNOUNCEMENT_DOMAIN: &str = "tlzk-checkpoint-announcement-v1";
 const MAX_ANNOUNCEMENT_BYTES: usize = 256 * 1024;
 const MAX_SYNC_BUNDLE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ZK_ENVELOPE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_STWO_PROOF_BYTES: usize = 32 * 1024 * 1024;
 const ED25519_SPKI_PREFIX_HEX: &str = "302a300506032b6570032100";
 
 fn response(ok: bool, reason: &str) -> String {
@@ -103,9 +104,11 @@ pub fn verifier_limits_json() -> String {
         "maxAnnouncementBytes": MAX_ANNOUNCEMENT_BYTES,
         "maxSyncBundleBytes": MAX_SYNC_BUNDLE_BYTES,
         "maxZkEnvelopeBytes": MAX_ZK_ENVELOPE_BYTES,
+        "maxStwoProofBytes": MAX_STWO_PROOF_BYTES,
         "signatureAlgorithm": "ed25519",
         "hash": "sha256",
-        "canonicalJson": "sorted-object-keys"
+        "canonicalJson": "sorted-object-keys",
+        "embeddedStwo": cfg!(feature = "embedded-stwo")
     })
     .to_string()
 }
@@ -314,6 +317,103 @@ pub fn verify_zk_consensus_envelope_json(envelope_json: &str) -> String {
     .to_string()
 }
 
+#[cfg(feature = "embedded-stwo")]
+mod embedded_stwo {
+    use cairo_air::verifier::verify_cairo;
+    use cairo_air::CairoProofForRustVerifier;
+    use stwo::core::vcs_lifted::blake2_merkle::{
+        Blake2sM31MerkleChannel, Blake2sM31MerkleHasher, Blake2sMerkleChannel, Blake2sMerkleHasher,
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    use stwo::core::vcs_lifted::poseidon252_merkle::{
+        Poseidon252MerkleChannel, Poseidon252MerkleHasher,
+    };
+
+    fn verify_blake2s(proof_json: &str) -> Result<(), String> {
+        let proof: CairoProofForRustVerifier<Blake2sMerkleHasher> =
+            serde_json::from_str(proof_json).map_err(|err| format!("STWO proof JSON decode failed: {}", err))?;
+        verify_cairo::<Blake2sMerkleChannel>(proof)
+            .map_err(|err| format!("STWO proof verification failed: {:?}", err))
+    }
+
+    fn verify_blake2s_m31(proof_json: &str) -> Result<(), String> {
+        let proof: CairoProofForRustVerifier<Blake2sM31MerkleHasher> =
+            serde_json::from_str(proof_json).map_err(|err| format!("STWO proof JSON decode failed: {}", err))?;
+        verify_cairo::<Blake2sM31MerkleChannel>(proof)
+            .map_err(|err| format!("STWO proof verification failed: {:?}", err))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn verify_poseidon252(proof_json: &str) -> Result<(), String> {
+        let proof: CairoProofForRustVerifier<Poseidon252MerkleHasher> =
+            serde_json::from_str(proof_json).map_err(|err| format!("STWO proof JSON decode failed: {}", err))?;
+        verify_cairo::<Poseidon252MerkleChannel>(proof)
+            .map_err(|err| format!("STWO proof verification failed: {:?}", err))
+    }
+
+    pub fn verify(proof_json: &str, channel_hash: &str) -> Result<(), String> {
+        match channel_hash.to_ascii_lowercase().as_str() {
+            "blake2s" => verify_blake2s(proof_json),
+            "blake2s_m31" => verify_blake2s_m31(proof_json),
+            #[cfg(not(target_arch = "wasm32"))]
+            "poseidon252" => verify_poseidon252(proof_json),
+            #[cfg(target_arch = "wasm32")]
+            "poseidon252" => Err("poseidon252 STWO verifier is not compiled for wasm32".to_string()),
+            other => Err(format!("unsupported STWO channel hash: {}", other)),
+        }
+    }
+}
+
+#[cfg(not(feature = "embedded-stwo"))]
+mod embedded_stwo {
+    pub fn verify(_proof_json: &str, _channel_hash: &str) -> Result<(), String> {
+        Err("embedded-stwo feature is not enabled in this verifier WASM".to_string())
+    }
+}
+
+#[wasm_bindgen]
+pub fn verify_stwo_cairo_proof_json(
+    proof_json: &str,
+    channel_hash: &str,
+    expected_sha256_hex: &str,
+) -> String {
+    if proof_json.len() > MAX_STWO_PROOF_BYTES {
+        return response(false, "STWO proof exceeds deterministic memory limit");
+    }
+    let observed_hash = sha256_hex(proof_json.as_bytes());
+    let expected_hash = expected_sha256_hex.trim().to_ascii_lowercase();
+    if !expected_hash.is_empty() && observed_hash != expected_hash {
+        return json!({
+            "ok": false,
+            "mode": "rust-wasm-embedded-stwo",
+            "reason": "STWO proof hash mismatch",
+            "observedHash": observed_hash,
+            "expectedHash": expected_hash
+        })
+        .to_string();
+    }
+
+    match embedded_stwo::verify(proof_json, channel_hash) {
+        Ok(()) => json!({
+            "ok": true,
+            "mode": "rust-wasm-embedded-stwo",
+            "proofHash": observed_hash,
+            "channelHash": channel_hash,
+            "feature": "embedded-stwo"
+        })
+        .to_string(),
+        Err(err) => json!({
+            "ok": false,
+            "mode": "rust-wasm-embedded-stwo",
+            "proofHash": observed_hash,
+            "channelHash": channel_hash,
+            "reason": err
+        })
+        .to_string(),
+    }
+}
+
 #[wasm_bindgen]
 pub fn verify_checkpoint_announcement_json(announcement_json: &str) -> String {
     if announcement_json.len() > MAX_ANNOUNCEMENT_BYTES {
@@ -405,5 +505,17 @@ mod tests {
         let result: Value =
             serde_json::from_str(&verify_zk_consensus_envelope_json(&envelope)).expect("result JSON");
         assert_eq!(result["ok"], true);
+    }
+
+    #[test]
+    fn stwo_proof_export_fails_closed_without_hash_match() {
+        let result: Value = serde_json::from_str(&verify_stwo_cairo_proof_json(
+            "{\"not\":\"a real proof\"}",
+            "blake2s",
+            &sha256_hex(b"different proof"),
+        ))
+        .expect("result JSON");
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["reason"], "STWO proof hash mismatch");
     }
 }

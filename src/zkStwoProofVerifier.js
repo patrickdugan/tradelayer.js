@@ -1,6 +1,8 @@
 'use strict';
 
 const { execFile } = require('child_process');
+const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 
 const ZkProofArtifactResolver = require('./zkProofArtifactResolver.js');
@@ -25,6 +27,10 @@ function outputTail(value, limit = 4096) {
 
 function posixQuote(value) {
     return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function sha256Buffer(bytes) {
+    return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
 function parseExtraArgs() {
@@ -93,6 +99,89 @@ function commandReceipt(base, commandResult, startedAt) {
         stdoutTail: outputTail(commandResult.stdout),
         stderrTail: outputTail(commandResult.stderr),
         reason: commandResult.ok ? '' : commandResult.reason
+    };
+}
+
+function embeddedWasmCandidates() {
+    const configured = String(process.env.TL_ZK_STWO_WASM_PACKAGE || '').trim();
+    const repoRoot = path.join(__dirname, '..');
+    const candidates = [];
+    if (configured) candidates.push(path.resolve(configured));
+    candidates.push(path.join(repoRoot, 'wasm', 'tlzk_verifier', 'pkg-node-stwo', 'tlzk_verifier.js'));
+    return [...new Set(candidates)];
+}
+
+function loadEmbeddedWasmPackage() {
+    if (String(process.env.TL_ZK_DISABLE_EMBEDDED_STWO || '').trim() === '1') {
+        return { ok: false, attempts: ['disabled by TL_ZK_DISABLE_EMBEDDED_STWO'] };
+    }
+    const attempts = [];
+    for (const candidate of embeddedWasmCandidates()) {
+        attempts.push(candidate);
+        if (!fs.existsSync(candidate)) continue;
+        try {
+            // eslint-disable-next-line import/no-dynamic-require, global-require
+            const pkg = require(candidate);
+            if (!pkg || typeof pkg.verify_stwo_cairo_proof_json !== 'function') {
+                continue;
+            }
+            const wasmPath = path.join(path.dirname(candidate), 'tlzk_verifier_bg.wasm');
+            const wasmCodeHash = fs.existsSync(wasmPath)
+                ? ZkProofArtifactResolver.sha256File(wasmPath)
+                : String(process.env.TL_ZK_STWO_WASM_HASH || '').trim();
+            return {
+                ok: true,
+                packagePath: candidate,
+                packageName: path.basename(path.dirname(candidate)),
+                wasmCodeHash,
+                pkg,
+                attempts
+            };
+        } catch (err) {
+            attempts.push(`${candidate}: ${err.message}`);
+        }
+    }
+    return { ok: false, attempts };
+}
+
+async function verifyEmbeddedWasmProof(envelope, artifactBinding, options = {}) {
+    const loaded = loadEmbeddedWasmPackage();
+    if (!loaded.ok) return null;
+    const proofBytes = fs.readFileSync(artifactBinding.proofPath);
+    const expectedHash = artifactBinding.observedHash || artifactBinding.expectedHash || sha256Buffer(proofBytes);
+    const startedAt = Date.now();
+    let parsed;
+    try {
+        parsed = JSON.parse(loaded.pkg.verify_stwo_cairo_proof_json(
+            proofBytes.toString('utf8'),
+            channelHash(envelope, options),
+            expectedHash
+        ));
+    } catch (err) {
+        parsed = {
+            ok: false,
+            reason: err.message || 'embedded STWO WASM verifier threw'
+        };
+    }
+    const elapsedMs = Date.now() - startedAt;
+    const reason = String(parsed.reason || '');
+    const unavailable = /embedded-stwo feature is not enabled|not found|is not a function/i.test(reason);
+    if (unavailable && String(process.env.TL_ZK_REQUIRE_EMBEDDED_STWO || '').trim() !== '1') {
+        return null;
+    }
+    return {
+        mode: 'rust-wasm-embedded-stwo',
+        verifierCommand: 'verify_stwo_cairo_proof_json',
+        packageName: loaded.packageName,
+        wasmCodeHash: loaded.wasmCodeHash,
+        proofPath: path.basename(artifactBinding.proofPath),
+        proofBytes: artifactBinding.proofBytes || proofBytes.length,
+        proofHash: expectedHash,
+        channelHash: channelHash(envelope, options),
+        ok: Boolean(parsed.ok),
+        elapsedMs,
+        reason,
+        embeddedResult: parsed
     };
 }
 
@@ -205,6 +294,12 @@ async function verifyCryptographicProof(envelope = {}, options = {}) {
         };
     }
 
+    const embeddedWasmResult = await verifyEmbeddedWasmProof(envelope, artifactBinding, options);
+    if (embeddedWasmResult) {
+        if (embeddedWasmResult.ok) verificationCache.set(key, embeddedWasmResult);
+        return embeddedWasmResult;
+    }
+
     const localResult = await verifyLocalProof(envelope, artifactBinding, options);
     if (localResult) {
         if (localResult.ok) verificationCache.set(key, localResult);
@@ -233,5 +328,7 @@ module.exports = {
     channelHash,
     remoteProofPath,
     cacheKey,
+    loadEmbeddedWasmPackage,
+    verifyEmbeddedWasmProof,
     verifyCryptographicProof
 };
