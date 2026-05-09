@@ -12,6 +12,7 @@ const ZkWasmVerifier = require('../src/zkWasmVerifier.js');
 const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
 const ZkProofArtifactResolver = require('../src/zkProofArtifactResolver.js');
 const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
+const Tx2SendBatch = require('../src/zkTx2SendBatch.js');
 const RejectionDemo = require('../scripts/runZkVerifierRejectionDemo.js');
 
 function privateKeyFromLabel(label) {
@@ -121,6 +122,61 @@ function fixtureStwoEnvelopeWithProofSummary() {
             }
         ]
     });
+}
+
+function fixtureTx2SendBatchEnvelope() {
+    const tx2SendBatch = Tx2SendBatch.buildTx2SendBatch({
+        sends: [
+            {
+                sender: 'tb1qalice0000000000000000000000000000000',
+                recipient: 'tb1qbob00000000000000000000000000000000',
+                propertyId: 1,
+                amountUnits: '125000000',
+                nonce: 'send-1'
+            },
+            {
+                sender: 'tb1qalice0000000000000000000000000000000',
+                recipient: 'tb1qcarol000000000000000000000000000000',
+                propertyId: 1,
+                amountUnits: '50000000',
+                nonce: 'send-2'
+            }
+        ],
+        startingBalances: {
+            'tb1qalice0000000000000000000000000000000': { 1: '300000000' },
+            'tb1qbob00000000000000000000000000000000': { 1: '0' },
+            'tb1qcarol000000000000000000000000000000': { 1: '100000000' }
+        }
+    });
+    const core = tx2SendBatch.batchCore;
+    const proofHash = ZkConsensus.sha256Hex('tx2-send-batch-proof');
+    const programHash = ZkConsensus.sha256Hex('tx2-send-batch-program');
+    return {
+        tx2SendBatch,
+        envelope: ZkConsensus.buildZkConsensusEnvelope({
+            proofHash,
+            programHash,
+            publicInputs: {
+                tx2SendBatchHash: core.batchHash,
+                tx2InputStateRoot: core.inputStateRoot,
+                tx2OutputStateRoot: core.outputStateRoot
+            },
+            daBlob: {
+                carrier: 'snacksack-stwo-proof-run',
+                encoding: 'json',
+                value: {
+                    tx2SendBatch,
+                    proofSummary: {
+                        proofSha256: proofHash,
+                        programSha256: programHash
+                    }
+                }
+            },
+            signedL1TxHex: '02000000000100',
+            batchL2TxHex: '74783273656e646261746368',
+            movements: Tx2SendBatch.movementsFromSends(core.sends)
+        })
+    };
 }
 
 describe('tx34 ZK batch movement draft', () => {
@@ -478,6 +534,37 @@ describe('tx34 ZK batch movement draft', () => {
             else process.env.TL_ZK_STWO_WASM_PACKAGE = previousWasmPackage;
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
+    });
+
+    test('binds a batch of tx2 sends to ZK movements and current input rows', async () => {
+        const { envelope, tx2SendBatch } = fixtureTx2SendBatchEnvelope();
+        expect(ZkConsensus.verifyZkConsensusEnvelope(envelope)).toEqual({ ok: true });
+
+        const binding = Tx2SendBatch.assertEnvelopeBindsTx2SendBatch(envelope, tx2SendBatch);
+        expect(binding.batchHash).toBe(tx2SendBatch.batchCore.batchHash);
+        expect(binding.inputStateRoot).toBe(tx2SendBatch.batchCore.inputStateRoot);
+        expect(binding.outputStateRoot).toBe(tx2SendBatch.batchCore.outputStateRoot);
+        expect(envelope.envelopeCore.movements).toEqual(Tx2SendBatch.movementsFromSends(tx2SendBatch.batchCore.sends));
+
+        const fakeTally = {
+            async getTally(address, propertyId) {
+                const row = tx2SendBatch.batchCore.inputRows.find((entry) => (
+                    entry.address === address && entry.propertyId === propertyId
+                ));
+                return { available: Tx2SendBatch.tokenUnitsToAmount(row.availableUnits).toNumber() };
+            }
+        };
+        await expect(Tx2SendBatch.assertCurrentInputRows(tx2SendBatch, fakeTally)).resolves.toMatchObject({
+            currentRoot: tx2SendBatch.batchCore.inputStateRoot
+        });
+    });
+
+    test('rejects a tx2 send batch when envelope movements differ from proved sends', () => {
+        const { envelope, tx2SendBatch } = fixtureTx2SendBatchEnvelope();
+        const tampered = JSON.parse(JSON.stringify(envelope));
+        tampered.envelopeCore.movements[0].amountUnits = '1';
+        expect(() => Tx2SendBatch.assertEnvelopeBindsTx2SendBatch(tampered, tx2SendBatch))
+            .toThrow(/movement root mismatch/);
     });
 
     test('rejects a non-approved verifier WASM hash', () => {

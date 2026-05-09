@@ -23,6 +23,7 @@ const OptionsEngine = require('./options.js');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
 const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
+const ZkTx2SendBatch = require('./zkTx2SendBatch.js');
 const ZkEnvelopeResolver = require('./zkEnvelopeResolver.js');
 
 // npm i bitcoinjs-lib bip32 tiny-secp256k1
@@ -3893,6 +3894,22 @@ Example integration point (around line 2900 in your file):
                   params.reason += `Signed channel transfer batch rejected: ${err.message}; `;
                   return params;
               }
+        }
+
+        const tx2SendBatch = ZkTx2SendBatch.extractTx2SendBatch(envelope);
+        if (tx2SendBatch) {
+            try {
+                const binding = ZkTx2SendBatch.assertEnvelopeBindsTx2SendBatch(envelope, tx2SendBatch);
+                params.zkTx2SendBatch = binding.normalized;
+                params.zkTx2SendBatchHash = binding.batchHash;
+                params.zkTx2InputStateRoot = binding.inputStateRoot;
+                params.zkTx2OutputStateRoot = binding.outputStateRoot;
+                await ZkTx2SendBatch.assertCurrentInputRows(binding.normalized, TallyMap);
+            } catch (err) {
+                params.valid = false;
+                params.reason += `Tx2 send batch rejected: ${err.message}; `;
+                return params;
+            }
         }
 
         const wasmCheck = await ZkWasmVerifier.verifyEnvelope(envelope);

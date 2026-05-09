@@ -55,9 +55,37 @@ For a signed channel-transfer batch, the tally movement is skipped and the chann
 
 Descendant transfers are encoded by signing `dependsOnTransferIds` inside each transfer core. During execution, a transfer can only depend on transfer ids already seen earlier in the batch, so an unpublished child cannot be applied before the unpublished parent whose output it spends.
 
+For a tx2 send batch, the DA blob can carry `tx2SendBatch`:
+
+```json
+{
+  "kind": "tl_zk_tx2_send_batch",
+  "batchCore": {
+    "protocol": "tl_zk_tx2_send_batch_v1",
+    "sends": [
+      {
+        "protocol": "tradelayer_tx2_send_v1",
+        "sender": "tb1q...",
+        "recipient": "tb1q...",
+        "propertyId": 1,
+        "amountUnits": "125000000",
+        "nonce": "send-1"
+      }
+    ],
+    "inputStateRoot": "...",
+    "outputStateRoot": "...",
+    "movementRoot": "...",
+    "batchHash": "..."
+  }
+}
+```
+
+Consensus recomputes the send batch hash, input root, output root, and movement root from the batch. It rejects the envelope if those roots differ from `publicInputs.tx2SendBatchHash`, `publicInputs.tx2InputStateRoot`, `publicInputs.tx2OutputStateRoot`, or the envelope movement root. During tx34 validity, it also rebuilds the current touched tally rows and requires the root to match the proved input root before `Logic.zkBatchMove` can apply the movements. This makes tx34 a ZK-compressed tx2 send batch: many tx2-style transfers, one proof envelope, one anchor, and one audited state update.
+
 ## Dev Notes
 
 - `src/zkConsensusEnvelope.js` defines the canonical envelope and verifier result hashes.
+- `src/zkTx2SendBatch.js` defines the tx2 send-batch witness shape and row-root checks.
 - `src/zkWasmVerifier.js` loads `wasm/tlzk_verifier/pkg-node` in Node, with a web package fallback.
 - `wasm/tlzk_verifier` contains the Rust verifier source.
 - `browser/tlzk_consensus_zk_worker.js` is the browser/Electron worker template for non-blocking verification.
