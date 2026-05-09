@@ -82,10 +82,56 @@ For a tx2 send batch, the DA blob can carry `tx2SendBatch`:
 
 Consensus recomputes the send batch hash, input root, output root, and movement root from the batch. It rejects the envelope if those roots differ from `publicInputs.tx2SendBatchHash`, `publicInputs.tx2InputStateRoot`, `publicInputs.tx2OutputStateRoot`, or the envelope movement root. During tx34 validity, it also rebuilds the current touched tally rows and requires the root to match the proved input root before `Logic.zkBatchMove` can apply the movements. This makes tx34 a ZK-compressed tx2 send batch: many tx2-style transfers, one proof envelope, one anchor, and one audited state update.
 
+For PNL settlement, the DA blob can carry `pnlSettlementBatch` covering the two PNL settlement surfaces:
+
+```json
+{
+  "kind": "tl_zk_pnl_settlement_batch",
+  "batchCore": {
+    "protocol": "tl_zk_pnl_settlement_batch_v1",
+    "settlements": [
+      {
+        "protocol": "tradelayer_tx23_net_settle_v1",
+        "txType": 23,
+        "settleType": 2,
+        "channelAddress": "tb1q...",
+        "propertyId": 1,
+        "amountUnits": "75000000",
+        "payerColumn": "A",
+        "receiverColumn": "B",
+        "nonce": "tx23-net"
+      },
+      {
+        "protocol": "tradelayer_tx31_king_settle_v1",
+        "txType": 31,
+        "settleType": 3,
+        "channelAddress": "tb1q...",
+        "propertyId": 1,
+        "amountUnits": "25000000",
+        "payerColumn": "B",
+        "receiverColumn": "A",
+        "blockStart": 100,
+        "blockEnd": 120,
+        "channelRoot": "...",
+        "nonce": "tx31-king"
+      }
+    ],
+    "inputStateRoot": "...",
+    "outputStateRoot": "...",
+    "settlementRoot": "...",
+    "movementRoot": "...",
+    "batchHash": "..."
+  }
+}
+```
+
+The movement layer uses `channel:<channelAddress>:A` and `channel:<channelAddress>:B` pseudo-addresses, matching the signed-channel ZK convention. Consensus recomputes `pnlSettlementBatchHash`, `pnlSettlementRoot`, `pnlInputStateRoot`, `pnlOutputStateRoot`, and the envelope movement root. During tx34 validity it also reloads the touched channel rows from `Channels.getChannel` and rejects stale proofs before accepting the verifier result.
+
 ## Dev Notes
 
 - `src/zkConsensusEnvelope.js` defines the canonical envelope and verifier result hashes.
 - `src/zkTx2SendBatch.js` defines the tx2 send-batch witness shape and row-root checks.
+- `src/zkPnlSettlementBatch.js` defines tx23 NET_SETTLE and tx31 KING_SETTLE witness shapes and channel row-root checks.
 - `src/zkWasmVerifier.js` loads `wasm/tlzk_verifier/pkg-node` in Node, with a web package fallback.
 - `wasm/tlzk_verifier` contains the Rust verifier source.
 - `browser/tlzk_consensus_zk_worker.js` is the browser/Electron worker template for non-blocking verification.

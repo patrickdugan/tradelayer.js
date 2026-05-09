@@ -13,6 +13,7 @@ const ZkEnvelopeResolver = require('../src/zkEnvelopeResolver.js');
 const ZkProofArtifactResolver = require('../src/zkProofArtifactResolver.js');
 const SignedChannelTransfer = require('../src/zkSignedChannelTransfer.js');
 const Tx2SendBatch = require('../src/zkTx2SendBatch.js');
+const PnlSettlementBatch = require('../src/zkPnlSettlementBatch.js');
 const RejectionDemo = require('../scripts/runZkVerifierRejectionDemo.js');
 
 function privateKeyFromLabel(label) {
@@ -175,6 +176,75 @@ function fixtureTx2SendBatchEnvelope() {
             signedL1TxHex: '02000000000100',
             batchL2TxHex: '74783273656e646261746368',
             movements: Tx2SendBatch.movementsFromSends(core.sends)
+        })
+    };
+}
+
+function fixturePnlSettlementBatchEnvelope() {
+    const pnlSettlementBatch = PnlSettlementBatch.buildPnlSettlementBatch({
+        settlements: [
+            {
+                txType: 23,
+                settleType: 2,
+                channelAddress: 'tb1qpnlchannel00000000000000000000000000',
+                propertyId: 1,
+                netAmount: 0.75,
+                columnAIsSeller: true,
+                txidNeutralized1: 'close-a',
+                txidNeutralized2: 'close-b',
+                nonce: 'tx23-net'
+            },
+            {
+                txType: 31,
+                settleType: 3,
+                channelAddress: 'tb1qpnlchannel00000000000000000000000000',
+                propertyId: 1,
+                amountUnits: '25000000',
+                aPaysBDirection: false,
+                blockStart: 100,
+                blockEnd: 120,
+                channelRoot: ZkConsensus.sha256Hex('king-channel-root'),
+                totalContracts: 2,
+                neutralizedCount: 4,
+                nonce: 'tx31-king'
+            }
+        ],
+        startingChannels: {
+            tb1qpnlchannel00000000000000000000000000: {
+                channel: 'tb1qpnlchannel00000000000000000000000000',
+                A: { 1: 2 },
+                B: { 1: 1 }
+            }
+        }
+    });
+    const core = pnlSettlementBatch.batchCore;
+    const proofHash = ZkConsensus.sha256Hex('pnl-settlement-proof');
+    const programHash = ZkConsensus.sha256Hex('pnl-settlement-program');
+    return {
+        pnlSettlementBatch,
+        envelope: ZkConsensus.buildZkConsensusEnvelope({
+            proofHash,
+            programHash,
+            publicInputs: {
+                pnlSettlementBatchHash: core.batchHash,
+                pnlSettlementRoot: core.settlementRoot,
+                pnlInputStateRoot: core.inputStateRoot,
+                pnlOutputStateRoot: core.outputStateRoot
+            },
+            daBlob: {
+                carrier: 'snacksack-stwo-proof-run',
+                encoding: 'json',
+                value: {
+                    pnlSettlementBatch,
+                    proofSummary: {
+                        proofSha256: proofHash,
+                        programSha256: programHash
+                    }
+                }
+            },
+            signedL1TxHex: '02000000000100',
+            batchL2TxHex: '706e6c736574746c656d656e746261746368',
+            movements: PnlSettlementBatch.movementsFromSettlements(core.settlements)
         })
     };
 }
@@ -564,6 +634,42 @@ describe('tx34 ZK batch movement draft', () => {
         const tampered = JSON.parse(JSON.stringify(envelope));
         tampered.envelopeCore.movements[0].amountUnits = '1';
         expect(() => Tx2SendBatch.assertEnvelopeBindsTx2SendBatch(tampered, tx2SendBatch))
+            .toThrow(/movement root mismatch/);
+    });
+
+    test('binds tx23 net-settle and tx31 king-settle PNL batches to channel rows', async () => {
+        const { envelope, pnlSettlementBatch } = fixturePnlSettlementBatchEnvelope();
+        expect(ZkConsensus.verifyZkConsensusEnvelope(envelope)).toEqual({ ok: true });
+
+        const binding = PnlSettlementBatch.assertEnvelopeBindsPnlSettlementBatch(envelope, pnlSettlementBatch);
+        expect(binding.batchHash).toBe(pnlSettlementBatch.batchCore.batchHash);
+        expect(binding.settlementRoot).toBe(pnlSettlementBatch.batchCore.settlementRoot);
+        expect(binding.inputStateRoot).toBe(pnlSettlementBatch.batchCore.inputStateRoot);
+        expect(binding.outputStateRoot).toBe(pnlSettlementBatch.batchCore.outputStateRoot);
+        expect(envelope.envelopeCore.movements).toEqual(
+            PnlSettlementBatch.movementsFromSettlements(pnlSettlementBatch.batchCore.settlements)
+        );
+
+        const fakeChannels = {
+            async getChannel(channelAddress) {
+                expect(channelAddress).toBe('tb1qpnlchannel00000000000000000000000000');
+                return {
+                    channel: channelAddress,
+                    A: { 1: 2 },
+                    B: { 1: 1 }
+                };
+            }
+        };
+        await expect(PnlSettlementBatch.assertCurrentInputRows(pnlSettlementBatch, fakeChannels)).resolves.toMatchObject({
+            currentRoot: pnlSettlementBatch.batchCore.inputStateRoot
+        });
+    });
+
+    test('rejects a PNL settlement batch when envelope movements differ from proved settlements', () => {
+        const { envelope, pnlSettlementBatch } = fixturePnlSettlementBatchEnvelope();
+        const tampered = JSON.parse(JSON.stringify(envelope));
+        tampered.envelopeCore.movements[1].amountUnits = '1';
+        expect(() => PnlSettlementBatch.assertEnvelopeBindsPnlSettlementBatch(tampered, pnlSettlementBatch))
             .toThrow(/movement root mismatch/);
     });
 

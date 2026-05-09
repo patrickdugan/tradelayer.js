@@ -24,6 +24,7 @@ const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
 const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
 const ZkTx2SendBatch = require('./zkTx2SendBatch.js');
+const ZkPnlSettlementBatch = require('./zkPnlSettlementBatch.js');
 const ZkEnvelopeResolver = require('./zkEnvelopeResolver.js');
 
 // npm i bitcoinjs-lib bip32 tiny-secp256k1
@@ -3908,6 +3909,23 @@ Example integration point (around line 2900 in your file):
             } catch (err) {
                 params.valid = false;
                 params.reason += `Tx2 send batch rejected: ${err.message}; `;
+                return params;
+            }
+        }
+
+        const pnlSettlementBatch = ZkPnlSettlementBatch.extractPnlSettlementBatch(envelope);
+        if (pnlSettlementBatch) {
+            try {
+                const binding = ZkPnlSettlementBatch.assertEnvelopeBindsPnlSettlementBatch(envelope, pnlSettlementBatch);
+                params.zkPnlSettlementBatch = binding.normalized;
+                params.zkPnlSettlementBatchHash = binding.batchHash;
+                params.zkPnlSettlementRoot = binding.settlementRoot;
+                params.zkPnlInputStateRoot = binding.inputStateRoot;
+                params.zkPnlOutputStateRoot = binding.outputStateRoot;
+                await ZkPnlSettlementBatch.assertCurrentInputRows(binding.normalized, Channels);
+            } catch (err) {
+                params.valid = false;
+                params.reason += `PNL settlement batch rejected: ${err.message}; `;
                 return params;
             }
         }
