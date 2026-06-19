@@ -20,6 +20,7 @@ const TradeHistory = require('./tradeHistoryManager.js')
 const VolumeIndex = require('./volumeIndex.js')
 const db = require('./db.js')
 const IssuanceIntent = require('./issuanceIntent.js')
+const WalletCache = require('../utils/walletCache.js')
 
 let isInitialized = false; // A flag to track the initialization status
 let isInitializing = false;
@@ -28,6 +29,52 @@ const app = express();
 const port = Number(process.env.TL_LISTENER_PORT || process.env.PORT || 3000);
 
 app.use(express.json()); // Middleware to parse JSON bodies
+
+function trimSlash(value) {
+    return String(value || '').replace(/\/+$/, '');
+}
+
+function getRelayerBaseUrl() {
+    return trimSlash(
+        process.env.TL_RELAYER_URL ||
+        process.env.RELAYER_URL ||
+        process.env.TRADELAYER_RELAYER_URL ||
+        'http://127.0.0.1:9191'
+    );
+}
+
+async function callAllocatedRelayerRpc(method, params, options = {}) {
+    const relayerBaseUrl = getRelayerBaseUrl();
+    const providerNodeId = String(options.providerNodeId || options.preferredProviderNodeId || '').trim();
+    if (!providerNodeId) {
+        throw new Error('Missing providerNodeId for allocated RPC');
+    }
+
+    const url = `${relayerBaseUrl}/rpc/allocated/${encodeURIComponent(providerNodeId)}/${encodeURIComponent(method)}`;
+    console.log('[portfolio-heartbeat][walletListener][allocated-rpc] request', {
+        method,
+        providerNodeId,
+        network: options.network || null,
+        service: options.service || null,
+        route: url,
+    });
+
+    const res = await axios.post(url, {
+        params: Array.isArray(params) ? params : [params],
+        network: options.network,
+        service: options.service,
+        timeoutMs: options.timeoutMs,
+        preferredProviderNodeId: providerNodeId,
+    });
+
+    console.log('[portfolio-heartbeat][walletListener][allocated-rpc] response', {
+        method,
+        providerNodeId,
+        ok: !!res?.data?.ok,
+        hasData: !!res?.data?.data || !!res?.data?.result || !!res?.data,
+    });
+    return res.data;
+}
 
 // Function to check if the ClientWrapper is ready (with retries)
 async function waitForClientWrapper(maxRetries = 10, interval = 500) {
@@ -274,6 +321,38 @@ app.post('/tl_getSyncStatus', async (_req, res) => {
     }
 });
 
+app.post('/tl_getStateSnapshot', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const label = String(body.label || process.env.TL_WALLET_LABEL || 'TL').trim() || 'TL';
+        const walletCache = new WalletCache();
+        const [syncStatus, stateSnapshot] = await Promise.all([
+            Main.getSyncStatus(),
+            walletCache.getStateSnapshot(label),
+        ]);
+
+        const mergedSnapshot = {
+            source: 'walletListener',
+            updatedAt: Date.now(),
+            label,
+            syncStatus,
+            state: stateSnapshot,
+        };
+
+        console.log('[portfolio-heartbeat][walletListener][state-snapshot] response', {
+            label,
+            walletBalanceCount: stateSnapshot?.walletBalanceCount ?? 0,
+            positionCount: stateSnapshot?.positionCount ?? 0,
+            hasSyncStatus: !!syncStatus,
+        });
+
+        res.status(200).json(mergedSnapshot);
+    } catch (error) {
+        console.error('Error fetching TradeLayer state snapshot:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
 app.post('/tl_getTrackHeight', async (req, res) => {
     try {
         // TrackHeight is persisted in consensus DB; do not initialize Main for read-only status.
@@ -336,6 +415,32 @@ app.post('/tl_getAllBalancesForAddress', async (req, res) => {
         res.status(200).json(balances);
     } catch (error) {
         console.error(error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_allocatedRpc', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const method = String(body.method || '').trim();
+        const params = Array.isArray(body.params) ? body.params : [body.params].filter((v) => v !== undefined);
+        const providerNodeId = String(body.providerNodeId || body.preferredProviderNodeId || '').trim();
+        if (!method) {
+            return res.status(400).json({ error: 'Missing method' });
+        }
+        if (!providerNodeId) {
+            return res.status(400).json({ error: 'Missing providerNodeId' });
+        }
+
+        const result = await callAllocatedRelayerRpc(method, params, {
+            providerNodeId,
+            network: body.network,
+            service: body.service,
+            timeoutMs: body.timeoutMs,
+        });
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('[portfolio-heartbeat][walletListener][allocated-rpc] failed', error);
         res.status(500).send('Error: ' + error.message);
     }
 });

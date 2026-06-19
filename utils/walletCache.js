@@ -1,13 +1,22 @@
-// Import necessary modules and interfaces
-const Litecoin = require('litecoin');
-const config = {host: '127.0.0.1',
-                      port: 8332,
-                      user: 'user',
-                      pass: 'pass',
-                      timeout: 10000}
-const rpcClient = new Litecoin(config) // Replace with your actual wallet interface module
-const { isMyAddressAllWallets, getTallyForAddress } = require('./interface.js'); // Helper functions, to be implemented
-const tallyMap = require('tally3.js')
+// Import necessary modules and interfaces lazily to keep listener startup light.
+const LitecoinModule = require('litecoin');
+let rpcClient = null;
+
+function getRpcClient() {
+    if (rpcClient) return rpcClient;
+    const Litecoin = typeof LitecoinModule === 'function'
+        ? LitecoinModule
+        : LitecoinModule?.default || LitecoinModule?.Litecoin || LitecoinModule?.Client || LitecoinModule;
+    const config = {
+        host: process.env.RPC_HOST || '127.0.0.1',
+        port: Number(process.env.RPC_PORT || 8332),
+        user: process.env.RPC_USER || 'user',
+        pass: process.env.RPC_PASSWORD || process.env.RPC_PASS || 'pass',
+        timeout: Number(process.env.RPC_TIMEOUT_MS || 10000),
+    };
+    rpcClient = new Litecoin(config);
+    return rpcClient;
+}
 class WalletCache {
     constructor() {
         this.walletBalancesCache = new Map(); // A map to store wallet balances
@@ -19,7 +28,9 @@ class WalletCache {
     
     async updateWalletCache(label) {
         let numChanges = 0;
-        const addresses = await rpcClient.getAddressesByLabel(label);
+        const client = getRpcClient();
+        const addresses = await client.getAddressesByLabel(label);
+        const TallyMap = require('../src/tally.js');
 
         for (const address of addresses) {
             const balance = await TallyMap.getAddressBalances(address);
@@ -37,8 +48,10 @@ class WalletCache {
     async getAllWalletBalances(label) {
             try {
                 // Get all TradeLayer addresses with the specified label from the wallet
-                const addresses = await rpcClient.getAddressesByLabel(label);
+                const client = getRpcClient();
+                const addresses = await client.getAddressesByLabel(label);
                 const allBalances = [];
+                const TallyMap = require('../src/tally.js');
 
                 // For each TradeLayer address, get all balances
                 for (const address of addresses) {
@@ -81,7 +94,8 @@ class WalletCache {
         try {
             // Get all TradeLayer addresses with the specified label from the wallet
             const label = 'TL'; // Replace with your actual label used for TradeLayer addresses
-            const addresses = await rpcClient.getAddressesByLabel(label);
+            const client = getRpcClient();
+            const addresses = await client.getAddressesByLabel(label);
             const allPositions = [];
 
             // For each TradeLayer address, get contract positions
@@ -103,8 +117,8 @@ class WalletCache {
      * Retrieves contract positions for a specific address from MarginMaps.
      */
     async getContractPositionsForAddress(address) {
-        const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
-        const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+        const MarginMap = require('../src/marginMap.js'); // Replace with your MarginMap module
+        const ContractsRegistry = require('../src/contractRegistry.js'); // Replace with your ContractsRegistry module
         const positions = [];
 
         // Fetch margin map for the address
@@ -132,9 +146,9 @@ class WalletCache {
         return positions;
     }
 
-    async getContractPositionForAddressAndContractId(address, contractId) {
-    const MarginMap = require('./MarginMap'); // Replace with your MarginMap module
-    const ContractsRegistry = require('./ContractsRegistry'); // Replace with your ContractsRegistry module
+async getContractPositionForAddressAndContractId(address, contractId) {
+    const MarginMap = require('../src/marginMap.js'); // Replace with your MarginMap module
+    const ContractsRegistry = require('../src/contractRegistry.js'); // Replace with your ContractsRegistry module
     
     // Fetch margin map for the address
     const marginMap = await MarginMap.getMarginMapForAddress(address);
@@ -166,6 +180,22 @@ class WalletCache {
         // Include other relevant contract position details
     };
 }
+
+    async getStateSnapshot(label = 'TL') {
+        const [walletBalances, positions] = await Promise.all([
+            this.getAllWalletBalances(label),
+            this.getPositions(),
+        ]);
+
+        return {
+            label,
+            updatedAt: Date.now(),
+            walletBalances,
+            positions,
+            walletBalanceCount: Array.isArray(walletBalances) ? walletBalances.length : 0,
+            positionCount: Array.isArray(positions) ? positions.length : 0,
+        };
+    }
 
 }
 
