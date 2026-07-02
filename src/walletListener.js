@@ -21,6 +21,7 @@ const VolumeIndex = require('./volumeIndex.js')
 const db = require('./db.js')
 const IssuanceIntent = require('./issuanceIntent.js')
 const WalletCache = require('../utils/walletCache.js')
+const Encode = require('./txEncoder.js')
 
 let isInitialized = false; // A flag to track the initialization status
 let isInitializing = false;
@@ -191,6 +192,42 @@ app.post('/tl_getAttestations', async (req, res) => {
         res.json(attestationHistory); // Send the sorted array back
     } catch (error) {
         console.error('Error validating address:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+function bodyParams(req) {
+    return Array.isArray(req.body?.params) ? req.body.params : [];
+}
+
+app.post('/tl_createpayload_attestation', async (req, res) => {
+    try {
+        const params = bodyParams(req);
+        const payload = params.length >= 4
+            ? Encode.encodeIssueOrRevokeAttestation({
+                revoke: params[0],
+                id: params[1],
+                targetAddress: params[2],
+                metaData: params[3]
+            })
+            : Encode.encodeIssueOrRevokeAttestation(req.body || {});
+        res.status(200).json(payload);
+    } catch (error) {
+        console.error('Error creating attestation payload:', error);
+        res.status(500).send('Error: ' + error.message);
+    }
+});
+
+app.post('/tl_createpayload_commit_tochannel', async (req, res) => {
+    try {
+        const params = bodyParams(req);
+        const config = params.length === 1 && typeof params[0] === 'object'
+            ? params[0]
+            : (req.body || {});
+        const payload = Encode.encodeCommit(config);
+        res.status(200).json(payload);
+    } catch (error) {
+        console.error('Error creating commit payload:', error);
         res.status(500).send('Error: ' + error.message);
     }
 });
