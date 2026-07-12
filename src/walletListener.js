@@ -174,7 +174,13 @@ app.post('/tl_getTransaction', async (req, res) => {
 
 app.post('/tl_getChannelColumn', async (req,res) =>{
     try {
-        const { channelAddress, newCommitAddress, cpAddress } = req.body;
+        const body = req.body || {};
+        const channelAddress = body.channelAddress || body.channel;
+        const newCommitAddress = body.newCommitAddress || body.myAddress || body.myAddr || body.buyerAddress;
+        const cpAddress = body.cpAddress || body.cpAddr;
+        if (!channelAddress || !newCommitAddress || !cpAddress) {
+            return res.status(400).json({ error: 'channelAddress, newCommitAddress, and cpAddress are required' });
+        }
         const column = await Channels.predictColumnForAddress(channelAddress, newCommitAddress, cpAddress)
         res.json(column);
     } catch (error) {
