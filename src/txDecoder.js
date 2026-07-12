@@ -670,13 +670,30 @@ const Decode = {
     // Decode Create Derivative of LRC20 or RGB
     decodeColoredCoin: (payload) => {
         const parts = payload.split(',');
+        const decodeDecimal = (encoded) => {
+            if (!encoded) return 0;
+            const isDecimal = encoded.endsWith('~');
+            const numStr = isDecimal ? encoded.slice(0, -1) : encoded;
+            const value = new BigNumber(parseInt(numStr || '0', 36));
+            return isDecimal ? value.div(1e8).toNumber() : value.toNumber();
+        };
 
         // Ensure there are enough parts to avoid undefined access
         return {
             encodeDecodeRecode: parseInt(parts[0], 10), // Assuming it's a numeric identifier
             propertyId: parseInt(parts[1], 36), // The TL account token being encoded
             satsRatio: parseInt(parts[2], 36), // How many sats of the account token
-            homeAddress: parts[3] || '' // Optional address, defaults to empty string if not provided
+            homeAddress: parts[3] || '', // Optional address, defaults to empty string if not provided
+            amount: decodeDecimal(parts[4]),
+            coloredOutputRef: parts[5] || '',
+            coloredOutput: parts[5] || '',
+            tapAssetId: parts[6] || '',
+            proofRoot: parts[7] || '',
+            rfqId: parts[8] || '',
+            bitvmStatusRef: parts[9] || '',
+            commitmentId: parts[10] || '',
+            previousOutputRef: parts[11] || '',
+            newColoredOutputRef: parts[12] || ''
         };
     },
 
@@ -714,6 +731,7 @@ const Decode = {
                 zkEnvelope: null
             };
         }
+
         let zkEnvelope = null;
         const envelopeB64 = parts[13] || '';
         if (envelopeB64.startsWith('b64:')) {

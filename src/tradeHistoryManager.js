@@ -35,14 +35,73 @@ class TradeHistory {
 }
 
 async getTradeHistoryForAddress(address, contractId) {
-  console.log('about to call load history for contract ' + contractId);
-  const trades = await this.loadTradeHistory(contractId);
+  return TradeHistory.getTradeHistoryForAddress(address, contractId);
+}
 
-  return trades.filter(t => {
-    const buyer = t?.buyer || t?.buyerAddress || t?.counterpartyAddress;
-    const seller = t?.seller || t?.sellerAddress || t?.liquidatingAddress;
-    return buyer === address || seller === address;
+static async getTradeHistoryForAddress(address, contractId) {
+  const tradeDB = await dbInstance.getDatabase('tradeHistory');
+  const addr = String(address || '');
+  const addrL = addr.toLowerCase();
+  if (!addr) return [];
+
+  const docs = await tradeDB.findAsync({
+    $or: [
+      { 'trade.buyer': addr },
+      { 'trade.seller': addr },
+      { 'trade.buyerAddress': addr },
+      { 'trade.sellerAddress': addr },
+      { 'trade.counterpartyAddress': addr },
+      { 'trade.liquidatingAddress': addr },
+      { buyer: addr },
+      { seller: addr },
+      { buyerAddress: addr },
+      { sellerAddress: addr },
+      { counterpartyAddress: addr },
+      { liquidatingAddress: addr },
+      { 'trade.buyer': addrL },
+      { 'trade.seller': addrL },
+      { 'trade.buyerAddress': addrL },
+      { 'trade.sellerAddress': addrL },
+      { 'trade.counterpartyAddress': addrL },
+      { 'trade.liquidatingAddress': addrL },
+      { buyer: addrL },
+      { seller: addrL },
+      { buyerAddress: addrL },
+      { sellerAddress: addrL },
+      { counterpartyAddress: addrL },
+      { liquidatingAddress: addrL },
+    ],
   });
+
+  const expectedContractKey = contractId === undefined || contractId === null
+    ? null
+    : `contract-${contractId}`;
+
+  return (docs || [])
+    .filter(doc => {
+      const trade = doc?.trade ?? doc;
+      const participants = [
+        trade?.buyer,
+        trade?.seller,
+        trade?.buyerAddress,
+        trade?.sellerAddress,
+        trade?.counterpartyAddress,
+        trade?.liquidatingAddress,
+      ];
+      const matchesAddress = participants.some(participant =>
+        typeof participant === 'string' && participant.toLowerCase() === addrL
+      );
+      if (!matchesAddress) return false;
+
+      if (!expectedContractKey) return true;
+      if (typeof doc?.key === 'string' && doc.key.startsWith('contract-')) {
+        return doc.key === expectedContractKey;
+      }
+      return String(trade?.contractId) === String(contractId);
+    })
+    .map(d => d.trade ?? d)
+    .filter(Boolean)
+    .sort((a, b) => Number(a.blockHeight || a.block || 0) - Number(b.blockHeight || b.block || 0));
 }
 
 

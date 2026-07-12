@@ -1,7 +1,7 @@
 {
   "kind": "tlzk_envelope_da_record_v1",
   "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
-  "writtenAt": "2026-05-08T21:22:15.024Z",
+  "writtenAt": "2026-05-09T10:30:52.917Z",
   "envelope": {
     "kind": "tlzk_zk_consensus_envelope",
     "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",

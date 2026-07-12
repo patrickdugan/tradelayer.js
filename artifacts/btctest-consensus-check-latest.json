@@ -1,18 +1,18 @@
 {
   "kind": "btctest_consensus_check",
-  "generatedAt": "2026-04-27T23:16:52.652Z",
+  "generatedAt": "2026-05-04T19:27:05.190Z",
   "node": {
     "chain": "testnet4",
-    "blocks": 132713,
-    "headers": 132713,
+    "blocks": 133657,
+    "headers": 133657,
     "initialblockdownload": false,
     "verificationprogress": 1,
-    "subversion": "/Satoshi:30.2.0/",
+    "subversion": "/Satoshi:31.0.0/",
     "wallet": "utxoref-testnet"
   },
   "database": {
-    "root": "nedb-sandbox",
-    "path": "nedb-sandbox\\btc-test"
+    "root": "nedb-data",
+    "path": "nedb-data\\btc-test"
   },
   "activations": {
     "network": "BTCTEST",
@@ -75,7 +75,7 @@
         "label": "subswap-dlc-funding",
         "txid": "bf3694aaf87eda0df0230e421775be6d5c0ee40b1e701aadbc7a61417682c0c0",
         "txType": null,
-        "source": "node-rawtransaction",
+        "source": "wallet-transaction",
         "voutCount": 3,
         "payload": "UTXORef:subswap-htlc:366161841ab76122:132857",
         "payloadOk": true,
@@ -264,8 +264,8 @@
     ]
   },
   "consensus": {
-    "stateHash": "1735887642f79ed4ff67aebbe0015567dc001ff23825d41f1cfcd305fc480e33",
-    "codeHash": "f41d456aa0ae98f2595835c62d3d89b333cb041782479717189ce3eb86cd4df9"
+    "stateHash": "7749d98115e1d5ceaca2f1524d63346a34ab2bb7cfe889ed3889d40dc23457cf",
+    "codeHash": "421ae2804565d29ee67f513749f9360783265dd8506ffb9876851216d9bdf341"
   },
   "reportPath": "artifacts\\btctest-consensus-check-latest.json",
   "ok": true

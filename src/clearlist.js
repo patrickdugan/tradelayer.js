@@ -145,8 +145,6 @@ class clearlistManager {
     }
 
     static async addAttestation(clearlistId, address, metaData, block) {
-        const attestationId = address;
-
         // Detect xpub prefix in metaData
         let xpub = null;
         if (typeof metaData === 'string' && metaData.startsWith('xpub:')) {
@@ -163,6 +161,7 @@ class clearlistManager {
         };
 
         const base = await dbInstance.getDatabase('attestations');
+        const attestationId = await this.getAttestationStorageId(base, clearlistId, address);
         await base.updateAsync(
             { _id: attestationId },
             { $set: { data: attestationData } },
@@ -173,7 +172,6 @@ class clearlistManager {
     }
 
     static async addAttestationWithXpub(clearlistId, address, metaData, xpub, block) {
-        const attestationId = address;
         const attestationData = {
             listId: clearlistId,
             address: address,
@@ -184,6 +182,7 @@ class clearlistManager {
         };
 
         const base = await dbInstance.getDatabase('attestations');
+        const attestationId = await this.getAttestationStorageId(base, clearlistId, address);
         await base.updateAsync(
             { _id: attestationId },
             { $set: { data: attestationData } },
@@ -191,6 +190,29 @@ class clearlistManager {
         );
 
         return attestationId;
+    }
+
+    // New records are scoped by clearlist so one address can be attested to many lists.
+    // Retain an existing legacy address-only record when it already belongs to this list.
+    static async getAttestationStorageId(base, clearlistId, address) {
+        let existing = await base.findOneAsync({
+            'data.address': address,
+            $or: [
+                { 'data.listId': clearlistId },
+                { 'data.clearlistId': clearlistId }
+            ]
+        });
+
+        // Older rows may have serialized the list id differently (for example, "1" vs 1).
+        if (!existing && typeof base.findAsync === 'function') {
+            const candidates = await base.findAsync({ 'data.address': address });
+            existing = candidates.find(record => {
+                const recordListId = record?.data?.listId ?? record?.data?.clearlistId;
+                return record?.data?.address === address && String(recordListId) === String(clearlistId);
+            });
+        }
+
+        return existing ? existing._id : `attestation:${clearlistId}:${address}`;
     }
 
     /**

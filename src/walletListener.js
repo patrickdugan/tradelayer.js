@@ -22,6 +22,7 @@ const db = require('./db.js')
 const IssuanceIntent = require('./issuanceIntent.js')
 const WalletCache = require('../utils/walletCache.js')
 const Encode = require('./txEncoder.js')
+const crypto = require('crypto');
 
 let isInitialized = false; // A flag to track the initialization status
 let isInitializing = false;
@@ -199,6 +200,198 @@ app.post('/tl_getAttestations', async (req, res) => {
 function bodyParams(req) {
     return Array.isArray(req.body?.params) ? req.body.params : [];
 }
+
+const WATCH_ONLY_REGISTRY_TYPE = 'desktopWatchOnlyRegistration';
+
+function watchOnlyError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+}
+
+function normalizeWatchOnlyNetwork(value) {
+    const normalized = String(value || '').trim().toLowerCase().replace(/[_\s-]+/g, '');
+    if (!normalized) return '';
+    if (normalized.includes('test') || normalized === 'regtest') return 'testnet';
+    if (normalized.includes('main') || normalized === 'live') return 'mainnet';
+    return normalized;
+}
+
+function configuredWatchOnlyNetwork() {
+    return normalizeWatchOnlyNetwork(
+        process.env.TL_WATCHONLY_NETWORK || process.env.NETWORK || process.env.DEFAULT_CHAIN || process.env.CHAIN
+    );
+}
+
+function hash160Hex(value) {
+    return crypto.createHash('ripemd160').update(crypto.createHash('sha256').update(value).digest()).digest('hex');
+}
+
+function readWatchOnlyRequest(req) {
+    const params = bodyParams(req);
+    const candidate = params.length === 1 && params[0] && typeof params[0] === 'object'
+        ? params[0]
+        : (req.body || {});
+    const address = String(candidate.address || '').trim();
+    const pubkey = String(candidate.pubkey || candidate.pubKey || '').trim().toLowerCase();
+    const network = normalizeWatchOnlyNetwork(candidate.network);
+    if (!address || address.length > 120) throw watchOnlyError('WATCH_ONLY_INVALID_ADDRESS', 'A single watch-only address is required');
+    if (!/^(02|03)[0-9a-f]{64}$/.test(pubkey)) {
+        throw watchOnlyError('WATCH_ONLY_INVALID_PUBKEY', 'A compressed public key is required');
+    }
+    return { address, pubkey, network };
+}
+
+async function validateScopedWatchOnlyAccount(client, input) {
+    const [validation, chainInfo] = await Promise.all([
+        client.validateAddress(input.address),
+        client.getBlockchainInfo(),
+    ]);
+    if (!validation?.isvalid) {
+        throw watchOnlyError('WATCH_ONLY_INVALID_ADDRESS', 'Address is invalid for the configured wallet network');
+    }
+
+    const coreNetwork = normalizeWatchOnlyNetwork(chainInfo?.chain);
+    const expectedNetwork = configuredWatchOnlyNetwork();
+    if ((input.network && input.network !== coreNetwork) || (expectedNetwork && expectedNetwork !== coreNetwork)) {
+        throw watchOnlyError('WATCH_ONLY_NETWORK_MISMATCH', 'Address request does not match the configured wallet network');
+    }
+
+    const scriptPubKey = String(validation?.scriptPubKey || '').toLowerCase();
+    const pubkeyHash = hash160Hex(Buffer.from(input.pubkey, 'hex'));
+    if (!scriptPubKey || !scriptPubKey.includes(pubkeyHash)) {
+        throw watchOnlyError('WATCH_ONLY_PUBKEY_MISMATCH', 'Public key does not match the requested address');
+    }
+
+    return {
+        address: String(validation.address || input.address).trim(),
+        pubkey: input.pubkey,
+        network: coreNetwork,
+        chainInfo,
+    };
+}
+
+async function getWatchOnlyRegistry() {
+    const proceduralDb = await db.getDatabase('procedural');
+    if (!proceduralDb) throw watchOnlyError('WATCH_ONLY_STORAGE_UNAVAILABLE', 'Watch-only registry storage is unavailable');
+    return proceduralDb;
+}
+
+function watchOnlyRegistryId(network, address) {
+    return `${WATCH_ONLY_REGISTRY_TYPE}:${network}:${String(address).trim().toLowerCase()}`;
+}
+
+async function registerScopedWatchOnlyAccount(client, input) {
+    const validated = await validateScopedWatchOnlyAccount(client, input);
+    const registry = await getWatchOnlyRegistry();
+    const _id = watchOnlyRegistryId(validated.network, validated.address);
+    const existing = await registry.findOneAsync({ _id });
+    if (existing?.pubkey && String(existing.pubkey).toLowerCase() !== validated.pubkey) {
+        throw watchOnlyError('WATCH_ONLY_REGISTRATION_CONFLICT', 'Address is already registered with a different public key');
+    }
+
+    let imported = false;
+    if (!existing?.registeredAt) {
+        try {
+            // Fixed label and rescan=false: this endpoint cannot alter wallet state beyond this one watch key.
+            await client.rpcCall('importpubkey', [validated.pubkey, `tl-watchonly:${validated.network}`, false], true);
+            imported = true;
+        } catch (error) {
+            const message = String(error?.message || error || '').toLowerCase();
+            if (!message.includes('already') && !message.includes('exists')) throw error;
+        }
+    }
+
+    const now = Date.now();
+    const record = {
+        _id,
+        type: WATCH_ONLY_REGISTRY_TYPE,
+        address: validated.address,
+        pubkey: validated.pubkey,
+        network: validated.network,
+        registeredAt: Number(existing?.registeredAt || now),
+        lastSeenAt: now,
+        importCount: Number(existing?.importCount || 0) + (imported ? 1 : 0),
+        source: 'desktop-wallet-listener',
+    };
+    await registry.updateAsync({ _id }, { $set: record }, { upsert: true });
+    return { ...validated, registration: record, imported };
+}
+
+function canonicalWatchOnlyUtxos(rows) {
+    return (Array.isArray(rows) ? rows : [])
+        .map((row) => ({
+            txid: String(row?.txid || '').trim(),
+            vout: Number(row?.vout),
+            amount: Number(row?.amount),
+            scriptPubKey: String(row?.scriptPubKey || '').trim(),
+            confirmations: Number(row?.confirmations || 0),
+        }))
+        .filter((row) => /^[0-9a-f]{64}$/i.test(row.txid) && Number.isInteger(row.vout) && Number.isFinite(row.amount) && !!row.scriptPubKey)
+        .sort((a, b) => a.txid.localeCompare(b.txid) || a.vout - b.vout);
+}
+
+async function buildScopedWatchOnlySnapshot(client, input) {
+    const registered = await registerScopedWatchOnlyAccount(client, input);
+    const rows = await client.listUnspent(0, 999999999, [registered.address]);
+    const utxos = canonicalWatchOnlyUtxos(rows);
+    const snapshotAt = Date.now();
+    const sourceBlock = {
+        chain: String(registered.chainInfo?.chain || ''),
+        height: Number.isFinite(Number(registered.chainInfo?.blocks)) ? Number(registered.chainInfo.blocks) : null,
+        headers: Number.isFinite(Number(registered.chainInfo?.headers)) ? Number(registered.chainInfo.headers) : null,
+        hash: String(registered.chainInfo?.bestblockhash || '') || null,
+    };
+    const snapshotHash = crypto.createHash('sha256').update(JSON.stringify(utxos)).digest('hex');
+    const registry = await getWatchOnlyRegistry();
+    await registry.updateAsync(
+        { _id: registered.registration._id },
+        { $set: { lastSnapshotAt: snapshotAt, lastSnapshotHash: snapshotHash, lastSnapshotHeight: sourceBlock.height, lastSnapshotCount: utxos.length } },
+        { upsert: false },
+    );
+    return {
+        address: registered.address,
+        pubkey: registered.pubkey,
+        network: registered.network,
+        registration: {
+            status: registered.imported ? 'registered' : 'already-registered',
+            registeredAt: registered.registration.registeredAt,
+            importCount: registered.registration.importCount,
+        },
+        snapshot: { id: snapshotHash, at: snapshotAt, count: utxos.length, sourceBlock },
+        utxos,
+    };
+}
+
+app.post('/tl_watchonly_register', async (req, res) => {
+    try {
+        const account = readWatchOnlyRequest(req);
+        const client = await waitForClientWrapper();
+        const registered = await registerScopedWatchOnlyAccount(client, account);
+        res.status(200).json({
+            address: registered.address,
+            pubkey: registered.pubkey,
+            network: registered.network,
+            registration: {
+                status: registered.imported ? 'registered' : 'already-registered',
+                registeredAt: registered.registration.registeredAt,
+                importCount: registered.registration.importCount,
+            },
+        });
+    } catch (error) {
+        res.status(400).json({ error: { code: error?.code || 'WATCH_ONLY_REQUEST_FAILED', message: error?.message || String(error) } });
+    }
+});
+
+app.post('/tl_watchonly_utxos', async (req, res) => {
+    try {
+        const account = readWatchOnlyRequest(req);
+        const client = await waitForClientWrapper();
+        res.status(200).json(await buildScopedWatchOnlySnapshot(client, account));
+    } catch (error) {
+        res.status(400).json({ error: { code: error?.code || 'WATCH_ONLY_REQUEST_FAILED', message: error?.message || String(error) } });
+    }
+});
 
 app.post('/tl_createpayload_attestation', async (req, res) => {
     try {

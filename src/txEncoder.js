@@ -688,15 +688,27 @@ const Encode = {
 
     // Encode Create Derivative of LRC20 or RGB
     encodeColoredCoin: (params) => {
+        const encodeDecimal = (value) => {
+            if (value === undefined || value === null || value === '') return '';
+            return `${new BigNumber(value).times(1e8).integerValue(BigNumber.ROUND_DOWN).toString(36)}~`;
+        };
         const payload = [
             params.encodeDecodeRecode, //0, decode, 1 encode, 2 repairs a channel theft/unauthorized UTXO movement
             params.propertyId?.toString(36) ?? '0', //the TL account token being encoded
-            params.SatsRatio?.toString(36) ?? '0', //how many sats of the account token are rounded to be encoded in 1 UTXO sat e.g. 100, 1000, 10000000
-            params.homeAddress //optional param to cite an addr such as a bridge or AMM depositee where this can recode if interrupted
+            (params.satsRatio ?? params.SatsRatio ?? 1)?.toString(36) ?? '1', //how many token base units are encoded in 1 UTXO sat
+            params.homeAddress || '', //optional bridge/AMM/decode target address
+            encodeDecimal(params.amount),
+            params.coloredOutputRef || params.coloredOutput || params.outputRef || '',
+            params.tapAssetId || '',
+            params.proofRoot || '',
+            params.rfqId || '',
+            params.bitvmStatusRef || '',
+            params.commitmentId || '',
+            params.previousOutputRef || '',
+            params.newColoredOutputRef || ''
         ];
         return payload.join(',');
     },
-
 
     // Type 34: compact anchor for a ZK-verified token batch movement.
     // Full signed L1 hex, signed TL L2 batch hex, movements, and witness data are
@@ -722,6 +734,7 @@ const Encode = {
         if (params.minimalAnchor || params.anchorVersion === 'z2') {
             return ['z2', fields.envelopeId || ''].join('|');
         }
+
         const payload = [
             'z1',
             fields.envelopeId || '',
@@ -748,6 +761,7 @@ const Encode = {
     encodeZkBatchMove: (params = {}) => {
         return Encode.encodeZkBatchMovement(params);
     },
+
 
     // Encode cross TL chain bridging tx
     encodeAbstractionBridge: (params) => {

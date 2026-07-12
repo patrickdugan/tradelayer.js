@@ -1,6 +1,6 @@
 {
   "kind": "tx34_full_proof_artifact_demo",
-  "createdAt": "2026-05-09T10:38:49.284Z",
+  "createdAt": "2026-05-09T17:16:16.527Z",
   "envelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
   "proofHash": "bc40931ee1fd738b6e2c11f2616e7e1e4bff6aad27144a72402e61ad1ada38d6",
   "verifierId": "tlzk_rust_wasm_v0",
@@ -131,7 +131,7 @@
         ]
       },
       "applied": true,
-      "updatedAt": 1778323129244
+      "updatedAt": 1778346976516
     },
     "outputRowsMatch": {
       "ok": true,

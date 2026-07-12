@@ -112,6 +112,12 @@ function buildSignedRelayBundle(opts, stateHash, payloadHash, payloadB64) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.oraclePrivkeyHex && process.env.TL_ORACLE_PRIVKEY_HEX) {
+    args.oraclePrivkeyHex = process.env.TL_ORACLE_PRIVKEY_HEX;
+  }
+  if (!args.oraclePubkeyHex && process.env.TL_ORACLE_PUBKEY_HEX) {
+    args.oraclePubkeyHex = process.env.TL_ORACLE_PUBKEY_HEX;
+  }
 
   const propertyId = Number(args.propertyId);
   const oracleId = Number(args.oracleId);

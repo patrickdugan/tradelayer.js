@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "runId": "zk-channel-transfer-1778275333878",
+  "runId": "zk-channel-transfer-1778322651132",
   "proofRun": "C:\\projects\\tradelayer.js\\artifacts\\snacksack_proof_runs\\tlzk-20260508-170058",
   "proofSummaryPath": "C:\\projects\\tradelayer.js\\artifacts\\snacksack_proof_runs\\tlzk-20260508-170058\\extracted\\tlzk_stwo\\summary.json",
   "envelopeDaPath": "C:\\projects\\tradelayer.js\\artifacts\\zk_envelopes\\84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
@@ -102,7 +102,7 @@
       ]
     },
     "applied": true,
-    "updatedAt": 1778275335231
+    "updatedAt": 1778322654013
   },
   "finalChannels": {
     "tb1qzkchan000000000000000000000000000000": {

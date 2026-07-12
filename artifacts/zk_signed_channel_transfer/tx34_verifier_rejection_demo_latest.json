@@ -1,6 +1,6 @@
 {
   "kind": "tx34_registered_wasm_verifier_rejection_demo",
-  "createdAt": "2026-05-08T23:57:26.093Z",
+  "createdAt": "2026-05-09T10:38:49.510Z",
   "source": "artifacts\\zk_envelopes\\84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a.json",
   "sourceEnvelopeId": "84e6ec79ad7a683ccdc54555e8709399365b0d8a3da9b9d2a6ddefe81bdb066a",
   "sourceVerifierWasmHash": "845dc849bcc4c789baec915badc10f95b9b8ab1a8abdda24d5b1d34dacaa06d9",
@@ -123,7 +123,7 @@
             ]
           },
           "applied": true,
-          "updatedAt": 1778284646030
+          "updatedAt": 1778323129291
         },
         "outputRowsMatch": {
           "ok": true,

@@ -40,6 +40,7 @@ const { BitvmCacheRegistry } = require('./bitvmCache.js');
 const { verifyBundleHash } = require('./bitvmBundle.js');
 const BitvmRisk = require('./bitvmRisk.js');
 const BinohashAdapter = require('./experimental/binohash/binohashAdapter.js');
+const ColoredCoin = require('./coloredCoin.js');
 const ZkConsensus = require('./zkConsensusEnvelope.js');
 const ZkWasmVerifier = require('./zkWasmVerifier.js');
 const ZkSignedChannelTransfer = require('./zkSignedChannelTransfer.js');
@@ -292,7 +293,7 @@ const Logic = {
                 await Logic.batchMoveZkRollup(params.zkVerifier, params.rollupData, params.zkProof, params.block);
                 break;
             case 33:
-                Logic.coloredCoin(params);
+                await Logic.coloredCoin(params);
                 break;
             case 34:
                 if (params.zkBatchMovement) {
@@ -761,7 +762,9 @@ const Logic = {
                     amountOffered:amountOffered,
                     amountExpected:amountExpected,
                     blockTime: confirmedBlock,
-                    sender: fromAddress, 
+                    sender: fromAddress,
+                    senderAddress: fromAddress,
+                    address: fromAddress,
                     stop: stop,
                     post: post
                 };
@@ -2344,6 +2347,7 @@ const Logic = {
 
         return summary;
     },
+
 	batchMoveZkRollup(zkVerifier, rollupData, zkProof) {
 	    // Parse the Zero-Knowledge rollup data
 	    let transactions;
@@ -2783,6 +2787,10 @@ const Logic = {
                 { upsert: true }
             );
         },
+
+    async coloredCoin(params) {
+        return ColoredCoin.processColoredCoin(params);
+    },
 
     bindSmartContract(){},
 

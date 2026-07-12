@@ -85,17 +85,20 @@ app.get('/initStatus', (req, res) => {
     res.json({ initialized: isInitialized });
 });
 
+function normalizeSpotOrderbookKey(propertyId1, propertyId2) {
+    const first = Number.isFinite(Number(propertyId1)) ? Number(propertyId1) : propertyId1;
+    const second = Number.isFinite(Number(propertyId2)) ? Number(propertyId2) : propertyId2;
+    return `${first}-${second}`;
+}
+
 app.post('/getOrderBook', async (req, res) => {
     try {
         const { propertyId1, propertyId2 } = req.body;
-        const orderBookKey = `${propertyId1}-${propertyId2}`;
+        const orderBookKey = normalizeSpotOrderbookKey(propertyId1, propertyId2);
 
         // Instantiate your Orderbook class with the specific orderBookKey
         const orderbook = new Orderbook(orderBookKey);
-        await orderbook.loadOrCreateOrderBook(); // Load or create the specific order book
-
-        // Retrieve the specific order book data
-        const orderBookData = orderbook.orderBooks[orderBookKey] || {};
+        const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);
     } catch (error) {
         console.error('Error fetching order book:', error);
@@ -106,12 +109,10 @@ app.post('/getOrderBook', async (req, res) => {
 app.post('/getContractOrderBook', async (req, res) => {
     try {
         const { contractId } = req.body;
-        const orderBookKey = `contract-${contractId}`;
+        const orderBookKey = Number.isFinite(Number(contractId)) ? String(contractId) : String(contractId);
 
         // Instantiate your Orderbook class with the specific contractId
         const orderbook = new Orderbook(orderBookKey);
-         // Load or create the specific order book
-
         // Retrieve the specific order book data
         const orderBookData = await orderbook.loadOrderBook(orderBookKey);
         res.json(orderBookData);

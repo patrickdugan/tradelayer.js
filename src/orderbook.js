@@ -51,6 +51,11 @@ function compareSenderAddresses(a, b, txidA = null, txidB = null) {
     return 0;
 }
 
+function getSenderAddress(order) {
+    if (!order || typeof order !== 'object') return undefined;
+    return order.senderAddress || order.sender || order.address;
+}
+
 
 class Orderbook {
       constructor(orderBookKey, tickSize = new BigNumber('0.00000001')) {
@@ -860,8 +865,8 @@ class Orderbook {
           continue;
         }
 
-        const sellOrderAddress = match.sellOrder.senderAddress;
-        const buyOrderAddress  = match.buyOrder.senderAddress;
+        const sellOrderAddress = getSenderAddress(match.sellOrder);
+        const buyOrderAddress  = getSenderAddress(match.buyOrder);
         const sellOrderPropertyId = match.sellOrder.offeredPropertyId;   // Token A
         const buyOrderPropertyId  = match.buyOrder.desiredPropertyId;    // Token B
 
@@ -1036,8 +1041,8 @@ class Orderbook {
       for (const match of matches) {
         if (!match.sellOrder || !match.buyOrder) continue;
 
-        const sellAddr = match.sellOrder.senderAddress;
-        const buyAddr  = match.buyOrder.senderAddress;
+        const sellAddr = getSenderAddress(match.sellOrder);
+        const buyAddr  = getSenderAddress(match.buyOrder);
         const propA = match.sellOrder.offeredPropertyId;   // A
         const propB = match.buyOrder.desiredPropertyId;    // B
         const amtA  = new BigNumber(match.amountOfTokenA);
