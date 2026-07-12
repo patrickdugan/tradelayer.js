@@ -1,5 +1,6 @@
 // Import necessary modules and interfaces lazily to keep listener startup light.
 const LitecoinModule = require('litecoin');
+const util = require('util');
 let rpcClient = null;
 
 function getRpcClient() {
@@ -17,6 +18,38 @@ function getRpcClient() {
     rpcClient = new Litecoin(config);
     return rpcClient;
 }
+
+function normalizeAddressesByLabel(result) {
+    if (Array.isArray(result)) {
+        return result.map((entry) => String(entry || '').trim()).filter(Boolean);
+    }
+    if (result && typeof result === 'object') {
+        return Object.keys(result).map((address) => String(address || '').trim()).filter(Boolean);
+    }
+    return [];
+}
+
+async function getAddressesByLabel(client, label) {
+    try {
+        if (typeof client.getAddressesByLabel === 'function') {
+            return normalizeAddressesByLabel(await client.getAddressesByLabel(label));
+        }
+        if (typeof client.getaddressesbylabel === 'function') {
+            return normalizeAddressesByLabel(await client.getaddressesbylabel(label));
+        }
+        if (typeof client.cmd === 'function') {
+            const call = util.promisify(client.cmd.bind(client, 'getaddressesbylabel'));
+            return normalizeAddressesByLabel(await call(label));
+        }
+        throw new Error('Configured Litecoin RPC client does not support getaddressesbylabel');
+    } catch (error) {
+        if (Number(error?.code) === -11 || /no addresses with label/i.test(String(error?.message || ''))) {
+            return [];
+        }
+        throw error;
+    }
+}
+
 class WalletCache {
     constructor() {
         this.walletBalancesCache = new Map(); // A map to store wallet balances
@@ -29,7 +62,7 @@ class WalletCache {
     async updateWalletCache(label) {
         let numChanges = 0;
         const client = getRpcClient();
-        const addresses = await client.getAddressesByLabel(label);
+        const addresses = await getAddressesByLabel(client, label);
         const TallyMap = require('../src/tally.js');
 
         for (const address of addresses) {
@@ -49,7 +82,7 @@ class WalletCache {
             try {
                 // Get all TradeLayer addresses with the specified label from the wallet
                 const client = getRpcClient();
-                const addresses = await client.getAddressesByLabel(label);
+                const addresses = await getAddressesByLabel(client, label);
                 const allBalances = [];
                 const TallyMap = require('../src/tally.js');
 
@@ -90,12 +123,11 @@ class WalletCache {
     /**
      * Retrieves contract positions for all addresses in the wallet.
      */
-    async getPositions() {
+    async getPositions(label = 'TL') {
         try {
             // Get all TradeLayer addresses with the specified label from the wallet
-            const label = 'TL'; // Replace with your actual label used for TradeLayer addresses
             const client = getRpcClient();
-            const addresses = await client.getAddressesByLabel(label);
+            const addresses = await getAddressesByLabel(client, label);
             const allPositions = [];
 
             // For each TradeLayer address, get contract positions
@@ -184,7 +216,7 @@ async getContractPositionForAddressAndContractId(address, contractId) {
     async getStateSnapshot(label = 'TL') {
         const [walletBalances, positions] = await Promise.all([
             this.getAllWalletBalances(label),
-            this.getPositions(),
+            this.getPositions(label),
         ]);
 
         return {
